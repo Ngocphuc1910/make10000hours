@@ -437,36 +437,5 @@ button:focus, button:active {
     margin-top: 10px; /* Adjust as needed to position below the clock */
     text-align: center;
     font-weight: bold; /* Make the text more prominent */
-    #current-task-name {
-      font-size: 1.2rem;
-      color: white; /* Changed to white */
-      margin-top: 10px; /* Adjust as needed to position below the clock */
-      text-align: center;
-      font-weight: bold; /* Make the text more prominent */
-      #current-task-name {
-        font-size: 1.2rem;
-        color: white; /* Changed to white */
-        margin-top: 10px; /* Adjust as needed to position below the clock */
-        text-align: center;
-        font-weight: bold; /* Make the text more prominent */
-        #current-task-name {
-          font-size: 1.2rem;
-          color: white; /* Changed to white */
-          margin-top: 10px; /* Adjust as needed to position below the clock */
-          text-align: center;
-          font-weight: bold; /* Make the text more prominent */
-          #current-task-name {
-            font-size: 1.2rem;
-            color: white; /* Changed to white */
-            margin-top: 10px; /* Adjust as needed to position below the clock */
-            text-align: center;
-            font-weight: bold; /* Make the text more prominent */
-            #current-task-name {
-              font-size: 1.2rem;
-              color: white; /* Changed to white */
-              margin-top: 10px; /* Adjust as needed to position below the clock */
-              text-align: center;
-              font-weight: bold; /* Make the text more prominent */
-
-  }}}}}}
+  }
 }
