@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Phuc's Birthday Project</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <progress id="js-progress" value="0"></progress>
+      <div class="progress-bar"></div>
+
+      <div class="button-group mode-buttons" id="js-mode-buttons">
+        <button data-mode="pomodoro" class="button mode-button active" id="js-pomodoro">Pomodoro</button>
+        <button data-mode="shortBreak" class="button mode-button" id="js-short-break">Short Break</button>
+        <button data-mode="longBreak" class="button mode-button" id="js-long-break">Long Break</button>
+      </div>
+
+      <div class="timer">
+        <div class="clock-container">
+          <div class="clock" id="js-clock">
+            <span id="js-minutes">25</span>
+            <span class="separator">:</span>
+            <span id="js-seconds">00</span>
+          </div>
+        </div>
+        <div id="current-task-name"></div>
+        <div class="button-group">
+          <button class="main-button" data-action="start" id="js-btn">Start</button>
+          <button class="main-button" data-action="next" id="js-next-btn">Next</button>
+        </div>
+      </div>
+
+      <div class="icon-container">
+        <img src="adjustment.png" alt="Settings Icon" class="settings-icon" id="settings-icon" />
+        <div class="upload-container" id="upload-container">
+          <label for="background-upload" class="upload-label">
+            <img src="file.png" alt="Upload Background" class="upload-icon" />
+          </label>
+          <input type="file" id="background-upload" accept="image/*" class="file-input" />
+        </div>
+      </div>
+
+      <div id="config-menu" class="config-menu hidden">
+        <h3>Configure Timer</h3>
+        <label for="pomodoro-time">Pomodoro Time:</label>
+        <input type="number" id="pomodoro-time" value="25" min="1" />
+        
+        <label for="shortbreak-time">Short Break Time:</label>
+        <input type="number" id="shortbreak-time" value="5" min="1" />
+        
+        <label for="longbreak-time">Long Break Time:</label>
+        <input type="number" id="longbreak-time" value="15" min="1" />
+        
+        <div class="config-buttons">
+          <button id="save-config">OK</button>
+          <button id="cancel-config">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Single Task Container Section for Drag and Drop -->
+      <div class="task-container" id="js-task-container">
+        <div class="task" data-task="1" draggable="true">
+          <input type="text" placeholder="Task 1" />
+        </div>
+        <div class="add-task" id="js-add-task">
+          <img src="plus.png" alt="Add Task Icon" class="add-icon" width="40" height="40" />
+        </div>
+      </div>
+    </main>
+
+    <!-- Spotify Embed 
+    <div class="spotify-container">
+      <iframe 
+        src="https://open.spotify.com/embed/playlist/6dEdaN9tg6S5x4v698ARfb?utm_source=generator" 
+        width="300" 
+        height="80" 
+        frameborder="0" 
+        allowtransparency="true" 
+        allow="encrypted-media">
+      </iframe>
+    </div> -->
+
+    <div class="hidden">
+      <audio src="backtowork.mp3" data-sound="pomodoro"></audio>
+      <audio src="break.mp3" data-sound="shortBreak"></audio>
+      <audio src="break.mp3" data-sound="longBreak"></audio>
+    </div>
+    
+    <script src="main.js"></script>
+  </body>
+</html>
