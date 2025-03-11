@@ -39,8 +39,21 @@ const profileDropdown = document.getElementById('profile-dropdown');
 const logoutButton = document.getElementById('logout-button');
 const accountSettings = document.getElementById('account-settings');
 const syncData = document.getElementById('sync-data');
+const mainAppContent = document.querySelector('main.app');
+const appOverlay = document.createElement('div');
 
-// Add a login button to the app
+// Create and add welcome overlay to DOM
+appOverlay.className = 'app-overlay';
+appOverlay.innerHTML = `
+  <div class="welcome-content">
+    <h1>Welcome to Pomodoro Timer</h1>
+    <p>Sign in to track your productivity across devices</p>
+    <button id="welcome-signin-btn" class="auth-button">Sign In / Sign Up</button>
+  </div>
+`;
+document.body.appendChild(appOverlay);
+
+// Add login button to the app
 const loginButton = document.createElement('button');
 loginButton.textContent = 'Sign In';
 loginButton.classList.add('auth-button');
@@ -49,19 +62,29 @@ loginButton.style.position = 'absolute';
 loginButton.style.top = '15px';
 loginButton.style.left = '15px';
 loginButton.style.zIndex = '100';
-document.querySelector('main.app').appendChild(loginButton);
+mainAppContent.appendChild(loginButton);
 
 // Global state
 let currentUser = null;
 let isSignInMode = true; // Track which form is currently active
 
 // Event Listeners
+document.getElementById('welcome-signin-btn').addEventListener('click', () => {
+  showAuthModal();
+});
+
 loginButton.addEventListener('click', () => {
   showAuthModal();
 });
 
 authClose.addEventListener('click', () => {
-  hideAuthModal();
+  // Only allow closing the auth modal if user is already logged in
+  if (currentUser) {
+    hideAuthModal();
+  } else {
+    // Show message that login is required
+    showError(signinError, 'Please sign in to use the app');
+  }
 });
 
 signinTab.addEventListener('click', () => {
@@ -175,20 +198,35 @@ onAuthStateChanged(auth, (user) => {
     currentUser = user;
     updateUIForSignedInUser(user);
     syncUserData(user.uid);
+    
+    // Hide the login overlay
+    appOverlay.style.display = 'none';
+    
+    // Show the main app content
+    mainAppContent.classList.add('authenticated');
   } else {
     // User is signed out
     currentUser = null;
     updateUIForSignedOutUser();
+    
+    // Show the login overlay and auth modal
+    appOverlay.style.display = 'flex';
+    showAuthModal();
+    
+    // Hide the main app content
+    mainAppContent.classList.remove('authenticated');
   }
 });
 
 // Helper functions
 function showAuthModal() {
   authContainer.classList.add('visible');
+  appOverlay.classList.add('blur-background');
 }
 
 function hideAuthModal() {
   authContainer.classList.remove('visible');
+  appOverlay.classList.remove('blur-background');
   signinError.classList.remove('visible');
   signupError.classList.remove('visible');
   signupSuccess.classList.remove('visible');
@@ -262,6 +300,13 @@ function updateUIForSignedInUser(user) {
   
   // If this is the first login, create default data
   checkAndCreateUserData(user.uid);
+  
+  // Allow closing the auth modal
+  hideAuthModal();
+  
+  // Dispatch authentication event for the app to initialize
+  const authEvent = new CustomEvent('userAuthenticated', { detail: { user } });
+  document.dispatchEvent(authEvent);
 }
 
 function updateUIForSignedOutUser() {

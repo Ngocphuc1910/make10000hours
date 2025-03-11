@@ -469,15 +469,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Hide Next button initially until timer starts
   nextButton.style.display = 'none';
   
-  // Select the first task by default
-  selectTask(0);
-  
-  // Ensure all tasks have correct event listeners
-  updateTaskEventListeners();
-  
-  // Initialize the progress bar
-  updateProgress();
-  
+  // Only initialize the app if user is authenticated
+  if (currentUser) {
+    initializeApp();
+  } else {
+    // Listen for authentication events
+    document.addEventListener('userAuthenticated', initializeApp);
+  }
+
   // Preload sounds
   const sounds = document.querySelectorAll('audio');
   sounds.forEach(sound => {
@@ -486,3 +485,21 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('Pomodoro Timer initialized successfully!');
 });
+
+// New function to initialize app after authentication
+function initializeApp() {
+  // Select the first task by default
+  selectTask(0);
+  
+  // Ensure all tasks have correct event listeners
+  updateTaskEventListeners();
+  
+  // Initialize the progress bar
+  updateProgress();
+
+  // Dispatch event to indicate app is ready
+  const appReadyEvent = new CustomEvent('appReady');
+  document.dispatchEvent(appReadyEvent);
+  
+  console.log('Pomodoro app fully initialized after authentication');
+}
