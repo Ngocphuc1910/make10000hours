@@ -97,8 +97,16 @@ const addTaskButton = document.getElementById('js-add-task');
 
 let taskCount = 1; // Start with 1 default task
 
-// Function to add a new task box
-function addNewTask() {
+// Make timer available to the auth module for syncing settings
+window.timer = timer;
+
+// Import Firebase modules
+import { auth, db } from './firebase-config.js';
+import { doc, updateDoc, arrayUnion, getDoc, setDoc } from 'firebase/firestore';
+import { currentUser } from './auth.js';
+
+// Modified function to add a new task that syncs with Firebase
+async function addNewTask() {
   taskCount++;
   const newTask = document.createElement('div');
   newTask.classList.add('task');
@@ -119,9 +127,42 @@ function addNewTask() {
   // Automatically select the new task and focus the input field
   selectTask(taskCount - 1);
   newTaskInput.focus();
+  
+  // Sync with Firebase if user is logged in
+  syncTasksToFirebase();
 }
 
-// Function to set up event listeners for each task
+// Function to sync tasks to Firebase
+async function syncTasksToFirebase() {
+  // Only sync if user is logged in
+  if (!currentUser) return;
+  
+  try {
+    const taskElements = document.querySelectorAll('.task');
+    const tasks = [];
+    
+    taskElements.forEach((task, index) => {
+      const taskId = parseInt(task.getAttribute('data-task'));
+      const taskName = task.querySelector('input').value || `Task ${index + 1}`;
+      tasks.push({
+        id: taskId,
+        name: taskName,
+        completed: false
+      });
+    });
+    
+    // Update tasks in Firestore
+    await setDoc(doc(db, `users/${currentUser.uid}/tasks`, 'defaultTasks'), {
+      tasks: tasks,
+      lastUpdated: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error syncing tasks to Firebase:', error);
+  }
+}
+
+// Modified task event listeners to sync changes with Firebase
 function updateTaskEventListeners() {
   const taskElements = document.querySelectorAll('.task');
   taskElements.forEach((task, index) => {
@@ -135,11 +176,17 @@ function updateTaskEventListeners() {
       }
     });
     
-    // Add input event to update task name display
+    // Add input event to update task name display and sync with Firebase
     input.addEventListener('input', () => {
       if (index === timer.currentTaskIndex) {
         updateCurrentTaskDisplay();
       }
+      
+      // Debounce the sync operation
+      clearTimeout(input.syncTimeout);
+      input.syncTimeout = setTimeout(() => {
+        syncTasksToFirebase();
+      }, 500);
     });
   });
 }
@@ -312,13 +359,17 @@ function moveToNextMode() {
   document.querySelector(`[data-sound="${timer.mode}"]`).play();
 }
 
+// Modified function to sync task completion
 function moveToNextTask() {
   timer.currentTaskIndex++;
-  const taskElements = document.querySelectorAll('.task input');
+  const taskElements = document.querySelectorAll('.task');
   if (timer.currentTaskIndex >= taskElements.length) {
     timer.currentTaskIndex = 0; // Loop back to the first task if all tasks are completed
   }
   selectTask(timer.currentTaskIndex); // Select the new task
+  
+  // Sync with Firebase
+  syncTasksToFirebase();
 }
 
 function handleMode(event) {
@@ -352,6 +403,7 @@ taskContainer.addEventListener("dragover", (event) => {
   }
 });
 
+// Modified drag-and-drop to sync with Firebase
 taskContainer.addEventListener("dragend", (event) => {
   if (event.target.classList.contains('task')) {
     event.target.classList.remove("dragging");
@@ -368,6 +420,9 @@ taskContainer.addEventListener("dragend", (event) => {
     
     // Make sure the current task is still selected
     selectTask(timer.currentTaskIndex);
+    
+    // Sync task order with Firebase
+    syncTasksToFirebase();
   }
 });
 
