@@ -103,6 +103,7 @@ function addNewTask() {
   const newTask = document.createElement('div');
   newTask.classList.add('task');
   newTask.setAttribute('data-task', taskCount);
+  newTask.draggable = true;
 
   const newTaskInput = document.createElement('input');
   newTaskInput.type = 'text';
@@ -122,9 +123,24 @@ function addNewTask() {
 
 // Function to set up event listeners for each task
 function updateTaskEventListeners() {
-  const taskElements = document.querySelectorAll('.task input');
-  taskElements.forEach((input, index) => {
-    input.addEventListener('focus', () => selectTask(index));
+  const taskElements = document.querySelectorAll('.task');
+  taskElements.forEach((task, index) => {
+    const input = task.querySelector('input');
+    
+    // Add click event to the task div
+    task.addEventListener('click', (e) => {
+      // Prevent click from firing when dragging
+      if (!task.classList.contains('dragging')) {
+        selectTask(index);
+      }
+    });
+    
+    // Add input event to update task name display
+    input.addEventListener('input', () => {
+      if (index === timer.currentTaskIndex) {
+        updateCurrentTaskDisplay();
+      }
+    });
   });
 }
 
@@ -133,20 +149,40 @@ addTaskButton.addEventListener('click', addNewTask);
 
 // Function to select a task
 function selectTask(index) {
-  timer.currentTaskIndex = index;
-  const taskNameDisplay = document.getElementById('current-task-name');
   const taskElements = document.querySelectorAll('.task');
-
+  
+  // Validate the index is in range
+  if (index < 0 || index >= taskElements.length) {
+    index = 0; // Default to first task if out of bounds
+  }
+  
+  timer.currentTaskIndex = index;
+  
   taskElements.forEach((task, i) => {
     if (i === index) {
       task.classList.add('active');
       task.classList.remove('inactive');
-      taskNameDisplay.textContent = task.querySelector('input').value || `Task ${index + 1}`;
     } else {
       task.classList.remove('active');
       task.classList.add('inactive');
     }
   });
+  
+  updateCurrentTaskDisplay();
+}
+
+// Function to update current task display
+function updateCurrentTaskDisplay() {
+  const taskNameDisplay = document.getElementById('current-task-name');
+  const taskElements = document.querySelectorAll('.task');
+  
+  if (taskElements.length > 0 && timer.currentTaskIndex < taskElements.length) {
+    const currentTask = taskElements[timer.currentTaskIndex];
+    const inputValue = currentTask.querySelector('input').value;
+    taskNameDisplay.textContent = inputValue || `Task ${timer.currentTaskIndex + 1}`;
+  } else {
+    taskNameDisplay.textContent = "No task selected";
+  }
 }
 
 function getRemainingTime(endTime) {
@@ -158,21 +194,48 @@ function getRemainingTime(endTime) {
   return { total, minutes, seconds };
 }
 
+// Need to ensure the progress bar is initialized
+const progressBar = document.getElementById('js-progress');
+
 function startTimer() {
   let { total } = timer.remainingTime;
   const endTime = Date.parse(new Date()) + total * 1000;
   if (timer.mode === 'pomodoro') timer.sessions++;
+  
   mainButton.dataset.action = 'stop';
   mainButton.textContent = 'Stop';
   mainButton.classList.add('active');
+  
+  // Make the "Next" button visible when timer is running
+  nextButton.style.display = 'inline-block';
+  
   interval = setInterval(() => {
     timer.remainingTime = getRemainingTime(endTime);
     updateClock();
+    updateProgress();
+    
     total = timer.remainingTime.total;
     if (total <= 0) {
       clearInterval(interval);
+      
+      // Play the sound notification
+      const sound = document.querySelector(`[data-sound="${timer.mode}"]`);
+      if (sound) {
+        sound.play();
+      }
+      
+      // Show a browser notification
+      if (Notification.permission === 'granted') {
+        const text = timer.mode === 'pomodoro' ? 'Get back to work!' : 'Take a break!';
+        new Notification(text);
+      }
+      
       moveToNextMode();
-      startTimer();
+      
+      // Don't automatically start the timer for the next session
+      mainButton.dataset.action = 'start';
+      mainButton.textContent = 'Start';
+      mainButton.classList.remove('active');
     }
   }, 1000);
 }
@@ -191,7 +254,20 @@ function updateClock() {
   document.getElementById('js-minutes').textContent = minutes;
   document.getElementById('js-seconds').textContent = seconds;
   document.title = `${minutes}:${seconds} — ${timer.mode === 'pomodoro' ? 'Get back to work!' : 'Take a break!'}`;
-  document.getElementById('js-progress').value = timer[timer.mode] * 60 - timer.remainingTime.total;
+}
+
+function updateProgress() {
+  // Calculate percentage of time elapsed
+  const totalSeconds = timer[timer.mode] * 60;
+  const remainingSeconds = timer.remainingTime.total;
+  const elapsedSeconds = totalSeconds - remainingSeconds;
+  
+  // Update progress bar
+  progressBar.value = elapsedSeconds;
+  progressBar.max = totalSeconds;
+  
+  // Update progress bar color based on current mode
+  progressBar.style.accentColor = `var(--${timer.mode})`;
 }
 
 function switchMode(mode) {
@@ -201,10 +277,19 @@ function switchMode(mode) {
   }
   timer.mode = mode;
   timer.remainingTime = { total: timer[mode] * 60, minutes: timer[mode], seconds: 0 };
+  
+  // Update progress bar
+  progressBar.max = timer[mode] * 60;
+  progressBar.value = 0;
+  
+  // Update active button styles
   document.querySelectorAll('button[data-mode]').forEach(button => button.classList.remove('active'));
   document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+  
+  // Change background color based on mode
   document.body.style.backgroundColor = `var(--${mode})`;
-  document.getElementById('js-progress').setAttribute('max', timer.remainingTime.total);
+  
+  // Update the clock display
   updateClock();
 }
 
@@ -245,24 +330,45 @@ function handleMode(event) {
 
 // Initialize Drag and Drop
 taskContainer.addEventListener("dragstart", (event) => {
-  event.target.classList.add("dragging");
-  event.dataTransfer.setData("text/plain", event.target.id);
+  // Only allow drag on the task div, not the input inside
+  if (event.target.classList.contains('task')) {
+    event.target.classList.add("dragging");
+  }
 });
 
 taskContainer.addEventListener("dragover", (event) => {
   event.preventDefault();
   const draggingTask = document.querySelector(".dragging");
+  if (!draggingTask) return;
+  
   const afterTask = getDragAfterElement(taskContainer, event.clientY);
   
   if (afterTask == null) {
-    taskContainer.appendChild(draggingTask);
+    // Don't append to the add task button
+    const addTaskBtn = document.getElementById('js-add-task');
+    taskContainer.insertBefore(draggingTask, addTaskBtn);
   } else {
     taskContainer.insertBefore(draggingTask, afterTask);
   }
 });
 
 taskContainer.addEventListener("dragend", (event) => {
-  event.target.classList.remove("dragging");
+  if (event.target.classList.contains('task')) {
+    event.target.classList.remove("dragging");
+    
+    // Update task indices after drag
+    const tasks = document.querySelectorAll('.task');
+    tasks.forEach((task, index) => {
+      task.setAttribute('data-task', index + 1);
+      const input = task.querySelector('input');
+      if (input.value === '') {
+        input.placeholder = `Task ${index + 1}`;
+      }
+    });
+    
+    // Make sure the current task is still selected
+    selectTask(timer.currentTaskIndex);
+  }
 });
 
 // Helper function to determine drag position
@@ -286,6 +392,7 @@ function getDragAfterElement(container, y) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Request notification permission
   if ('Notification' in window) {
     if (
       Notification.permission !== 'granted' &&
@@ -300,7 +407,27 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   }
+  
+  // Initialize the app
   switchMode('pomodoro');
-  selectTask(0); // Highlight the first task by default
-  updateTaskEventListeners(); // Ensure all tasks have correct event listeners at startup
+  
+  // Hide Next button initially until timer starts
+  nextButton.style.display = 'none';
+  
+  // Select the first task by default
+  selectTask(0);
+  
+  // Ensure all tasks have correct event listeners
+  updateTaskEventListeners();
+  
+  // Initialize the progress bar
+  updateProgress();
+  
+  // Preload sounds
+  const sounds = document.querySelectorAll('audio');
+  sounds.forEach(sound => {
+    sound.load();
+  });
+  
+  console.log('Pomodoro Timer initialized successfully!');
 });

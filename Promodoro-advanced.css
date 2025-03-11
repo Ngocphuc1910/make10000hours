@@ -64,18 +64,23 @@ main.app {
 
 progress {
   border-radius: 2px;
-  width: 80%;
+  width: 100%;
   height: 12px;
   position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  appearance: none;
 }
 
 progress::-webkit-progress-bar {
-  background-color: rgb(255, 255, 255);
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
 progress::-webkit-progress-value {
   background-color: #fff;
+  transition: width 0.5s ease;
 }
 
 .timer {
@@ -257,10 +262,19 @@ button:focus, button:active {
 .task {
   width: 400px;
   padding: 10px;
-  background-color: rgb(255, 255, 255);
+  background-color: rgba(255, 255, 255, 0.8);
   border: 2px solid transparent;
   border-radius: 8px;
-  transition: background-color 0.3s ease, border-color 0.3s ease, opacity 0.3s ease;
+  transition: all 0.3s ease;
+  cursor: move; /* Indicate it's draggable */
+}
+
+.task.active {
+  border-color: #ffffff;
+  background-color: #ffffff;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.7);
+  transform: scale(1.02);
+  opacity: 1;
 }
 
 .task input {
@@ -272,6 +286,12 @@ button:focus, button:active {
   font-size: 16px;
   outline: none;
   text-align: center;
+  cursor: text; /* Override the move cursor for the input */
+}
+
+.task.inactive {
+  opacity: 0.5;
+  transform: scale(0.98);
 }
 
 .add-task {
@@ -388,19 +408,52 @@ button:focus, button:active {
 /* Adjust clock font size for smaller screens */
 @media screen and (max-width: 550px) {
   .clock {
-    font-size: 8rem;
+    font-size: 5rem;
+    margin-top: 30px;
   }
 
   .task {
-    width: 400px;
-    padding: 10px;
-    background-color: rgb(255, 255, 255);
-    border: 2px solid transparent;
-    border-radius: 8px;
-    transition: background-color 0.3s ease, border-color 0.3s ease, opacity 0.3s ease;
+    width: 90%;
+    max-width: 350px;
   }
   
-    /* Styles for active and inactive tasks */
+  .timer {
+    padding: 10px;
+  }
+  
+  .button-group.mode-buttons {
+    width: 100%;
+    padding: 10px;
+    justify-content: space-around;
+  }
+  
+  .mode-button {
+    padding: 5px;
+    width: auto;
+    font-size: 14px;
+  }
+  
+  .main-button {
+    width: 150px;
+    font-size: 18px;
+    height: 45px;
+  }
+  
+  #js-next-btn {
+    width: 150px;
+    font-size: 18px;
+    height: 45px;
+  }
+  
+  /* Ensure settings menu is correctly positioned on mobile */
+  .config-menu {
+    top: 60px;
+    right: 5px;
+    width: 90%;
+    max-width: 300px;
+  }
+  
+  /* Styles for active and inactive tasks */
   .task.active {
     opacity: 1;
     border-color: #fff;
@@ -410,19 +463,6 @@ button:focus, button:active {
   .task.inactive {
     opacity: 0.5; /* Fade effect for inactive tasks */
   }
-  .task.inactive {
-    opacity: 0.5; /* Fade effect for inactive tasks */
-  }
-  .task.inactive {
-    opacity: 0.5; /* Fade effect for inactive tasks */
-  }
-  .task.inactive {
-    opacity: 0.5; /* Fade effect for inactive tasks */
-  }
-  .task.inactive {
-    opacity: 0.5; /* Fade effect for inactive tasks */
-  }
-  
   
   #current-task-name {
     font-size: 1.2rem;
@@ -431,11 +471,20 @@ button:focus, button:active {
     text-align: center;
     font-weight: bold; /* Make the text more prominent */
   }
-  #current-task-name {
-    font-size: 1.2rem;
-    color: white; /* Changed to white */
-    margin-top: 10px; /* Adjust as needed to position below the clock */
-    text-align: center;
-    font-weight: bold; /* Make the text more prominent */
-  }
+}
+
+#current-task-name {
+  font-size: 1.2rem;
+  color: white;
+  margin-top: 10px;
+  text-align: center;
+  font-weight: bold;
+  padding: 5px 15px;
+  border-radius: 20px;
+  background-color: rgba(255, 255, 255, 0.2);
+  min-width: 200px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
