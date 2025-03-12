@@ -1,0 +1,140 @@
+.timer-container {
+  max-width: 500px;
+  margin: 0 auto;
+  text-align: center;
+  padding: 20px;
+}
+
+.timer-header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 30px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 50px;
+  padding: 5px;
+}
+
+.timer-mode-button {
+  background: none;
+  border: none;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 50px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.3s, color 0.3s;
+  opacity: 0.7;
+}
+
+.timer-mode-button:hover {
+  opacity: 1;
+}
+
+.timer-mode-button.active {
+  background-color: rgba(255, 255, 255, 0.2);
+  opacity: 1;
+}
+
+.timer-circle-container {
+  position: relative;
+  width: 300px;
+  height: 300px;
+  margin: 0 auto 30px;
+}
+
+.timer-circle {
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+
+.timer-circle-bg {
+  stroke: rgba(255, 255, 255, 0.1);
+}
+
+.timer-circle-progress {
+  stroke: white;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s;
+}
+
+.timer-text {
+  fill: white;
+  font-size: 40px;
+  font-weight: 300;
+  transform: rotate(90deg);
+  transform-origin: center;
+}
+
+.timer-controls {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+}
+
+.timer-button {
+  border: none;
+  background-color: transparent;
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 30px;
+  padding: 12px 30px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.timer-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.start-button, .resume-button {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.start-button:hover, .resume-button:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.pause-button, .reset-button {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.skip-button {
+  border-color: rgba(255, 255, 255, 0.15);
+  opacity: 0.8;
+}
+
+/* Timer mode colors */
+.timer-container[data-mode="pomodoro"] {
+  --progress-color: var(--pomodoro);
+}
+
+.timer-container[data-mode="shortBreak"] {
+  --progress-color: var(--short-break);
+}
+
+.timer-container[data-mode="longBreak"] {
+  --progress-color: var(--long-break);
+}
+
+/* Responsive styles */
+@media screen and (max-width: 500px) {
+  .timer-circle-container {
+    width: 250px;
+    height: 250px;
+  }
+  
+  .timer-text {
+    font-size: 32px;
+  }
+  
+  .timer-controls {
+    flex-wrap: wrap;
+  }
+  
+  .timer-button {
+    padding: 10px 20px;
+    font-size: 1rem;
+  }
+} 
