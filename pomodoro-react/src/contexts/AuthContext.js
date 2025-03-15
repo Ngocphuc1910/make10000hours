@@ -8,7 +8,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup
 } from 'firebase/auth';
-import { app } from '../firebase/firebase';
+import { auth } from '../firebase/firebase';
 
 export const AuthContext = createContext();
 
@@ -18,8 +18,6 @@ export const AuthProvider = ({ children }) => {
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   
-  const auth = getAuth(app);
-  
   // Listen for auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -28,7 +26,7 @@ export const AuthProvider = ({ children }) => {
     });
     
     return unsubscribe;
-  }, [auth]);
+  }, []);
   
   // Sign up with email and password
   const emailSignUp = async (email, password) => {

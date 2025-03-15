@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTimer } from '../hooks/useTimer';
 import '../styles/Timer.css';
 
@@ -9,6 +9,10 @@ const Timer = () => {
     isActive,
     isPaused,
     setTimerMode,
+    pomodoroTime,
+    shortBreakTime,
+    longBreakTime,
+    updateTimerSettings,
     startTimer,
     pauseTimer,
     resetTimer,
@@ -16,6 +20,17 @@ const Timer = () => {
   } = useTimer();
 
   const audioRef = useRef(null);
+  const [showSettings, setShowSettings] = useState(false);
+  
+  // Add state for background image
+  const [backgroundImage, setBackgroundImage] = useState('');
+  
+  // Local state for timer settings form
+  const [settingsForm, setSettingsForm] = useState({
+    pomodoro: pomodoroTime,
+    shortBreak: shortBreakTime,
+    longBreak: longBreakTime
+  });
 
   // Format time as MM:SS
   const formatTime = (seconds) => {
@@ -37,22 +52,85 @@ const Timer = () => {
       document.title = 'Pomodoro Timer';
     };
   }, [time, timerMode, isActive]);
+  
+  // Apply background image to body when it changes
+  useEffect(() => {
+    if (backgroundImage) {
+      document.body.style.backgroundImage = `url(${backgroundImage})`;
+    } else {
+      document.body.style.backgroundImage = 'none';
+    }
+    
+    return () => {
+      document.body.style.backgroundImage = 'none';
+    };
+  }, [backgroundImage]);
+
+  // Handle background image upload
+  const handleBackgroundUpload = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.match('image.*')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setBackgroundImage(e.target.result);
+        // Save to localStorage
+        localStorage.setItem('pomodoro-background', e.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  // Load background from localStorage on mount
+  useEffect(() => {
+    const savedBackground = localStorage.getItem('pomodoro-background');
+    if (savedBackground) {
+      setBackgroundImage(savedBackground);
+    }
+  }, []);
+  
+  // Update settings form when context values change
+  useEffect(() => {
+    setSettingsForm({
+      pomodoro: pomodoroTime,
+      shortBreak: shortBreakTime,
+      longBreak: longBreakTime
+    });
+  }, [pomodoroTime, shortBreakTime, longBreakTime]);
+  
+  // Handle settings form changes
+  const handleSettingsChange = (e) => {
+    const { name, value } = e.target;
+    setSettingsForm(prev => ({
+      ...prev,
+      [name]: parseInt(value) || 1 // Ensure value is at least 1
+    }));
+  };
+  
+  // Save settings
+  const handleSaveSettings = () => {
+    updateTimerSettings(
+      settingsForm.pomodoro,
+      settingsForm.shortBreak,
+      settingsForm.longBreak
+    );
+    setShowSettings(false);
+  };
 
   // Calculate progress percentage for the circle
   const calculateProgress = () => {
     let totalTime;
     switch (timerMode) {
       case 'pomodoro':
-        totalTime = 25 * 60;
+        totalTime = pomodoroTime * 60;
         break;
       case 'shortBreak':
-        totalTime = 5 * 60;
+        totalTime = shortBreakTime * 60;
         break;
       case 'longBreak':
-        totalTime = 15 * 60;
+        totalTime = longBreakTime * 60;
         break;
       default:
-        totalTime = 25 * 60;
+        totalTime = pomodoroTime * 60;
     }
     
     return ((totalTime - time) / totalTime) * 100;
@@ -85,6 +163,71 @@ const Timer = () => {
           Long Break
         </button>
       </div>
+      
+      {/* Settings and background upload buttons */}
+      <div className="timer-settings">
+        <button 
+          className="settings-button" 
+          onClick={() => setShowSettings(!showSettings)}
+          title="Timer Settings"
+        >
+          ⚙️
+        </button>
+        
+        <label className="upload-label" title="Upload Background">
+          🖼️
+          <input 
+            type="file" 
+            className="file-input" 
+            accept="image/*" 
+            onChange={handleBackgroundUpload} 
+          />
+        </label>
+      </div>
+      
+      {/* Settings panel */}
+      {showSettings && (
+        <div className="settings-panel">
+          <h3>Configure Timer</h3>
+          <label>
+            Pomodoro Time (min):
+            <input 
+              type="number" 
+              name="pomodoro"
+              min="1" 
+              max="60" 
+              value={settingsForm.pomodoro}
+              onChange={handleSettingsChange}
+            />
+          </label>
+          <label>
+            Short Break (min):
+            <input 
+              type="number" 
+              name="shortBreak"
+              min="1" 
+              max="30" 
+              value={settingsForm.shortBreak}
+              onChange={handleSettingsChange}
+            />
+          </label>
+          <label>
+            Long Break (min):
+            <input 
+              type="number" 
+              name="longBreak"
+              min="1" 
+              max="60" 
+              value={settingsForm.longBreak}
+              onChange={handleSettingsChange}
+            />
+          </label>
+          <div className="settings-buttons">
+            <button onClick={() => setShowSettings(false)}>Cancel</button>
+            <button onClick={handleSaveSettings}>Save</button>
+          </div>
+        </div>
+      )}
       
       <div className="timer-circle-container">
         <svg className="timer-circle" width="300" height="300" viewBox="0 0 300 300">
@@ -145,7 +288,9 @@ const Timer = () => {
         )}
       </div>
       
-      <audio ref={audioRef} src="/notificationn.mp3"></audio>
+      <audio ref={audioRef} src="/sounds/backtowork.mp3" data-sound="pomodoro"></audio>
+      <audio src="/sounds/break.mp3" data-sound="shortBreak"></audio>
+      <audio src="/sounds/break.mp3" data-sound="longBreak"></audio>
     </div>
   );
 };

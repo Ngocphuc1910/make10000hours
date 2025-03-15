@@ -6,52 +6,70 @@ export const TimerContext = createContext();
 export const TimerProvider = ({ children }) => {
   const { currentUser } = useAuth();
   const [timerMode, setTimerMode] = useState('pomodoro');
-  const [time, setTime] = useState(25 * 60); // Default 25 minutes for pomodoro
+  const [pomodoroTime, setPomodoroTime] = useState(25);
+  const [shortBreakTime, setShortBreakTime] = useState(5);
+  const [longBreakTime, setLongBreakTime] = useState(15);
+  const [time, setTime] = useState(pomodoroTime * 60); // Default 25 minutes for pomodoro
   const [isActive, setIsActive] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [pomodoroCount, setPomodoroCount] = useState(0);
   const [intervalId, setIntervalId] = useState(null);
   
-  // Reset timer when mode changes
+  // Load timer settings from localStorage
   useEffect(() => {
-    handleResetTimer();
+    const savedSettings = localStorage.getItem('pomodoro-settings');
+    if (savedSettings) {
+      const { pomodoro, shortBreak, longBreak } = JSON.parse(savedSettings);
+      setPomodoroTime(pomodoro);
+      setShortBreakTime(shortBreak);
+      setLongBreakTime(longBreak);
+    }
+  }, []);
+  
+  // Handle reset timer function
+  const handleResetTimer = useCallback(() => {
+    if (intervalId) {
+      clearInterval(intervalId);
+      setIntervalId(null);
+    }
     
-    // Set time based on timer mode
+    setIsActive(false);
+    setIsPaused(false);
+    
+    // Reset time based on current mode
     switch (timerMode) {
       case 'pomodoro':
-        setTime(25 * 60); // 25 minutes
-        document.body.setAttribute('data-timer-mode', 'pomodoro');
+        setTime(pomodoroTime * 60);
         break;
       case 'shortBreak':
-        setTime(5 * 60); // 5 minutes
-        document.body.setAttribute('data-timer-mode', 'shortBreak');
+        setTime(shortBreakTime * 60);
         break;
       case 'longBreak':
-        setTime(15 * 60); // 15 minutes
-        document.body.setAttribute('data-timer-mode', 'longBreak');
+        setTime(longBreakTime * 60);
         break;
       default:
-        setTime(25 * 60);
-        document.body.setAttribute('data-timer-mode', 'pomodoro');
+        setTime(pomodoroTime * 60);
     }
-  }, [timerMode]);
+  }, [intervalId, timerMode, pomodoroTime, shortBreakTime, longBreakTime]);
   
-  // Clean up interval on unmount
-  useEffect(() => {
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [intervalId]);
+  // Update timer settings
+  const updateTimerSettings = useCallback((pomodoro, shortBreak, longBreak) => {
+    setPomodoroTime(pomodoro);
+    setShortBreakTime(shortBreak);
+    setLongBreakTime(longBreak);
+    
+    // Save to localStorage
+    localStorage.setItem('pomodoro-settings', JSON.stringify({
+      pomodoro,
+      shortBreak,
+      longBreak
+    }));
+    
+    // Reset current timer based on mode
+    handleResetTimer();
+  }, [handleResetTimer]);
   
   // Handle timer completion
-  useEffect(() => {
-    if (time === 0 && isActive) {
-      handleTimerComplete();
-    }
-  }, [time, isActive]);
-  
   const handleTimerComplete = useCallback(() => {
     setIsActive(false);
     setIsPaused(false);
@@ -59,6 +77,12 @@ export const TimerProvider = ({ children }) => {
     if (intervalId) {
       clearInterval(intervalId);
       setIntervalId(null);
+    }
+    
+    // Play sound based on timer mode
+    const sound = document.querySelector(`audio[data-sound="${timerMode}"]`);
+    if (sound) {
+      sound.play().catch(err => console.error('Error playing sound:', err));
     }
     
     // Handle pomodoro completion
@@ -77,6 +101,46 @@ export const TimerProvider = ({ children }) => {
       setTimerMode('pomodoro');
     }
   }, [intervalId, pomodoroCount, timerMode]);
+  
+  // Reset timer when mode changes
+  useEffect(() => {
+    handleResetTimer();
+    
+    // Set time based on timer mode
+    switch (timerMode) {
+      case 'pomodoro':
+        setTime(pomodoroTime * 60); // Convert minutes to seconds
+        document.body.setAttribute('data-timer-mode', 'pomodoro');
+        break;
+      case 'shortBreak':
+        setTime(shortBreakTime * 60);
+        document.body.setAttribute('data-timer-mode', 'shortBreak');
+        break;
+      case 'longBreak':
+        setTime(longBreakTime * 60);
+        document.body.setAttribute('data-timer-mode', 'longBreak');
+        break;
+      default:
+        setTime(pomodoroTime * 60);
+        document.body.setAttribute('data-timer-mode', 'pomodoro');
+    }
+  }, [timerMode, pomodoroTime, shortBreakTime, longBreakTime, handleResetTimer]);
+  
+  // Clean up interval on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [intervalId]);
+  
+  // Handle timer completion
+  useEffect(() => {
+    if (time === 0 && isActive) {
+      handleTimerComplete();
+    }
+  }, [time, isActive, handleTimerComplete]);
   
   const startTimer = () => {
     setIsActive(true);
@@ -107,31 +171,6 @@ export const TimerProvider = ({ children }) => {
     handleResetTimer();
   };
   
-  const handleResetTimer = () => {
-    if (intervalId) {
-      clearInterval(intervalId);
-      setIntervalId(null);
-    }
-    
-    setIsActive(false);
-    setIsPaused(false);
-    
-    // Reset time based on current mode
-    switch (timerMode) {
-      case 'pomodoro':
-        setTime(25 * 60);
-        break;
-      case 'shortBreak':
-        setTime(5 * 60);
-        break;
-      case 'longBreak':
-        setTime(15 * 60);
-        break;
-      default:
-        setTime(25 * 60);
-    }
-  };
-  
   const skipTimer = () => {
     // Skip to the end of the current timer
     setTime(0);
@@ -144,6 +183,10 @@ export const TimerProvider = ({ children }) => {
     isActive,
     isPaused,
     pomodoroCount,
+    pomodoroTime,
+    shortBreakTime,
+    longBreakTime,
+    updateTimerSettings,
     startTimer,
     pauseTimer,
     resetTimer,
