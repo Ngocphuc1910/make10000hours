@@ -1,332 +1,195 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useContext, createContext } from 'react';
+import { Mail, Lock, X, User } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { Button } from '../ui/button';
-import { 
-  Card, 
-  CardHeader, 
-  CardTitle, 
-  CardContent,
-  CardFooter,
-  CardDescription
-} from '../ui/card';
-import { LogOut, User, Mail, Lock } from 'lucide-react';
-import { cn } from '../../utils/cn';
 
-const Auth = () => {
-  const { 
-    currentUser, 
-    googleSignIn, 
-    emailSignIn, 
-    emailSignUp, 
-    signOut,
-    authError,
-    setAuthError,
-    isAuthLoading
-  } = useAuth();
+// Create context for the auth modal
+const AuthModalContext = createContext();
 
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [activeTab, setActiveTab] = useState('login');
+// Define AuthModalProvider component
+function AuthModalProvider({ children }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [mode, setMode] = useState('signin'); // 'signin' or 'signup'
+
+  const openAuthModal = (initialMode = 'signin') => {
+    setMode(initialMode);
+    setIsOpen(true);
+  };
+
+  const closeAuthModal = () => {
+    setIsOpen(false);
+  };
+
+  const toggleMode = () => {
+    setMode(mode === 'signin' ? 'signup' : 'signin');
+  };
+
+  return (
+    <AuthModalContext.Provider
+      value={{
+        isOpen,
+        mode,
+        openAuthModal,
+        closeAuthModal,
+        toggleMode,
+      }}
+    >
+      {children}
+      <AuthModal />
+    </AuthModalContext.Provider>
+  );
+}
+
+// Define useAuthModal hook
+function useAuthModal() {
+  const context = useContext(AuthModalContext);
+  if (!context) {
+    throw new Error('useAuthModal must be used within an AuthModalProvider');
+  }
+  return context;
+}
+
+// Define AuthModal component
+const AuthModal = () => {
+  const { isOpen, mode, closeAuthModal, toggleMode } = useAuthModal();
+  const { signIn, signUp } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [showWelcome, setShowWelcome] = useState(!currentUser);
-
-  // Reset form on tab change
-  useEffect(() => {
-    setEmail('');
-    setPassword('');
-    setAuthError('');
-  }, [activeTab, setAuthError]);
-
-  // Hide welcome screen when user is authenticated
-  useEffect(() => {
-    if (currentUser) {
-      setShowWelcome(false);
-    }
-  }, [currentUser]);
-
-  const toggleAuthModal = () => {
-    setShowAuthModal(!showAuthModal);
-    if (showAuthModal) {
-      // Reset form when closing
-      setEmail('');
-      setPassword('');
-      setAuthError('');
-    }
-  };
-
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-  };
+  const [name, setName] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+    setError('');
+    setLoading(true);
+
     try {
-      if (activeTab === 'login') {
-        await emailSignIn(email, password);
+      if (mode === 'signin') {
+        await signIn(email, password);
       } else {
-        await emailSignUp(email, password);
+        await signUp(email, password, name);
       }
-      toggleAuthModal();
-    } catch (error) {
-      console.error("Auth error:", error);
+      closeAuthModal();
+    } catch (err) {
+      setError(err.message || 'An error occurred');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    try {
-      await googleSignIn();
-      toggleAuthModal();
-    } catch (error) {
-      console.error("Google sign in error:", error);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      setShowDropdown(false);
-      setShowWelcome(true);
-    } catch (error) {
-      console.error("Sign out error:", error);
-    }
-  };
-
-  const toggleDropdown = () => {
-    setShowDropdown(!showDropdown);
-  };
-
-  if (showWelcome) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-pomodoro to-pomodoro/80 text-white p-6 z-50">
-        <div className="text-center max-w-md">
-          <h1 className="text-4xl font-bold mb-4">Pomodoro Timer</h1>
-          <p className="text-lg mb-8 opacity-90">
-            Stay focused, be productive with the Pomodoro technique.
-          </p>
-          <Button 
-            size="lg"
-            variant="timer"
-            onClick={toggleAuthModal}
-            className="font-medium"
-          >
-            Get Started
-          </Button>
-        </div>
-        {renderAuthModal()}
-      </div>
-    );
-  }
-
-  function renderAuthModal() {
-    return (
-      <div 
-        className={cn(
-          "fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6 z-50 transition-opacity duration-300",
-          showAuthModal ? "opacity-100" : "opacity-0 pointer-events-none"
-        )}
-      >
-        <Card className="w-full max-w-md text-left">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center">
-              {activeTab === 'login' ? 'Sign In' : 'Create Account'}
-            </CardTitle>
-            <CardDescription className="text-center">
-              Enter your details to {activeTab === 'login' ? 'sign in to' : 'create'} your account
-            </CardDescription>
-          </CardHeader>
-          
-          <div className="flex border-b">
-            <button
-              className={cn(
-                "flex-1 px-4 py-2 text-center transition-colors",
-                activeTab === 'login' 
-                  ? "border-b-2 border-primary font-medium" 
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-              onClick={() => handleTabChange('login')}
-            >
-              Sign In
-            </button>
-            <button
-              className={cn(
-                "flex-1 px-4 py-2 text-center transition-colors",
-                activeTab === 'register' 
-                  ? "border-b-2 border-primary font-medium" 
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-              onClick={() => handleTabChange('register')}
-            >
-              Register
-            </button>
-          </div>
-          
-          <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    required
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <input
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    required
-                  />
-                </div>
-              </div>
-              
-              {authError && (
-                <div className="bg-destructive/10 text-destructive p-3 rounded-md text-sm">
-                  {authError}
-                </div>
-              )}
-              
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isAuthLoading}
-              >
-                {isAuthLoading 
-                  ? 'Loading...' 
-                  : activeTab === 'login' ? 'Sign In' : 'Create Account'
-                }
-              </Button>
-            </form>
-            
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="bg-background px-2 text-muted-foreground">or</span>
-              </div>
-            </div>
-            
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={handleGoogleSignIn}
-              disabled={isAuthLoading}
-            >
-              <img 
-                src="https://developers.google.com/identity/images/g-logo.png" 
-                alt="Google" 
-                className="w-5 h-5 mr-2" 
-              />
-              Continue with Google
-            </Button>
-          </CardContent>
-          
-          <CardFooter className="flex flex-col items-center gap-1 border-t px-6 py-4 text-center text-sm">
-            <p className="text-muted-foreground">
-              {activeTab === 'login' 
-                ? "Don't have an account?" 
-                : "Already have an account?"
-              }
-            </p>
-            <button
-              className="text-primary underline-offset-4 hover:underline transition-colors"
-              onClick={() => handleTabChange(activeTab === 'login' ? 'register' : 'login')}
-            >
-              {activeTab === 'login' ? 'Create an account' : 'Sign in'}
-            </button>
-          </CardFooter>
-        </Card>
-        
-        <button 
-          className="absolute top-4 right-4 text-white bg-black/20 rounded-full p-2 hover:bg-black/40 transition-colors"
-          onClick={toggleAuthModal}
-        >
-          <span className="sr-only">Close</span>
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            width="24" 
-            height="24" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
-          >
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      </div>
-    );
-  }
+  if (!isOpen) return null;
 
   return (
-    <>
-      {currentUser && (
-        <div className="absolute top-4 right-4 z-10">
-          <button
-            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 rounded-full pl-2 pr-3 py-1 text-white transition-colors"
-            onClick={toggleDropdown}
-          >
-            <div className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center">
-              {currentUser.photoURL ? (
-                <img 
-                  src={currentUser.photoURL} 
-                  alt={currentUser.displayName || currentUser.email} 
-                  className="w-7 h-7 rounded-full"
-                />
-              ) : (
-                <User className="w-4 h-4" />
-              )}
-            </div>
-            <span className="text-sm">
-              {currentUser.displayName || currentUser.email.split('@')[0]}
-            </span>
-          </button>
-          
-          {showDropdown && (
-            <div className="absolute top-full right-0 mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg z-10 w-36 py-1 text-sm">
-              <button
-                className="flex w-full items-center gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
-                onClick={handleSignOut}
-              >
-                <LogOut className="w-4 h-4" />
-                Sign Out
-              </button>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md relative">
+        {/* Close button */}
+        <button
+          onClick={closeAuthModal}
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        <div className="p-6">
+          <h2 className="text-2xl font-bold mb-6 text-center">
+            {mode === 'signin' ? 'Sign In' : 'Create Account'}
+          </h2>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-md text-sm">
+              {error}
             </div>
           )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === 'signup' && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Name</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <User className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-800 dark:text-white"
+                    placeholder="Your name"
+                    required={mode === 'signup'}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Email</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Mail className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-800 dark:text-white"
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Password</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-800 dark:text-white"
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Processing...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
+            </button>
+          </form>
+
+          <div className="mt-6 text-center">
+            <button
+              onClick={toggleMode}
+              className="text-sm text-primary hover:text-primary-dark"
+            >
+              {mode === 'signin'
+                ? "Don't have an account? Sign up"
+                : 'Already have an account? Sign in'}
+            </button>
+          </div>
         </div>
-      )}
-      
-      {!currentUser && !showWelcome && (
-        <div className="absolute top-4 right-4 z-10">
-          <Button
-            variant="timer"
-            size="sm"
-            onClick={toggleAuthModal}
-          >
-            Sign In
-          </Button>
-        </div>
-      )}
-      
-      {renderAuthModal()}
-    </>
+      </div>
+    </div>
   );
 };
 
-export default Auth; 
+// Create a dummy component for the default export
+const Auth = {
+  __esModule: true,
+  default: () => null,
+  AuthModalProvider,
+  useAuthModal
+};
+
+// Export AuthModalProvider and useAuthModal for direct imports
+export { AuthModalProvider, useAuthModal };
+
+// Export AuthModalProvider as default export
+export default AuthModalProvider; 

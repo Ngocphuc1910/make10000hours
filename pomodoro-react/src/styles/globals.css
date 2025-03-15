@@ -5,71 +5,71 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 224 71.4% 4.1%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 220 14.3% 95.9%;
+    --muted-foreground: 220 8.9% 46.1%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 224 71.4% 4.1%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 224 71.4% 4.1%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 346 85% 61%;
+    --primary-foreground: 210 20% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 220 14.3% 95.9%;
+    --secondary-foreground: 220.9 39.3% 11%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 220 14.3% 95.9%;
+    --accent-foreground: 220.9 39.3% 11%;
 
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 210 20% 98%;
 
-    --ring: 215 20.2% 65.1%;
+    --ring: 346 85% 61%;
 
     --radius: 0.5rem;
 
     /* Pomodoro colors */
-    --pomodoro: #f05050;
-    --short-break: #4acea3;
-    --long-break: #45a7e5;
+    --color-pomodoro: 346 85% 61%;
+    --color-short-break: 201 97% 39%;
+    --color-long-break: 82 67% 53%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 224 71.4% 4.1%;
+    --foreground: 210 20% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 215 27.9% 16.9%;
+    --muted-foreground: 217.9 10.6% 64.9%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 224 71.4% 4.1%;
+    --popover-foreground: 210 20% 98%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 224 71.4% 4.1%;
+    --card-foreground: 210 20% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 215 27.9% 16.9%;
+    --input: 215 27.9% 16.9%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 346 85% 61%;
+    --primary-foreground: 210 20% 98%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 215 27.9% 16.9%;
+    --secondary-foreground: 210 20% 98%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 215 27.9% 16.9%;
+    --accent-foreground: 210 20% 98%;
 
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 85.7% 97.3%;
+    --destructive-foreground: 210 20% 98%;
 
-    --ring: 217.2 32.6% 17.5%;
+    --ring: 346 85% 61%;
   }
 }
 
@@ -83,23 +83,46 @@
   }
 }
 
-/* Pomodoro specific styles */
-[data-timer-mode="pomodoro"] {
-  background-color: var(--pomodoro);
+.bg-pomodoro {
+  background-color: hsl(var(--color-pomodoro));
 }
 
-[data-timer-mode="shortBreak"] {
-  background-color: var(--short-break);
+.bg-short-break {
+  background-color: hsl(var(--color-short-break));
 }
 
-[data-timer-mode="longBreak"] {
-  background-color: var(--long-break);
+.bg-long-break {
+  background-color: hsl(var(--color-long-break));
 }
 
-.circular-progress {
-  transform: rotate(-90deg);
-  transform-origin: center;
-  transition: stroke-dashoffset 1s linear;
+.text-pomodoro {
+  color: hsl(var(--color-pomodoro));
+}
+
+.text-short-break {
+  color: hsl(var(--color-short-break));
+}
+
+.text-long-break {
+  color: hsl(var(--color-long-break));
+}
+
+.from-pomodoro {
+  --tw-gradient-from: hsl(var(--color-pomodoro)) var(--tw-gradient-from-position);
+  --tw-gradient-to: hsl(var(--color-pomodoro) / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+.from-short-break {
+  --tw-gradient-from: hsl(var(--color-short-break)) var(--tw-gradient-from-position);
+  --tw-gradient-to: hsl(var(--color-short-break) / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+.from-long-break {
+  --tw-gradient-from: hsl(var(--color-long-break)) var(--tw-gradient-from-position);
+  --tw-gradient-to: hsl(var(--color-long-break) / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
 }
 
 html {
@@ -129,17 +152,4 @@ body {
 
 .hidden {
   display: none;
-}
-
-.app.authenticated {
-  opacity: 1;
-  pointer-events: auto;
-  filter: blur(0);
-}
-
-.app:not(.authenticated) {
-  opacity: 0.3;
-  pointer-events: none;
-  filter: blur(5px);
-  transition: opacity 0.5s ease, filter 0.5s ease;
 } 
