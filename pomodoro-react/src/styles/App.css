@@ -113,21 +113,24 @@
 body {
   font-family: 'Roboto', 'Helvetica Neue', sans-serif;
   line-height: 1.6;
-  background-color: var(--pomodoro);
-  background-image: linear-gradient(135deg, var(--pomodoro) 0%, #943030 100%);
+  /* Comment out these background styles that are overriding Tailwind */
+  /* background-color: var(--pomodoro);
+  background-image: linear-gradient(135deg, var(--pomodoro) 0%, #943030 100%); */
   min-height: 100vh;
-  color: white;
+  /* color: white; */
   transition: background-color 0.5s, background-image 0.5s;
 }
 
 body[data-timer-mode="shortBreak"] {
-  background-color: var(--short-break);
-  background-image: linear-gradient(135deg, var(--short-break) 0%, #2a6165 100%);
+  /* Comment out these background styles */
+  /* background-color: var(--short-break);
+  background-image: linear-gradient(135deg, var(--short-break) 0%, #2a6165 100%); */
 }
 
 body[data-timer-mode="longBreak"] {
-  background-color: var(--long-break);
-  background-image: linear-gradient(135deg, var(--long-break) 0%, #275277 100%);
+  /* Comment out these background styles */
+  /* background-color: var(--long-break);
+  background-image: linear-gradient(135deg, var(--long-break) 0%, #275277 100%); */
 }
 
 button {

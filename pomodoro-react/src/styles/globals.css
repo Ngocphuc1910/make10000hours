@@ -136,7 +136,8 @@ html {
 }
 
 body {
-  background-color: var(--pomodoro);
+  /* Remove the red background */
+  /* background-color: var(--pomodoro); */
   transition: background-color 1s ease, background-image 1s ease;
   background-size: cover;
   background-position: center;
