@@ -22,9 +22,10 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "BUILD_PATH=../docs react-scripts build",
+    "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "predeploy": "npm run build && mv build ../docs"
   },
   "eslintConfig": {
     "extends": [
@@ -49,5 +50,6 @@
     "postcss": "^8.4.24",
     "tailwindcss": "^3.3.2",
     "tailwindcss-animate": "^1.0.7"
-  }
+  },
+  "homepage": "https://ngocphuc1910.github.io/make10000hours/"
 }

@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/make10000hours/static/css/main.c7103285.css",
+    "main.js": "/make10000hours/static/js/main.eec73783.js",
+    "index.html": "/make10000hours/index.html",
+    "main.c7103285.css.map": "/make10000hours/static/css/main.c7103285.css.map",
+    "main.eec73783.js.map": "/make10000hours/static/js/main.eec73783.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.c7103285.css",
+    "static/js/main.eec73783.js"
+  ]
+}
