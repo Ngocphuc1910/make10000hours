@@ -19,7 +19,7 @@
     --border: 220 13% 91%;
     --input: 220 13% 91%;
 
-    --primary: 346 85% 61%;
+    --primary: 220 14% 20%;
     --primary-foreground: 210 20% 98%;
 
     --secondary: 220 14.3% 95.9%;
@@ -31,14 +31,14 @@
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 20% 98%;
 
-    --ring: 346 85% 61%;
+    --ring: 220 14% 20%;
 
     --radius: 0.5rem;
 
-    /* Pomodoro colors */
-    --color-pomodoro: 346 85% 61%;
-    --color-short-break: 201 97% 39%;
-    --color-long-break: 82 67% 53%;
+    /* Pomodoro colors - updated to more muted tones */
+    --color-pomodoro: 220 14% 20%;
+    --color-short-break: 200 14% 40%;
+    --color-long-break: 180 14% 40%;
   }
 
   .dark {
@@ -57,7 +57,7 @@
     --border: 215 27.9% 16.9%;
     --input: 215 27.9% 16.9%;
 
-    --primary: 346 85% 61%;
+    --primary: 215 14% 75%;
     --primary-foreground: 210 20% 98%;
 
     --secondary: 215 27.9% 16.9%;
@@ -69,7 +69,7 @@
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 20% 98%;
 
-    --ring: 346 85% 61%;
+    --ring: 215 14% 75%;
   }
 }
 
@@ -153,4 +153,14 @@ body {
 
 .hidden {
   display: none;
+}
+
+/* Shadow classes */
+.shadow-sm {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Remove transition from hover effects for a cleaner, more minimalist feel */
+button, a {
+  transition: none;
 } 
