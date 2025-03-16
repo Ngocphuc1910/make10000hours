@@ -2,7 +2,7 @@
   "name": "pomodoro-react",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://ngocphuc1910.github.io/make10000hours/",
+  "homepage": "https://make10000hours.com/",
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/modifiers": "^6.0.1",

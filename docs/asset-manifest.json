@@ -1,10 +1,10 @@
 {
   "files": {
-    "main.css": "/make10000hours/static/css/main.c7103285.css",
-    "main.js": "/make10000hours/static/js/main.eec73783.js",
-    "index.html": "/make10000hours/index.html",
-    "main.c7103285.css.map": "/make10000hours/static/css/main.c7103285.css.map",
-    "main.eec73783.js.map": "/make10000hours/static/js/main.eec73783.js.map"
+    "main.css": "/static/css/main.c7103285.css",
+    "main.js": "/static/js/main.eec73783.js",
+    "index.html": "/index.html",
+    "main.c7103285.css.map": "/static/css/main.c7103285.css.map",
+    "main.eec73783.js.map": "/static/js/main.eec73783.js.map"
   },
   "entrypoints": [
     "static/css/main.c7103285.css",
