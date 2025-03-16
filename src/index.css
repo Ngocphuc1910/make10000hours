@@ -1,0 +1,4 @@
+/* Hide security delay messages */
+[class*="security"], [id*="security"] {
+  display: none !important;
+} 

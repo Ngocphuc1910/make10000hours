@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Clock } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
-const LoginModal = ({ onClose }) => {
+const LoginModal = ({ onClose, onSwitchToSignup }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
@@ -31,6 +31,11 @@ const LoginModal = ({ onClose }) => {
     } catch (error) {
       // Error is handled by the useAuth hook
     }
+  };
+
+  const handleForgotPassword = () => {
+    // Will be implemented later
+    alert('Password reset functionality will be implemented soon.');
   };
 
   return (
@@ -101,9 +106,13 @@ const LoginModal = ({ onClose }) => {
               </label>
             </div>
             
-            <a href="#" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary">
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary"
+            >
               Forgot password?
-            </a>
+            </button>
           </div>
           
           <button
@@ -117,10 +126,21 @@ const LoginModal = ({ onClose }) => {
         
         {/* Google sign in */}
         <div className="mt-6">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                Or continue with
+              </span>
+            </div>
+          </div>
+          
           <button
             onClick={handleGoogleSignIn}
             disabled={isAuthLoading}
-            className="w-full flex items-center justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70"
+            className="mt-4 w-full flex items-center justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70"
           >
             <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
               <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
@@ -137,7 +157,13 @@ const LoginModal = ({ onClose }) => {
         {/* Sign up link */}
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Don't have an account? <span className="font-medium text-primary cursor-pointer">Sign Up</span>
+            Don't have an account?{' '}
+            <button 
+              className="font-medium text-primary hover:underline" 
+              onClick={onSwitchToSignup}
+            >
+              Sign Up
+            </button>
           </p>
         </div>
       </div>

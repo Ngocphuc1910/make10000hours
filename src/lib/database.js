@@ -10,18 +10,65 @@ export const getUserProfile = async (userId) => {
     .eq('id', userId)
     .single();
   
-  if (error) throw error;
+  if (error) {
+    // If profile doesn't exist yet, return null instead of throwing
+    if (error.code === 'PGRST116') {
+      return null;
+    }
+    throw error;
+  }
   return data;
+};
+
+export const createOrUpdateUserProfile = async (profileData) => {
+  // Check if profile exists
+  const { data: existingProfile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', profileData.id)
+    .single();
+  
+  let result;
+  
+  if (existingProfile) {
+    // Update existing profile
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({
+        ...profileData,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', profileData.id)
+      .select();
+    
+    if (error) throw error;
+    result = data[0];
+  } else {
+    // Create new profile
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert(profileData)
+      .select();
+    
+    if (error) throw error;
+    result = data[0];
+  }
+  
+  return result;
 };
 
 export const updateUserProfile = async (userId, updates) => {
   const { data, error } = await supabase
     .from('profiles')
-    .update(updates)
-    .eq('id', userId);
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', userId)
+    .select();
   
   if (error) throw error;
-  return data;
+  return data[0];
 };
 
 /**
