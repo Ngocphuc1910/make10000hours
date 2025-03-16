@@ -8,16 +8,18 @@
     "@dnd-kit/modifiers": "^6.0.1",
     "@dnd-kit/sortable": "^7.0.2",
     "@dnd-kit/utilities": "^3.2.2",
+    "@supabase/supabase-js": "^2.49.1",
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
     "classnames": "^2.3.2",
     "clsx": "^2.0.0",
+    "dotenv": "^16.4.7",
     "firebase": "^9.22.0",
     "lucide-react": "^0.279.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
+    "react-scripts": "^5.0.1",
     "tailwind-merge": "^1.14.0",
     "web-vitals": "^2.1.4"
   },
@@ -26,7 +28,13 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "deploy": "npm run build && cp -r build/* . && touch .nojekyll"
+    "deploy": "npm run build && cp -r build/* . && touch .nojekyll",
+    "supabase:setup": "node supabase-dev-setup.js",
+    "supabase:env": "node setup-supabase-env.js",
+    "supabase:schema": "node copy-schema.js",
+    "supabase:types": "node generate-types.js",
+    "supabase:login": "npx supabase login",
+    "supabase:projects": "npx supabase projects list"
   },
   "eslintConfig": {
     "extends": [

@@ -3,6 +3,8 @@ import './styles/globals.css';
 import { Clock, Bell, Settings, Play, Pause, RotateCcw, SkipForward, Plus, FolderPlus, Medal, Flame, Sunrise } from 'lucide-react';
 import { ThemeToggle } from './components/ThemeToggle';
 import SessionsList from './components/SessionsList';
+import Header from './components/Header';
+import { AuthProvider } from './hooks/useAuth';
 
 function App() {
   const [time, setTime] = useState(25 * 60); // 25 minutes in seconds
@@ -74,241 +76,222 @@ function App() {
   }, [isActive, isPaused]);
   
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      {/* Header */}
-      <header className="h-16 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6">
-        <div className="flex items-center gap-2 font-semibold">
-          <Clock className="w-5 h-5 text-gray-500" />
-          <span>10,000 Hours</span>
-        </div>
+    <AuthProvider>
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 dark:text-gray-100">
+        {/* Header */}
+        <Header />
         
-        <div className="flex items-center gap-4">
-          <button className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
-            <Bell className="w-5 h-5" />
-          </button>
-          
-          <ThemeToggle />
-          
-          <button className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
-            <Settings className="w-5 h-5" />
-          </button>
-          
-          <div className="w-9 h-9 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center text-sm font-medium">
-            <span>JD</span>
-          </div>
-        </div>
-      </header>
-      
-      <main className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-          {/* Left sidebar */}
-          <div className="md:col-span-3 space-y-6">
-            {/* Quick Actions */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
-              <h2 className="font-semibold text-lg mb-4">Quick Actions</h2>
-              
-              <div className="space-y-2">
-                <button 
-                  className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white p-3 rounded-md"
-                  onClick={startTimer}
-                >
-                  <Play className="w-4 h-4" />
-                  <span>Quick Start</span>
-                </button>
+        <main className="container mx-auto px-4 py-6">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            {/* Left sidebar */}
+            <div className="md:col-span-3 space-y-6">
+              {/* Quick Actions */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+                <h2 className="font-semibold text-lg mb-4">Quick Actions</h2>
                 
-                <button 
-                  className="w-full flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-700 p-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-                  onClick={() => {
-                    if (sessionsListRef.current) {
-                      sessionsListRef.current.openTaskDialog();
-                    }
-                  }}
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>New Task</span>
-                </button>
-                
-                <button className="w-full flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-700 p-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <FolderPlus className="w-4 h-4" />
-                  <span>New Project</span>
-                </button>
+                <div className="space-y-2">
+                  <button 
+                    className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white p-3 rounded-md"
+                    onClick={startTimer}
+                  >
+                    <Play className="w-4 h-4" />
+                    <span>Quick Start</span>
+                  </button>
+                  
+                  <button 
+                    className="w-full flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-700 p-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                    onClick={() => {
+                      if (sessionsListRef.current) {
+                        sessionsListRef.current.openTaskDialog();
+                      }
+                    }}
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>New Task</span>
+                  </button>
+                  
+                  <button className="w-full flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-700 p-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <FolderPlus className="w-4 h-4" />
+                    <span>New Project</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-          
-          {/* Main content */}
-          <div className="md:col-span-6">
-            {/* Timer */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 text-center">
-              <div className="flex justify-center space-x-2 mb-6">
-                <button 
-                  className={`px-4 py-2 rounded-full ${mode === 'pomodoro' ? 'bg-gray-900 text-white' : 'bg-gray-100 dark:bg-gray-700'}`}
-                  onClick={() => setMode('pomodoro')}
-                >
-                  Pomodoro
-                </button>
-                <button 
-                  className={`px-4 py-2 rounded-full ${mode === 'shortBreak' ? 'bg-gray-900 text-white' : 'bg-gray-100 dark:bg-gray-700'}`}
-                  onClick={() => setMode('shortBreak')}
-                >
-                  Short Break
-                </button>
-                <button 
-                  className={`px-4 py-2 rounded-full ${mode === 'longBreak' ? 'bg-gray-900 text-white' : 'bg-gray-100 dark:bg-gray-700'}`}
-                  onClick={() => setMode('longBreak')}
-                >
-                  Long Break
-                </button>
-              </div>
-              
-              <div className="text-8xl font-bold tracking-tighter mb-8">
-                {formatTime(time)}
-              </div>
-              
-              <div className="flex justify-center space-x-4">
-                {isActive && !isPaused ? (
+            
+            {/* Main content */}
+            <div className="md:col-span-6">
+              {/* Timer */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 text-center">
+                <div className="flex justify-center space-x-2 mb-6">
+                  <button 
+                    className={`px-4 py-2 rounded-full ${mode === 'pomodoro' ? 'bg-gray-900 text-white' : 'bg-gray-100 dark:bg-gray-700'}`}
+                    onClick={() => setMode('pomodoro')}
+                  >
+                    Pomodoro
+                  </button>
+                  <button 
+                    className={`px-4 py-2 rounded-full ${mode === 'shortBreak' ? 'bg-gray-900 text-white' : 'bg-gray-100 dark:bg-gray-700'}`}
+                    onClick={() => setMode('shortBreak')}
+                  >
+                    Short Break
+                  </button>
+                  <button 
+                    className={`px-4 py-2 rounded-full ${mode === 'longBreak' ? 'bg-gray-900 text-white' : 'bg-gray-100 dark:bg-gray-700'}`}
+                    onClick={() => setMode('longBreak')}
+                  >
+                    Long Break
+                  </button>
+                </div>
+                
+                <div className="text-8xl font-bold tracking-tighter mb-8">
+                  {formatTime(time)}
+                </div>
+                
+                <div className="flex justify-center space-x-4">
+                  {isActive && !isPaused ? (
+                    <button
+                      onClick={pauseTimer}
+                      className="w-14 h-14 rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-sm flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      <Pause className="w-6 h-6" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={startTimer}
+                      className="w-14 h-14 rounded-full bg-gray-900 text-white shadow-sm flex items-center justify-center hover:bg-gray-800 transition-colors"
+                    >
+                      <Play className="w-6 h-6 ml-0.5" />
+                    </button>
+                  )}
+                  
                   <button
-                    onClick={pauseTimer}
+                    onClick={resetTimer}
                     className="w-14 h-14 rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-sm flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                   >
-                    <Pause className="w-6 h-6" />
+                    <RotateCcw className="w-6 h-6" />
                   </button>
-                ) : (
-                  <button
-                    onClick={startTimer}
-                    className="w-14 h-14 rounded-full bg-gray-900 text-white shadow-sm flex items-center justify-center hover:bg-gray-800 transition-colors"
-                  >
-                    <Play className="w-6 h-6 ml-0.5" />
-                  </button>
-                )}
-                
-                <button
-                  onClick={resetTimer}
-                  className="w-14 h-14 rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-sm flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                >
-                  <RotateCcw className="w-6 h-6" />
-                </button>
-                
-                <button
-                  onClick={skipTimer}
-                  className="w-14 h-14 rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-sm flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                >
-                  <SkipForward className="w-6 h-6" />
-                </button>
-              </div>
-              
-              <div className="mt-8 py-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex justify-between items-center">
-                  <div className="text-left">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Current Task</div>
-                    <div className="font-medium">Complete UI Development</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Project</div>
-                    <div className="font-medium">Work</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {/* Today's Sessions with drag and drop */}
-            <SessionsList ref={sessionsListRef} />
-          </div>
-          
-          {/* Right sidebar */}
-          <div className="md:col-span-3 space-y-6">
-            {/* Progress Tracker */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
-              <h2 className="font-semibold text-lg mb-4">Progress to 10,000 Hours</h2>
-              
-              <div className="mb-2 flex justify-between text-sm">
-                <span>2,500 hours</span>
-                <span>10,000 hours</span>
-              </div>
-              
-              <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-6">
-                <div 
-                  className="h-full bg-gray-400 dark:bg-gray-500" 
-                  style={{ width: '25%' }}
-                ></div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
-                  <div className="text-sm text-gray-500 dark:text-gray-400">Daily Average</div>
-                  <div className="text-xl font-bold">2.5 hrs</div>
-                </div>
-                
-                <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
-                  <div className="text-sm text-gray-500 dark:text-gray-400">Remaining</div>
-                  <div className="text-xl font-bold">7,500 hrs</div>
-                </div>
-              </div>
-            </div>
-            
-            {/* Projects - moved from left sidebar */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="font-semibold text-lg">Projects</h2>
-                <button className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-              
-              <div className="space-y-3">
-                {projects.map(project => {
-                  const progress = (project.completedTasks / project.tasks) * 100;
                   
-                  return (
-                    <div key={project.id} className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md cursor-pointer">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium">{project.name}</span>
-                        <span className="text-xs text-gray-500">{project.completedTasks}/{project.tasks}</span>
-                      </div>
-                      
-                      <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gray-400 dark:bg-gray-500" 
-                          style={{ width: `${progress}%` }}
-                        ></div>
-                      </div>
+                  <button
+                    onClick={skipTimer}
+                    className="w-14 h-14 rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-sm flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    <SkipForward className="w-6 h-6" />
+                  </button>
+                </div>
+                
+                <div className="mt-8 py-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex justify-between items-center">
+                    <div className="text-left">
+                      <div className="text-sm text-gray-500 dark:text-gray-400">Current Task</div>
+                      <div className="font-medium">Complete UI Development</div>
                     </div>
-                  );
-                })}
+                    <div className="text-right">
+                      <div className="text-sm text-gray-500 dark:text-gray-400">Project</div>
+                      <div className="font-medium">Work</div>
+                    </div>
+                  </div>
+                </div>
               </div>
+              
+              {/* Today's Sessions with drag and drop */}
+              <SessionsList ref={sessionsListRef} />
             </div>
             
-            {/* Achievements - more minimalist */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
-              <h2 className="font-semibold text-lg mb-4">Achievements</h2>
+            {/* Right sidebar */}
+            <div className="md:col-span-3 space-y-6">
+              {/* Progress Tracker */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+                <h2 className="font-semibold text-lg mb-4">Progress to 10,000 Hours</h2>
+                
+                <div className="mb-2 flex justify-between text-sm">
+                  <span>2,500 hours</span>
+                  <span>10,000 hours</span>
+                </div>
+                
+                <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-6">
+                  <div 
+                    className="h-full bg-gray-400 dark:bg-gray-500" 
+                    style={{ width: '25%' }}
+                  ></div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">Daily Average</div>
+                    <div className="text-xl font-bold">2.5 hrs</div>
+                  </div>
+                  
+                  <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">Remaining</div>
+                    <div className="text-xl font-bold">7,500 hrs</div>
+                  </div>
+                </div>
+              </div>
               
-              <div className="flex justify-between">
-                <div className="flex flex-col items-center">
-                  <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full flex items-center justify-center mb-2">
-                    <Medal className="w-6 h-6" />
-                  </div>
-                  <span className="text-xs">First Mile</span>
+              {/* Projects - moved from left sidebar */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="font-semibold text-lg">Projects</h2>
+                  <button className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <Plus className="w-4 h-4" />
+                  </button>
                 </div>
                 
-                <div className="flex flex-col items-center">
-                  <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full flex items-center justify-center mb-2">
-                    <Flame className="w-6 h-6" />
-                  </div>
-                  <span className="text-xs">7 Day Streak</span>
+                <div className="space-y-3">
+                  {projects.map(project => {
+                    const progress = (project.completedTasks / project.tasks) * 100;
+                    
+                    return (
+                      <div key={project.id} className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md cursor-pointer">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium">{project.name}</span>
+                          <span className="text-xs text-gray-500">{project.completedTasks}/{project.tasks}</span>
+                        </div>
+                        
+                        <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gray-400 dark:bg-gray-500" 
+                            style={{ width: `${progress}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+              </div>
+              
+              {/* Achievements - more minimalist */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+                <h2 className="font-semibold text-lg mb-4">Achievements</h2>
                 
-                <div className="flex flex-col items-center">
-                  <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full flex items-center justify-center mb-2">
-                    <Sunrise className="w-6 h-6" />
+                <div className="flex justify-between">
+                  <div className="flex flex-col items-center">
+                    <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full flex items-center justify-center mb-2">
+                      <Medal className="w-6 h-6" />
+                    </div>
+                    <span className="text-xs">First Mile</span>
                   </div>
-                  <span className="text-xs">Early Bird</span>
+                  
+                  <div className="flex flex-col items-center">
+                    <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full flex items-center justify-center mb-2">
+                      <Flame className="w-6 h-6" />
+                    </div>
+                    <span className="text-xs">7 Day Streak</span>
+                  </div>
+                  
+                  <div className="flex flex-col items-center">
+                    <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full flex items-center justify-center mb-2">
+                      <Sunrise className="w-6 h-6" />
+                    </div>
+                    <span className="text-xs">Early Bird</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </AuthProvider>
   );
 }
 
