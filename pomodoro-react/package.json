@@ -2,6 +2,7 @@
   "name": "pomodoro-react",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://ngocphuc1910.github.io/make10000hours/",
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/modifiers": "^6.0.1",
@@ -24,8 +25,7 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "predeploy": "npm run build && mv build ../docs"
+    "eject": "react-scripts eject"
   },
   "eslintConfig": {
     "extends": [
@@ -50,6 +50,5 @@
     "postcss": "^8.4.24",
     "tailwindcss": "^3.3.2",
     "tailwindcss-animate": "^1.0.7"
-  },
-  "homepage": "https://ngocphuc1910.github.io/make10000hours/"
+  }
 }
