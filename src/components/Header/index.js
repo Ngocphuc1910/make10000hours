@@ -3,6 +3,7 @@ import { Bell, Settings, Clock, User, LogOut, ChevronDown } from 'lucide-react';
 import LoginModal from '../LoginModal';
 import SignupModal from '../SignupModal';
 import { useAuth } from '../../hooks/useAuth';
+import { ThemeToggle } from '../ThemeToggle';
 
 const Header = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -76,6 +77,9 @@ const Header = () => {
         <button className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
           <Bell className="w-5 h-5" />
         </button>
+        
+        {/* Theme Toggle Button */}
+        <ThemeToggle />
         
         <button className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
           <Settings className="w-5 h-5" />
