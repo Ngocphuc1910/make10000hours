@@ -10,10 +10,25 @@ const Header = () => {
   const [showSignupModal, setShowSignupModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { currentUser, userProfile, signOut } = useAuth();
+  
+  // Force login button for debugging
+  const [forceShowLogin, setForceShowLogin] = useState(false);
 
   // Debug auth state
   useEffect(() => {
-    console.log("Auth state in Header:", { currentUser, userProfileExists: !!userProfile });
+    console.log("Auth state in Header:", { 
+      currentUser, 
+      userProfileExists: !!userProfile,
+      currentUserEmail: currentUser?.email || 'not set',
+      userProfileName: userProfile?.full_name || 'not set'
+    });
+    
+    // Check for GitHub Pages domain and force login button if needed
+    const isGitHubPages = window.location.hostname.includes('github.io');
+    if (isGitHubPages) {
+      setForceShowLogin(true);
+      console.log("GitHub Pages detected, forcing login button");
+    }
   }, [currentUser, userProfile]);
 
   useEffect(() => {
@@ -90,7 +105,8 @@ const Header = () => {
           <Settings className="w-5 h-5" />
         </button>
         
-        {currentUser ? (
+        {/* Show button based on auth state OR force show for GitHub Pages */}
+        {(currentUser && !forceShowLogin) ? (
           /* User avatar - with dropdown for logout */
           <div className="relative">
             <div 
@@ -129,7 +145,7 @@ const Header = () => {
             )}
           </div>
         ) : (
-          /* Login button - always show in production for debugging */
+          /* Login button - always show if not logged in or if forced */
           <button 
             onClick={() => setShowLoginModal(true)}
             className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 px-3 py-1.5"
