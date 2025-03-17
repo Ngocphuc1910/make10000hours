@@ -7,126 +7,173 @@
     <meta name="theme-color" content="#000000" />
     <meta
       name="description"
-      content="10,000 Hours Pomodoro Timer - Track your path to mastery"
+      content="Track your progress to 10,000 hours of mastery"
     />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <!--
+      manifest.json provides metadata used when your web app is installed on a
+      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
+    -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <!--
+      Notice the use of %PUBLIC_URL% in the tags above.
+      It will be replaced with the URL of the `public` folder during the build.
+      Only files inside the `public` folder can be referenced from the HTML.
+
+      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
+      work correctly both with client-side routing and a non-root public URL.
+      Learn how to configure a non-root public URL by running `npm run build`.
+    -->
+    <title>10,000 Hours - Pomodoro Timer</title>
+
+    <!-- Inline styles for fallback content -->
+    <style>
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+          'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      
+      .fallback-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        text-align: center;
+        padding: 0 20px;
+        background-color: #f9fafb;
+      }
+      
+      .fallback-header {
+        padding: 16px;
+        background-color: white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      
+      .fallback-title {
+        font-size: 24px;
+        font-weight: bold;
+        color: #111827;
+      }
+      
+      .fallback-button {
+        padding: 8px 16px;
+        background-color: #1f2937;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      
+      .fallback-error {
+        margin-top: 20px;
+        padding: 16px;
+        background-color: #fee2e2;
+        border: 1px solid #ef4444;
+        border-radius: 4px;
+        color: #b91c1c;
+        max-width: 600px;
+        text-align: left;
+        display: none;
+      }
+    </style>
     
-    <!-- GitHub Pages SPA support -->
+    <!-- Single Page Apps for GitHub Pages -->
     <script type="text/javascript">
       // Single Page Apps for GitHub Pages
       // MIT License
       // https://github.com/rafgraph/spa-github-pages
+      // This script checks to see if a redirect is present in the query string,
+      // converts it back into the correct url and adds it to the
+      // browser's history using window.history.replaceState(...),
+      // which won't cause the browser to attempt to load the new url.
+      // When the single page app is loaded further down in this file,
+      // the correct url will be waiting in the browser's history for
+      // the single page app to route accordingly.
       (function(l) {
         if (l.search[1] === '/' ) {
           var decoded = l.search.slice(1).split('&').map(function(s) { 
             return s.replace(/~and~/g, '&')
           }).join('?');
           window.history.replaceState(null, null,
-            l.pathname.slice(0, -1) + decoded + l.hash
+              l.pathname.slice(0, -1) + decoded + l.hash
           );
         }
       }(window.location))
     </script>
-    
-    <!-- Enhanced script to disable security timers and prevent auto-clicks -->
-    <script>
-      (function() {
-        // Function to remove security messages and prevent auto-clicks
-        window.addEventListener('DOMContentLoaded', function() {
-          // Initial protection before components load
-          var originalClick = Element.prototype.click;
-          Element.prototype.click = function() {
-            console.log('Click intercepted - checking if legitimate');
-            // Block programmatic clicks on buttons and inputs in auth forms
-            if (this.tagName === 'BUTTON' || this.tagName === 'INPUT') {
-              var isInAuthForm = false;
-              var parent = this;
-              
-              // Check if element is in an auth form/modal
-              while (parent && parent !== document) {
-                if (parent.className && 
-                    (parent.className.includes('modal') || 
-                     parent.className.includes('form'))) {
-                  isInAuthForm = true;
-                  break;
-                }
-                parent = parent.parentElement;
-              }
-              
-              // Block auto-clicks in auth forms
-              if (isInAuthForm) {
-                console.log('Blocked auto-click in auth form');
-                return false;
-              }
-            }
-            
-            // Allow legitimate clicks to proceed
-            return originalClick.apply(this, arguments);
-          };
-          
-          // Regular security message removal
-          setInterval(function() {
-            try {
-              // Remove security messages
-              var elements = document.querySelectorAll('div');
-              for (var i = 0; i < elements.length; i++) {
-                var el = elements[i];
-                if (el && el.textContent && (
-                  el.textContent.indexOf('For security purposes') !== -1 || 
-                  el.textContent.indexOf('after 46 seconds') !== -1
-                )) {
-                  el.style.display = 'none';
-                }
-              }
-              
-              // Remove any injected click triggers
-              var suspiciousScripts = document.querySelectorAll('script:not([src])');
-              for (var j = 0; j < suspiciousScripts.length; j++) {
-                var script = suspiciousScripts[j];
-                if (script.textContent && (
-                  script.textContent.indexOf('click()') !== -1 ||
-                  script.textContent.indexOf('submit()') !== -1
-                )) {
-                  script.textContent = '/* Neutralized */';
-                }
-              }
-            } catch (e) {
-              // Ignore errors
-            }
-          }, 100);
-        });
-      })();
-    </script>
-    
-    <title>10,000 Hours - Pomodoro Timer</title>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
-    
-    <div class="hidden">
-      <audio src="%PUBLIC_URL%/backtowork.mp3" data-sound="pomodoro"></audio>
-      <audio src="%PUBLIC_URL%/break.mp3" data-sound="shortBreak"></audio>
-      <audio src="%PUBLIC_URL%/break.mp3" data-sound="longBreak"></audio>
+    <div id="root">
+      <!-- Fallback content that will show if React fails to load -->
+      <div class="fallback-content">
+        <header class="fallback-header">
+          <h1 class="fallback-title">10,000 Hours</h1>
+          <button class="fallback-button" onclick="window.location.reload()">Sign In</button>
+        </header>
+        
+        <h2>Loading 10,000 Hours App...</h2>
+        <p>If you continue to see this message, there might be an issue loading the application.</p>
+        <button class="fallback-button" onclick="window.location.reload()">Reload Page</button>
+        
+        <div id="browser-info"></div>
+        
+        <div class="fallback-error" id="error-display">
+          <p><strong>Error Details:</strong></p>
+          <pre id="error-message"></pre>
+        </div>
+      </div>
     </div>
-
+    
     <script>
-      // Error logging to diagnose UI issues
+      // Record that HTML loaded successfully
+      console.log('index.html loaded at', new Date().toISOString());
+      
+      // Basic browser diagnostics
+      document.getElementById('browser-info').innerHTML = `
+        <p style="margin-top: 20px; color: #6b7280; font-size: 14px;">
+          Browser: ${navigator.userAgent}<br>
+          URL: ${window.location.href}<br>
+          Time: ${new Date().toLocaleString()}
+        </p>
+      `;
+      
+      // Simple error handler that will display errors if React fails to load
       window.addEventListener('error', function(e) {
-        console.error('Global error caught:', e.error);
-        // Display error directly on screen for debugging
-        var errorDiv = document.createElement('div');
-        errorDiv.style.position = 'fixed';
-        errorDiv.style.top = '10px';
-        errorDiv.style.left = '10px';
-        errorDiv.style.backgroundColor = 'rgba(255,0,0,0.8)';
-        errorDiv.style.color = 'white';
-        errorDiv.style.padding = '10px';
-        errorDiv.style.zIndex = '9999';
-        errorDiv.textContent = 'Error: ' + (e.error ? e.error.message : e.message);
-        document.body.appendChild(errorDiv);
+        console.error('Global error caught in index.html:', e.error || e.message);
+        document.getElementById('error-display').style.display = 'block';
+        document.getElementById('error-message').textContent = e.error ? e.error.stack : e.message;
       });
+      
+      // Check if React app loads within reasonable time
+      setTimeout(function() {
+        // If the fallback content is still visible after 10 seconds, we likely have a loading issue
+        if (document.querySelector('.fallback-content') && 
+            window.getComputedStyle(document.querySelector('.fallback-content')).display !== 'none') {
+          console.warn('React app may have failed to load completely after 10 seconds');
+        }
+      }, 10000);
     </script>
+    
+    <!--
+      This HTML file is a template.
+      If you open it directly in the browser, you will see an empty page.
+
+      You can add webfonts, meta tags, or analytics to this file.
+      The build step will place the bundled scripts into the <body> tag.
+
+      To begin the development, run `npm start` or `yarn start`.
+      To create a production bundle, use `npm run build` or `yarn build`.
+    -->
   </body>
 </html> 

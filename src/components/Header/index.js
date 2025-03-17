@@ -45,11 +45,22 @@ function Header() {
         setForceShowLogin(true);
         console.log("Production environment detected, forcing login button");
       }
+      
+      // Add page visibility check
+      document.addEventListener('visibilitychange', () => {
+        console.log('Page visibility changed:', document.visibilityState);
+      });
+      
+      // Check if TailwindCSS is loaded properly
+      const isTailwindLoaded = !!document.querySelector('style[data-styled]') || 
+                              !!document.querySelector('link[rel=stylesheet][href*=tailwind]');
+      console.log('TailwindCSS appears to be loaded:', isTailwindLoaded);
+      
     } catch (err) {
       console.error("Error in header debug:", err);
       setError(err.message);
     }
-  }, [user]);
+  }, [user, forceShowLogin]); // Fixed ESLint warning by adding forceShowLogin to deps
   
   // Toggle theme function
   const toggleTheme = () => {
@@ -94,6 +105,7 @@ function Header() {
     }
   };
   
+  // This function is used when the "Sign Up" link in the login modal is clicked
   const handleOpenSignupModal = () => {
     try {
       setShowSignupModal(true);
@@ -115,8 +127,8 @@ function Header() {
   
   const handleSwitchToSignup = () => {
     try {
-      setShowLoginModal(false);
-      setShowSignupModal(true);
+      console.log("Switching to signup from login");
+      handleOpenSignupModal(); // Use the existing function to fix the unused warning
     } catch (err) {
       console.error("Error switching to signup:", err);
       setError(err.message);
@@ -146,6 +158,10 @@ function Header() {
   // Memoized value for whether to show login based on user state or forced visibility
   const shouldShowLogin = useMemo(() => {
     try {
+      // Force login in production for now
+      if (process.env.NODE_ENV === 'production') {
+        return true;
+      }
       return !user || forceShowLogin;
     } catch (err) {
       console.error("Error determining login visibility:", err);
@@ -166,6 +182,9 @@ function Header() {
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
         <div className="flex items-center">
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">10,000 Hours</h1>
+          <span className="ml-3 text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-300">
+            {process.env.NODE_ENV || 'development'}
+          </span>
         </div>
         
         <div className="flex items-center space-x-3">
@@ -196,6 +215,7 @@ function Header() {
               <button
                 onClick={handleOpenLoginModal}
                 className="flex items-center gap-1 bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded-md text-sm"
+                id="sign-in-button"
               >
                 <User className="h-4 w-4" />
                 <span>Sign In</span>
