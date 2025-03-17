@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, useCallback } from 'react';
+import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
 import supabase from '../lib/supabase';
 import { getUserProfile, createOrUpdateUserProfile } from '../lib/database';
 
@@ -14,6 +14,51 @@ export const AuthProvider = ({ children }) => {
 
   // Define session timeout (in milliseconds) - 8 hours
   const SESSION_TIMEOUT = 8 * 60 * 60 * 1000;
+  
+  // Use refs for functions to avoid circular dependencies
+  const signOutRef = useRef(null);
+  
+  // Sign out function - defined early to avoid circular dependencies
+  const signOut = async () => {
+    try {
+      console.log("Attempting to sign out user...");
+      setIsAuthLoading(true);
+      
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error("Supabase signOut error:", error);
+        throw error;
+      }
+      
+      console.log("Sign out successful, clearing user data");
+      
+      // Clear user state
+      setCurrentUser(null);
+      setUserProfile(null);
+      
+      // Clear session timeout
+      if (sessionExpiryTimeout) {
+        clearTimeout(sessionExpiryTimeout);
+        setSessionExpiryTimeout(null);
+      }
+      
+      // Force a refresh of auth state
+      window.location.reload();
+      
+      console.log("Sign out complete");
+      return true;
+    } catch (error) {
+      console.error("Sign out error:", error.message);
+      setAuthError("Failed to sign out: " + error.message);
+      throw error;
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+  
+  // Assign signOut to ref for use in callbacks
+  signOutRef.current = signOut;
 
   // Fetch user profile - wrapped in useCallback to prevent unnecessary rerenders
   const fetchUserProfile = useCallback(async (userId) => {
@@ -27,7 +72,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // Start session expiry timer - wrapped in useCallback to prevent unnecessary rerenders
+  // Start session expiry timer - using signOutRef to avoid circular dependency
   const startSessionExpiryTimer = useCallback(() => {
     // Clear existing timer if any
     if (sessionExpiryTimeout) {
@@ -37,14 +82,16 @@ export const AuthProvider = ({ children }) => {
     // Set new timer
     const timeoutId = setTimeout(async () => {
       console.log("Session expired due to inactivity");
-      await signOut();
+      if (signOutRef.current) {
+        await signOutRef.current();
+      }
       setAuthError("Your session has expired due to inactivity. Please sign in again.");
     }, SESSION_TIMEOUT);
 
     setSessionExpiryTimeout(timeoutId);
-  }, [sessionExpiryTimeout]);
+  }, [sessionExpiryTimeout, SESSION_TIMEOUT]);
 
-  // Reset session timer on user activity - wrapped in useCallback to prevent unnecessary rerenders
+  // Reset session timer on user activity
   const resetSessionTimer = useCallback(() => {
     if (currentUser) {
       startSessionExpiryTimer();
@@ -328,45 +375,6 @@ export const AuthProvider = ({ children }) => {
       return true;
     } catch (error) {
       setAuthError(error.message);
-      throw error;
-    } finally {
-      setIsAuthLoading(false);
-    }
-  };
-
-  // Sign out
-  const signOut = async () => {
-    try {
-      console.log("Attempting to sign out user...");
-      setIsAuthLoading(true);
-      
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error("Supabase signOut error:", error);
-        throw error;
-      }
-      
-      console.log("Sign out successful, clearing user data");
-      
-      // Clear user state
-      setCurrentUser(null);
-      setUserProfile(null);
-      
-      // Clear session timeout
-      if (sessionExpiryTimeout) {
-        clearTimeout(sessionExpiryTimeout);
-        setSessionExpiryTimeout(null);
-      }
-      
-      // Force a refresh of auth state
-      window.location.reload();
-      
-      console.log("Sign out complete");
-      return true;
-    } catch (error) {
-      console.error("Sign out error:", error.message);
-      setAuthError("Failed to sign out: " + error.message);
       throw error;
     } finally {
       setIsAuthLoading(false);

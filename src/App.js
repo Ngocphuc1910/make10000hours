@@ -270,8 +270,11 @@ function MainApp() {
 }
 
 function App() {
+  // Get the base URL for GitHub Pages deployment
+  const baseUrl = process.env.PUBLIC_URL || '';
+  
   return (
-    <Router>
+    <Router basename={baseUrl}>
       <AuthProvider>
         <Routes>
           <Route path="/" element={<MainApp />} />
