@@ -216,3 +216,11 @@ The database schema will follow the structure outlined in the technical implemen
 - Time logged per user (daily/weekly/monthly)
 - Feature engagement metrics
 - Sharing/referral statistics
+
+#sign-in-button {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  z-index: 100 !important;
+}
