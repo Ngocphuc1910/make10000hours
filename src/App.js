@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './styles/globals.css';
 import { Play, Pause, RotateCcw, SkipForward, Plus, FolderPlus } from 'lucide-react';
@@ -8,7 +8,18 @@ import { AuthProvider } from './hooks/useAuth';
 import ResetPasswordForm from './components/ResetPasswordForm';
 import AuthCallback from './components/AuthCallback';
 
+// Loading component
+const LoadingFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 dark:text-gray-100">
+    <div className="text-center">
+      <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-900 dark:border-white mb-4"></div>
+      <p>Loading application...</p>
+    </div>
+  </div>
+);
+
 function MainApp() {
+  const [loading, setLoading] = useState(true);
   const [time, setTime] = useState(25 * 60); // 25 minutes in seconds
   const [isActive, setIsActive] = useState(false);
   const [isPaused, setIsPaused] = useState(true);
@@ -18,6 +29,17 @@ function MainApp() {
   
   // Reference to the SessionsList component to access its methods
   const sessionsListRef = useRef(null);
+
+  // Initial loading effect
+  useEffect(() => {
+    console.log("MainApp component mounted");
+    const timer = setTimeout(() => {
+      setLoading(false);
+      console.log("MainApp finished loading");
+    }, 500); // Short timeout to ensure UI is responsive
+
+    return () => clearTimeout(timer);
+  }, []);
   
   // Format time as MM:SS
   const formatTime = (timeInSeconds) => {
@@ -76,6 +98,11 @@ function MainApp() {
     
     return () => clearInterval(interval);
   }, [isActive, isPaused]);
+  
+  // If still loading, show loading indicator
+  if (loading) {
+    return <LoadingFallback />;
+  }
   
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 dark:text-gray-100">
@@ -270,15 +297,18 @@ function MainApp() {
 function App() {
   // Get the base URL for GitHub Pages deployment
   const baseUrl = process.env.PUBLIC_URL || '';
+  console.log("App component mounted, using basename:", baseUrl);
   
   return (
     <Router basename={baseUrl}>
       <AuthProvider>
-        <Routes>
-          <Route path="/" element={<MainApp />} />
-          <Route path="/reset-password" element={<ResetPasswordForm />} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
-        </Routes>
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes>
+            <Route path="/" element={<MainApp />} />
+            <Route path="/reset-password" element={<ResetPasswordForm />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
+          </Routes>
+        </Suspense>
       </AuthProvider>
     </Router>
   );

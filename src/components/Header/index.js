@@ -1,176 +1,258 @@
-import React, { useState, useEffect } from 'react';
-import { Bell, Settings, Clock, User, LogOut, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Moon, Sun, Settings, User, LogOut, ChevronDown, AlertTriangle } from 'lucide-react';
 import LoginModal from '../LoginModal';
 import SignupModal from '../SignupModal';
 import { useAuth } from '../../hooks/useAuth';
-import { ThemeToggle } from '../ThemeToggle';
 
-const Header = () => {
+// Hardcoded to always show login in production
+const FORCE_SHOW_LOGIN = true;
+
+function Header() {
+  const [theme, setTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('theme') || 'light';
+    }
+    return 'light';
+  });
+  
+  const { user, signOut } = useAuth();
+  
+  // State for showing modals
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupModal, setShowSignupModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const { currentUser, userProfile, signOut } = useAuth();
+  const [forceShowLogin, setForceShowLogin] = useState(FORCE_SHOW_LOGIN);
+  const [error, setError] = useState(null);
   
-  // Force login button for debugging
-  const [forceShowLogin, setForceShowLogin] = useState(false);
-
-  // Debug auth state
+  // Debugging info about the current environment
   useEffect(() => {
-    console.log("Auth state in Header:", { 
-      currentUser, 
-      userProfileExists: !!userProfile,
-      currentUserEmail: currentUser?.email || 'not set',
-      userProfileName: userProfile?.full_name || 'not set'
-    });
-    
-    // Check for GitHub Pages domain and force login button if needed
-    const isGitHubPages = window.location.hostname.includes('github.io');
-    if (isGitHubPages) {
-      setForceShowLogin(true);
-      console.log("GitHub Pages detected, forcing login button");
-    }
-  }, [currentUser, userProfile]);
-
-  useEffect(() => {
-    if (currentUser) {
-      setShowLoginModal(false);
-      setShowSignupModal(false);
-    }
-  }, [currentUser]);
-
-  const handleLogout = async () => {
     try {
-      console.log("Header: Initiating logout");
-      // Show visual feedback that logout is in progress
-      const logoutButton = document.querySelector('button[data-action="logout"]');
-      if (logoutButton) {
-        logoutButton.innerHTML = '<svg class="animate-spin w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Signing out...';
-        logoutButton.disabled = true;
+      console.log("=== HEADER DEBUGGING INFO ===");
+      console.log("Current hostname:", window.location.hostname);
+      console.log("Current pathname:", window.location.pathname);
+      console.log("Auth state - user:", user);
+      console.log("Force show login:", forceShowLogin);
+      console.log("Environment:", process.env.NODE_ENV);
+      console.log("PUBLIC_URL:", process.env.PUBLIC_URL);
+      
+      // Detect localhost vs production
+      const isLocalhost = window.location.hostname === 'localhost' || 
+                         window.location.hostname === '127.0.0.1';
+      
+      console.log("Is localhost:", isLocalhost);
+      
+      if (!isLocalhost) {
+        setForceShowLogin(true);
+        console.log("Production environment detected, forcing login button");
       }
-      
-      await signOut();
-      console.log("Header: Logout successful");
-      
-      // Only close the menu if signOut was successful
-      setShowUserMenu(false);
-    } catch (error) {
-      console.error("Header: Logout failed", error);
-      alert("Failed to sign out. Please try again.");
-      
-      // Restore button state
-      const logoutButton = document.querySelector('button[data-action="logout"]');
-      if (logoutButton) {
-        logoutButton.innerHTML = '<svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg> Sign out';
-        logoutButton.disabled = false;
-      }
+    } catch (err) {
+      console.error("Error in header debug:", err);
+      setError(err.message);
+    }
+  }, [user]);
+  
+  // Toggle theme function
+  const toggleTheme = () => {
+    try {
+      const newTheme = theme === 'light' ? 'dark' : 'light';
+      setTheme(newTheme);
+      localStorage.setItem('theme', newTheme);
+      document.documentElement.classList.toggle('dark', newTheme === 'dark');
+    } catch (err) {
+      console.error("Error toggling theme:", err);
+      setError(err.message);
     }
   };
-
+  
+  // Apply theme on mount
+  useEffect(() => {
+    try {
+      document.documentElement.classList.toggle('dark', theme === 'dark');
+    } catch (err) {
+      console.error("Error applying theme:", err);
+      setError(err.message);
+    }
+  }, [theme]);
+  
+  // Modal handlers
+  const handleOpenLoginModal = () => {
+    try {
+      setShowLoginModal(true);
+      setShowSignupModal(false);
+    } catch (err) {
+      console.error("Error opening login modal:", err);
+      setError(err.message);
+    }
+  };
+  
+  const handleCloseLoginModal = () => {
+    try {
+      setShowLoginModal(false);
+    } catch (err) {
+      console.error("Error closing login modal:", err);
+      setError(err.message);
+    }
+  };
+  
+  const handleOpenSignupModal = () => {
+    try {
+      setShowSignupModal(true);
+      setShowLoginModal(false);
+    } catch (err) {
+      console.error("Error opening signup modal:", err);
+      setError(err.message);
+    }
+  };
+  
+  const handleCloseSignupModal = () => {
+    try {
+      setShowSignupModal(false);
+    } catch (err) {
+      console.error("Error closing signup modal:", err);
+      setError(err.message);
+    }
+  };
+  
   const handleSwitchToSignup = () => {
-    setShowLoginModal(false);
-    setShowSignupModal(true);
+    try {
+      setShowLoginModal(false);
+      setShowSignupModal(true);
+    } catch (err) {
+      console.error("Error switching to signup:", err);
+      setError(err.message);
+    }
   };
-
+  
   const handleSwitchToLogin = () => {
-    setShowSignupModal(false);
-    setShowLoginModal(true);
+    try {
+      setShowSignupModal(false);
+      setShowLoginModal(true);
+    } catch (err) {
+      console.error("Error switching to login:", err);
+      setError(err.message);
+    }
   };
-
-  const handleCloseModals = () => {
-    setShowLoginModal(false);
-    setShowSignupModal(false);
+  
+  const handleLogout = () => {
+    try {
+      signOut();
+      setShowUserMenu(false);
+    } catch (err) {
+      console.error("Error during logout:", err);
+      setError(err.message);
+    }
   };
-
+  
+  // Memoized value for whether to show login based on user state or forced visibility
+  const shouldShowLogin = useMemo(() => {
+    try {
+      return !user || forceShowLogin;
+    } catch (err) {
+      console.error("Error determining login visibility:", err);
+      setError(err.message);
+      return true; // Default to showing login button on error
+    }
+  }, [user, forceShowLogin]);
+  
   return (
-    <header className="h-16 border-b border-gray-200 dark:border-gray-800 flex items-center px-6">
-      {/* Logo */}
-      <div className="flex items-center gap-2 font-semibold">
-        <Clock className="w-5 h-5 text-primary" />
-        <span>PomoPro</span>
-      </div>
+    <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 flex items-center" role="alert">
+          <AlertTriangle className="h-5 w-5 mr-2" />
+          <span>Error: {error}</span>
+        </div>
+      )}
       
-      {/* Spacer */}
-      <div className="flex-grow"></div>
-      
-      {/* Right side icons */}
-      <div className="flex items-center gap-4">
-        <button className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
-          <Bell className="w-5 h-5" />
-        </button>
+      <div className="container mx-auto px-4 py-3 flex justify-between items-center">
+        <div className="flex items-center">
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">10,000 Hours</h1>
+        </div>
         
-        {/* Theme Toggle Button */}
-        <ThemeToggle />
-        
-        <button className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
-          <Settings className="w-5 h-5" />
-        </button>
-        
-        {/* Show button based on auth state OR force show for GitHub Pages */}
-        {(currentUser && !forceShowLogin) ? (
-          /* User avatar - with dropdown for logout */
-          <div className="relative">
-            <div 
-              className="flex items-center gap-1.5 cursor-pointer"
-              onClick={() => setShowUserMenu(!showUserMenu)}
-            >
-              <div className="w-9 h-9 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center text-sm font-medium overflow-hidden">
-                {userProfile?.avatar_url || currentUser.user_metadata?.avatar_url ? (
-                  <img 
-                    src={userProfile?.avatar_url || currentUser.user_metadata?.avatar_url} 
-                    alt={userProfile?.full_name || currentUser.email} 
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span>{(userProfile?.full_name?.[0] || currentUser.email?.[0] || '').toUpperCase()}</span>
-                )}
-              </div>
-              <ChevronDown className="w-4 h-4 text-gray-500" />
-            </div>
-            
-            {showUserMenu && (
-              <div className="absolute top-full right-0 mt-1 py-1 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-10">
-                <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{userProfile?.full_name || 'User'}</p>
-                  <p className="text-xs text-gray-500 truncate">{currentUser.email}</p>
-                </div>
-                <button 
-                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-left text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  onClick={handleLogout}
-                  data-action="logout"
+        <div className="flex items-center space-x-3">
+          {/* Theme toggle button */}
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+            aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+          >
+            {theme === 'light' ? (
+              <Moon className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+            ) : (
+              <Sun className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+            )}
+          </button>
+          
+          {/* Settings button */}
+          <button
+            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+            aria-label="Settings"
+          >
+            <Settings className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+          </button>
+          
+          {/* Login/User button with debugging */}
+          <div>
+            {shouldShowLogin ? (
+              <button
+                onClick={handleOpenLoginModal}
+                className="flex items-center gap-1 bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded-md text-sm"
+              >
+                <User className="h-4 w-4" />
+                <span>Sign In</span>
+              </button>
+            ) : (
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center gap-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded-md"
                 >
-                  <LogOut className="w-4 h-4" />
-                  <span>Sign out</span>
+                  <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
+                    {user?.email?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                  <span className="hidden sm:inline">{user?.email || 'User'}</span>
+                  <ChevronDown className="h-4 w-4" />
                 </button>
+                
+                {showUserMenu && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-10">
+                    <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+                      <p className="text-sm font-medium">{user?.email || 'User'}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Signed in</p>
+                    </div>
+                    <div className="p-2">
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center gap-2 w-full text-left p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-sm"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        <span>Sign out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        ) : (
-          /* Login button - always show if not logged in or if forced */
-          <button 
-            onClick={() => setShowLoginModal(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 px-3 py-1.5"
-          >
-            <User className="w-4 h-4" />
-            <span>Sign in</span>
-          </button>
-        )}
+        </div>
       </div>
-
+      
+      {/* Login Modal */}
       {showLoginModal && (
         <LoginModal 
-          onClose={handleCloseModals} 
-          onSwitchToSignup={handleSwitchToSignup} 
+          onClose={handleCloseLoginModal}
+          onSwitchToSignup={handleSwitchToSignup}
         />
       )}
       
+      {/* Signup Modal */}
       {showSignupModal && (
-        <SignupModal 
-          onClose={handleCloseModals} 
-          onSwitchToLogin={handleSwitchToLogin} 
+        <SignupModal
+          onClose={handleCloseSignupModal}
+          onSwitchToLogin={handleSwitchToLogin}
         />
       )}
     </header>
   );
-};
+}
 
 export default Header; 
