@@ -2,6 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Ensure dark mode works properly */
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-rgb: 249, 250, 251;
+}
+
+.dark {
+  --foreground-rgb: 255, 255, 255;
+  --background-rgb: 17, 24, 39;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background-color: rgb(var(--background-rgb));
+}
+
+/* Force dark theme for production */
+@media (min-width: 0px) {
+  :root:has(html.dark) {
+    color-scheme: dark;
+  }
+  
+  /* Default to dark theme in production */
+  :root.dark {
+    color-scheme: dark;
+  }
+}
+
+/* Ensure that styles are applied in production */
+#root {
+  display: block;
+  min-height: 100vh;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

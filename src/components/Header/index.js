@@ -1,30 +1,19 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Moon, Sun, Settings, User, LogOut, ChevronDown, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Settings, User } from 'lucide-react';
 import LoginModal from '../LoginModal';
 import SignupModal from '../SignupModal';
 import { useAuth } from '../../hooks/useAuth';
+import { ThemeToggle } from '../ThemeToggle';
 
-// Hardcoded to always show login in production
+// Always show login button in production
 const FORCE_SHOW_LOGIN = true;
 
 function Header() {
-  // IMPORTANT: Always show login button on the production site
-  // This is a critical fix to ensure authentication works
-  const alwaysShowLogin = true;
-  
-  const [theme, setTheme] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('theme') || 'light';
-    }
-    return 'light';
-  });
-  
   const { user, signOut } = useAuth();
   
   // State for showing modals
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupModal, setShowSignupModal] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
   const [forceShowLogin, setForceShowLogin] = useState(FORCE_SHOW_LOGIN);
   const [error, setError] = useState(null);
   
@@ -39,55 +28,16 @@ function Header() {
       console.log("Environment:", process.env.NODE_ENV);
       console.log("PUBLIC_URL:", process.env.PUBLIC_URL);
       
-      // Detect localhost vs production
-      const isLocalhost = window.location.hostname === 'localhost' || 
-                         window.location.hostname === '127.0.0.1';
-      
-      console.log("Is localhost:", isLocalhost);
-      
-      if (!isLocalhost) {
+      // Always force login button in production
+      if (process.env.NODE_ENV === 'production') {
         setForceShowLogin(true);
         console.log("Production environment detected, forcing login button");
       }
-      
-      // Add page visibility check
-      document.addEventListener('visibilitychange', () => {
-        console.log('Page visibility changed:', document.visibilityState);
-      });
-      
-      // Check if TailwindCSS is loaded properly
-      const isTailwindLoaded = !!document.querySelector('style[data-styled]') || 
-                              !!document.querySelector('link[rel=stylesheet][href*=tailwind]');
-      console.log('TailwindCSS appears to be loaded:', isTailwindLoaded);
-      
     } catch (err) {
       console.error("Error in header debug:", err);
       setError(err.message);
     }
-  }, [user, forceShowLogin]); // Fixed ESLint warning by adding forceShowLogin to deps
-  
-  // Toggle theme function
-  const toggleTheme = () => {
-    try {
-      const newTheme = theme === 'light' ? 'dark' : 'light';
-      setTheme(newTheme);
-      localStorage.setItem('theme', newTheme);
-      document.documentElement.classList.toggle('dark', newTheme === 'dark');
-    } catch (err) {
-      console.error("Error toggling theme:", err);
-      setError(err.message);
-    }
-  };
-  
-  // Apply theme on mount
-  useEffect(() => {
-    try {
-      document.documentElement.classList.toggle('dark', theme === 'dark');
-    } catch (err) {
-      console.error("Error applying theme:", err);
-      setError(err.message);
-    }
-  }, [theme]);
+  }, [user, forceShowLogin]);
   
   // Modal handlers
   const handleOpenLoginModal = () => {
@@ -109,7 +59,6 @@ function Header() {
     }
   };
   
-  // This function is used when the "Sign Up" link in the login modal is clicked
   const handleOpenSignupModal = () => {
     try {
       setShowSignupModal(true);
@@ -132,7 +81,7 @@ function Header() {
   const handleSwitchToSignup = () => {
     try {
       console.log("Switching to signup from login");
-      handleOpenSignupModal(); // Use the existing function to fix the unused warning
+      handleOpenSignupModal();
     } catch (err) {
       console.error("Error switching to signup:", err);
       setError(err.message);
@@ -148,25 +97,11 @@ function Header() {
       setError(err.message);
     }
   };
-  
-  const handleLogout = () => {
-    try {
-      signOut();
-      setShowUserMenu(false);
-    } catch (err) {
-      console.error("Error during logout:", err);
-      setError(err.message);
-    }
-  };
-  
-  // CRITICAL: We're bypassing the normal logic and always showing the login button
-  // This works around any auth state issues
-  
+
   return (
     <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 flex items-center" role="alert">
-          <AlertTriangle className="h-5 w-5 mr-2" />
           <span>Error: {error}</span>
         </div>
       )}
@@ -174,24 +109,16 @@ function Header() {
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
         <div className="flex items-center">
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">10,000 Hours</h1>
-          <span className="ml-3 text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-300">
-            {process.env.NODE_ENV || 'development'}
-          </span>
+          {process.env.NODE_ENV === 'development' && (
+            <span className="ml-3 text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-gray-800 dark:text-gray-300">
+              development
+            </span>
+          )}
         </div>
         
         <div className="flex items-center space-x-3">
           {/* Theme toggle button */}
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
-            aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-          >
-            {theme === 'light' ? (
-              <Moon className="h-5 w-5 text-gray-700 dark:text-gray-300" />
-            ) : (
-              <Sun className="h-5 w-5 text-gray-700 dark:text-gray-300" />
-            )}
-          </button>
+          <ThemeToggle />
           
           {/* Settings button */}
           <button
@@ -201,7 +128,7 @@ function Header() {
             <Settings className="h-5 w-5 text-gray-700 dark:text-gray-300" />
           </button>
           
-          {/* CRITICAL: Always show the login button */}
+          {/* Always show the sign-in button */}
           <button
             onClick={handleOpenLoginModal}
             className="flex items-center gap-1 bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded-md text-sm"
