@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './styles/globals.css';
-import { Clock, Bell, Settings, Play, Pause, RotateCcw, SkipForward, Plus, FolderPlus, Medal, Flame, Sunrise } from 'lucide-react';
-import { ThemeToggle } from './components/ThemeToggle';
+import { Play, Pause, RotateCcw, SkipForward, Plus, FolderPlus } from 'lucide-react';
 import SessionsList from './components/SessionsList';
 import Header from './components/Header';
 import { AuthProvider } from './hooks/useAuth';
@@ -53,13 +52,6 @@ function MainApp() {
     { id: 1, name: 'Work', tasks: 5, completedTasks: 2 },
     { id: 2, name: 'Personal', tasks: 3, completedTasks: 1 },
     { id: 3, name: 'Learning', tasks: 4, completedTasks: 0 },
-  ];
-  
-  const tasks = [
-    { id: 1, name: 'Complete project proposal', estimatedPomodoros: 3, project: 'Work' },
-    { id: 2, name: 'Research new API', estimatedPomodoros: 2, project: 'Work' },
-    { id: 3, name: 'Workout routine', estimatedPomodoros: 1, project: 'Personal' },
-    { id: 4, name: 'Learn React hooks', estimatedPomodoros: 4, project: 'Learning' },
   ];
   
   // Timer effect
@@ -267,34 +259,6 @@ function MainApp() {
                       </div>
                     );
                   })}
-                </div>
-              </div>
-              
-              {/* Achievements - more minimalist */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
-                <h2 className="font-semibold text-lg mb-4">Achievements</h2>
-                
-                <div className="flex justify-between">
-                  <div className="flex flex-col items-center">
-                    <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full flex items-center justify-center mb-2">
-                      <Medal className="w-6 h-6" />
-                    </div>
-                    <span className="text-xs">First Mile</span>
-                  </div>
-                  
-                  <div className="flex flex-col items-center">
-                    <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full flex items-center justify-center mb-2">
-                      <Flame className="w-6 h-6" />
-                    </div>
-                    <span className="text-xs">7 Day Streak</span>
-                  </div>
-                  
-                  <div className="flex flex-col items-center">
-                    <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full flex items-center justify-center mb-2">
-                      <Sunrise className="w-6 h-6" />
-                    </div>
-                    <span className="text-xs">Early Bird</span>
-                  </div>
                 </div>
               </div>
             </div>

@@ -75,7 +75,7 @@ export const AuthProvider = ({ children }) => {
         });
       };
     }
-  }, [currentUser]);
+  }, [currentUser, resetSessionTimer, sessionExpiryTimeout, startSessionExpiryTimer]);
 
   // Check for user session on load
   useEffect(() => {
@@ -116,7 +116,7 @@ export const AuthProvider = ({ children }) => {
       if (sessionExpiryTimeout) clearTimeout(sessionExpiryTimeout);
       authListener?.subscription?.unsubscribe();
     };
-  }, []);
+  }, [fetchUserProfile, sessionExpiryTimeout, startSessionExpiryTimer]);
 
   // Email sign in
   const emailSignIn = async (email, password) => {
