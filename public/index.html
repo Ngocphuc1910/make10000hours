@@ -9,12 +9,15 @@
       name="description"
       content="Track your progress to 10,000 hours of mastery"
     />
+    <!-- Try to help with CORS -->
+    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups" />
+    <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
     -->
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" crossorigin="use-credentials" />
     <!--
       Notice the use of %PUBLIC_URL% in the tags above.
       It will be replaced with the URL of the `public` folder during the build.
@@ -36,6 +39,24 @@
           sans-serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
+      }
+      
+      /* Ensure button visibility regardless of CSS issues */
+      .guaranteed-sign-in-button {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 9999;
+        padding: 8px 16px;
+        background-color: #1f2937;
+        color: white !important;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        text-decoration: none;
+        display: block; /* Always display this button */
+        font-weight: 500;
       }
       
       /* Fallback content */
@@ -90,22 +111,6 @@
         text-align: left;
         display: none;
       }
-      
-      /* Force the button to be visible in case of CSS issues */
-      #sign-in-button-fallback {
-        position: fixed;
-        top: 16px;
-        right: 16px;
-        z-index: 9999;
-        padding: 8px 16px;
-        background-color: #1f2937;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 14px;
-        display: none;
-      }
     </style>
     
     <!-- Single Page Apps for GitHub Pages -->
@@ -135,8 +140,59 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     
-    <!-- Emergency sign in button that shows if CSS fails -->
-    <button id="sign-in-button-fallback" onclick="window.location.href='/login'">Sign In</button>
+    <!-- GUARANTEED Sign In Button - This will always be visible regardless of React state -->
+    <a href="#" class="guaranteed-sign-in-button" onclick="openSignInModal(); return false;">Sign In</a>
+
+    <!-- Script to handle the guaranteed sign-in button click -->
+    <script>
+      function openSignInModal() {
+        // Try to find and click the actual sign-in button rendered by React if it exists
+        const signInButton = document.getElementById('sign-in-button');
+        if (signInButton) {
+          signInButton.click();
+        } else {
+          // Fallback - create a simple sign-in form
+          const modal = document.createElement('div');
+          modal.style.position = 'fixed';
+          modal.style.top = '0';
+          modal.style.left = '0';
+          modal.style.width = '100%';
+          modal.style.height = '100%';
+          modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+          modal.style.display = 'flex';
+          modal.style.alignItems = 'center';
+          modal.style.justifyContent = 'center';
+          modal.style.zIndex = '10000';
+
+          const form = document.createElement('div');
+          form.style.padding = '24px';
+          form.style.backgroundColor = 'white';
+          form.style.borderRadius = '8px';
+          form.style.maxWidth = '400px';
+          form.style.width = '90%';
+          form.innerHTML = `
+            <h2 style="margin-top: 0; font-size: 20px; font-weight: 600; color: #111827;">Sign In</h2>
+            <p style="color: #6b7280; margin-bottom: 16px;">Enter your email and password to sign in.</p>
+            <input type="email" placeholder="Email" style="width: 100%; padding: 8px; margin-bottom: 12px; border: 1px solid #d1d5db; border-radius: 4px; box-sizing: border-box;" />
+            <input type="password" placeholder="Password" style="width: 100%; padding: 8px; margin-bottom: 16px; border: 1px solid #d1d5db; border-radius: 4px; box-sizing: border-box;" />
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <button style="padding: 8px 16px; background-color: #1f2937; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">Sign In</button>
+              <button onclick="document.body.removeChild(modal)" style="padding: 8px 16px; background-color: transparent; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer;">Cancel</button>
+            </div>
+          `;
+          
+          modal.appendChild(form);
+          document.body.appendChild(modal);
+          
+          // Close when clicking outside
+          modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+              document.body.removeChild(modal);
+            }
+          });
+        }
+      }
+    </script>
     
     <!-- Sound files for Pomodoro Timer -->
     <audio id="pomodoro-sound" preload="auto">
@@ -151,7 +207,7 @@
       <div class="fallback-content">
         <header class="fallback-header">
           <h1 class="fallback-title">10,000 Hours</h1>
-          <button class="fallback-button" onclick="window.location.reload()">Sign In</button>
+          <button class="fallback-button" onclick="openSignInModal()">Sign In</button>
         </header>
         
         <h2>Loading 10,000 Hours App...</h2>
@@ -172,33 +228,45 @@
       console.log('index.html loaded at', new Date().toISOString());
       
       // Basic browser diagnostics
-      document.getElementById('browser-info').innerHTML = `
-        <p style="margin-top: 20px; color: #6b7280; font-size: 14px;">
-          Browser: ${navigator.userAgent}<br>
-          URL: ${window.location.href}<br>
-          Time: ${new Date().toLocaleString()}
-        </p>
-      `;
+      if (document.getElementById('browser-info')) {
+        document.getElementById('browser-info').innerHTML = `
+          <p style="margin-top: 20px; color: #6b7280; font-size: 14px;">
+            Browser: ${navigator.userAgent}<br>
+            URL: ${window.location.href}<br>
+            Time: ${new Date().toLocaleString()}
+          </p>
+        `;
+      }
       
       // Simple error handler that will display errors if React fails to load
       window.addEventListener('error', function(e) {
         console.error('Global error caught in index.html:', e.error || e.message);
-        document.getElementById('error-display').style.display = 'block';
-        document.getElementById('error-message').textContent = e.error ? e.error.stack : e.message;
+        const errorDisplay = document.getElementById('error-display');
+        const errorMessage = document.getElementById('error-message');
         
-        // Show emergency sign-in button if there's an error
-        document.getElementById('sign-in-button-fallback').style.display = 'block';
+        if (errorDisplay && errorMessage) {
+          errorDisplay.style.display = 'block';
+          errorMessage.textContent = e.error ? e.error.stack : e.message;
+        }
       });
       
-      // Show emergency sign-in button if react doesn't load
-      setTimeout(function() {
-        // If the fallback content is still visible after 5 seconds, we likely have a loading issue
-        if (document.querySelector('.fallback-content') && 
-            window.getComputedStyle(document.querySelector('.fallback-content')).display !== 'none') {
-          console.warn('React app may have failed to load completely after 5 seconds');
-          document.getElementById('sign-in-button-fallback').style.display = 'block';
-        }
-      }, 5000);
+      // Disable database access temporarily to prevent errors
+      if (window.indexedDB) {
+        const originalOpen = window.indexedDB.open;
+        window.indexedDB.open = function(name, version) {
+          console.log('Intercepting indexedDB.open for:', name);
+          try {
+            return originalOpen.apply(this, arguments);
+          } catch (e) {
+            console.error('Error opening IndexedDB:', e);
+            return {
+              onerror: function() {},
+              onsuccess: function() {},
+              onupgradeneeded: function() {}
+            };
+          }
+        };
+      }
     </script>
     
     <!--

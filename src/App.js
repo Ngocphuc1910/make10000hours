@@ -295,12 +295,11 @@ function MainApp() {
 }
 
 function App() {
-  // Get the base URL for GitHub Pages deployment
-  const baseUrl = process.env.PUBLIC_URL || '';
-  console.log("App component mounted, using basename:", baseUrl);
+  // Fix the incorrect basename - just use "/" for root or blank for custom domain
+  console.log("App component mounted");
   
   return (
-    <Router basename={baseUrl}>
+    <Router basename="/">
       <AuthProvider>
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
