@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './styles/globals.css';
 import { Clock, Bell, Settings, Play, Pause, RotateCcw, SkipForward, Plus, FolderPlus, Medal, Flame, Sunrise } from 'lucide-react';
 import { ThemeToggle } from './components/ThemeToggle';
 import SessionsList from './components/SessionsList';
 import Header from './components/Header';
 import { AuthProvider } from './hooks/useAuth';
+import ResetPasswordForm from './components/ResetPasswordForm';
+import AuthCallback from './components/AuthCallback';
 
-function App() {
+function MainApp() {
   const [time, setTime] = useState(25 * 60); // 25 minutes in seconds
   const [isActive, setIsActive] = useState(false);
   const [isPaused, setIsPaused] = useState(true);
@@ -48,8 +51,15 @@ function App() {
   // Mock data
   const projects = [
     { id: 1, name: 'Work', tasks: 5, completedTasks: 2 },
-    { id: 2, name: 'Study', tasks: 3, completedTasks: 1 },
-    { id: 3, name: 'Personal', tasks: 8, completedTasks: 4 },
+    { id: 2, name: 'Personal', tasks: 3, completedTasks: 1 },
+    { id: 3, name: 'Learning', tasks: 4, completedTasks: 0 },
+  ];
+  
+  const tasks = [
+    { id: 1, name: 'Complete project proposal', estimatedPomodoros: 3, project: 'Work' },
+    { id: 2, name: 'Research new API', estimatedPomodoros: 2, project: 'Work' },
+    { id: 3, name: 'Workout routine', estimatedPomodoros: 1, project: 'Personal' },
+    { id: 4, name: 'Learn React hooks', estimatedPomodoros: 4, project: 'Learning' },
   ];
   
   // Timer effect
@@ -292,6 +302,20 @@ function App() {
         </main>
       </div>
     </AuthProvider>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <Routes>
+          <Route path="/" element={<MainApp />} />
+          <Route path="/reset-password" element={<ResetPasswordForm />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
+        </Routes>
+      </AuthProvider>
+    </Router>
   );
 }
 

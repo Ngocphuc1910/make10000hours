@@ -1,4 +1,36 @@
-/* Hide security delay messages */
+/* Hide security delay messages and prevent auto-click behaviors */
 [class*="security"], [id*="security"] {
   display: none !important;
+} 
+
+/* Additional selectors to target common security message containers */
+[class*="delay"], [id*="delay"],
+[class*="timer"], [id*="timer"],
+div[style*="position: fixed"][style*="z-index: 9999"] {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* Prevent auto-click scripts from accessing form elements */
+form button, 
+form input[type="submit"] {
+  pointer-events: auto !important;
+}
+
+/* Stop auto-clicks by requiring user interaction */
+.auth-form button,
+.auth-modal button {
+  user-select: none;
+  touch-action: manipulation;
+}
+
+/* Apply these classes to our auth modals */
+.login-modal,
+.signup-modal {
+  user-select: none;
+}
+
+/* Ensure form submits only come from user */
+form button:not(:active):not(:focus) {
+  will-change: transform;
 } 

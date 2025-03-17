@@ -18,8 +18,31 @@ const Header = () => {
   }, [currentUser]);
 
   const handleLogout = async () => {
-    await signOut();
-    setShowUserMenu(false);
+    try {
+      console.log("Header: Initiating logout");
+      // Show visual feedback that logout is in progress
+      const logoutButton = document.querySelector('button[data-action="logout"]');
+      if (logoutButton) {
+        logoutButton.innerHTML = '<svg class="animate-spin w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Signing out...';
+        logoutButton.disabled = true;
+      }
+      
+      await signOut();
+      console.log("Header: Logout successful");
+      
+      // Only close the menu if signOut was successful
+      setShowUserMenu(false);
+    } catch (error) {
+      console.error("Header: Logout failed", error);
+      alert("Failed to sign out. Please try again.");
+      
+      // Restore button state
+      const logoutButton = document.querySelector('button[data-action="logout"]');
+      if (logoutButton) {
+        logoutButton.innerHTML = '<svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg> Sign out';
+        logoutButton.disabled = false;
+      }
+    }
   };
 
   const handleSwitchToSignup = () => {
@@ -88,6 +111,7 @@ const Header = () => {
                 <button 
                   className="flex items-center gap-2 w-full px-4 py-2 text-sm text-left text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                   onClick={handleLogout}
+                  data-action="logout"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>Sign out</span>

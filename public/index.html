@@ -12,13 +12,46 @@
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     
-    <!-- Simplified script to disable security timer validation -->
+    <!-- Enhanced script to disable security timers and prevent auto-clicks -->
     <script>
       (function() {
-        // Simple script to remove security messages
+        // Function to remove security messages and prevent auto-clicks
         window.addEventListener('DOMContentLoaded', function() {
+          // Initial protection before components load
+          var originalClick = Element.prototype.click;
+          Element.prototype.click = function() {
+            console.log('Click intercepted - checking if legitimate');
+            // Block programmatic clicks on buttons and inputs in auth forms
+            if (this.tagName === 'BUTTON' || this.tagName === 'INPUT') {
+              var isInAuthForm = false;
+              var parent = this;
+              
+              // Check if element is in an auth form/modal
+              while (parent && parent !== document) {
+                if (parent.className && 
+                    (parent.className.includes('modal') || 
+                     parent.className.includes('form'))) {
+                  isInAuthForm = true;
+                  break;
+                }
+                parent = parent.parentElement;
+              }
+              
+              // Block auto-clicks in auth forms
+              if (isInAuthForm) {
+                console.log('Blocked auto-click in auth form');
+                return false;
+              }
+            }
+            
+            // Allow legitimate clicks to proceed
+            return originalClick.apply(this, arguments);
+          };
+          
+          // Regular security message removal
           setInterval(function() {
             try {
+              // Remove security messages
               var elements = document.querySelectorAll('div');
               for (var i = 0; i < elements.length; i++) {
                 var el = elements[i];
@@ -29,10 +62,22 @@
                   el.style.display = 'none';
                 }
               }
+              
+              // Remove any injected click triggers
+              var suspiciousScripts = document.querySelectorAll('script:not([src])');
+              for (var j = 0; j < suspiciousScripts.length; j++) {
+                var script = suspiciousScripts[j];
+                if (script.textContent && (
+                  script.textContent.indexOf('click()') !== -1 ||
+                  script.textContent.indexOf('submit()') !== -1
+                )) {
+                  script.textContent = '/* Neutralized */';
+                }
+              }
             } catch (e) {
               // Ignore errors
             }
-          }, 200);
+          }, 100);
         });
       })();
     </script>
