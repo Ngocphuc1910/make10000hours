@@ -11,6 +11,11 @@ const Header = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { currentUser, userProfile, signOut } = useAuth();
 
+  // Debug auth state
+  useEffect(() => {
+    console.log("Auth state in Header:", { currentUser, userProfileExists: !!userProfile });
+  }, [currentUser, userProfile]);
+
   useEffect(() => {
     if (currentUser) {
       setShowLoginModal(false);
@@ -124,7 +129,7 @@ const Header = () => {
             )}
           </div>
         ) : (
-          /* Login button */
+          /* Login button - always show in production for debugging */
           <button 
             onClick={() => setShowLoginModal(true)}
             className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 px-3 py-1.5"

@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import supabase from '../lib/supabase';
 import { getUserProfile, createOrUpdateUserProfile } from '../lib/database';
 
@@ -15,18 +15,20 @@ export const AuthProvider = ({ children }) => {
   // Define session timeout (in milliseconds) - 8 hours
   const SESSION_TIMEOUT = 8 * 60 * 60 * 1000;
 
-  // Fetch user profile
-  const fetchUserProfile = async (userId) => {
+  // Fetch user profile - wrapped in useCallback to prevent unnecessary rerenders
+  const fetchUserProfile = useCallback(async (userId) => {
     try {
+      console.log("Fetching user profile for:", userId);
       const profile = await getUserProfile(userId);
       setUserProfile(profile);
+      console.log("Profile fetched:", profile);
     } catch (error) {
       console.error("Error fetching user profile:", error);
     }
-  };
+  }, []);
 
-  // Start session expiry timer
-  const startSessionExpiryTimer = () => {
+  // Start session expiry timer - wrapped in useCallback to prevent unnecessary rerenders
+  const startSessionExpiryTimer = useCallback(() => {
     // Clear existing timer if any
     if (sessionExpiryTimeout) {
       clearTimeout(sessionExpiryTimeout);
@@ -40,17 +42,18 @@ export const AuthProvider = ({ children }) => {
     }, SESSION_TIMEOUT);
 
     setSessionExpiryTimeout(timeoutId);
-  };
+  }, [sessionExpiryTimeout]);
 
-  // Reset session timer on user activity
-  const resetSessionTimer = () => {
+  // Reset session timer on user activity - wrapped in useCallback to prevent unnecessary rerenders
+  const resetSessionTimer = useCallback(() => {
     if (currentUser) {
       startSessionExpiryTimer();
     }
-  };
+  }, [currentUser, startSessionExpiryTimer]);
 
   // Attach activity listeners
   useEffect(() => {
+    console.log("Setting up auth activity listeners, currentUser:", !!currentUser);
     if (currentUser) {
       // Start initial timer
       startSessionExpiryTimer();
