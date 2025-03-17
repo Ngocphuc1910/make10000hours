@@ -80,16 +80,8 @@ const rootElement = document.getElementById('root');
 
 // First, clear any contents that might be in the root element (like fallback content)
 if (rootElement) {
-  // Save a reference to the emergency sign-in button if it exists
-  const emergencyButton = document.getElementById('super-guaranteed-signin');
-  
   // Clear the root element
   rootElement.innerHTML = '';
-  
-  // Re-add the emergency button to the body if it existed
-  if (emergencyButton) {
-    document.body.appendChild(emergencyButton);
-  }
   
   // Now create the React root and render the app
   try {
