@@ -4,7 +4,7 @@ A modern Pomodoro timer application built with React and Tailwind CSS, featuring
 
 ## Features
 
-- **Pomodoro Timer**: 
+- **Pomodoro Timer
   - Customizable Pomodoro, short break, and long break durations
   - Visual timer with circular progress indicator
   - Audio notifications when timers end
