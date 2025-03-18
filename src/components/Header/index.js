@@ -128,12 +128,11 @@ function Header() {
             <Settings className="h-5 w-5 text-gray-700 dark:text-gray-300" />
           </button>
           
-          {/* Extra visible sign-in button for production environment - added for debugging purposes */}
+          {/* Sign-in button */}
           <button
             onClick={handleOpenLoginModal}
             className="flex items-center gap-1 bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded-md text-sm"
             id="sign-in-button"
-            style={{ display: 'flex !important', visibility: 'visible !important', opacity: '1 !important' }}
           >
             <User className="h-4 w-4" />
             <span>Sign In</span>

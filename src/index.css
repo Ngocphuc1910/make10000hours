@@ -34,12 +34,3 @@ form input[type="submit"] {
 form button:not(:active):not(:focus) {
   will-change: transform;
 } 
-
-/* Ensure sign-in button is always visible */
-#sign-in-button {
-  display: flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  pointer-events: auto !important;
-  z-index: 100 !important;
-} 
