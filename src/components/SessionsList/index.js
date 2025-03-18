@@ -41,18 +41,21 @@ const SessionsList = forwardRef((props, ref) => {
           title: "UI Design Research",
           time: "Completed at 10:30 AM",
           duration: "25min",
+          completed: false
         },
         {
           id: "2",
           title: "Project Planning",
           time: "Completed at 11:00 AM",
           duration: "25min",
+          completed: false
         },
         {
           id: "3",
           title: "Client Meeting",
           time: "Completed at 11:45 AM",
           duration: "25min",
+          completed: false
         },
       ]);
     }
@@ -93,9 +96,17 @@ const SessionsList = forwardRef((props, ref) => {
       title: task.title,
       time: `Added at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
       duration: `${task.estimatedPomodoros * 25}min`,
+      completed: false
     };
     
     setSessions((prevSessions) => [newSession, ...prevSessions]);
+  };
+  
+  // Function to toggle task completion status
+  const handleToggleComplete = (id) => {
+    setSessions(sessions.map(session => 
+      session.id === id ? { ...session, completed: !session.completed } : session
+    ));
   };
   
   return (
@@ -119,7 +130,11 @@ const SessionsList = forwardRef((props, ref) => {
         <SortableContext items={sessions.map((s) => s.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-3">
             {sessions.map((session) => (
-              <SortableSessionItem key={session.id} session={session} />
+              <SortableSessionItem 
+                key={session.id} 
+                session={session} 
+                onToggleComplete={handleToggleComplete}
+              />
             ))}
           </div>
         </SortableContext>

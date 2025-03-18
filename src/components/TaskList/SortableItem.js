@@ -1,9 +1,9 @@
 import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, CheckSquare, Square } from 'lucide-react';
 
-const SortableSessionItem = ({ session }) => {
+const SortableSessionItem = ({ session, onToggleComplete }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: session.id,
   });
@@ -14,6 +14,12 @@ const SortableSessionItem = ({ session }) => {
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const handleCheckboxClick = (e) => {
+    // Stop propagation to prevent drag start
+    e.stopPropagation();
+    onToggleComplete(session.id);
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -22,9 +28,23 @@ const SortableSessionItem = ({ session }) => {
         isDragging ? 'bg-gray-50 dark:bg-gray-800 rounded' : ''
       }`}
     >
+      {/* Checkbox */}
+      <div 
+        className="cursor-pointer text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+        onClick={handleCheckboxClick}
+      >
+        {session.completed ? (
+          <CheckSquare className="h-5 w-5 text-blue-500" />
+        ) : (
+          <Square className="h-5 w-5" />
+        )}
+      </div>
+      
       <div className="w-1 h-12 bg-gray-400 dark:bg-gray-500 rounded-full"></div>
       <div className="flex-1">
-        <h3 className="font-medium">{session.title}</h3>
+        <h3 className={`font-medium ${session.completed ? 'line-through text-gray-400 dark:text-gray-500' : ''}`}>
+          {session.title}
+        </h3>
         <p className="text-sm text-gray-500">{session.time}</p>
       </div>
       <div className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
