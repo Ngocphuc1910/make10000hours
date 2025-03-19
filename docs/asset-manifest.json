@@ -1,17 +1,13 @@
 {
   "files": {
-    "main.css": "/static/css/main.34b42d71.css",
-    "main.js": "/static/js/main.b833a95d.js",
-    "static/js/288.19e89547.chunk.js": "/static/js/288.19e89547.chunk.js",
-    "static/js/845.0eab30e1.chunk.js": "/static/js/845.0eab30e1.chunk.js",
-    "index.html": "/index.html",
-    "main.34b42d71.css.map": "/static/css/main.34b42d71.css.map",
-    "main.b833a95d.js.map": "/static/js/main.b833a95d.js.map",
-    "288.19e89547.chunk.js.map": "/static/js/288.19e89547.chunk.js.map",
-    "845.0eab30e1.chunk.js.map": "/static/js/845.0eab30e1.chunk.js.map"
+    "main.css": "https://make10000hours.com/static/css/main.cdd3c6ee.css",
+    "main.js": "https://make10000hours.com/static/js/main.ae26c68b.js",
+    "static/js/69.f8bbd2a4.chunk.js": "https://make10000hours.com/static/js/69.f8bbd2a4.chunk.js",
+    "static/js/542.6849e55a.chunk.js": "https://make10000hours.com/static/js/542.6849e55a.chunk.js",
+    "index.html": "https://make10000hours.com/index.html"
   },
   "entrypoints": [
-    "static/css/main.34b42d71.css",
-    "static/js/main.b833a95d.js"
+    "static/css/main.cdd3c6ee.css",
+    "static/js/main.ae26c68b.js"
   ]
 }

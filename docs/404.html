@@ -1,129 +1,26 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <title>10,000 Hours - Redirecting</title>
-    <script type="text/javascript">
-      // Single Page Apps for GitHub Pages
-      // MIT License
-      // https://github.com/rafgraph/spa-github-pages
-      // This script takes the current url and converts the path and query
-      // string into just a query string, and then redirects the browser
-      // to the new url with only a query string and hash fragment,
-      // e.g. https://make10000hours.com/one/two?a=b&c=d#qwe, becomes
-      // https://make10000hours.com/?/one/two&a=b~and~c=d#qwe
-      // Note: this 404.html file must be at least 512 bytes for it to work
-      // with Internet Explorer (it is currently > 512 bytes)
-
-      // If you're creating a Project Pages site and NOT using a custom domain,
-      // then set pathSegmentsToKeep to 1 (enterprise users may need to set it to > 1).
-      // This way the code will only replace the route part of the path, and not
-      // the real directory in which the app resides, for example:
-      // https://username.github.io/repo-name/one/two?a=b&c=d#qwe becomes
-      // https://username.github.io/repo-name/?/one/two&a=b~and~c=d#qwe
-      // Otherwise, leave pathSegmentsToKeep as 0.
-      var pathSegmentsToKeep = 0;
-
-      // Get the current location and determine the redirect
-      var l = window.location;
-      
-      // Add logging to debug redirect issues
-      console.log('404.html redirect script started');
-      console.log('Current location:', l.href);
-      console.log('Pathname:', l.pathname);
-      console.log('Search:', l.search);
-      console.log('Hash:', l.hash);
-      
-      // Check for custom domain vs GitHub Pages domain
-      var isCustomDomain = !l.hostname.includes('github.io');
-      console.log('Is custom domain:', isCustomDomain);
-      console.log('pathSegmentsToKeep:', pathSegmentsToKeep);
-      
-      // Build the redirect URL
-      var redirectUrl;
-      try {
-        l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/');
-        
-        // Get the path segments to redirect
-        var pathnameSplit = l.pathname.split('/');
-        var pathSegments = pathnameSplit.slice(1 + pathSegmentsToKeep);
-        
-        // Build the redirect path with query parameters
-        var newPath = pathSegments.join('/');
-        var queryParams = l.search ? l.search.slice(1) : '';
-        
-        // Create the redirect URL
-        redirectUrl = l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') + 
-          l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + 
-          '/?/' + newPath + 
-          (queryParams ? '&' + queryParams.replace(/&/g, '~and~') : '') + 
-          l.hash;
-        
-        console.log('Redirecting to:', redirectUrl);
-      } catch (e) {
-        console.error('Error building redirect URL:', e);
-        // Fallback to homepage
-        redirectUrl = l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '');
+<head>
+  <meta charset="utf-8">
+  <title>Redirecting...</title>
+  <script>
+    // Single Page Apps for GitHub Pages
+    // MIT License
+    // https://github.com/rafgraph/spa-github-pages
+    (function(l) {
+      if (l.search[1] === '/' ) {
+        var decoded = l.search.slice(1).split('&').map(function(s) { 
+          return s.replace(/~and~/g, '&')
+        }).join('?');
+        window.history.replaceState(null, null,
+            l.pathname.slice(0, -1) + decoded + l.hash
+        );
       }
-      
-      // Perform the redirect
-      window.location.replace(redirectUrl);
-    </script>
-    <style>
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        margin: 0;
-        padding: 20px;
-        text-align: center;
-        background-color: #f9fafb;
-        color: #111827;
-        line-height: 1.5;
-      }
-      
-      .container {
-        max-width: 600px;
-        margin: 50px auto;
-        padding: 20px;
-        background-color: white;
-        border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      }
-      
-      h1 {
-        margin-top: 0;
-        color: #111827;
-      }
-      
-      p {
-        margin: 16px 0;
-      }
-      
-      .button {
-        display: inline-block;
-        padding: 8px 16px;
-        background-color: #1f2937;
-        color: white;
-        text-decoration: none;
-        border-radius: 4px;
-        font-weight: 500;
-        margin-top: 16px;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h1>Redirecting...</h1>
-      <p>If you are not redirected automatically, please click the button below.</p>
-      <a class="button" href="/">Go to Homepage</a>
-      <p id="debug-info" style="font-size: 12px; color: #6b7280; margin-top: 32px;"></p>
-    </div>
-    
-    <script>
-      // Add some additional debug info that might be useful
-      var debugInfo = document.getElementById('debug-info');
-      debugInfo.innerHTML = 'URL: ' + window.location.href + '<br>' +
-                           'Time: ' + new Date().toLocaleString() + '<br>' +
-                           'User Agent: ' + navigator.userAgent;
-    </script>
-  </body>
-</html> 
+    }(window.location))
+  </script>
+  <meta http-equiv="refresh" content="0;URL='/'">
+</head>
+<body>
+  Redirecting to home page...
+</body>
+</html>
