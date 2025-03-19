@@ -15,7 +15,7 @@ function Header() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupModal, setShowSignupModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [forceShowLogin, setForceShowLogin] = useState(FORCE_SHOW_LOGIN);
+  const [forceShowLogin] = useState(FORCE_SHOW_LOGIN);
   const [error, setError] = useState(null);
   
   // Refs for dropdown
@@ -107,16 +107,6 @@ function Header() {
       setShowLoginModal(false);
     } catch (err) {
       console.error("Error closing login modal:", err);
-      setError(err.message);
-    }
-  };
-  
-  const handleOpenSignupModal = () => {
-    try {
-      setShowSignupModal(true);
-      setShowLoginModal(false);
-    } catch (err) {
-      console.error("Error opening signup modal:", err);
       setError(err.message);
     }
   };
