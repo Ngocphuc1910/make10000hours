@@ -87,3 +87,82 @@ button span {
     background-color: #1f2937 !important;
   }
 } 
+
+/* Add to existing CSS to ensure checkboxes are visible in production */
+
+/* Task checkbox styling */
+input[type="checkbox"] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  width: 18px !important;
+  height: 18px !important;
+  border: 2px solid #a0aec0 !important;
+  border-radius: 4px !important;
+  margin-right: 8px !important;
+  position: relative !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background-color: transparent !important;
+  transition: all 0.2s ease !important;
+}
+
+input[type="checkbox"]:checked {
+  background-color: #4a5568 !important;
+  border-color: #4a5568 !important;
+}
+
+input[type="checkbox"]:checked::after {
+  content: "" !important;
+  display: block !important;
+  width: 6px !important;
+  height: 10px !important;
+  border: solid white !important;
+  border-width: 0 2px 2px 0 !important;
+  transform: rotate(45deg) !important;
+  position: absolute !important;
+  top: 1px !important;
+}
+
+/* Ensure form elements are visible */
+.form-checkbox,
+.form-radio {
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+/* Dark mode support */
+.dark input[type="checkbox"] {
+  border-color: #718096 !important;
+}
+
+.dark input[type="checkbox"]:checked {
+  background-color: #667eea !important;
+  border-color: #667eea !important;
+}
+
+/* Task list specific styling */
+.tasks-container .task-checkbox {
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+/* Fix for auth buttons and sign-in visibility */
+button#sign-in-button,
+button[type="submit"] {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
+  font-weight: 500 !important;
+}
+
+/* Ensure absolute compatibility with all browsers */
+@supports (-webkit-appearance: none) or (-moz-appearance: none) {
+  input[type="checkbox"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+  }
+} 

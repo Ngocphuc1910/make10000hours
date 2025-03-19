@@ -2,7 +2,7 @@
   "name": "pomodoro-react",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://make10000hours.com/",
+  "homepage": "/",
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/modifiers": "^6.0.1",
@@ -27,10 +27,10 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "GENERATE_SOURCEMAP=false react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "deploy": "npm run build && cp -r build/* . && touch .nojekyll",
+    "deploy": "npm run build && bash deploy.sh",
     "supabase:setup": "node supabase-dev-setup.js",
     "supabase:env": "node setup-supabase-env.js",
     "supabase:schema": "node copy-schema.js",
@@ -42,7 +42,10 @@
     "extends": [
       "react-app",
       "react-app/jest"
-    ]
+    ],
+    "rules": {
+      "react-hooks/exhaustive-deps": "warn"
+    }
   },
   "browserslist": {
     "production": [
@@ -57,9 +60,15 @@
     ]
   },
   "devDependencies": {
+    "@pmmmwh/react-refresh-webpack-plugin": "^0.5.10",
     "autoprefixer": "^10.4.14",
+    "babel-loader": "^9.1.3",
     "postcss": "^8.4.24",
     "tailwindcss": "^3.3.2",
     "tailwindcss-animate": "^1.0.7"
+  },
+  "resolutions": {
+    "@pmmmwh/react-refresh-webpack-plugin": "^0.5.10",
+    "babel-loader": "^9.1.3"
   }
 }
