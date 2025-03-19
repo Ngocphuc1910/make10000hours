@@ -190,17 +190,20 @@ function Header() {
           {!currentUser || forceShowLogin ? (
             <button
               onClick={handleOpenLoginModal}
-              className="flex items-center gap-1 bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded-md text-sm"
+              className="flex items-center gap-1 bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded-md text-sm font-medium"
               id="sign-in-button"
+              type="button"
+              style={{ minWidth: '90px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              <User className="h-4 w-4" />
-              <span>Sign In</span>
+              <User className="h-4 w-4 mr-1" />
+              <span className="whitespace-nowrap">Sign In</span>
             </button>
           ) : (
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={toggleDropdown}
                 className="flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded-md"
+                type="button"
               >
                 <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-700 dark:text-gray-300 font-medium">
                   {userProfile?.avatar_url ? (
@@ -213,7 +216,7 @@ function Header() {
                     getInitials(currentUser)
                   )}
                 </div>
-                <span className="text-gray-800 dark:text-gray-200 max-w-[100px] truncate">
+                <span className="text-gray-800 dark:text-gray-200 max-w-[100px] truncate hidden sm:inline">
                   {userProfile?.full_name || currentUser.email.split('@')[0]}
                 </span>
               </button>
@@ -228,6 +231,7 @@ function Header() {
                     onClick={handleSignOut}
                     className="flex items-center w-full px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                     style={{ cursor: 'pointer' }}
+                    type="button"
                   >
                     <LogOut className="h-4 w-4 mr-2" />
                     Sign Out

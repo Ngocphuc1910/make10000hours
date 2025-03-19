@@ -33,4 +33,57 @@ form input[type="submit"] {
 /* Ensure form submits only come from user */
 form button:not(:active):not(:focus) {
   will-change: transform;
+}
+
+/* Fix for header buttons in production */
+header button {
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+header button svg {
+  display: inline-block !important;
+}
+
+/* Ensure icons are visible */
+svg {
+  display: inline-block !important;
+  vertical-align: middle !important;
+}
+
+/* Ensure text is visible next to icons */
+button span {
+  display: inline-block !important;
+}
+
+#sign-in-button {
+  display: flex !important;
+  align-items: center !important;
+  white-space: nowrap !important;
+}
+
+/* Fix for Lucide icons in production */
+[data-lucide], 
+.lucide,
+.lucide-icon {
+  display: inline-block !important;
+  vertical-align: middle !important;
+}
+
+/* Ensure the avatar component displays correctly in production */
+.w-8.h-8.rounded-full {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Dark mode compatibility */
+@media (prefers-color-scheme: dark) {
+  .dark\:text-gray-300 {
+    color: #d1d5db !important;
+  }
+  
+  .dark\:bg-gray-800 {
+    background-color: #1f2937 !important;
+  }
 } 

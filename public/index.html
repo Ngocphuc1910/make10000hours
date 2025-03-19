@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#000000" />
     <meta
       name="description"
-      content="Track your progress to 10,000 hours of mastery"
+      content="Track your journey to 10,000 hours of mastery with our Pomodoro timer and progress tracker"
     />
     <!-- Try to help with CORS -->
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups" />
@@ -27,7 +27,7 @@
       work correctly both with client-side routing and a non-root public URL.
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
-    <title>10,000 Hours - Pomodoro Timer</title>
+    <title>10,000 Hours - Track Your Journey to Mastery</title>
 
     <!-- Inline Tailwind-like styles to ensure the login button shows even if CSS fails -->
     <style>
@@ -93,6 +93,70 @@
         text-align: left;
         display: none;
       }
+      
+      /* Critical CSS to ensure icons display properly in production */
+      svg {
+        display: inline-block !important;
+        vertical-align: middle !important;
+      }
+      
+      [data-lucide], 
+      .lucide,
+      .lucide-icon {
+        display: inline-block !important;
+        vertical-align: middle !important;
+      }
+      
+      button svg {
+        display: inline-block !important;
+      }
+      
+      button span {
+        display: inline-block !important;
+      }
+      
+      #sign-in-button {
+        display: flex !important;
+        align-items: center !important;
+      }
+      
+      /* Loading state styling */
+      .app-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        width: 100vw;
+        background-color: #0f172a;
+        color: #f8fafc;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+          Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      }
+      
+      .app-loading h1 {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+      }
+      
+      .app-loading p {
+        margin-bottom: 2rem;
+        color: #94a3b8;
+      }
+      
+      .spinner {
+        border: 4px solid rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+        border-top: 4px solid #ffffff;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
     </style>
     
     <!-- Single Page Apps for GitHub Pages -->
@@ -131,23 +195,11 @@
     </audio>
     
     <div id="root">
-      <!-- Fallback content that will show if React fails to load -->
-      <div class="fallback-content">
-        <header class="fallback-header">
-          <h1 class="fallback-title">10,000 Hours</h1>
-          <button class="fallback-button" onclick="window.location.reload()">Sign In</button>
-        </header>
-        
-        <h2>Loading 10,000 Hours App...</h2>
-        <p>If you continue to see this message, there might be an issue loading the application.</p>
-        <button class="fallback-button" onclick="window.location.reload()">Reload Page</button>
-        
-        <div id="browser-info"></div>
-        
-        <div class="fallback-error" id="error-display">
-          <p><strong>Error Details:</strong></p>
-          <pre id="error-message"></pre>
-        </div>
+      <!-- Loading spinner that displays until React loads -->
+      <div class="app-loading">
+        <h1>10,000 Hours</h1>
+        <p>Loading your productivity journey...</p>
+        <div class="spinner"></div>
       </div>
     </div>
     
