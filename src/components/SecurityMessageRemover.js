@@ -16,69 +16,72 @@ const SecurityMessageRemover = () => {
           try {
             if (el && el.textContent && (
               el.textContent.includes('For security purposes') || 
-              el.textContent.includes('after 46 seconds')
+              el.textContent.includes('after') || 
+              el.textContent.includes('seconds') ||
+              el.textContent.includes('delay') ||
+              el.textContent.includes('wait')
             )) {
               // Try to hide the element
               el.style.display = 'none';
+              el.style.visibility = 'hidden';
+              el.style.opacity = '0';
+              el.style.pointerEvents = 'none';
+              
+              // Attempt to remove it completely if safe
+              if (el.parentNode && !el.querySelector('form')) {
+                el.parentNode.removeChild(el);
+              }
             }
           } catch (e) {
             // Ignore errors for individual elements
           }
         });
         
-        // Find and disable any potential auto-click scripts
-        const potentialAutoClickScripts = document.querySelectorAll('script:not([src])');
-        potentialAutoClickScripts.forEach(script => {
-          if (script.textContent && (
-            script.textContent.includes('click()') ||
-            script.textContent.includes('submit()') ||
-            script.textContent.includes('dispatchEvent')
-          )) {
-            // Make a note in console for debugging
-            console.log('Potential auto-click script detected and blocked');
-            // Try to neutralize by replacing with empty script
-            script.textContent = '/* Auto-click script neutralized */';
-          }
-        });
-        
-        // Prevent automatic form submissions
+        // More aggressive prevention of automated form submissions
         const forms = document.querySelectorAll('form');
         forms.forEach(form => {
-          // Add a tiny delay to form submissions to prevent auto-submissions
+          // Replace the submit method to require explicit user action
           const originalSubmit = form.submit;
-          form.submit = function() {
-            setTimeout(() => {
-              originalSubmit.apply(this, arguments);
-            }, 50);
-          };
-        });
-        
-        // Prevent automatic button clicks
-        const buttons = document.querySelectorAll('button');
-        buttons.forEach(button => {
-          // Add a data attribute to track if we've already modified this button
-          if (!button.getAttribute('data-click-protected')) {
-            button.setAttribute('data-click-protected', 'true');
+          if (!form._isProtected) {
+            form._isProtected = true;
+            form.submit = function() {
+              console.log('Form submit intercepted - preventing potential auto-submission');
+              // Do nothing - block automated submissions
+              return false;
+            };
             
-            // Store original onclick
-            const originalClick = button.onclick;
-            
-            // Override click event
-            button.onclick = function(e) {
-              // Prevent programmatic clicks by checking for isTrusted
-              if (!e || !e.isTrusted) {
-                console.log('Prevented auto-click on button');
-                e && e.preventDefault();
+            // Make sure the form can still be submitted via the submit button
+            form.addEventListener('submit', function(e) {
+              // Only allow trusted events (user-initiated)
+              if (!e.isTrusted) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Blocked untrusted form submission');
                 return false;
               }
-              
-              // Allow manual clicks to proceed
-              if (originalClick) {
-                return originalClick.apply(this, arguments);
-              }
-            };
+            });
           }
         });
+        
+        // Completely block any click events that aren't trusted
+        document.addEventListener('click', function(e) {
+          if (!e.isTrusted) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Blocked untrusted click event');
+            return false;
+          }
+        }, true);
+        
+        // Block any automated submit events
+        document.addEventListener('submit', function(e) {
+          if (!e.isTrusted) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Blocked untrusted form submission');
+            return false;
+          }
+        }, true);
       } catch (err) {
         console.error('Error in SecurityMessageRemover:', err);
       }
