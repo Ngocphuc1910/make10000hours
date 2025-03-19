@@ -24,18 +24,10 @@ export const AuthProvider = ({ children }) => {
       console.log("Attempting to sign out user...");
       setIsAuthLoading(true);
       
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error("Supabase signOut error:", error);
-        throw error;
-      }
-      
-      console.log("Sign out successful, clearing user data");
-      
-      // Clear user state
+      // First clean up local state so we don't trigger any dependency effects
       setCurrentUser(null);
       setUserProfile(null);
+      setAuthError('');
       
       // Clear session timeout
       if (sessionExpiryTimeout) {
@@ -43,10 +35,21 @@ export const AuthProvider = ({ children }) => {
         setSessionExpiryTimeout(null);
       }
       
-      // Force a refresh of auth state
-      window.location.reload();
+      // Then clear the session with Supabase
+      const { error } = await supabase.auth.signOut();
       
-      console.log("Sign out complete");
+      if (error) {
+        console.error("Supabase signOut error:", error);
+        throw error;
+      }
+      
+      console.log("Sign out successful");
+      
+      // Force a page refresh to ensure clean state if necessary
+      if (process.env.NODE_ENV === 'production') {
+        window.location.href = '/';
+      }
+      
       return true;
     } catch (error) {
       console.error("Sign out error:", error.message);
@@ -89,7 +92,7 @@ export const AuthProvider = ({ children }) => {
     }, SESSION_TIMEOUT);
 
     setSessionExpiryTimeout(timeoutId);
-  }, [sessionExpiryTimeout, SESSION_TIMEOUT]);
+  }, [SESSION_TIMEOUT]);
 
   // Reset session timer on user activity
   const resetSessionTimer = useCallback(() => {
@@ -102,16 +105,19 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     console.log("Setting up auth activity listeners, currentUser:", !!currentUser);
     if (currentUser) {
-      // Start initial timer
-      startSessionExpiryTimer();
-      
-      // Set up event listeners for user activity
+      // Only set up listeners if we haven't already
       const activityEvents = ['mousedown', 'keypress', 'scroll', 'touchstart'];
       
       const handleUserActivity = () => {
         resetSessionTimer();
       };
       
+      // Remove any existing listeners first to prevent duplicates
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, handleUserActivity);
+      });
+      
+      // Then add fresh listeners
       activityEvents.forEach(event => {
         window.addEventListener(event, handleUserActivity);
       });
@@ -125,48 +131,80 @@ export const AuthProvider = ({ children }) => {
         });
       };
     }
-  }, [currentUser, resetSessionTimer, sessionExpiryTimeout, startSessionExpiryTimer]);
+  }, [currentUser, resetSessionTimer, sessionExpiryTimeout]);
 
-  // Check for user session on load
+  // Check for user session on load - only run once on component mount
   useEffect(() => {
+    let isSubscribed = true;
+    let authListener = null;
+    const sessionTimeoutRef = sessionExpiryTimeout;
+    
     const checkUser = async () => {
       try {
+        console.log("Checking for existing user session...");
         const { data: { session } } = await supabase.auth.getSession();
-        setCurrentUser(session?.user || null);
         
-        if (session?.user) {
-          await fetchUserProfile(session.user.id);
-          startSessionExpiryTimer();
+        if (session?.user && isSubscribed) {
+          console.log("Found existing session for user:", session.user.email);
+          setCurrentUser(session.user);
+          if (fetchUserProfile && isSubscribed) {
+            await fetchUserProfile(session.user.id);
+          }
+        } else if (isSubscribed) {
+          console.log("No active session found");
+          setCurrentUser(null);
+          setUserProfile(null);
         }
       } catch (error) {
         console.error("Error checking auth session:", error);
       } finally {
-        setIsAuthLoading(false);
+        if (isSubscribed) {
+          setIsAuthLoading(false);
+        }
       }
     };
 
-    // Set up auth state listener
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setCurrentUser(session?.user || null);
-      
-      if (session?.user) {
-        await fetchUserProfile(session.user.id);
-        startSessionExpiryTimer();
-      } else {
-        setUserProfile(null);
-      }
-      
-      setIsAuthLoading(false);
-    });
+    // Set up auth state listener - only once
+    const setupAuthListener = () => {
+      const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (!isSubscribed) return;
+        
+        console.log("Auth state changed:", event, "User:", session?.user?.email || "none");
+        
+        if (session?.user && isSubscribed) {
+          console.log("User is now signed in:", session.user.email);
+          setCurrentUser(session.user);
+          if (fetchUserProfile && isSubscribed) {
+            await fetchUserProfile(session.user.id);
+          }
+        } else if (isSubscribed) {
+          console.log("User is now signed out");
+          setCurrentUser(null);
+          setUserProfile(null);
+        }
+        
+        if (isSubscribed) {
+          setIsAuthLoading(false);
+        }
+      });
 
+      return listener;
+    };
+
+    // Run once
     checkUser();
+    authListener = setupAuthListener();
     
     // Cleanup
     return () => {
-      if (sessionExpiryTimeout) clearTimeout(sessionExpiryTimeout);
-      authListener?.subscription?.unsubscribe();
+      isSubscribed = false;
+      if (sessionTimeoutRef) clearTimeout(sessionTimeoutRef);
+      if (authListener?.subscription) {
+        console.log("Cleaning up auth listener");
+        authListener.subscription.unsubscribe();
+      }
     };
-  }, [fetchUserProfile, sessionExpiryTimeout, startSessionExpiryTimer]);
+  }, []); // Empty dependency array intentional - eslint-disable-line react-hooks/exhaustive-deps
 
   // Email sign in
   const emailSignIn = async (email, password) => {
@@ -174,14 +212,30 @@ export const AuthProvider = ({ children }) => {
     setAuthError('');
     
     try {
+      console.log('Attempting to sign in with email:', email);
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Sign in error:', error);
+        throw error;
+      }
+
+      console.log('Sign in successful:', data.user?.email);
+      
+      // Make sure the UI updates with the new user
+      setCurrentUser(data.user);
+      
+      // Fetch the user profile immediately
+      if (data.user) {
+        await fetchUserProfile(data.user.id);
+      }
+      
       return data;
     } catch (error) {
+      console.error('Sign in error:', error);
       setAuthError(error.message);
       throw error;
     } finally {
@@ -195,6 +249,7 @@ export const AuthProvider = ({ children }) => {
     setAuthError('');
     
     try {
+      console.log('Attempting to sign up with email:', email);
       // Sign up with Supabase Auth
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -207,19 +262,30 @@ export const AuthProvider = ({ children }) => {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Sign up error:', error);
+        throw error;
+      }
+
+      console.log('Sign up successful:', data.user?.email);
+
+      // Make sure the UI updates with the new user
+      setCurrentUser(data.user);
 
       // If signup successful, create profile
       if (data.user) {
         try {
+          console.log('Creating user profile for:', data.user.id);
           // Create profile in the profiles table
-          await createOrUpdateUserProfile({
+          const profile = await createOrUpdateUserProfile({
             id: data.user.id,
             email: data.user.email,
             full_name: userData.full_name || '',
             avatar_url: data.user.user_metadata?.avatar_url || '',
             created_at: new Date().toISOString()
           });
+          
+          console.log('Profile created successfully:', profile);
           
           // Fetch the user profile to update state
           await fetchUserProfile(data.user.id);
@@ -232,6 +298,7 @@ export const AuthProvider = ({ children }) => {
 
       return data;
     } catch (error) {
+      console.error('Sign up error:', error);
       setAuthError(error.message);
       throw error;
     } finally {
@@ -266,6 +333,7 @@ export const AuthProvider = ({ children }) => {
     setAuthError('');
     
     try {
+      console.log('Attempting to sign in with Google');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -273,9 +341,19 @@ export const AuthProvider = ({ children }) => {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Google sign in error:', error);
+        throw error;
+      }
+
+      console.log('Google sign in initiated successfully');
+      
+      // Note: For OAuth providers, we don't need to manually update the state
+      // The auth state listener will handle this when the user is redirected back
+      
       return data;
     } catch (error) {
+      console.error('Google sign in error:', error);
       setAuthError(error.message);
       throw error;
     } finally {
@@ -289,6 +367,7 @@ export const AuthProvider = ({ children }) => {
     setAuthError('');
     
     try {
+      console.log('Attempting to sign in with GitHub');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
@@ -296,9 +375,19 @@ export const AuthProvider = ({ children }) => {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('GitHub sign in error:', error);
+        throw error;
+      }
+
+      console.log('GitHub sign in initiated successfully');
+      
+      // Note: For OAuth providers, we don't need to manually update the state
+      // The auth state listener will handle this when the user is redirected back
+      
       return data;
     } catch (error) {
+      console.error('GitHub sign in error:', error);
       setAuthError(error.message);
       throw error;
     } finally {

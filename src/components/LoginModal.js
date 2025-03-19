@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { X, Clock, Github, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import ForgotPasswordModal from './ForgotPasswordModal';
-import SecurityMessageRemover from './SecurityMessageRemover';
 
 const LoginModal = ({ onClose, onSwitchToSignup }) => {
   const [email, setEmail] = useState('');
@@ -11,6 +10,7 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [emailConfirmationNeeded, setEmailConfirmationNeeded] = useState(false);
   const [lastSubmitTime, setLastSubmitTime] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const { 
     emailSignIn, 
@@ -19,6 +19,16 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
     authError, 
     isAuthLoading 
   } = useAuth();
+  
+  // Reset form when modal opens
+  useEffect(() => {
+    // Reset all form state
+    setEmail('');
+    setPassword('');
+    setRememberMe(false);
+    setIsSubmitting(false);
+    setLastSubmitTime(0);
+  }, [onClose]);
   
   // Check for email confirmation error
   useEffect(() => {
@@ -36,37 +46,67 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Prevent duplicate/automated submissions by requiring at least 1 second between attempts
-    const now = Date.now();
-    if (now - lastSubmitTime < 1000) {
-      console.log('Prevented rapid form submission');
+    // Prevent submission if already submitting
+    if (isSubmitting || isAuthLoading) {
+      console.log('Form is already being submitted');
       return;
     }
-    setLastSubmitTime(now);
+    
+    // Prevent duplicate/automated submissions by requiring at least 1 second between attempts
+    const now = Date.now();
+    if (now - lastSubmitTime < 2000) {
+      console.log('Please wait before submitting again');
+      return;
+    }
     
     try {
-      await emailSignIn(email, password);
-      onClose();
+      setIsSubmitting(true);
+      setLastSubmitTime(now);
+      console.log('Starting sign in for:', email);
+      const result = await emailSignIn(email, password);
+      console.log('Sign in completed successfully:', result?.user?.email);
+      
+      // Give the auth state a moment to update before closing
+      setTimeout(() => {
+        onClose();
+      }, 1000);
     } catch (error) {
+      console.error('Sign in failed:', error);
       // Error is handled by the useAuth hook
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
+    if (isSubmitting || isAuthLoading) {
+      return;
+    }
+    
     try {
+      setIsSubmitting(true);
       await googleSignIn();
       onClose();
     } catch (error) {
       // Error is handled by the useAuth hook
+    } finally {
+      setIsSubmitting(false);
     }
   };
   
   const handleGithubSignIn = async () => {
+    if (isSubmitting || isAuthLoading) {
+      return;
+    }
+    
     try {
+      setIsSubmitting(true);
       await githubSignIn();
       onClose();
     } catch (error) {
       // Error is handled by the useAuth hook
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -86,7 +126,6 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <SecurityMessageRemover />
       <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md p-6 relative">
         {/* Close button */}
         <button 
@@ -108,7 +147,7 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
         <p className="text-gray-500 dark:text-gray-400 text-center mb-6">Track your productivity journey</p>
         
         {/* Login form */}
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <div className="mb-4">
             <label className="block text-gray-700 dark:text-gray-300 mb-2">Email</label>
             <input
@@ -118,6 +157,7 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               required
+              disabled={isSubmitting || isAuthLoading}
             />
           </div>
           
@@ -130,6 +170,8 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               required
+              disabled={isSubmitting || isAuthLoading}
+              autoComplete="current-password"
             />
           </div>
           
@@ -163,6 +205,7 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
                 className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                disabled={isSubmitting || isAuthLoading}
               />
               <label htmlFor="remember-me" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 Remember me
@@ -173,6 +216,7 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
               type="button"
               onClick={handleForgotPassword}
               className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary"
+              disabled={isSubmitting || isAuthLoading}
             >
               Forgot password?
             </button>
@@ -180,10 +224,10 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
           
           <button
             type="submit"
-            disabled={isAuthLoading}
+            disabled={isSubmitting || isAuthLoading}
             className="w-full py-2 px-4 bg-gray-900 dark:bg-gray-800 text-white font-medium rounded-lg hover:bg-gray-800 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70"
           >
-            {isAuthLoading ? 'Signing in...' : 'Sign In'}
+            {isSubmitting || isAuthLoading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
         
@@ -204,7 +248,7 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
             {/* Google login */}
             <button
               onClick={handleGoogleSignIn}
-              disabled={isAuthLoading}
+              disabled={isSubmitting || isAuthLoading}
               className="flex items-center justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70"
             >
               <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
@@ -221,7 +265,7 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
             {/* GitHub login */}
             <button
               onClick={handleGithubSignIn}
-              disabled={isAuthLoading}
+              disabled={isSubmitting || isAuthLoading}
               className="flex items-center justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70"
             >
               <Github className="h-5 w-5 mr-2" />
@@ -237,6 +281,7 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
             <button 
               className="font-medium text-primary hover:underline" 
               onClick={onSwitchToSignup}
+              disabled={isSubmitting || isAuthLoading}
             >
               Sign Up
             </button>

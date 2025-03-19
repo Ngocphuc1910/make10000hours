@@ -39,14 +39,14 @@ A modern Pomodoro timer application built with React and Tailwind CSS, featuring
 
 - Node.js (v14 or later recommended)
 - NPM or Yarn
-- Firebase account (for authentication and database features)
+- Supabase account (for authentication and database features)
 
 ### Installation
 
 1. Clone the repository
 ```bash
 git clone https://github.com/yourusername/make10000hours.git
-cd make10000hours/pomodoro-react
+cd make10000hours
 ```
 
 2. Install dependencies
@@ -56,11 +56,20 @@ npm install
 yarn install
 ```
 
-3. Configure Firebase
-   - Create a Firebase project at [Firebase Console](https://console.firebase.google.com/)
-   - Enable Authentication (Email/Password and Google Sign-in)
-   - Create a Firestore database
-   - Update the Firebase configuration in `src/firebase/firebase.js` with your project credentials
+3. Configure Supabase
+   - Create a Supabase project at [Supabase Dashboard](https://supabase.com/dashboard)
+   - Go to Settings > API in your Supabase project
+   - Copy the URL and anon key
+   - Use our setup script to configure your environment:
+   ```bash
+   node setup-env.js
+   ```
+   - Follow the prompts to enter your Supabase URL and anon key
+   - Alternatively, create a `.env` file manually with the following content:
+   ```
+   REACT_APP_SUPABASE_URL=your_supabase_url
+   REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
 
 4. Start the development server
 ```bash
@@ -70,6 +79,15 @@ yarn start
 ```
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+### Authentication Troubleshooting
+
+If you experience issues with authentication:
+
+1. Check the browser console for Supabase connection errors
+2. Verify your environment variables are set correctly
+3. Make sure your Supabase project has Email/Password authentication enabled
+4. If you see placeholder errors, run the setup script again to update your credentials
 
 ## Future Enhancements
 
