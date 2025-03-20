@@ -7,6 +7,7 @@ import Header from './components/Header';
 import { AuthProvider } from './hooks/useAuth';
 import ResetPasswordForm from './components/ResetPasswordForm';
 import AuthCallback from './components/AuthCallback';
+import Achievements from './components/Achievements';
 
 // Loading component
 const LoadingFallback = () => (
@@ -255,6 +256,9 @@ function MainApp() {
                 </div>
               </div>
             </div>
+            
+            {/* Achievements */}
+            <Achievements />
             
             {/* Projects - moved from left sidebar */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
