@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Clock, Check, AlertCircle, Github } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import SecurityMessageRemover from './SecurityMessageRemover';
 
 const SignupModal = ({ onClose, onSwitchToLogin }) => {
   const [email, setEmail] = useState('');
@@ -191,7 +190,6 @@ const SignupModal = ({ onClose, onSwitchToLogin }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <SecurityMessageRemover />
       <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md p-6 relative">
         {/* Close button */}
         <button 
