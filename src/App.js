@@ -304,17 +304,18 @@ function App() {
   console.log("App component mounted");
   
   return (
-    <Router basename="/">
+    // <Router basename="/">
       <AuthProvider>
         <Suspense fallback={<LoadingFallback />}>
-          <Routes>
+        <MainApp />
+          {/* <Routes>
             <Route path="/" element={<MainApp />} />
             <Route path="/reset-password" element={<ResetPasswordForm />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
-          </Routes>
+          </Routes> */}
         </Suspense>
       </AuthProvider>
-    </Router>
+    // </Router>
   );
 }
 
