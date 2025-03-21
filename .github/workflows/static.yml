@@ -46,7 +46,7 @@ jobs:
           CI: false
           REACT_APP_SUPABASE_URL: "https://ccxhdmyfmfwincvzqjhg.supabase.co"
           REACT_APP_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNjeGhkbXlmbWZ3aW5jdnpxamhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIxNDAyMzIsImV4cCI6MjA1NzcxNjIzMn0.nf8fOFwXcFayteHi-HOhcxiHw4aLE7oOtWv8HeQAYjU"
-          PUBLIC_URL: "https://quangkhaidam93.github.io/make10000hours"
+          PUBLIC_URL: "https://ngocphuc1910.github.io/make10000hours"
           GENERATE_SOURCEMAP: false
           
       - name: Setup Pages
