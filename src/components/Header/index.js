@@ -4,6 +4,7 @@ import LoginModal from '../LoginModal';
 import SignupModal from '../SignupModal';
 import { useAuth } from '../../hooks/useAuth';
 import { ThemeToggle } from '../ThemeToggle';
+import SettingsModal from '../SettingsModal';
 
 // Always show login button in production
 const FORCE_SHOW_LOGIN = false;
@@ -14,6 +15,7 @@ function Header() {
   // State for showing modals
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupModal, setShowSignupModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [forceShowLogin] = useState(FORCE_SHOW_LOGIN);
   const [error, setError] = useState(null);
@@ -156,6 +158,15 @@ function Header() {
     return user.email.charAt(0).toUpperCase();
   };
 
+  // Settings modal handlers
+  const handleOpenSettingsModal = () => {
+    setShowSettingsModal(true);
+  };
+
+  const handleCloseSettingsModal = () => {
+    setShowSettingsModal(false);
+  };
+
   return (
     <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       {error && (
@@ -180,6 +191,7 @@ function Header() {
           
           {/* Settings button */}
           <button
+            onClick={handleOpenSettingsModal}
             className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
             aria-label="Settings"
           >
@@ -256,6 +268,13 @@ function Header() {
         <SignupModal
           onClose={handleCloseSignupModal}
           onSwitchToLogin={handleSwitchToLogin}
+        />
+      )}
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <SettingsModal
+          onClose={handleCloseSettingsModal}
         />
       )}
     </header>
