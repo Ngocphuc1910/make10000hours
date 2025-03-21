@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, HashRouter, Routes, Route } from 'react-router-dom';
 import './styles/globals.css';
 import { Play, Pause, RotateCcw, SkipForward, Plus, FolderPlus } from 'lucide-react';
 import SessionsList from './components/SessionsList';
@@ -304,18 +304,17 @@ function App() {
   console.log("App component mounted");
   
   return (
-    // <Router basename="/">
+    <HashRouter>
       <AuthProvider>
         <Suspense fallback={<LoadingFallback />}>
-        <MainApp />
-          {/* <Routes>
+          <Routes>
             <Route path="/" element={<MainApp />} />
             <Route path="/reset-password" element={<ResetPasswordForm />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
-          </Routes> */}
+          </Routes>
         </Suspense>
       </AuthProvider>
-    // </Router>
+    </HashRouter>
   );
 }
 
