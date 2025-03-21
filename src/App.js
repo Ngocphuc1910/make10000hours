@@ -33,7 +33,6 @@ function MainApp() {
 
   // Initial loading effect
   useEffect(() => {
-    console.log("khaidq update 2");
     console.log("MainApp component mounted");
     const timer = setTimeout(() => {
       setLoading(false);
@@ -304,7 +303,7 @@ function App() {
   console.log("App component mounted");
   
   return (
-    <HashRouter>
+    <Router>
       <AuthProvider>
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
@@ -314,7 +313,7 @@ function App() {
           </Routes>
         </Suspense>
       </AuthProvider>
-    </HashRouter>
+    </Router>
   );
 }
 
