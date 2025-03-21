@@ -33,7 +33,7 @@ function MainApp() {
 
   // Initial loading effect
   useEffect(() => {
-    console.log("khaidq update 1");
+    console.log("khaidq update 2");
     console.log("MainApp component mounted");
     const timer = setTimeout(() => {
       setLoading(false);
