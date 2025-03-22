@@ -46,6 +46,7 @@ function MainApp() {
   const [mode, setMode] = useState('pomodoro'); // 'pomodoro', 'shortBreak', 'longBreak'
   // eslint-disable-next-line no-unused-vars
   const [sessionsCompleted, setSessionsCompleted] = useState(0);
+  const [selectedTask, setSelectedTask] = useState(null);
   
   // Reference to the SessionsList component to access its methods
   const sessionsListRef = useRef(null);
@@ -242,6 +243,11 @@ function MainApp() {
     return () => clearInterval(interval);
   }, [isActive, isPaused, mode, settings]);
   
+  // Function to handle task selection
+  const handleTaskSelection = (task) => {
+    setSelectedTask(task);
+  };
+  
   // If still loading, show loading indicator
   if (loading) {
     return <LoadingFallback />;
@@ -358,7 +364,7 @@ function MainApp() {
                 <div className="flex justify-between items-center">
                   <div className="text-left">
                     <div className="text-sm text-gray-500 dark:text-gray-400">Current Task</div>
-                    <div className="font-medium">Complete UI Development</div>
+                    <div className="font-medium">{selectedTask ? selectedTask.title : "Select a task"}</div>
                   </div>
                   <div className="text-right">
                     <div className="text-sm text-gray-500 dark:text-gray-400">Project</div>
@@ -369,7 +375,10 @@ function MainApp() {
             </div>
             
             {/* Today's Sessions with drag and drop */}
-            <SessionsList ref={sessionsListRef} />
+            <SessionsList 
+              ref={sessionsListRef} 
+              onTaskSelect={handleTaskSelection}
+            />
           </div>
           
           {/* Right sidebar */}
