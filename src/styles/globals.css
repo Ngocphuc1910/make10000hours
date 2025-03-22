@@ -136,18 +136,6 @@
   }
 }
 
-/* Force dark theme for production */
-@media (min-width: 0px) {
-  :root:has(html.dark) {
-    color-scheme: dark;
-  }
-  
-  /* Default to dark theme in production */
-  :root.dark {
-    color-scheme: dark;
-  }
-}
-
 /* Ensure that styles are applied in production */
 #root {
   display: block;

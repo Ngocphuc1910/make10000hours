@@ -77,16 +77,14 @@ button span {
   justify-content: center !important;
 }
 
-/* Dark mode compatibility */
-@media (prefers-color-scheme: dark) {
-  .dark\:text-gray-300 {
-    color: #d1d5db !important;
-  }
-  
-  .dark\:bg-gray-800 {
-    background-color: #1f2937 !important;
-  }
-} 
+/* Dark mode compatibility - using theme classes instead of media query */
+.dark .dark\:text-gray-300 {
+  color: #d1d5db !important;
+}
+
+.dark .dark\:bg-gray-800 {
+  background-color: #1f2937 !important;
+}
 
 /* Add to existing CSS to ensure checkboxes are visible in production */
 

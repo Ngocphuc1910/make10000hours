@@ -32,27 +32,30 @@ export const ThemeProvider = ({ defaultTheme = 'dark', children }) => {
 
   // Apply the theme class to the root HTML element
   useEffect(() => {
-    // Default to dark theme on production to match the local development appearance
-    const isProduction = process.env.NODE_ENV === 'production';
-    const finalTheme = isProduction ? 'dark' : theme;
+    // Use the selected theme regardless of environment
+    const finalTheme = theme;
     
-    console.log('Applying theme:', finalTheme, 'in environment:', process.env.NODE_ENV);
+    console.log('Theme change detected:', finalTheme, 'in environment:', process.env.NODE_ENV);
     
     // Remove both classes first
     document.documentElement.classList.remove('light', 'dark');
     // Add the current theme class
     document.documentElement.classList.add(finalTheme);
+    console.log('Applied theme class:', finalTheme, 'to document.documentElement');
     
     // Save to localStorage
     if (typeof window !== 'undefined') {
       localStorage.setItem('theme', finalTheme);
+      console.log('Saved theme to localStorage:', finalTheme);
     }
   }, [theme]);
 
   // Toggle between light and dark themes
   const toggleTheme = () => {
-    setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
-    console.log('Theme toggled');
+    console.log('Toggle theme called. Current theme:', theme);
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    console.log('Setting new theme to:', newTheme);
+    setTheme(newTheme);
   };
 
   // The value that will be provided to consumers of this context
