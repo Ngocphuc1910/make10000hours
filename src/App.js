@@ -10,6 +10,7 @@ import AuthCallback from './components/AuthCallback';
 import Achievements from './components/Achievements';
 import { getUserSettings } from './lib/database';
 import testSupabaseConnection from './lib/testSupabase';
+import ThemeProvider from './components/ThemeProvider';
 
 // Make test function available in the global scope for console debugging
 window.testSupabaseConnection = testSupabaseConnection;
@@ -448,17 +449,19 @@ function App() {
   console.log("App component mounted");
   
   return (
-    <Router basename="/">
-      <AuthProvider>
-        <Suspense fallback={<LoadingFallback />}>
-          <Routes>
-            <Route path="/" element={<MainApp />} />
-            <Route path="/reset-password" element={<ResetPasswordForm />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
-          </Routes>
-        </Suspense>
-      </AuthProvider>
-    </Router>
+    <ThemeProvider>
+      <Router basename="/">
+        <AuthProvider>
+          <Suspense fallback={<LoadingFallback />}>
+            <Routes>
+              <Route path="/" element={<MainApp />} />
+              <Route path="/reset-password" element={<ResetPasswordForm />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
+            </Routes>
+          </Suspense>
+        </AuthProvider>
+      </Router>
+    </ThemeProvider>
   );
 }
 
