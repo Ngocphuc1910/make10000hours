@@ -20,6 +20,9 @@ import TaskDialog from '../TaskList/TaskDialog';
 const SessionsList = forwardRef((props, ref) => {
   const [sessions, setSessions] = useState([]);
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
+  const [activeSessionId, setActiveSessionId] = useState(null);
+  
+  const { onTaskSelect } = props;
   
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
@@ -33,9 +36,18 @@ const SessionsList = forwardRef((props, ref) => {
     const savedSessions = JSON.parse(localStorage.getItem('pomodoro-sessions') || '[]');
     if (savedSessions.length > 0) {
       setSessions(savedSessions);
+      // Set the first task as active by default
+      if (savedSessions.length > 0 && !activeSessionId) {
+        setActiveSessionId(savedSessions[0].id);
+        
+        // Notify parent component about the active task
+        if (onTaskSelect) {
+          onTaskSelect(savedSessions[0]);
+        }
+      }
     } else {
       // Default sessions if none exist
-      setSessions([
+      const defaultSessions = [
         {
           id: "1",
           title: "UI Design Research",
@@ -57,9 +69,18 @@ const SessionsList = forwardRef((props, ref) => {
           duration: "25min",
           completed: false
         },
-      ]);
+      ];
+      
+      setSessions(defaultSessions);
+      // Set the first task as active by default
+      setActiveSessionId("1");
+      
+      // Notify parent component about the active task
+      if (onTaskSelect) {
+        onTaskSelect(defaultSessions[0]);
+      }
     }
-  }, []);
+  }, [onTaskSelect, activeSessionId]);
   
   // Save sessions to localStorage when they change
   useEffect(() => {
@@ -100,13 +121,46 @@ const SessionsList = forwardRef((props, ref) => {
     };
     
     setSessions((prevSessions) => [newSession, ...prevSessions]);
+    // Set newly added task as active
+    setActiveSessionId(task.id);
+    
+    // Notify parent component about the active task
+    if (onTaskSelect) {
+      onTaskSelect(newSession);
+    }
   };
   
   // Function to toggle task completion status
   const handleToggleComplete = (id) => {
-    setSessions(sessions.map(session => 
+    // Find the task and update its completed status
+    const updatedSessions = sessions.map(session => 
       session.id === id ? { ...session, completed: !session.completed } : session
-    ));
+    );
+    
+    // Update the sessions state
+    setSessions(updatedSessions);
+    
+    // If the completed task is the active one, update the parent
+    if (id === activeSessionId && onTaskSelect) {
+      const updatedTask = updatedSessions.find(session => session.id === id);
+      if (updatedTask) {
+        onTaskSelect(updatedTask);
+      }
+    }
+    
+    // Save to localStorage immediately
+    localStorage.setItem('pomodoro-sessions', JSON.stringify(updatedSessions));
+  };
+  
+  // Function to select a task
+  const handleSelectSession = (id) => {
+    setActiveSessionId(id);
+    
+    // Find the selected task and notify parent component
+    const selectedTask = sessions.find(session => session.id === id);
+    if (selectedTask && onTaskSelect) {
+      onTaskSelect(selectedTask);
+    }
   };
   
   return (
@@ -128,12 +182,14 @@ const SessionsList = forwardRef((props, ref) => {
         modifiers={[restrictToVerticalAxis]}
       >
         <SortableContext items={sessions.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-          <div className="space-y-3">
+          <div className="space-y-0 divide-y divide-gray-100 dark:divide-gray-700">
             {sessions.map((session) => (
               <SortableSessionItem 
                 key={session.id} 
                 session={session} 
                 onToggleComplete={handleToggleComplete}
+                isSelected={session.id === activeSessionId}
+                onSelectTask={handleSelectSession}
               />
             ))}
           </div>
