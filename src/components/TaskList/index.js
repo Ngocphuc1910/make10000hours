@@ -26,16 +26,31 @@ import {
   PointerSensor, 
   useSensor, 
   useSensors,
-  TouchSensor 
+  TouchSensor,
+  MeasuringStrategy,
+  defaultDropAnimationSideEffects
 } from '@dnd-kit/core';
-import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { restrictToVerticalAxis, snapCenterToCursor } from '@dnd-kit/modifiers';
 import { 
   SortableContext, 
   sortableKeyboardCoordinates,
-  verticalListSortingStrategy
+  verticalListSortingStrategy,
+  arrayMove
 } from '@dnd-kit/sortable';
 import SortableSessionItem from './SortableItem';
 import TaskDialog from './TaskDialog';
+
+// Custom drop animation for smoother experience
+const dropAnimation = {
+  sideEffects: defaultDropAnimationSideEffects({
+    styles: {
+      active: {
+        opacity: '0.5',
+      },
+    },
+  }),
+  duration: 100, // Faster drop animation for better responsiveness
+};
 
 const TaskList = () => {
   const { currentUser } = useAuth();
@@ -90,18 +105,40 @@ const TaskList = () => {
     localStorage.setItem('pomodoro-sessions', JSON.stringify(sessions));
   }, [sessions]);
   
+  // Add function to move items up/down as alternative to drag and drop
+  const moveSessionItem = (sessionId, direction) => {
+    const sessionIndex = sessions.findIndex(s => s.id === sessionId);
+    if (sessionIndex === -1) return;
+    
+    // Don't move if at the boundaries
+    if (direction === 'up' && sessionIndex === 0) return;
+    if (direction === 'down' && sessionIndex === sessions.length - 1) return;
+    
+    const newIndex = direction === 'up' ? sessionIndex - 1 : sessionIndex + 1;
+    
+    // Use arrayMove helper from dnd-kit for consistency
+    const newSessions = arrayMove(sessions, sessionIndex, newIndex);
+    setSessions(newSessions);
+    
+    // Provide haptic feedback if supported
+    if (navigator.vibrate) {
+      navigator.vibrate(20); // Short vibration for feedback
+    }
+  };
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       // Lower the activation distance to make it more responsive on mobile
       activationConstraint: {
         distance: 8, // Reduced from default for better mobile experience
         tolerance: 5,
+        delay: 0, // No delay for pointer to feel more responsive
       },
     }),
     useSensor(TouchSensor, {
-      // Specific for touch devices
+      // Specific for touch devices with long press activation 
       activationConstraint: {
-        delay: 100, // Small delay to distinguish from taps
+        delay: 250, // Delay for long press 
         tolerance: 10,
       },
     }),
@@ -110,7 +147,15 @@ const TaskList = () => {
     })
   );
   
+  const handleDragStart = (event) => {
+    // Add class to body to prevent unwanted scroll behavior during drag
+    document.body.classList.add('dragging');
+  };
+  
   const handleDragEnd = (event) => {
+    // Remove class from body when drag ends
+    document.body.classList.remove('dragging');
+    
     const { active, over } = event;
     
     if (over && active.id !== over.id) {
@@ -325,16 +370,21 @@ const TaskList = () => {
           </button>
         </div>
         
-        {/* Mobile instruction hint */}
+        {/* Mobile instruction hint - improved with clearer instructions */}
         <div className="text-sm text-gray-500 mb-2 md:hidden">
-          Press and hold the grip icon to drag and reorder items
+          <p className="mb-1">Press and hold the grip icon to drag and reorder items</p>
+          <p>Or use the up/down buttons for easier reordering</p>
         </div>
         
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
-          modifiers={[restrictToVerticalAxis]}
+          modifiers={[
+            restrictToVerticalAxis,
+            snapCenterToCursor
+          ]}
           autoScroll={{
             threshold: {
               x: 0,
@@ -345,6 +395,13 @@ const TaskList = () => {
               y: 10, // Scroll speed
             }
           }}
+          measuring={{
+            droppable: {
+              strategy: MeasuringStrategy.Always,
+            },
+          }}
+          // Add this prop for smooth drop animation
+          dropAnimation={dropAnimation}
         >
           <SortableContext items={sessions.map((s) => s.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-2">
@@ -361,6 +418,15 @@ const TaskList = () => {
                   }}
                   isSelected={false}
                   onSelectTask={() => {}} // Add implementation if needed
+                  // Pass move functions for the up/down buttons
+                  onMoveUp={(e) => {
+                    e?.stopPropagation();
+                    moveSessionItem(session.id, 'up');
+                  }}
+                  onMoveDown={(e) => {
+                    e?.stopPropagation();
+                    moveSessionItem(session.id, 'down');
+                  }}
                 />
               ))}
             </div>
