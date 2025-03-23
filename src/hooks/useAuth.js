@@ -1,9 +1,13 @@
 import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
 import supabase from '../lib/supabase';
 import { getUserProfile, createOrUpdateUserProfile } from '../lib/database';
+import { checkSupabaseConnection } from '../utils/networkUtils';
 
 // Create context
 export const AuthContext = createContext();
+
+// Supabase URL for connection checks
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://ccxhdmyfmfwincvzqjhg.supabase.co';
 
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -207,7 +211,25 @@ export const AuthProvider = ({ children }) => {
   }, []); // Empty dependency array intentional - eslint-disable-line react-hooks/exhaustive-deps
 
   // Email sign in
-  const emailSignIn = async (email, password) => {
+  const emailSignIn = async (email, password, event) => {
+    // Validate input
+    if (!email || !password) {
+      setAuthError('Email and password are required');
+      return null;
+    }
+    
+    // Check for automated events
+    if (event && !event.isTrusted) {
+      console.log('Prevented automated email sign-in attempt');
+      return null;
+    }
+    
+    // Set a timeout to reset loading state if something goes wrong
+    const loadingResetTimeout = setTimeout(() => {
+      console.log('Resetting loading state due to timeout');
+      setIsAuthLoading(false);
+    }, 15000); // 15 seconds timeout
+    
     setIsAuthLoading(true);
     setAuthError('');
     
@@ -236,9 +258,20 @@ export const AuthProvider = ({ children }) => {
       return data;
     } catch (error) {
       console.error('Sign in error:', error);
-      setAuthError(error.message);
+      
+      // Provide more specific error messages
+      if (error.message?.includes('fetch') || error.message?.includes('network') || error.message?.includes('Connection error')) {
+        setAuthError('Network connection error. Please check your internet connection and try again.');
+      } else if (error.message?.includes('Invalid login')) {
+        setAuthError('Invalid email or password. Please try again.');
+      } else {
+        setAuthError(error.message);
+      }
+      
       throw error;
     } finally {
+      // Clear the timeout and reset loading state
+      clearTimeout(loadingResetTimeout);
       setIsAuthLoading(false);
     }
   };
@@ -328,16 +361,26 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Google sign in
-  const googleSignIn = async () => {
+  const googleSignIn = async (event) => {
+    // Make sure this is triggered by a user action
+    if (event && !event.isTrusted) {
+      console.log('Prevented automated Google sign-in attempt');
+      return null;
+    }
+    
     setIsAuthLoading(true);
     setAuthError('');
     
     try {
       console.log('Attempting to sign in with Google');
+      
+      // We'll handle connection issues naturally through the OAuth flow
+      // rather than pre-checking with our own function
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin
+          redirectTo: `${window.location.origin}/auth/callback`
         }
       });
 
@@ -346,15 +389,17 @@ export const AuthProvider = ({ children }) => {
         throw error;
       }
 
-      console.log('Google sign in initiated successfully');
-      
-      // Note: For OAuth providers, we don't need to manually update the state
-      // The auth state listener will handle this when the user is redirected back
-      
       return data;
     } catch (error) {
       console.error('Google sign in error:', error);
-      setAuthError(error.message);
+      
+      // Provide more specific error messages
+      if (error.message?.includes('fetch') || error.message?.includes('network') || error.message?.includes('Connection error')) {
+        setAuthError('Network connection error. Please check your internet connection and try again.');
+      } else {
+        setAuthError(error.message);
+      }
+      
       throw error;
     } finally {
       setIsAuthLoading(false);
@@ -362,16 +407,26 @@ export const AuthProvider = ({ children }) => {
   };
 
   // GitHub sign in
-  const githubSignIn = async () => {
+  const githubSignIn = async (event) => {
+    // Make sure this is triggered by a user action
+    if (event && !event.isTrusted) {
+      console.log('Prevented automated GitHub sign-in attempt');
+      return null;
+    }
+    
     setIsAuthLoading(true);
     setAuthError('');
     
     try {
       console.log('Attempting to sign in with GitHub');
+      
+      // We'll handle connection issues naturally through the OAuth flow
+      // rather than pre-checking with our own function
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
-          redirectTo: window.location.origin
+          redirectTo: `${window.location.origin}/auth/callback`
         }
       });
 
@@ -380,15 +435,17 @@ export const AuthProvider = ({ children }) => {
         throw error;
       }
 
-      console.log('GitHub sign in initiated successfully');
-      
-      // Note: For OAuth providers, we don't need to manually update the state
-      // The auth state listener will handle this when the user is redirected back
-      
       return data;
     } catch (error) {
       console.error('GitHub sign in error:', error);
-      setAuthError(error.message);
+      
+      // Provide more specific error messages
+      if (error.message?.includes('fetch') || error.message?.includes('network') || error.message?.includes('Connection error')) {
+        setAuthError('Network connection error. Please check your internet connection and try again.');
+      } else {
+        setAuthError(error.message);
+      }
+      
       throw error;
     } finally {
       setIsAuthLoading(false);
