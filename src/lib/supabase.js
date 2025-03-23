@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase configuration
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+// Initialize Supabase client
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://ccxhdmyfmfwincvzqjhg.supabase.co';
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNjeGhkbXlmbWZ3aW5jdnpxamhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTg5MzA2NDAsImV4cCI6MjAxNDUwNjY0MH0.N8BzOUNKpYZkj5xj5vczxWlkuXmyaLQFvxcCpXC_Bbo';
 
 // Add detailed logging to help debug issues
 console.log('Supabase initialization:');
@@ -32,21 +32,31 @@ if (isPlaceholder) {
   console.error('=====================================================');
 }
 
-// Initialize Supabase client with better options
-const supabaseOptions = {
+// Initialize the Supabase client with persist session option explicitly set
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
+    // 8 hours in seconds
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: {
+      getItem: (key) => {
+        console.log(`Supabase: Getting storage key: ${key}`);
+        const value = localStorage.getItem(key);
+        console.log(`Supabase: Value for ${key}:`, value ? 'exists' : 'null');
+        return value;
+      },
+      setItem: (key, value) => {
+        console.log(`Supabase: Setting storage key: ${key}`);
+        localStorage.setItem(key, value);
+      },
+      removeItem: (key) => {
+        console.log(`Supabase: Removing storage key: ${key}`);
+        localStorage.removeItem(key);
+      }
+    }
   }
-};
-
-// Create the client with proper error handling
-const supabase = createClient(
-  supabaseUrl || 'https://placeholder-url.supabase.co',
-  supabaseAnonKey || 'placeholder-key',
-  supabaseOptions
-);
+});
 
 // Test connection when app loads
 supabase.auth.getSession().then(({ data, error }) => {
