@@ -25,53 +25,67 @@ const SettingsModal = ({ onClose }) => {
   useEffect(() => {
     const loadSettings = async () => {
       try {
+        setError(null);
+        console.log("SettingsModal: Loading settings");
+        
+        // Wait for auth to finish loading
+        if (isAuthLoading) {
+          console.log("SettingsModal: Auth is still loading, will try loading settings later");
+          return;
+        }
+        
         // First check if user is logged in
-        if (currentUser && !isAuthLoading) {
-          console.log("Loading settings from database for user:", currentUser.id);
-          const userSettings = await getUserSettings(currentUser.id);
+        if (currentUser) {
+          console.log("SettingsModal: Loading settings from database for user:", currentUser.id);
           
-          // If user has settings in the database, use those
-          if (userSettings) {
-            console.log("User settings found:", userSettings);
+          try {
+            const userSettings = await getUserSettings(currentUser.id);
+            
+            // getUserSettings should always return valid settings now
+            console.log("SettingsModal: User settings loaded:", userSettings);
             setSettings(userSettings);
-            return;
+          } catch (dbError) {
+            console.error("SettingsModal: Error loading settings from database:", dbError);
+            setError(`Failed to load settings from database: ${dbError.message}`);
+            
+            // Try from localStorage if database fails
+            const savedSettings = localStorage.getItem('timerSettings');
+            if (savedSettings) {
+              try {
+                const parsedSettings = JSON.parse(savedSettings);
+                console.log("SettingsModal: Falling back to localStorage settings:", parsedSettings);
+                setSettings(parsedSettings);
+              } catch (parseError) {
+                console.error("SettingsModal: Error parsing localStorage settings:", parseError);
+                setSettings(defaultSettings);
+              }
+            } else {
+              console.log("SettingsModal: No localStorage settings, using defaults");
+              setSettings(defaultSettings);
+            }
           }
-          
-          // If no database settings but localStorage exists, save those to database
-          const savedSettings = localStorage.getItem('timerSettings');
-          if (savedSettings) {
-            const parsedSettings = JSON.parse(savedSettings);
-            console.log("Saving localStorage settings to database:", parsedSettings);
-            await saveUserSettings(currentUser.id, parsedSettings);
-            setSettings(parsedSettings);
-            return;
-          }
-          
-          // If no settings anywhere, save defaults to database
-          console.log("Using default settings and saving to database");
-          await saveUserSettings(currentUser.id, defaultSettings);
-          setSettings(defaultSettings);
         } else {
           // Not logged in, use localStorage
-          console.log("User not logged in, using localStorage");
+          console.log("SettingsModal: User not logged in, using localStorage");
           const savedSettings = localStorage.getItem('timerSettings');
           if (savedSettings) {
-            setSettings(JSON.parse(savedSettings));
+            try {
+              const parsedSettings = JSON.parse(savedSettings);
+              console.log("SettingsModal: Settings loaded from localStorage:", parsedSettings);
+              setSettings(parsedSettings);
+            } catch (parseError) {
+              console.error("SettingsModal: Error parsing localStorage settings:", parseError);
+              setSettings(defaultSettings);
+            }
           } else {
+            console.log("SettingsModal: No localStorage settings, using defaults");
             setSettings(defaultSettings);
           }
         }
       } catch (err) {
-        console.error("Error loading settings:", err);
+        console.error("SettingsModal: Error loading settings:", err);
         setError("Failed to load settings. Using defaults.");
-        
-        // Fallback to localStorage or defaults
-        const savedSettings = localStorage.getItem('timerSettings');
-        if (savedSettings) {
-          setSettings(JSON.parse(savedSettings));
-        } else {
-          setSettings(defaultSettings);
-        }
+        setSettings(defaultSettings);
       }
     };
 
@@ -92,42 +106,50 @@ const SettingsModal = ({ onClose }) => {
       setIsSaving(true);
       setError(null);
       
-      console.log("Starting settings save process");
+      console.log("SettingsModal: Starting settings save process");
       
       // Validate settings before saving
       if (settings.pomodoroTime <= 0 || settings.shortBreakTime <= 0 || settings.longBreakTime <= 0) {
         setError("Time values must be greater than 0");
+        setIsSaving(false);
         return;
       }
       
+      // Make a copy of settings to ensure we don't have any issues with references
+      const settingsCopy = JSON.parse(JSON.stringify(settings));
+      
       // Always save to localStorage for offline/non-logged-in use
-      localStorage.setItem('timerSettings', JSON.stringify(settings));
-      console.log("Settings saved to localStorage");
+      localStorage.setItem('timerSettings', JSON.stringify(settingsCopy));
+      console.log("SettingsModal: Settings saved to localStorage:", settingsCopy);
+      
+      // Always dispatch the event to update the timer immediately
+      // This ensures changes are applied even if database save fails
+      console.log("SettingsModal: Dispatching settings update event");
+      window.dispatchEvent(new CustomEvent('timerSettingsUpdated', { 
+        detail: settingsCopy
+      }));
       
       // If user is logged in, save to database
       if (currentUser) {
-        console.log("Attempting to save settings to database for user:", currentUser.id);
+        console.log("SettingsModal: Attempting to save settings to database for user:", currentUser.id);
         try {
           // Show detailed user info for debugging
-          console.log("Current user:", {
+          console.log("SettingsModal: Current user:", {
             id: currentUser.id,
             email: currentUser.email,
             aud: currentUser.aud,
             role: currentUser.role
           });
           
-          const result = await saveUserSettings(currentUser.id, settings);
-          console.log("Settings saved to database successfully:", result);
-          
-          // Dispatch event for App.js to pick up the changes
-          window.dispatchEvent(new CustomEvent('timerSettingsUpdated', { 
-            detail: settings 
-          }));
+          const result = await saveUserSettings(currentUser.id, settingsCopy);
+          console.log("SettingsModal: Settings saved to database successfully:", result);
           
           // Close the modal after successful save
-          onClose();
+          setTimeout(() => {
+            onClose();
+          }, 500); // Short delay to ensure event processing completes
         } catch (dbError) {
-          console.error("Database error:", dbError);
+          console.error("SettingsModal: Database error:", dbError);
           
           // Show specific error message and instructions
           let errorMessage = "Failed to save settings to your account. ";
@@ -146,26 +168,20 @@ const SettingsModal = ({ onClose }) => {
           
           setError(errorMessage);
           
-          // But continue - the settings are still in localStorage
-          console.log("Falling back to localStorage only");
-          
-          // Show a confirmation that at least localStorage was updated
-          window.dispatchEvent(new CustomEvent('timerSettingsUpdated', { 
-            detail: settings 
-          }));
+          // Settings are still applied because we've already dispatched the event and saved to localStorage
+          console.log("SettingsModal: Settings were saved locally and applied, but not saved to database");
         }
       } else {
         // Not logged in, just use localStorage and update the app
-        console.log("User not logged in, using localStorage only");
-        window.dispatchEvent(new CustomEvent('timerSettingsUpdated', { 
-          detail: settings 
-        }));
+        console.log("SettingsModal: User not logged in, using localStorage only");
         
         // Close the modal if not logged in (no errors possible)
-        onClose();
+        setTimeout(() => {
+          onClose();
+        }, 500); // Short delay to ensure event processing completes
       }
     } catch (err) {
-      console.error("Error saving settings:", err);
+      console.error("SettingsModal: Error saving settings:", err);
       setError("Failed to save settings. Please try again. Error: " + err.message);
     } finally {
       setIsSaving(false);

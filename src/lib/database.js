@@ -76,7 +76,33 @@ export const updateUserProfile = async (userId, updates) => {
  */
 export const getUserSettings = async (userId) => {
   try {
-    console.log("Fetching settings for user:", userId);
+    console.log("Database: Fetching settings for user:", userId);
+    
+    // Get default settings from localStorage or use system defaults
+    const defaultSettings = JSON.parse(localStorage.getItem('timerSettings')) || {
+      pomodoroTime: 25,
+      shortBreakTime: 5,
+      shortBreakEnabled: true,
+      longBreakTime: 15,
+      longBreakEnabled: true,
+      autoStartSessions: false
+    };
+    
+    // Exit early if no userId provided
+    if (!userId) {
+      console.log("Database: No userId provided to getUserSettings, returning defaults");
+      return defaultSettings;
+    }
+    
+    // Debug authentication status
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      console.error("Database: Auth session error:", sessionError);
+    } else if (!session) {
+      console.warn("Database: No active session found when getting settings");
+    } else {
+      console.log("Database: Active session expires:", new Date(session.expires_at * 1000).toISOString());
+    }
     
     const { data, error } = await supabase
       .from('user_settings')
@@ -85,27 +111,54 @@ export const getUserSettings = async (userId) => {
       .single();
     
     if (error) {
-      console.error("Error fetching user settings:", error);
-      // If settings don't exist yet, return null instead of throwing
+      console.error("Database: Error fetching user settings:", error);
+      // If settings don't exist yet, return defaults instead of throwing
       if (error.code === 'PGRST116') {
-        console.log("No settings found for user (PGRST116)");
-        return null;
+        console.log("Database: No settings found for user (PGRST116), using defaults");
+        return defaultSettings;
       }
       
       // Check if table doesn't exist
       if (error.code === 'PGRST301') {
-        console.error("Table 'user_settings' does not exist");
+        console.error("Database: Table 'user_settings' does not exist");
         throw new Error("Settings table does not exist. Please run the SQL setup.");
       }
       
       throw error;
     }
     
-    console.log("Settings retrieved successfully:", data?.settings);
-    return data?.settings;
+    // If we get null or undefined settings, return defaults
+    if (!data || !data.settings) {
+      console.log("Database: No settings found in response, using defaults");
+      return defaultSettings;
+    }
+    
+    // Diagnostic log of the settings we found
+    console.log("Database: Raw settings from database:", data.settings);
+    
+    // Merge with defaults to ensure all fields are present
+    const mergedSettings = {
+      ...defaultSettings,
+      ...data.settings
+    };
+    
+    console.log("Database: Settings retrieved and merged with defaults:", mergedSettings);
+    return mergedSettings;
   } catch (err) {
-    console.error("Unexpected error in getUserSettings:", err);
-    throw err;
+    console.error("Database: Unexpected error in getUserSettings:", err);
+    
+    // On error, try to get settings from localStorage instead of failing completely
+    const fallbackSettings = JSON.parse(localStorage.getItem('timerSettings')) || {
+      pomodoroTime: 25,
+      shortBreakTime: 5,
+      shortBreakEnabled: true,
+      longBreakTime: 15,
+      longBreakEnabled: true,
+      autoStartSessions: false
+    };
+    
+    console.log("Database: Falling back to localStorage settings due to error");
+    return fallbackSettings;
   }
 };
 
@@ -121,27 +174,41 @@ export const getUserSettings = async (userId) => {
  */
 export const saveUserSettings = async (userId, settings) => {
   if (!userId) {
-    console.error('saveUserSettings: No userId provided');
+    console.error('Database: No userId provided to saveUserSettings');
     throw new Error('You must be logged in to save settings');
   }
   
-  console.log(`Attempting to save settings for user ${userId}`);
+  console.log(`Database: Attempting to save settings for user ${userId}`);
   
   try {
     // Get the current session to verify authentication
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError) {
-      console.error('Session verification error:', sessionError);
+      console.error('Database: Session verification error:', sessionError);
       throw new Error(`Authentication error: ${sessionError.message}`);
     }
     
     if (!session) {
-      console.error('No active session found');
+      console.error('Database: No active session found');
       throw new Error('No active session. Please log in again');
     }
     
-    console.log('Session verified, token expires:', new Date(session.expires_at * 1000).toISOString());
+    if (session.user.id !== userId) {
+      console.error('Database: Session user ID does not match requested user ID');
+      throw new Error('Authentication mismatch. Please log in again');
+    }
+    
+    const expiresAt = new Date(session.expires_at * 1000);
+    const now = new Date();
+    const timeUntilExpiry = expiresAt - now;
+    
+    console.log('Database: Session verified, token expires:', expiresAt.toISOString());
+    console.log('Database: Time until token expiry:', Math.floor(timeUntilExpiry / 1000 / 60), 'minutes');
+    
+    if (timeUntilExpiry < 5 * 60 * 1000) { // Less than 5 minutes
+      console.warn('Database: Auth token expires soon, may need to refresh');
+    }
     
     // First check if this user already has settings
     const { data: existingSettings, error: getError } = await supabase
@@ -151,7 +218,7 @@ export const saveUserSettings = async (userId, settings) => {
       .maybeSingle();
     
     if (getError) {
-      console.error('Error checking for existing settings:', getError);
+      console.error('Database: Error checking for existing settings:', getError);
       
       // Handle table not existing
       if (getError.code === 'PGRST301') {
@@ -162,13 +229,13 @@ export const saveUserSettings = async (userId, settings) => {
       throw new Error(`Error checking settings: ${getError.message}`);
     }
     
-    console.log('Existing settings check result:', existingSettings);
+    console.log('Database: Existing settings check result:', existingSettings);
     
     let result;
     
     // If settings exist, update them
     if (existingSettings) {
-      console.log(`Updating existing settings for user ${userId}`);
+      console.log(`Database: Updating existing settings for user ${userId}`);
       
       try {
         const { data, error } = await supabase
@@ -178,9 +245,9 @@ export const saveUserSettings = async (userId, settings) => {
           .select();
         
         if (error) {
-          console.error('Error updating settings:', error);
+          console.error('Database: Error updating settings:', error);
           
-          if (error.message.includes('Method Not Allowed')) {
+          if (error.message && error.message.includes('Method Not Allowed')) {
             throw new Error('Error updating settings: Method Not Allowed. Check your RLS policies.');
           }
           
@@ -188,15 +255,15 @@ export const saveUserSettings = async (userId, settings) => {
         }
         
         result = data;
-        console.log('Settings updated successfully:', data);
+        console.log('Database: Settings updated successfully:', data);
       } catch (updateError) {
-        console.error('Exception during update operation:', updateError);
+        console.error('Database: Exception during update operation:', updateError);
         throw updateError;
       }
     } 
     // If no settings exist, insert new ones
     else {
-      console.log(`Creating new settings for user ${userId}`);
+      console.log(`Database: Creating new settings for user ${userId}`);
       
       try {
         const { data, error } = await supabase
@@ -210,9 +277,9 @@ export const saveUserSettings = async (userId, settings) => {
           .select();
         
         if (error) {
-          console.error('Error inserting settings:', error);
+          console.error('Database: Error inserting settings:', error);
           
-          if (error.message.includes('Method Not Allowed')) {
+          if (error.message && error.message.includes('Method Not Allowed')) {
             throw new Error('Error inserting settings: Method Not Allowed. Check your RLS policies.');
           }
           
@@ -224,16 +291,16 @@ export const saveUserSettings = async (userId, settings) => {
         }
         
         result = data;
-        console.log('Settings inserted successfully:', data);
+        console.log('Database: Settings inserted successfully:', data);
       } catch (insertError) {
-        console.error('Exception during insert operation:', insertError);
+        console.error('Database: Exception during insert operation:', insertError);
         throw insertError;
       }
     }
     
     return result;
   } catch (error) {
-    console.error('Error in saveUserSettings:', error);
+    console.error('Database: Error in saveUserSettings:', error);
     
     // Provide more helpful error messages
     if (error.message.includes('network error')) {
