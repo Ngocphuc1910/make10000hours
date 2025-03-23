@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "@modelcontextprotocol/server-postgres", 
+        "postgresql://postgres:oOgCGu5NTKcsLyjD@db.ccxhdmyfmfwincvzqjhg.supabase.co:5432/postgres",
+        "--debug"
+      ],
+      "env": {
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+      }
+    }
+  }
+} 
