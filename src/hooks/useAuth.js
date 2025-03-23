@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
   // Sign out function - defined early to avoid circular dependencies
   const signOut = async () => {
     try {
-      console.log("Attempting to sign out user...");
+      console.log("Auth: Attempting to sign out user...");
       setIsAuthLoading(true);
       
       // First clean up local state so we don't trigger any dependency effects
@@ -39,24 +39,41 @@ export const AuthProvider = ({ children }) => {
         setSessionExpiryTimeout(null);
       }
       
+      // Clear settings to ensure clean state after sign out
+      const defaultSettings = {
+        pomodoroTime: 25,
+        shortBreakTime: 5,
+        shortBreakEnabled: true,
+        longBreakTime: 15,
+        longBreakEnabled: true,
+        autoStartSessions: false,
+        longBreakInterval: 4
+      };
+      
+      // Update localStorage with default settings
+      localStorage.setItem('timerSettings', JSON.stringify(defaultSettings));
+      
+      // Notify rest of app about settings reset
+      window.dispatchEvent(new CustomEvent('timerSettingsUpdated', { 
+        detail: defaultSettings
+      }));
+      
       // Then clear the session with Supabase
       const { error } = await supabase.auth.signOut();
       
       if (error) {
-        console.error("Supabase signOut error:", error);
+        console.error("Auth: Supabase signOut error:", error);
         throw error;
       }
       
-      console.log("Sign out successful");
+      console.log("Auth: Sign out successful");
       
-      // Force a page refresh to ensure clean state if necessary
-      if (process.env.NODE_ENV === 'production') {
-        window.location.href = '/';
-      }
+      // Force a page refresh to ensure clean state
+      window.location.href = '/';
       
       return true;
     } catch (error) {
-      console.error("Sign out error:", error.message);
+      console.error("Auth: Sign out error:", error.message);
       setAuthError("Failed to sign out: " + error.message);
       throw error;
     } finally {
@@ -218,9 +235,19 @@ export const AuthProvider = ({ children }) => {
       return null;
     }
     
-    // Check for automated events
-    if (event && !event.isTrusted) {
-      console.log('Prevented automated email sign-in attempt');
+    // Check for automated events - enhanced protection
+    if (event) {
+      // Only proceed with explicitly trusted (user-initiated) events
+      if (!event.isTrusted) {
+        console.log('Prevented automated email sign-in attempt - event not trusted');
+        return null;
+      }
+    } else {
+      // If this was triggered by a reload, not a user click
+      console.log('Sign-in triggered without an event object - possible automated attempt');
+      // This needs investigation as it might be caused by page reload
+      // or a call from somewhere else in the codebase
+      setAuthError('Please try signing in by clicking the button');
       return null;
     }
     

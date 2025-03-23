@@ -93,6 +93,7 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
     // Check if the event is trusted (came from user interaction)
     if (!e || !e.isTrusted) {
       console.log('Prevented automated form submission');
+      setAuthError('Please click the sign in button directly');
       return false;
     }
     
@@ -112,20 +113,29 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
     const now = Date.now();
     if (now - lastSubmitTime < 2000) {
       console.log('Please wait before submitting again');
+      setAuthError('Please wait a moment before trying again');
       return;
     }
     
     try {
       setIsSubmitting(true);
       setLastSubmitTime(now);
+      setAuthError(''); // Clear any previous errors
       console.log('Starting sign in for:', email);
-      const result = await emailSignIn(email, password, e); // Pass the event
-      console.log('Sign in completed successfully:', result?.user?.email);
       
-      // Give the auth state a moment to update before closing
-      setTimeout(() => {
-        onClose();
-      }, 1000);
+      // Pass the original DOM event to ensure it's not triggered by a page reload
+      const result = await emailSignIn(email, password, e);
+      
+      if (result) {
+        console.log('Sign in completed successfully:', result?.user?.email);
+        
+        // Give the auth state a moment to update before closing
+        setTimeout(() => {
+          onClose();
+        }, 1000);
+      } else {
+        console.log('Sign in did not complete - no result returned');
+      }
     } catch (error) {
       console.error('Sign in failed:', error);
       // Error is handled by the useAuth hook

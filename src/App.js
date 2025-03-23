@@ -67,36 +67,104 @@ function MainApp() {
     const loadSettings = async () => {
       try {
         // If still loading auth state, wait
-        if (isAuthLoading) return;
+        if (isAuthLoading) {
+          console.log("App: Auth still loading, waiting for auth state");
+          return;
+        }
+        
+        console.log("App: Loading settings with auth state ready, user:", currentUser?.id || "none");
         
         // If user is logged in, try to get settings from the database
         if (currentUser) {
-          console.log("Loading settings from database for user:", currentUser.id);
-          const userSettings = await getUserSettings(currentUser.id);
-          
-          if (userSettings) {
-            console.log("User settings found in database:", userSettings);
-            setSettings(userSettings);
-            return;
+          try {
+            console.log("App: Loading settings from database for user:", currentUser.id);
+            const userSettings = await getUserSettings(currentUser.id);
+            
+            if (userSettings) {
+              console.log("App: User settings found in database:", userSettings);
+              
+              // Make sure settings are correctly typed
+              const processedSettings = {
+                ...userSettings,
+                pomodoroTime: Number(userSettings.pomodoroTime) || 25,
+                shortBreakTime: Number(userSettings.shortBreakTime) || 5,
+                longBreakTime: Number(userSettings.longBreakTime) || 15,
+                autoStartSessions: userSettings.autoStartSessions === true,
+                shortBreakEnabled: userSettings.shortBreakEnabled !== false,
+                longBreakEnabled: userSettings.longBreakEnabled !== false,
+                longBreakInterval: Number(userSettings.longBreakInterval) || 4
+              };
+              
+              setSettings(processedSettings);
+              
+              // Update localStorage for consistency
+              localStorage.setItem('timerSettings', JSON.stringify(processedSettings));
+              
+              // Dispatch event for other components to update
+              const event = new CustomEvent('timerSettingsUpdated', { 
+                detail: processedSettings 
+              });
+              window.dispatchEvent(event);
+              
+              console.log("App: Settings loaded and dispatched event");
+              return;
+            }
+          } catch (dbError) {
+            console.error("App: Error loading settings from database:", dbError);
+            // Fall through to localStorage
           }
         }
         
         // Fallback to localStorage (for not logged in or no database settings)
-        console.log("Loading settings from localStorage");
+        console.log("App: Loading settings from localStorage");
         const savedSettings = localStorage.getItem('timerSettings');
+        
         if (savedSettings) {
-          setSettings(JSON.parse(savedSettings));
+          try {
+            const parsedSettings = JSON.parse(savedSettings);
+            console.log("App: Settings loaded from localStorage:", parsedSettings);
+            
+            // Make sure settings are correctly typed
+            const processedSettings = {
+              ...parsedSettings,
+              pomodoroTime: Number(parsedSettings.pomodoroTime) || 25,
+              shortBreakTime: Number(parsedSettings.shortBreakTime) || 5,
+              longBreakTime: Number(parsedSettings.longBreakTime) || 15,
+              autoStartSessions: parsedSettings.autoStartSessions === true,
+              shortBreakEnabled: parsedSettings.shortBreakEnabled !== false,
+              longBreakEnabled: parsedSettings.longBreakEnabled !== false,
+              longBreakInterval: Number(parsedSettings.longBreakInterval) || 4
+            };
+            
+            setSettings(processedSettings);
+            
+            // Dispatch event for other components to update
+            const event = new CustomEvent('timerSettingsUpdated', { 
+              detail: processedSettings 
+            });
+            window.dispatchEvent(event);
+          } catch (parseError) {
+            console.error("App: Error parsing localStorage settings:", parseError);
+            setSettings(defaultSettings);
+          }
         } else {
+          console.log("App: No settings found, using defaults");
           setSettings(defaultSettings);
         }
       } catch (err) {
-        console.error("Error loading settings:", err);
+        console.error("App: Error loading settings:", err);
         
         // Fallback to localStorage on error
-        const savedSettings = localStorage.getItem('timerSettings');
-        if (savedSettings) {
-          setSettings(JSON.parse(savedSettings));
-        } else {
+        try {
+          const savedSettings = localStorage.getItem('timerSettings');
+          if (savedSettings) {
+            const parsedSettings = JSON.parse(savedSettings);
+            setSettings(parsedSettings);
+          } else {
+            setSettings(defaultSettings);
+          }
+        } catch (e) {
+          console.error("App: Error with fallback settings:", e);
           setSettings(defaultSettings);
         }
       }
@@ -109,20 +177,32 @@ function MainApp() {
   useEffect(() => {
     const handleSettingsUpdated = (event) => {
       const newSettings = event.detail;
-      setSettings(newSettings);
+      console.log("App: Settings updated event received:", newSettings);
+      
+      // Ensure we have all required fields by merging with current settings
+      const mergedSettings = {
+        ...settings,
+        ...newSettings
+      };
+      
+      // Update the settings state
+      setSettings(mergedSettings);
       
       // Update timer based on mode and new settings
       if (mode === 'pomodoro') {
-        setTime(newSettings.pomodoroTime * 60);
-      } else if (mode === 'shortBreak' && newSettings.shortBreakEnabled) {
-        setTime(newSettings.shortBreakTime * 60);
-      } else if (mode === 'longBreak' && newSettings.longBreakEnabled) {
-        setTime(newSettings.longBreakTime * 60);
+        setTime(mergedSettings.pomodoroTime * 60);
+      } else if (mode === 'shortBreak' && mergedSettings.shortBreakEnabled) {
+        setTime(mergedSettings.shortBreakTime * 60);
+      } else if (mode === 'longBreak' && mergedSettings.longBreakEnabled) {
+        setTime(mergedSettings.longBreakTime * 60);
       }
       
       // Reset active state to enforce the new settings
       setIsActive(false);
       setIsPaused(true);
+      
+      // Update localStorage for consistency across page reloads
+      localStorage.setItem('timerSettings', JSON.stringify(mergedSettings));
     };
 
     window.addEventListener('timerSettingsUpdated', handleSettingsUpdated);
@@ -130,7 +210,7 @@ function MainApp() {
     return () => {
       window.removeEventListener('timerSettingsUpdated', handleSettingsUpdated);
     };
-  }, [mode]);
+  }, [mode, settings]);
   
   // Update time when mode changes
   useEffect(() => {
