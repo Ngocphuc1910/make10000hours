@@ -25,7 +25,8 @@ import {
   KeyboardSensor, 
   PointerSensor, 
   useSensor, 
-  useSensors 
+  useSensors,
+  TouchSensor 
 } from '@dnd-kit/core';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { 
@@ -90,7 +91,20 @@ const TaskList = () => {
   }, [sessions]);
   
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      // Lower the activation distance to make it more responsive on mobile
+      activationConstraint: {
+        distance: 8, // Reduced from default for better mobile experience
+        tolerance: 5,
+      },
+    }),
+    useSensor(TouchSensor, {
+      // Specific for touch devices
+      activationConstraint: {
+        delay: 100, // Small delay to distinguish from taps
+        tolerance: 10,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -311,16 +325,43 @@ const TaskList = () => {
           </button>
         </div>
         
+        {/* Mobile instruction hint */}
+        <div className="text-sm text-gray-500 mb-2 md:hidden">
+          Press and hold the grip icon to drag and reorder items
+        </div>
+        
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
           modifiers={[restrictToVerticalAxis]}
+          autoScroll={{
+            threshold: {
+              x: 0,
+              y: 0.2, // Start scrolling when dragged item is 20% from edge
+            },
+            speed: {
+              x: 10,
+              y: 10, // Scroll speed
+            }
+          }}
         >
           <SortableContext items={sessions.map((s) => s.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-2">
               {sessions.map((session) => (
-                <SortableSessionItem key={session.id} session={session} />
+                <SortableSessionItem 
+                  key={session.id} 
+                  session={session} 
+                  onToggleComplete={(id) => {
+                    // Handle task completion toggle
+                    const updatedSessions = sessions.map(s => 
+                      s.id === id ? {...s, completed: !s.completed} : s
+                    );
+                    setSessions(updatedSessions);
+                  }}
+                  isSelected={false}
+                  onSelectTask={() => {}} // Add implementation if needed
+                />
               ))}
             </div>
           </SortableContext>

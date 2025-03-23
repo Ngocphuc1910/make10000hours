@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, CheckSquare, Square } from 'lucide-react';
 import { useTheme } from '../../components/ThemeProvider';
 
 const SortableSessionItem = ({ session, onToggleComplete, isSelected, onSelectTask }) => {
+  const [isTouched, setIsTouched] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: session.id,
   });
@@ -14,6 +15,7 @@ const SortableSessionItem = ({ session, onToggleComplete, isSelected, onSelectTa
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    touchAction: 'none', // Prevents browser handling of touch events
   };
 
   const handleCheckboxClick = (e) => {
@@ -27,6 +29,15 @@ const SortableSessionItem = ({ session, onToggleComplete, isSelected, onSelectTa
     return false;
   };
 
+  // Handle touch events for mobile feedback
+  const handleTouchStart = () => {
+    setIsTouched(true);
+  };
+
+  const handleTouchEnd = () => {
+    setIsTouched(false);
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -34,7 +45,8 @@ const SortableSessionItem = ({ session, onToggleComplete, isSelected, onSelectTa
       onClick={() => onSelectTask(session.id)}
       className={`flex justify-between items-center py-3 px-3 border-b border-gray-200 dark:border-gray-700 last:border-0 cursor-pointer
         ${isDragging ? 'bg-gray-50 dark:bg-gray-800 rounded' : ''} 
-        ${isSelected ? 'bg-gray-50 dark:bg-gray-800' : ''}`}
+        ${isSelected ? 'bg-gray-50 dark:bg-gray-800' : ''}
+        ${isTouched ? 'bg-gray-100 dark:bg-gray-700' : ''}`}
     >
       <div className="flex items-center">
         {/* Checkbox with improved click handling */}
@@ -69,10 +81,14 @@ const SortableSessionItem = ({ session, onToggleComplete, isSelected, onSelectTa
         <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 
+                    p-2 -m-2 touch-manipulation" /* Increased touch area and added touch-manipulation */
           onClick={(e) => e.stopPropagation()} // Prevent triggering the parent onClick
         >
           <GripVertical className="h-5 w-5" />
+          <span className="sr-only md:hidden">Drag to reorder</span>
         </div>
       </div>
     </div>
