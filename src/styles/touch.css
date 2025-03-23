@@ -1,0 +1,69 @@
+/* Mobile Touch Optimizations */
+
+/* Increase touch targets for better mobile experience */
+@media (max-width: 768px) {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Disable pull-to-refresh when dragging */
+  body.dragging {
+    overscroll-behavior: none;
+    touch-action: none;
+  }
+
+  /* Improved touch feedback */
+  .touch-feedback:active {
+    transform: scale(0.97);
+    transition: transform 0.1s ease;
+  }
+
+  /* Enhanced active states */
+  .touch-active {
+    position: relative;
+  }
+  
+  .touch-active:active::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: inherit;
+  }
+
+  /* Magnetic snap animation */
+  .magnetic-snap {
+    transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+}
+
+/* Prevent text selection during drag */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Custom styles for drag handles */
+.drag-handle {
+  touch-action: none;
+  cursor: grab;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Smooth animation for dropped items */
+.drop-animation {
+  transition: all 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Enhanced droppable area styles */
+.droppable-highlight {
+  background-color: rgba(0, 0, 0, 0.03);
+  transition: background-color 0.15s ease;
+} 
