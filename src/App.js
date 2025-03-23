@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './styles/globals.css';
+import './styles/touch.css'; // Import touch-specific optimizations
 import { Play, Pause, RotateCcw, SkipForward, Plus, FolderPlus } from 'lucide-react';
 import SessionsList from './components/SessionsList';
 import Header from './components/Header';
