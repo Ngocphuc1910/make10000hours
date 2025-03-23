@@ -349,6 +349,12 @@ const SettingsModal = ({ onClose }) => {
     }
   };
 
+  // Add move buttons as alternative to dragging
+  const moveItem = (item, direction) => {
+    // Implement the logic to move the item in the desired direction
+    console.log(`Moving item: ${item} in direction: ${direction}`);
+  };
+
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
