@@ -109,88 +109,138 @@ export const getUserSettings = async (userId) => {
   }
 };
 
+/**
+ * Saves user settings to the database
+ * 
+ * @param {string} userId - The user's ID
+ * @param {object} settings - The settings object to save
+ * @returns {object} The saved settings record
+ * 
+ * NOTE: When adding new settings to the UI, no database schema changes are needed
+ * because we store all settings in the JSONB 'settings' column.
+ */
 export const saveUserSettings = async (userId, settings) => {
+  if (!userId) {
+    console.error('saveUserSettings: No userId provided');
+    throw new Error('You must be logged in to save settings');
+  }
+  
+  console.log(`Attempting to save settings for user ${userId}`);
+  
   try {
-    console.log("Saving settings for user:", userId);
-    console.log("Settings to save:", settings);
+    // Get the current session to verify authentication
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-    // Check supabase connection
-    const { data: authData, error: authError } = await supabase.auth.getSession();
-    if (authError) {
-      console.error("Supabase auth error:", authError);
-      throw new Error("Authentication error: " + authError.message);
+    if (sessionError) {
+      console.error('Session verification error:', sessionError);
+      throw new Error(`Authentication error: ${sessionError.message}`);
     }
     
-    if (!authData.session) {
-      console.error("No active session found");
-      throw new Error("No active session. User must be logged in to save settings.");
+    if (!session) {
+      console.error('No active session found');
+      throw new Error('No active session. Please log in again');
     }
     
-    // Check if settings exist
-    const { data: existingSettings, error: checkError } = await supabase
+    console.log('Session verified, token expires:', new Date(session.expires_at * 1000).toISOString());
+    
+    // First check if this user already has settings
+    const { data: existingSettings, error: getError } = await supabase
       .from('user_settings')
-      .select('user_id')
+      .select('id')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
     
-    if (checkError && checkError.code !== 'PGRST116') {
-      console.error("Error checking existing settings:", checkError);
+    if (getError) {
+      console.error('Error checking for existing settings:', getError);
       
-      // Check if table doesn't exist
-      if (checkError.code === 'PGRST301') {
-        throw new Error("Settings table does not exist. Please run the SQL setup.");
+      // Handle table not existing
+      if (getError.code === 'PGRST301') {
+        throw new Error('The user_settings table does not exist. Please run the SQL setup.');
       }
       
-      throw checkError;
+      // Handle other errors
+      throw new Error(`Error checking settings: ${getError.message}`);
     }
+    
+    console.log('Existing settings check result:', existingSettings);
     
     let result;
     
+    // If settings exist, update them
     if (existingSettings) {
-      console.log("Updating existing settings for user:", userId);
-      // Update existing settings
-      const { data, error } = await supabase
-        .from('user_settings')
-        .update({
-          settings,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', userId)
-        .select();
+      console.log(`Updating existing settings for user ${userId}`);
       
-      if (error) {
-        console.error("Error updating settings:", error);
-        throw error;
+      try {
+        const { data, error } = await supabase
+          .from('user_settings')
+          .update({ settings, updated_at: new Date() })
+          .eq('user_id', userId)
+          .select();
+        
+        if (error) {
+          console.error('Error updating settings:', error);
+          
+          if (error.message.includes('Method Not Allowed')) {
+            throw new Error('Error updating settings: Method Not Allowed. Check your RLS policies.');
+          }
+          
+          throw new Error(`Error updating settings: ${error.message}`);
+        }
+        
+        result = data;
+        console.log('Settings updated successfully:', data);
+      } catch (updateError) {
+        console.error('Exception during update operation:', updateError);
+        throw updateError;
       }
+    } 
+    // If no settings exist, insert new ones
+    else {
+      console.log(`Creating new settings for user ${userId}`);
       
-      console.log("Settings updated successfully:", data);
-      result = data[0];
-    } else {
-      console.log("Creating new settings for user:", userId);
-      // Create new settings
-      const { data, error } = await supabase
-        .from('user_settings')
-        .insert({
-          user_id: userId,
-          settings,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select();
-      
-      if (error) {
-        console.error("Error inserting settings:", error);
-        throw error;
+      try {
+        const { data, error } = await supabase
+          .from('user_settings')
+          .insert({
+            user_id: userId,
+            settings,
+            created_at: new Date(),
+            updated_at: new Date()
+          })
+          .select();
+        
+        if (error) {
+          console.error('Error inserting settings:', error);
+          
+          if (error.message.includes('Method Not Allowed')) {
+            throw new Error('Error inserting settings: Method Not Allowed. Check your RLS policies.');
+          }
+          
+          if (error.code === 'PGRST301') {
+            throw new Error('The user_settings table does not exist. Please run the SQL setup.');
+          }
+          
+          throw new Error(`Error inserting settings: ${error.message}`);
+        }
+        
+        result = data;
+        console.log('Settings inserted successfully:', data);
+      } catch (insertError) {
+        console.error('Exception during insert operation:', insertError);
+        throw insertError;
       }
-      
-      console.log("Settings created successfully:", data);
-      result = data[0];
     }
     
     return result;
-  } catch (err) {
-    console.error("Unexpected error in saveUserSettings:", err);
-    throw err;
+  } catch (error) {
+    console.error('Error in saveUserSettings:', error);
+    
+    // Provide more helpful error messages
+    if (error.message.includes('network error')) {
+      throw new Error('Network error. Please check your internet connection and try again.');
+    }
+    
+    throw error;
   }
 };
 

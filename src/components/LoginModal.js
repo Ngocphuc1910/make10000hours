@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { X, Clock, Github, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import ForgotPasswordModal from './ForgotPasswordModal';
+import testSupabaseConnection from '../lib/testSupabase';
+import { checkSupabaseConnection, advancedSupabaseTest, checkForCORSIssues } from '../utils/networkUtils';
+import { checkInternetConnection } from '../utils/networkUtils';
+
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://ccxhdmyfmfwincvzqjhg.supabase.co';
 
 const LoginModal = ({ onClose, onSwitchToSignup }) => {
   const [email, setEmail] = useState('');
@@ -11,14 +16,40 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
   const [emailConfirmationNeeded, setEmailConfirmationNeeded] = useState(false);
   const [lastSubmitTime, setLastSubmitTime] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showVerificationMessage, setShowVerificationMessage] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [showPasswordResetSent, setShowPasswordResetSent] = useState(false);
+  const [diagnosticResults, setDiagnosticResults] = useState(null);
+  const [isRunningDiagnostics, setIsRunningDiagnostics] = useState(false);
+  const [authError, setAuthError] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [showDiagnosticButton, setShowDiagnosticButton] = useState(true);
   
   const { 
     emailSignIn, 
     googleSignIn,
     githubSignIn,
-    authError, 
-    isAuthLoading 
+    authError: hookAuthError, 
+    isAuthLoading,
+    verifyEmail,
+    resetPassword,
+    currentUser
   } = useAuth();
+  
+  // Create ref for email input
+  const emailInputRef = React.useRef(null);
+  
+  // Focus the email input when modal opens
+  useEffect(() => {
+    // Short timeout to ensure the DOM is ready
+    const timer = setTimeout(() => {
+      if (emailInputRef.current) {
+        emailInputRef.current.focus();
+      }
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
   
   // Reset form when modal opens
   useEffect(() => {
@@ -32,19 +63,32 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
   
   // Check for email confirmation error
   useEffect(() => {
-    if (authError && (
-      authError.includes('Email not confirmed') || 
-      authError.includes('not verified') || 
-      authError.includes('not confirmed')
+    if (hookAuthError && (
+      hookAuthError.includes('Email not confirmed') || 
+      hookAuthError.includes('not verified') || 
+      hookAuthError.includes('not confirmed')
     )) {
       setEmailConfirmationNeeded(true);
     } else {
       setEmailConfirmationNeeded(false);
     }
-  }, [authError]);
+  }, [hookAuthError]);
+
+  // Use both the hook's authError and our local one
+  useEffect(() => {
+    if (hookAuthError) {
+      setAuthError(hookAuthError);
+    }
+  }, [hookAuthError]);
+
+  // Add console logging to track disabled state
+  useEffect(() => {
+    console.log('Button state:', { isSubmitting, isAuthLoading });
+  }, [isSubmitting, isAuthLoading]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    e.stopPropagation(); // Stop any event bubbling
     
     // Check if the event is trusted (came from user interaction)
     if (!e || !e.isTrusted) {
@@ -55,6 +99,12 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
     // Prevent submission if already submitting
     if (isSubmitting || isAuthLoading) {
       console.log('Form is already being submitted');
+      return;
+    }
+    
+    // Prevent submission if email or password is empty
+    if (!email.trim() || !password.trim()) {
+      setAuthError('Please enter both email and password');
       return;
     }
     
@@ -69,7 +119,7 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
       setIsSubmitting(true);
       setLastSubmitTime(now);
       console.log('Starting sign in for:', email);
-      const result = await emailSignIn(email, password);
+      const result = await emailSignIn(email, password, e); // Pass the event
       console.log('Sign in completed successfully:', result?.user?.email);
       
       // Give the auth state a moment to update before closing
@@ -91,15 +141,12 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
       return false;
     }
     
-    if (isSubmitting || isAuthLoading) {
-      return;
-    }
-    
     try {
       setIsSubmitting(true);
-      await googleSignIn();
-      onClose();
+      const result = await googleSignIn(e); // Pass the event to the function
+      console.log('Google sign in initiated');
     } catch (error) {
+      console.error('Google sign in error:', error);
       // Error is handled by the useAuth hook
     } finally {
       setIsSubmitting(false);
@@ -113,15 +160,12 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
       return false;
     }
     
-    if (isSubmitting || isAuthLoading) {
-      return;
-    }
-    
     try {
       setIsSubmitting(true);
-      await githubSignIn();
-      onClose();
+      const result = await githubSignIn(e); // Pass the event to the function
+      console.log('GitHub sign in initiated');
     } catch (error) {
+      console.error('GitHub sign in error:', error);
       // Error is handled by the useAuth hook
     } finally {
       setIsSubmitting(false);
@@ -142,13 +186,184 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
     );
   }
 
+  // Update runDiagnostics function
+  const runDiagnostics = async () => {
+    setIsRunningDiagnostics(true);
+    setDiagnosticResults(null);
+    
+    try {
+      console.log('Starting advanced connection diagnostics...');
+      
+      // Step 1: Check basic internet connectivity
+      const internetStatus = await checkInternetConnection();
+      console.log('Internet connectivity:', internetStatus);
+      
+      // Step 2: Check for CORS issues
+      console.log('Checking for CORS issues...');
+      const corsCheck = await checkForCORSIssues();
+      console.log('CORS check results:', corsCheck);
+      
+      // Step 3: Run advanced Supabase tests
+      console.log('Running advanced Supabase tests...');
+      const advancedResults = await advancedSupabaseTest();
+      console.log('Advanced test results:', advancedResults);
+      
+      // Step 4: Check environment variables
+      const envCheck = {
+        url: !!process.env.REACT_APP_SUPABASE_URL,
+        key: !!process.env.REACT_APP_SUPABASE_ANON_KEY,
+        urlValue: process.env.REACT_APP_SUPABASE_URL ? 
+          `${process.env.REACT_APP_SUPABASE_URL.substring(0, 20)}...` : 'not set',
+        keyValue: process.env.REACT_APP_SUPABASE_ANON_KEY ? 
+          `${process.env.REACT_APP_SUPABASE_ANON_KEY.substring(0, 5)}...${
+            process.env.REACT_APP_SUPABASE_ANON_KEY.substring(
+              process.env.REACT_APP_SUPABASE_ANON_KEY.length - 3
+            )
+          }` : 'not set'
+      };
+      console.log('Environment variables:', envCheck);
+      
+      // Compile all results
+      const fullResults = {
+        internet: internetStatus,
+        cors: corsCheck,
+        supabase: advancedResults,
+        env: envCheck,
+        timestamp: new Date().toISOString()
+      };
+      
+      setDiagnosticResults(fullResults);
+      
+      // Determine overall status
+      const isSuccessful = internetStatus.success && advancedResults.success;
+      
+      if (isSuccessful) {
+        setErrorMessage('Diagnostics passed successfully. Try logging in again.');
+      } else {
+        let errorDetails = '';
+        if (!internetStatus.success) {
+          errorDetails += 'Internet connection issue. ';
+        }
+        if (!corsCheck.success) {
+          errorDetails += 'CORS issues detected. ';
+        }
+        if (!advancedResults.success) {
+          errorDetails += 'Supabase connection failed. ';
+        }
+        if (!envCheck.url || !envCheck.key) {
+          errorDetails += 'Environment variables missing. ';
+        }
+        
+        setErrorMessage(`Connection issues detected: ${errorDetails}`);
+      }
+    } catch (error) {
+      console.error('Diagnostic error:', error);
+      setDiagnosticResults({ error: error.message, timestamp: new Date().toISOString() });
+      setErrorMessage(`Diagnostics error: ${error.message}`);
+    } finally {
+      setIsRunningDiagnostics(false);
+    }
+  };
+  
+  // Update the diagnostic results display
+  const renderDiagnosticResults = () => {
+    if (!diagnosticResults) return null;
+    
+    return (
+      <div className="diagnostic-results mt-3 p-3 border rounded bg-light">
+        <h6>Diagnostic Results:</h6>
+        <div className="small">
+          <div><strong>Timestamp:</strong> {diagnosticResults.timestamp}</div>
+          
+          {diagnosticResults.internet && (
+            <div className="mt-2">
+              <div><strong>Internet:</strong> {diagnosticResults.internet.success ? '✅ Connected' : '❌ Not connected'}</div>
+              {!diagnosticResults.internet.success && <div className="text-danger">{diagnosticResults.internet.error}</div>}
+            </div>
+          )}
+          
+          {diagnosticResults.cors && (
+            <div className="mt-2">
+              <div><strong>CORS:</strong> {diagnosticResults.cors.success ? '✅ Passed' : '❌ Failed'}</div>
+              {!diagnosticResults.cors.success && <div className="text-danger">{diagnosticResults.cors.error}</div>}
+              {diagnosticResults.cors.status && <div>Status: {diagnosticResults.cors.status}</div>}
+            </div>
+          )}
+          
+          {diagnosticResults.env && (
+            <div className="mt-2">
+              <div><strong>Environment:</strong></div>
+              <div>URL: {diagnosticResults.env.url ? '✅' : '❌'} {diagnosticResults.env.urlValue}</div>
+              <div>API Key: {diagnosticResults.env.key ? '✅' : '❌'} {diagnosticResults.env.keyValue}</div>
+            </div>
+          )}
+          
+          {diagnosticResults.supabase && (
+            <div className="mt-2">
+              <div>
+                <strong>Supabase:</strong> 
+                {diagnosticResults.supabase.success ? '✅ Connected' : '❌ Connection failed'}
+              </div>
+              
+              {diagnosticResults.supabase.methods && (
+                <div>
+                  <div className="mt-1"><strong>Connection Methods:</strong></div>
+                  {Object.entries(diagnosticResults.supabase.methods).map(([method, result]) => (
+                    <div key={method} className={`ml-2 ${result.success ? 'text-success' : 'text-danger'}`}>
+                      {method}: {result.success ? `✅ (${result.status})` : `❌ ${result.error || 'Failed'}`}
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {diagnosticResults.supabase.error && (
+                <div className="text-danger">{diagnosticResults.supabase.error}</div>
+              )}
+            </div>
+          )}
+          
+          {diagnosticResults.error && (
+            <div className="mt-2 text-danger">
+              <strong>Error:</strong> {diagnosticResults.error}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Prevent modal close when clicking inside the modal
+  const handleModalClick = (e) => {
+    // Only prevent default and stop propagation, don't close the modal
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  
+  // Close modal only when explicitly clicking the backdrop
+  const handleBackdropClick = (e) => {
+    // Only close if clicking directly on the backdrop
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md p-6 relative">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4" 
+      style={{ pointerEvents: 'auto' }}
+      onClick={handleBackdropClick}
+    >
+      <div 
+        className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md p-6 relative" 
+        onClick={(e) => {
+          e.stopPropagation();
+        }}
+      >
         {/* Close button */}
         <button 
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          type="button"
         >
           <X className="w-5 h-5" />
         </button>
@@ -164,8 +379,32 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
         <h2 className="text-2xl font-bold text-center mb-2 dark:text-white">Welcome back to PomoPro</h2>
         <p className="text-gray-500 dark:text-gray-400 text-center mb-6">Track your productivity journey</p>
         
+        {authError && (
+          <div className="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-md">
+            <p>{authError}</p>
+            {errorMessage && errorMessage.includes('network') && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm w-100"
+                  onClick={runDiagnostics}
+                  disabled={isRunningDiagnostics}
+                >
+                  {isRunningDiagnostics ? 'Running Diagnostics...' : 'Run Connection Diagnostics'}
+                </button>
+                {renderDiagnosticResults()}
+              </div>
+            )}
+          </div>
+        )}
+        
         {/* Login form */}
-        <form onSubmit={handleSubmit} noValidate>
+        <form 
+          onSubmit={handleSubmit} 
+          noValidate 
+          onClick={(e) => e.stopPropagation()}
+          style={{ position: 'relative', zIndex: 10 }}
+        >
           <div className="mb-4">
             <label className="block text-gray-700 dark:text-gray-300 mb-2">Email</label>
             <input
@@ -176,6 +415,7 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               required
               disabled={isSubmitting || isAuthLoading}
+              ref={emailInputRef}
             />
           </div>
           
@@ -243,7 +483,14 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
           <button
             type="submit"
             disabled={isSubmitting || isAuthLoading}
-            className="w-full py-2 px-4 bg-gray-900 dark:bg-gray-800 text-white font-medium rounded-lg hover:bg-gray-800 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70"
+            className="w-full py-3 px-4 bg-gray-900 dark:bg-gray-800 text-white font-medium rounded-lg hover:bg-gray-800 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70"
+            style={{ position: 'relative', zIndex: 20 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!isSubmitting && !isAuthLoading) {
+                handleSubmit(e);
+              }
+            }}
           >
             {isSubmitting || isAuthLoading ? 'Signing in...' : 'Sign In'}
           </button>
@@ -265,9 +512,14 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
           <div className="grid grid-cols-2 gap-3 mt-4">
             {/* Google login */}
             <button
-              onClick={handleGoogleSignIn}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleGoogleSignIn(e);
+              }}
               disabled={isSubmitting || isAuthLoading}
-              className="flex items-center justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70"
+              className="flex items-center justify-center py-3 px-4 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70"
+              style={{ position: 'relative', zIndex: 20 }}
             >
               <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
                 <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
@@ -282,9 +534,14 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
             
             {/* GitHub login */}
             <button
-              onClick={handleGithubSignIn}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleGithubSignIn(e);
+              }}
               disabled={isSubmitting || isAuthLoading}
-              className="flex items-center justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70"
+              className="flex items-center justify-center py-3 px-4 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70"
+              style={{ position: 'relative', zIndex: 20 }}
             >
               <Github className="h-5 w-5 mr-2" />
               GitHub
