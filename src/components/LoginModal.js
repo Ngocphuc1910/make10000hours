@@ -39,6 +39,10 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
   // Create ref for email input
   const emailInputRef = React.useRef(null);
   
+  // Add ref for preventing auto-submission on load
+  const hasAttemptedAutoSubmit = React.useRef(false);
+  const initialRenderComplete = React.useRef(false);
+  
   // Focus the email input when modal opens
   useEffect(() => {
     // Short timeout to ensure the DOM is ready
@@ -86,20 +90,41 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
     console.log('Button state:', { isSubmitting, isAuthLoading });
   }, [isSubmitting, isAuthLoading]);
 
+  // Check if this is a page reload and prevent auto-submission
+  useEffect(() => {
+    // Skip on first render
+    if (!initialRenderComplete.current) {
+      initialRenderComplete.current = true;
+      return;
+    }
+
+    const isPageReload = performance.navigation ? 
+      performance.navigation.type === 1 : // Type 1 is reload
+      window.performance.getEntriesByType('navigation')
+        .some(nav => nav.type === 'reload');
+    
+    if (isPageReload && !hasAttemptedAutoSubmit.current) {
+      console.log('LoginModal: Page reload detected, preventing auto-submission');
+      hasAttemptedAutoSubmit.current = true;
+      setAuthError('Please click the sign in button to log in');
+    }
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     e.stopPropagation(); // Stop any event bubbling
     
+    // Enhanced check to prevent auto-submission
     // Check if the event is trusted (came from user interaction)
     if (!e || !e.isTrusted) {
-      console.log('Prevented automated form submission');
+      console.log('LoginModal: Prevented automated form submission');
       setAuthError('Please click the sign in button directly');
       return false;
     }
     
     // Prevent submission if already submitting
     if (isSubmitting || isAuthLoading) {
-      console.log('Form is already being submitted');
+      console.log('LoginModal: Form is already being submitted');
       return;
     }
     
@@ -112,7 +137,7 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
     // Prevent duplicate/automated submissions by requiring at least 1 second between attempts
     const now = Date.now();
     if (now - lastSubmitTime < 2000) {
-      console.log('Please wait before submitting again');
+      console.log('LoginModal: Please wait before submitting again');
       setAuthError('Please wait a moment before trying again');
       return;
     }
@@ -121,24 +146,32 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
       setIsSubmitting(true);
       setLastSubmitTime(now);
       setAuthError(''); // Clear any previous errors
-      console.log('Starting sign in for:', email);
+      console.log('LoginModal: Starting sign in for:', email);
       
-      // Pass the original DOM event to ensure it's not triggered by a page reload
+      // Explicitly mark this as a user-initiated event
+      // The original DOM event is important to ensure it's not triggered by a page reload
+      e.isUserInitiated = true; // Add custom property to help identify user actions
       const result = await emailSignIn(email, password, e);
       
-      if (result) {
-        console.log('Sign in completed successfully:', result?.user?.email);
+      if (result?.user) {
+        console.log('LoginModal: Sign in completed successfully:', result.user.email);
         
         // Give the auth state a moment to update before closing
         setTimeout(() => {
           onClose();
         }, 1000);
       } else {
-        console.log('Sign in did not complete - no result returned');
+        console.log('LoginModal: Sign in did not complete - no result returned');
+        if (!authError) {
+          setAuthError('Sign in failed. Please try again.');
+        }
       }
     } catch (error) {
-      console.error('Sign in failed:', error);
-      // Error is handled by the useAuth hook
+      console.error('LoginModal: Sign in failed:', error);
+      // Error is handled by the useAuth hook, but ensure we have a fallback
+      if (!authError) {
+        setAuthError('An error occurred during sign in. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }

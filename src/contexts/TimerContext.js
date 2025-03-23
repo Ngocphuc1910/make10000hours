@@ -219,38 +219,28 @@ export const TimerProvider = ({ children }) => {
     loadSettings();
   }, []);
   
-  // Save settings to localStorage when they change, but only after initial load
+  // Listen for timerSettingsUpdated events from any component, with debouncing
   useEffect(() => {
-    if (!settingsLoaded) return;
+    // Debounce handler to avoid multiple rapid updates
+    let settingsUpdateTimeout = null;
     
-    const settings = {
-      pomodoroTime,
-      shortBreakTime,
-      longBreakTime,
-      autoStartBreaks,
-      autoStartPomodoros,
-      longBreakInterval,
-      soundEnabled,
-      volume,
-      // Include these for compatibility with the rest of the app
-      shortBreakEnabled: true,
-      longBreakEnabled: true,
-      autoStartSessions: autoStartPomodoros
-    };
-    
-    console.log("TimerContext: Saving settings to localStorage:", settings);
-    localStorage.setItem('timerSettings', JSON.stringify(settings));
-    
-    // Listen for timerSettingsUpdated events
-    useEffect(() => {
-      const handleSettingsUpdated = (event) => {
-        const newSettings = event.detail;
-        console.log("TimerContext: Received settings update event:", newSettings);
-        
-        if (!newSettings) {
-          console.warn("TimerContext: Received empty settings update event");
-          return;
-        }
+    const handleSettingsUpdated = (event) => {
+      const newSettings = event.detail;
+      console.log("TimerContext: Received settings update event:", newSettings);
+      
+      if (!newSettings) {
+        console.warn("TimerContext: Received empty settings update event");
+        return;
+      }
+      
+      // Clear any existing timeout to debounce multiple rapid updates
+      if (settingsUpdateTimeout) {
+        clearTimeout(settingsUpdateTimeout);
+      }
+      
+      // Set a short timeout to batch multiple settings updates
+      settingsUpdateTimeout = setTimeout(() => {
+        console.log("TimerContext: Applying settings update from event");
         
         // Update all settings from the event with type validation
         if (newSettings.pomodoroTime !== undefined) {
@@ -296,27 +286,42 @@ export const TimerProvider = ({ children }) => {
           if (!isNaN(value) && value > 0) setCurrentTime(value * 60);
         }
         
+        // Also update localStorage for persistence, ensuring conversion from seconds to minutes
+        try {
+          const settingsToSave = {
+            pomodoroTime: Number(newSettings.pomodoroTime) || pomodoroTime,
+            shortBreakTime: Number(newSettings.shortBreakTime) || shortBreakTime,
+            longBreakTime: Number(newSettings.longBreakTime) || longBreakTime,
+            autoStartSessions: newSettings.autoStartSessions !== undefined ? 
+              !!newSettings.autoStartSessions : autoStartPomodoros,
+            shortBreakEnabled: newSettings.shortBreakEnabled !== undefined ?
+              !!newSettings.shortBreakEnabled : autoStartBreaks,
+            longBreakInterval: Number(newSettings.longBreakInterval) || longBreakInterval,
+            soundEnabled: newSettings.soundEnabled !== undefined ? 
+              !!newSettings.soundEnabled : soundEnabled,
+            volume: Number(newSettings.volume) !== undefined ? 
+              Number(newSettings.volume) : volume
+          };
+          
+          localStorage.setItem('timerSettings', JSON.stringify(settingsToSave));
+          console.log("TimerContext: Updated localStorage with settings:", settingsToSave);
+        } catch (err) {
+          console.error("TimerContext: Error saving settings to localStorage:", err);
+        }
+        
         console.log("TimerContext: Applied settings from event");
-      };
-      
-      window.addEventListener('timerSettingsUpdated', handleSettingsUpdated);
-      
-      return () => {
-        window.removeEventListener('timerSettingsUpdated', handleSettingsUpdated);
-      };
-    }, [mode]);
-  }, [
-    settingsLoaded,
-    pomodoroTime, 
-    shortBreakTime, 
-    longBreakTime, 
-    autoStartBreaks, 
-    autoStartPomodoros, 
-    longBreakInterval,
-    soundEnabled,
-    volume,
-    mode
-  ]);
+      }, 50); // Small debounce delay
+    };
+    
+    window.addEventListener('timerSettingsUpdated', handleSettingsUpdated);
+    
+    return () => {
+      window.removeEventListener('timerSettingsUpdated', handleSettingsUpdated);
+      if (settingsUpdateTimeout) {
+        clearTimeout(settingsUpdateTimeout);
+      }
+    };
+  }, [mode, pomodoroTime, shortBreakTime, longBreakTime, autoStartPomodoros, autoStartBreaks, longBreakInterval, soundEnabled, volume]);
   
   // Reset timer when mode changes
   useEffect(() => {

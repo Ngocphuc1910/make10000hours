@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
 import supabase from '../lib/supabase';
-import { getUserProfile, createOrUpdateUserProfile } from '../lib/database';
+import { getUserProfile, createOrUpdateUserProfile, getUserSettings } from '../lib/database';
 import { checkSupabaseConnection } from '../utils/networkUtils';
 
 // Create context
@@ -162,22 +162,85 @@ export const AuthProvider = ({ children }) => {
     
     const checkUser = async () => {
       try {
-        console.log("Checking for existing user session...");
-        const { data: { session } } = await supabase.auth.getSession();
+        console.log("Auth: Checking for existing user session...");
+        
+        // Add a small delay to ensure the browser has time to stabilize after reload
+        // This helps prevent race conditions with the auth state
+        if (document.readyState !== 'complete') {
+          console.log("Auth: Document not fully loaded, delaying auth check");
+          await new Promise(resolve => {
+            window.addEventListener('load', resolve, { once: true });
+            // Fallback timeout in case load event doesn't fire
+            setTimeout(resolve, 1000);
+          });
+        }
+        
+        // Track if this is a page reload or fresh visit
+        const isPageReload = performance.navigation ? 
+          performance.navigation.type === 1 : // Type 1 is reload
+          window.performance.getEntriesByType('navigation')
+            .some(nav => nav.type === 'reload');
+            
+        console.log("Auth: Page reload detected:", isPageReload);
+        
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error("Auth: Session error", error);
+          if (isSubscribed) {
+            setCurrentUser(null);
+            setUserProfile(null);
+            setIsAuthLoading(false);
+          }
+          return;
+        }
         
         if (session?.user && isSubscribed) {
-          console.log("Found existing session for user:", session.user.email);
-          setCurrentUser(session.user);
-          if (fetchUserProfile && isSubscribed) {
-            await fetchUserProfile(session.user.id);
+          console.log("Auth: Found existing session for user:", session.user.email);
+          
+          // Check token expiration
+          const expiresAt = new Date(session.expires_at * 1000);
+          const now = new Date();
+          console.log("Auth: Token expires at:", expiresAt.toISOString());
+          console.log("Auth: Time until expiry:", Math.floor((expiresAt - now) / 1000 / 60), "minutes");
+          
+          // If token is expired or close to expiry (less than 5 minutes), refresh it
+          if (expiresAt - now < 5 * 60 * 1000) {
+            console.log("Auth: Token expiring soon, refreshing...");
+            try {
+              const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+              
+              if (refreshError) {
+                console.error("Auth: Token refresh failed:", refreshError);
+                // Token refresh failed, treat as logged out
+                if (isSubscribed) {
+                  setCurrentUser(null);
+                  setUserProfile(null);
+                }
+              } else if (refreshData?.session && isSubscribed) {
+                console.log("Auth: Session refreshed successfully");
+                setCurrentUser(refreshData.session.user);
+                if (fetchUserProfile) {
+                  await fetchUserProfile(refreshData.session.user.id);
+                }
+              }
+            } catch (refreshErr) {
+              console.error("Auth: Unexpected error refreshing token:", refreshErr);
+            }
+          } else {
+            // Token is valid, set user
+            setCurrentUser(session.user);
+            if (fetchUserProfile && isSubscribed) {
+              await fetchUserProfile(session.user.id);
+            }
           }
         } else if (isSubscribed) {
-          console.log("No active session found");
+          console.log("Auth: No active session found");
           setCurrentUser(null);
           setUserProfile(null);
         }
       } catch (error) {
-        console.error("Error checking auth session:", error);
+        console.error("Auth: Error checking auth session:", error);
       } finally {
         if (isSubscribed) {
           setIsAuthLoading(false);
@@ -187,24 +250,42 @@ export const AuthProvider = ({ children }) => {
 
     // Set up auth state listener - only once
     const setupAuthListener = () => {
+      console.log("Auth: Setting up auth state listener");
+      
       const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (!isSubscribed) return;
         
-        console.log("Auth state changed:", event, "User:", session?.user?.email || "none");
+        console.log("Auth: Auth state changed:", event, "User:", session?.user?.email || "none");
         
-        if (session?.user && isSubscribed) {
-          console.log("User is now signed in:", session.user.email);
-          setCurrentUser(session.user);
-          if (fetchUserProfile && isSubscribed) {
-            await fetchUserProfile(session.user.id);
+        if (event === 'SIGNED_OUT') {
+          console.log("Auth: User signed out");
+          if (isSubscribed) {
+            setCurrentUser(null);
+            setUserProfile(null);
+            setIsAuthLoading(false);
           }
-        } else if (isSubscribed) {
-          console.log("User is now signed out");
-          setCurrentUser(null);
-          setUserProfile(null);
+          return;
         }
         
-        if (isSubscribed) {
+        if (session?.user && isSubscribed) {
+          console.log("Auth: User is now signed in:", session.user.email);
+          
+          // Small delay to ensure all state updates properly
+          setTimeout(() => {
+            if (isSubscribed) {
+              setCurrentUser(session.user);
+              if (fetchUserProfile) {
+                fetchUserProfile(session.user.id).catch(err => {
+                  console.error("Auth: Error fetching profile after auth change:", err);
+                });
+              }
+              setIsAuthLoading(false);
+            }
+          }, 100);
+        } else if (isSubscribed && !session?.user && event !== 'SIGNED_OUT') {
+          console.log("Auth: User session became invalid");
+          setCurrentUser(null);
+          setUserProfile(null);
           setIsAuthLoading(false);
         }
       });
@@ -235,25 +316,47 @@ export const AuthProvider = ({ children }) => {
       return null;
     }
     
-    // Check for automated events - enhanced protection
+    // Check for page reload - early exit for security
+    const isPageReload = performance.navigation ? 
+      performance.navigation.type === 1 : // Type 1 is reload
+      window.performance.getEntriesByType('navigation')
+        .some(nav => nav.type === 'reload');
+    
+    // Enhanced security check for automated events
     if (event) {
       // Only proceed with explicitly trusted (user-initiated) events
       if (!event.isTrusted) {
-        console.log('Prevented automated email sign-in attempt - event not trusted');
+        console.log('Auth: Prevented automated email sign-in attempt - event not trusted');
+        setAuthError('Please try signing in by clicking the button directly');
         return null;
       }
-    } else {
-      // If this was triggered by a reload, not a user click
-      console.log('Sign-in triggered without an event object - possible automated attempt');
-      // This needs investigation as it might be caused by page reload
-      // or a call from somewhere else in the codebase
+    } else if (isPageReload) {
+      // If triggered by a reload without an event, prevent auto-sign-in
+      console.log('Auth: Sign-in attempted during page reload - blocked for security');
+      setAuthError('Please click the sign in button to authenticate');
+      return null;
+    } else if (!event) {
+      console.log('Auth: Sign-in triggered without an event object - possible automated attempt');
       setAuthError('Please try signing in by clicking the button');
+      return null;
+    }
+    
+    // Extra security: Record last sign-in attempt in sessionStorage
+    // This helps prevent loops where sign-in keeps auto-triggering
+    const now = Date.now();
+    const lastAttempt = parseInt(sessionStorage.getItem('lastSignInAttempt') || '0', 10);
+    sessionStorage.setItem('lastSignInAttempt', now.toString());
+    
+    // Don't allow more than one sign-in attempt per 2 seconds
+    if (now - lastAttempt < 2000) {
+      console.log('Auth: Sign-in throttled - too many attempts');
+      setAuthError('Please wait a moment before trying again');
       return null;
     }
     
     // Set a timeout to reset loading state if something goes wrong
     const loadingResetTimeout = setTimeout(() => {
-      console.log('Resetting loading state due to timeout');
+      console.log('Auth: Resetting loading state due to timeout');
       setIsAuthLoading(false);
     }, 15000); // 15 seconds timeout
     
@@ -261,43 +364,62 @@ export const AuthProvider = ({ children }) => {
     setAuthError('');
     
     try {
-      console.log('Attempting to sign in with email:', email);
+      console.log('Auth: Attempting to sign in with email:', email);
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
       if (error) {
-        console.error('Sign in error:', error);
+        console.error('Auth: Sign in error:', error);
+        
+        // Provide more helpful error messages based on error code
+        if (error.message.includes('Invalid login credentials')) {
+          setAuthError('Invalid email or password. Please try again.');
+        } else if (error.message.includes('Email not confirmed')) {
+          setAuthError('Email not confirmed. Please check your inbox for the verification email.');
+        } else {
+          setAuthError(error.message);
+        }
+        
         throw error;
       }
 
-      console.log('Sign in successful:', data.user?.email);
+      console.log('Auth: Sign in successful:', data.user?.email);
       
-      // Make sure the UI updates with the new user
-      setCurrentUser(data.user);
+      // Clear the auth error
+      setAuthError('');
       
-      // Fetch the user profile immediately
-      if (data.user) {
-        await fetchUserProfile(data.user.id);
+      // Ensure local storage is updated with settings
+      try {
+        // If user has settings in database, ensure they're loaded
+        if (data.user?.id) {
+          const userSettings = await getUserSettings(data.user.id);
+          if (userSettings) {
+            // Store in localStorage for persistence
+            localStorage.setItem('timerSettings', JSON.stringify(userSettings));
+            
+            // Notify the app of settings change
+            window.dispatchEvent(new CustomEvent('timerSettingsUpdated', { 
+              detail: userSettings 
+            }));
+            
+            console.log('Auth: User settings loaded after sign-in');
+          }
+        }
+      } catch (settingsError) {
+        console.error('Auth: Error loading settings after sign-in:', settingsError);
+        // Non-critical, don't fail the sign-in
       }
+      
+      // Small delay to allow state updates to propagate
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       return data;
     } catch (error) {
-      console.error('Sign in error:', error);
-      
-      // Provide more specific error messages
-      if (error.message?.includes('fetch') || error.message?.includes('network') || error.message?.includes('Connection error')) {
-        setAuthError('Network connection error. Please check your internet connection and try again.');
-      } else if (error.message?.includes('Invalid login')) {
-        setAuthError('Invalid email or password. Please try again.');
-      } else {
-        setAuthError(error.message);
-      }
-      
-      throw error;
+      console.error('Auth: Sign in error:', error.message);
+      return null;
     } finally {
-      // Clear the timeout and reset loading state
       clearTimeout(loadingResetTimeout);
       setIsAuthLoading(false);
     }

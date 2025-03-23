@@ -75,92 +75,151 @@ export const updateUserProfile = async (userId, updates) => {
  * User settings operations
  */
 export const getUserSettings = async (userId) => {
+  console.log('Database: Getting user settings for user:', userId);
+  
+  // Return default settings if no userId provided
+  if (!userId) {
+    console.log('Database: No userId provided to getUserSettings, returning defaults');
+    return getDefaultSettings();
+  }
+  
+  // Check if auth session is valid
   try {
-    console.log("Database: Fetching settings for user:", userId);
-    
-    // Get default settings from localStorage or use system defaults
-    const defaultSettings = JSON.parse(localStorage.getItem('timerSettings')) || {
-      pomodoroTime: 25,
-      shortBreakTime: 5,
-      shortBreakEnabled: true,
-      longBreakTime: 15,
-      longBreakEnabled: true,
-      autoStartSessions: false
-    };
-    
-    // Exit early if no userId provided
-    if (!userId) {
-      console.log("Database: No userId provided to getUserSettings, returning defaults");
-      return defaultSettings;
-    }
-    
-    // Debug authentication status
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
     if (sessionError) {
-      console.error("Database: Auth session error:", sessionError);
-    } else if (!session) {
-      console.warn("Database: No active session found when getting settings");
-    } else {
-      console.log("Database: Active session expires:", new Date(session.expires_at * 1000).toISOString());
+      console.error('Database: Session error in getUserSettings:', sessionError);
+      return getDefaultSettings();
     }
     
+    if (!session) {
+      console.log('Database: No active session found in getUserSettings');
+      return getDefaultSettings();
+    }
+    
+    if (session.user.id !== userId) {
+      console.error('Database: Session user ID does not match requested user ID');
+      return getDefaultSettings();
+    }
+    
+    // Verify token is not expired
+    const expiresAt = new Date(session.expires_at * 1000);
+    const now = new Date();
+    console.log(`Database: Session expires at ${expiresAt.toISOString()}, ${Math.floor((expiresAt - now) / 1000 / 60)} minutes remaining`);
+    
+    if (expiresAt < now) {
+      console.error('Database: Session token is expired');
+      return getDefaultSettings();
+    }
+  
+    // Query the database
     const { data, error } = await supabase
       .from('user_settings')
-      .select('settings')
+      .select('*')
       .eq('user_id', userId)
-      .single();
-    
+      .maybeSingle();
+  
     if (error) {
-      console.error("Database: Error fetching user settings:", error);
-      // If settings don't exist yet, return defaults instead of throwing
-      if (error.code === 'PGRST116') {
-        console.log("Database: No settings found for user (PGRST116), using defaults");
-        return defaultSettings;
+      console.error('Database: Error getting user settings:', error);
+      
+      // If table doesn't exist, return default settings
+      if (error.code === 'PGRST301' || error.message.includes('does not exist')) {
+        console.error('Database: user_settings table does not exist');
+        return getDefaultSettings();
       }
       
-      // Check if table doesn't exist
-      if (error.code === 'PGRST301') {
-        console.error("Database: Table 'user_settings' does not exist");
-        throw new Error("Settings table does not exist. Please run the SQL setup.");
-      }
-      
-      throw error;
+      // Check localStorage if we can't access the database
+      return getFallbackSettings();
     }
-    
-    // If we get null or undefined settings, return defaults
-    if (!data || !data.settings) {
-      console.log("Database: No settings found in response, using defaults");
-      return defaultSettings;
+  
+    // If no user settings found, return default settings
+    if (!data) {
+      console.log('Database: No user settings found, returning defaults');
+      return getDefaultSettings();
     }
+  
+    console.log('Database: User settings found:', data);
     
-    // Diagnostic log of the settings we found
-    console.log("Database: Raw settings from database:", data.settings);
+    // Ensure we return the settings object, not the row
+    const settings = data.settings || {};
     
-    // Merge with defaults to ensure all fields are present
-    const mergedSettings = {
-      ...defaultSettings,
-      ...data.settings
-    };
-    
-    console.log("Database: Settings retrieved and merged with defaults:", mergedSettings);
-    return mergedSettings;
-  } catch (err) {
-    console.error("Database: Unexpected error in getUserSettings:", err);
-    
-    // On error, try to get settings from localStorage instead of failing completely
-    const fallbackSettings = JSON.parse(localStorage.getItem('timerSettings')) || {
-      pomodoroTime: 25,
-      shortBreakTime: 5,
-      shortBreakEnabled: true,
-      longBreakTime: 15,
-      longBreakEnabled: true,
-      autoStartSessions: false
-    };
-    
-    console.log("Database: Falling back to localStorage settings due to error");
-    return fallbackSettings;
+    // Apply defaults to ensure all required fields exist
+    return mergeWithDefaults(settings);
+  } catch (error) {
+    console.error('Database: Unexpected error in getUserSettings:', error);
+    return getFallbackSettings();
   }
 };
+
+/**
+ * Get default settings
+ */
+function getDefaultSettings() {
+  console.log('Database: Using default settings');
+  
+  // Default settings
+  const defaults = {
+    pomodoroTime: 25,
+    shortBreakTime: 5,
+    longBreakTime: 15,
+    shortBreakEnabled: true,
+    longBreakEnabled: true,
+    longBreakInterval: 4,
+    autoStartSessions: false,
+    soundEnabled: true,
+    volume: 0.5
+  };
+  
+  return defaults;
+}
+
+/**
+ * Get settings from localStorage as fallback
+ */
+function getFallbackSettings() {
+  try {
+    console.log('Database: Attempting to get settings from localStorage');
+    const localSettings = localStorage.getItem('timerSettings');
+    
+    if (localSettings) {
+      const parsed = JSON.parse(localSettings);
+      console.log('Database: Found settings in localStorage:', parsed);
+      return mergeWithDefaults(parsed);
+    }
+  } catch (e) {
+    console.error('Database: Error parsing localStorage settings:', e);
+  }
+  
+  return getDefaultSettings();
+}
+
+/**
+ * Merge user settings with defaults
+ */
+function mergeWithDefaults(userSettings) {
+  const defaults = getDefaultSettings();
+  
+  // Type conversion to ensure correct types
+  const merged = {
+    ...defaults,
+    ...userSettings,
+    // Ensure number types
+    pomodoroTime: Number(userSettings.pomodoroTime) || defaults.pomodoroTime,
+    shortBreakTime: Number(userSettings.shortBreakTime) || defaults.shortBreakTime,
+    longBreakTime: Number(userSettings.longBreakTime) || defaults.longBreakTime,
+    longBreakInterval: Number(userSettings.longBreakInterval) || defaults.longBreakInterval,
+    // Ensure boolean types
+    shortBreakEnabled: userSettings.shortBreakEnabled !== undefined ? !!userSettings.shortBreakEnabled : defaults.shortBreakEnabled,
+    longBreakEnabled: userSettings.longBreakEnabled !== undefined ? !!userSettings.longBreakEnabled : defaults.longBreakEnabled,
+    autoStartSessions: userSettings.autoStartSessions !== undefined ? !!userSettings.autoStartSessions : defaults.autoStartSessions,
+    soundEnabled: userSettings.soundEnabled !== undefined ? !!userSettings.soundEnabled : defaults.soundEnabled,
+    // Handle volume specially (must be between 0 and 1)
+    volume: userSettings.volume !== undefined ? Math.min(Math.max(Number(userSettings.volume), 0), 1) : defaults.volume
+  };
+  
+  console.log('Database: Merged settings with defaults:', merged);
+  return merged;
+}
 
 /**
  * Saves user settings to the database
