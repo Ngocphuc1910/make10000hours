@@ -1,4 +1,5 @@
 # make10000hours Pomodoro Timer
+I just show up
 
 A modern Pomodoro timer application built with React and Tailwind CSS, featuring task management, authentication, and customizable timer settings.
 
