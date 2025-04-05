@@ -379,7 +379,7 @@ const SettingsModal = ({ onClose }) => {
                   <ol className="list-decimal pl-5 mt-1">
                     <li>Make sure you've run the SQL setup script in your Supabase project</li>
                     <li>Navigate to the SQL Editor in your Supabase dashboard</li>
-                    <li>Run the SQL from the supabase_user_settings_table.sql file</li>
+                    <li>Run the SQL from the supabase/migrations/20240317_user_settings_table.sql file</li>
                   </ol>
                 </div>
               )}
