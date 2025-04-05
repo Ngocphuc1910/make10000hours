@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
-import { getUserSettings, saveUserSettings } from '../lib/database';
-import testSupabaseConnection from '../lib/testSupabase';
-import { defaultSettings } from '../types/settings';
-import supabase from '../lib/supabase';
-import { generateSettingsSql, generateTestSql } from '../utils/settingsUtil';
+import { useAuth } from '../../hooks/useAuth';
+import { getUserSettings, saveUserSettings } from '../../lib/database';
+import testSupabaseConnection from '../../lib/testSupabase';
+import { defaultSettings } from '../../types/settings';
+import supabase from '../../lib/supabase';
+import { generateSettingsSql, generateTestSql } from '../../utils/settingsUtil';
 
 // Default timer settings are now imported from types/settings.js
 

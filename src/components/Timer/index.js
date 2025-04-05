@@ -1,13 +1,20 @@
-import React from 'react';
-import { Play, Pause, SkipForward, RotateCcw } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Play, Pause, SkipForward, RotateCcw, Settings, Image } from 'lucide-react';
 import { useTimer } from '../../hooks/useTimer';
 import { useTasks } from '../../hooks/useTasks';
+import '../../styles/Timer.css';
 
 const Timer = () => {
   const {
     currentTime,
     isActive,
+    isPaused,
     mode,
+    setMode,
+    pomodoroTime,
+    shortBreakTime,
+    longBreakTime,
+    updateTimerSettings,
     startTimer,
     pauseTimer,
     resetTimer,
@@ -18,6 +25,18 @@ const Timer = () => {
   
   // Find the active task
   const activeTask = tasks.find(task => task.id === activeTaskId);
+  
+  // Additional state from the standalone Timer
+  const audioRef = useRef(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [backgroundImage, setBackgroundImage] = useState('');
+  
+  // Local state for timer settings form
+  const [settingsForm, setSettingsForm] = useState({
+    pomodoro: pomodoroTime,
+    shortBreak: shortBreakTime,
+    longBreak: longBreakTime
+  });
   
   // Format time as MM:SS
   const formatTime = (timeInSeconds) => {
@@ -54,11 +73,174 @@ const Timer = () => {
     }
   };
   
+  // Update document title with timer
+  useEffect(() => {
+    document.title = `${formatTime(currentTime)} - ${mode.charAt(0).toUpperCase() + mode.slice(1)}`;
+    
+    // Play sound when timer ends
+    if (currentTime === 0 && isActive) {
+      audioRef.current?.play();
+    }
+    
+    return () => {
+      document.title = 'Make 10,000 Hours';
+    };
+  }, [currentTime, mode, isActive]);
+  
+  // Apply background image to body when it changes
+  useEffect(() => {
+    if (backgroundImage) {
+      document.body.style.backgroundImage = `url(${backgroundImage})`;
+    } else {
+      document.body.style.backgroundImage = 'none';
+    }
+    
+    return () => {
+      document.body.style.backgroundImage = 'none';
+    };
+  }, [backgroundImage]);
+  
+  // Handle background image upload
+  const handleBackgroundUpload = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.match('image.*')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setBackgroundImage(e.target.result);
+        // Save to localStorage
+        localStorage.setItem('pomodoro-background', e.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  // Load background from localStorage on mount
+  useEffect(() => {
+    const savedBackground = localStorage.getItem('pomodoro-background');
+    if (savedBackground) {
+      setBackgroundImage(savedBackground);
+    }
+  }, []);
+  
+  // Update settings form when context values change
+  useEffect(() => {
+    setSettingsForm({
+      pomodoro: pomodoroTime,
+      shortBreak: shortBreakTime,
+      longBreak: longBreakTime
+    });
+  }, [pomodoroTime, shortBreakTime, longBreakTime]);
+  
+  // Handle settings form changes
+  const handleSettingsChange = (e) => {
+    const { name, value } = e.target;
+    setSettingsForm(prev => ({
+      ...prev,
+      [name]: parseInt(value) || 1 // Ensure value is at least 1
+    }));
+  };
+  
+  // Save settings
+  const handleSaveSettings = () => {
+    updateTimerSettings({
+      pomodoroTime: settingsForm.pomodoro,
+      shortBreakTime: settingsForm.shortBreak,
+      longBreakTime: settingsForm.longBreak
+    });
+    setShowSettings(false);
+  };
+  
   return (
     <div className={`rounded-xl p-6 ${getBackgroundColor()}`}>
       <div className="text-center mb-6">
         <h2 className="text-lg font-medium">{getModeLabel()}</h2>
       </div>
+      
+      {/* Settings and background upload buttons */}
+      <div className="absolute top-4 right-4 flex gap-2">
+        <button 
+          onClick={() => setShowSettings(!showSettings)}
+          className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+          title="Timer Settings"
+        >
+          <Settings className="w-4 h-4 text-white/80" />
+        </button>
+        
+        <label className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors cursor-pointer" title="Upload Background">
+          <Image className="w-4 h-4 text-white/80" />
+          <input 
+            type="file" 
+            className="hidden" 
+            accept="image/*" 
+            onChange={handleBackgroundUpload} 
+          />
+        </label>
+      </div>
+      
+      {/* Settings panel */}
+      {showSettings && (
+        <div className="absolute top-14 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 z-10 w-64">
+          <h3 className="font-semibold mb-4 text-center">Timer Settings</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                Pomodoro Time (min)
+              </label>
+              <input 
+                type="number" 
+                name="pomodoro"
+                min="1" 
+                max="60" 
+                value={settingsForm.pomodoro}
+                onChange={handleSettingsChange}
+                className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-md"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                Short Break (min)
+              </label>
+              <input 
+                type="number" 
+                name="shortBreak"
+                min="1" 
+                max="30" 
+                value={settingsForm.shortBreak}
+                onChange={handleSettingsChange}
+                className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-md"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                Long Break (min)
+              </label>
+              <input 
+                type="number" 
+                name="longBreak"
+                min="1" 
+                max="60" 
+                value={settingsForm.longBreak}
+                onChange={handleSettingsChange}
+                className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-md"
+              />
+            </div>
+            <div className="flex justify-between pt-2">
+              <button 
+                onClick={() => setShowSettings(false)}
+                className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 rounded-md"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleSaveSettings}
+                className="px-3 py-1.5 bg-primary text-white rounded-md"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="text-center mb-8">
         <div className="text-7xl font-bold tracking-tighter">
@@ -67,7 +249,7 @@ const Timer = () => {
       </div>
       
       <div className="flex justify-center space-x-4">
-        {isActive ? (
+        {isActive && !isPaused ? (
           <button
             onClick={pauseTimer}
             className="w-12 h-12 rounded-full bg-white dark:bg-gray-800 shadow-md flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -99,7 +281,7 @@ const Timer = () => {
       </div>
       
       {/* Current task display */}
-      <div className="border-t border-gray-200 dark:border-gray-800 pt-6 w-full grid grid-cols-2 gap-4">
+      <div className="border-t border-gray-200 dark:border-gray-800 pt-6 mt-6 w-full grid grid-cols-2 gap-4">
         {activeTask ? (
           <>
             <div>
@@ -117,6 +299,9 @@ const Timer = () => {
           </div>
         )}
       </div>
+      
+      {/* Audio elements for sounds */}
+      <audio ref={audioRef} src="/sounds/backtowork.mp3"></audio>
     </div>
   );
 };

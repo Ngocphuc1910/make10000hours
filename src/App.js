@@ -6,12 +6,11 @@ import { Play, Pause, RotateCcw, SkipForward, Plus, FolderPlus } from 'lucide-re
 import SessionsList from './components/SessionsList';
 import Header from './components/Header';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import ResetPasswordForm from './components/ResetPasswordForm';
-import AuthCallback from './components/AuthCallback';
+import { ResetPasswordForm, AuthCallback } from './components/auth';
 import Achievements from './components/Achievements';
 import { getUserSettings } from './lib/database';
 import testSupabaseConnection from './lib/testSupabase';
-import ThemeProvider from './components/ThemeProvider';
+import { ThemeProvider } from './components/theme';
 
 // Make test function available in the global scope for console debugging
 window.testSupabaseConnection = testSupabaseConnection;

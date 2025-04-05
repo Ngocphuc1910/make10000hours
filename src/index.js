@@ -4,7 +4,7 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { AuthProvider } from './hooks/useAuth';
-import { ThemeProvider } from './components/ThemeProvider';
+import { ThemeProvider } from './components/theme';
 
 // Add console logs to check if the app is loading correctly
 console.log("App starting with React version:", React.version);

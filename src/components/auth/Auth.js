@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth';
-import LoginModal from './LoginModal';
-import SignupModal from './SignupModal';
-import '../styles/Auth.css';
+import { useAuth } from '../../hooks/useAuth';
+import { LoginModal, SignupModal } from '../modals';
+import '../../styles/Auth.css';
 
 const Auth = () => {
   const { 
