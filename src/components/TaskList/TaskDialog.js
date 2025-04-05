@@ -19,23 +19,32 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    if (!title.trim()) return;
+    console.log('DEBUGGING: TaskDialog - Form submitted');
     
-    const newTask = {
-      id: Date.now().toString(),
+    // Basic validation
+    if (!title.trim()) {
+      console.log('DEBUGGING: TaskDialog - Validation failed: title is empty');
+      return;
+    }
+    
+    // Create task object
+    const task = {
       title: title.trim(),
       description: description.trim(),
-      project,
-      priority,
-      estimatedPomodoros,
-      completedPomodoros: 0,
-      createdAt: new Date().toISOString(),
-      completed: false,
+      estimatedPomodoros: parseInt(estimatedPomodoros, 10),
+      completed: false
     };
     
-    onAddTask(newTask);
+    console.log('DEBUGGING: TaskDialog - Submitting task:', task);
+    
+    // Call the onAddTask function provided by parent
+    onAddTask(task);
+    console.log('DEBUGGING: TaskDialog - Task submitted to parent'); 
+    
+    // Reset form and close dialog
     resetForm();
     onClose();
+    console.log('DEBUGGING: TaskDialog - Dialog closed');
   };
   
   const resetForm = () => {
