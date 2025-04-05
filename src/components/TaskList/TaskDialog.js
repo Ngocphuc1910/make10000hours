@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Clock, Plus, Minus } from 'lucide-react';
 
 const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
@@ -7,6 +7,14 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
   const [project, setProject] = useState('work');
   const [priority, setPriority] = useState('medium');
   const [estimatedPomodoros, setEstimatedPomodoros] = useState(1);
+  const titleInputRef = useRef(null);
+  
+  // Focus the title input when the dialog opens
+  useEffect(() => {
+    if (isOpen && titleInputRef.current) {
+      titleInputRef.current.focus();
+    }
+  }, [isOpen]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -59,6 +67,7 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
               <input
                 id="title"
                 type="text"
+                ref={titleInputRef}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="What are you working on?"

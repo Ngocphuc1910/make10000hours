@@ -8,6 +8,16 @@ const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'eyJhbGciOiJI
 console.log('Supabase initialization:');
 console.log('- URL:', supabaseUrl);
 console.log('- Key length:', supabaseAnonKey ? supabaseAnonKey.length : 0);
+console.log('- Key first/last chars:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 10)}...${supabaseAnonKey.substring(supabaseAnonKey.length - 10)}` : 'N/A');
+
+// Force clear any potentially corrupted auth data in localStorage
+console.log('Clearing previous Supabase auth data...');
+Object.keys(localStorage).forEach(key => {
+  if (key.includes('sb-') && key.includes('auth')) {
+    console.log(`Removing key: ${key}`);
+    localStorage.removeItem(key);
+  }
+});
 
 // Check for placeholder values
 const isPlaceholder = 
@@ -85,17 +95,17 @@ const enhancedStorage = {
   }
 };
 
-// Initialize the Supabase client with persist session option explicitly set
+// Initialize with modified options
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storage: enhancedStorage,
-    // Debug flags
+    // Increase debug for more visibility
     debug: true,
-    // Default 8 hours in seconds (28800)
-    storageKey: 'sb-auth-token',
+    // Explicitly set the storage key
+    storageKey: 'sb-auth-token-new',
   },
   global: {
     headers: {
