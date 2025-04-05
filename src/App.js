@@ -11,6 +11,8 @@ import Achievements from './components/Achievements';
 import { getUserSettings } from './lib/database';
 import testSupabaseConnection from './lib/testSupabase';
 import { ThemeProvider } from './components/theme';
+import { useTasks } from './hooks/useTasks';
+import { TaskProvider } from './contexts/TaskContext';
 
 // Make test function available in the global scope for console debugging
 window.testSupabaseConnection = testSupabaseConnection;
@@ -37,6 +39,7 @@ const LoadingFallback = () => (
 
 function MainApp() {
   const { currentUser, isAuthLoading } = useAuth();
+  const { setActiveTask, moveToMainTasks } = useTasks();
   const [loading, setLoading] = useState(true);
   // Get settings from localStorage or use defaults
   const [settings, setSettings] = useState(defaultSettings);
@@ -323,9 +326,37 @@ function MainApp() {
     return () => clearInterval(interval);
   }, [isActive, isPaused, mode, settings]);
   
-  // Function to handle task selection
-  const handleTaskSelection = (task) => {
+  // Handle task selection from SessionsList 
+  const handleTaskSelection = (task, isExplicitSelection = true) => {
+    console.log('DEBUGGING: App - Task selection called:');
+    console.log('DEBUGGING: App - Task:', task);
+    console.log('DEBUGGING: App - isExplicitSelection flag:', isExplicitSelection);
+    
+    // Always update the selected task in App component's state
     setSelectedTask(task);
+    console.log('DEBUGGING: App - Updated selectedTask state');
+    
+    // If we have an active task ID and setActiveTask is available
+    if (task && task.id && setActiveTask) {
+      try {
+        // Update active task in TaskContext - this just updates the active ID
+        setActiveTask(task.id);
+        console.log('DEBUGGING: App - Set active task ID to:', task.id);
+        
+        // Only move the task to main tasks if this is an explicit selection by the user
+        if (moveToMainTasks && isExplicitSelection === true) {
+          console.log('DEBUGGING: App - EXPLICIT selection detected, moving task to main tasks list');
+          moveToMainTasks(task.id);
+          console.log('DEBUGGING: App - Task moved to main tasks list');
+        } else {
+          console.log('DEBUGGING: App - NOT moving task to main tasks (not an explicit selection)');
+        }
+      } catch (error) {
+        console.error('DEBUGGING: App - Error in handleTaskSelection:', error);
+      }
+    } else {
+      console.log('DEBUGGING: App - Cannot set active task ID (missing task, task.id, or setActiveTask)');
+    }
   };
   
   // If still loading, show loading indicator
@@ -541,13 +572,15 @@ function App() {
     <ThemeProvider>
       <Router basename="/">
         <AuthProvider>
-          <Suspense fallback={<LoadingFallback />}>
-            <Routes>
-              <Route path="/" element={<MainApp />} />
-              <Route path="/reset-password" element={<ResetPasswordForm />} />
-              <Route path="/auth/callback" element={<AuthCallback />} />
-            </Routes>
-          </Suspense>
+          <TaskProvider>
+            <Suspense fallback={<LoadingFallback />}>
+              <Routes>
+                <Route path="/" element={<MainApp />} />
+                <Route path="/reset-password" element={<ResetPasswordForm />} />
+                <Route path="/auth/callback" element={<AuthCallback />} />
+              </Routes>
+            </Suspense>
+          </TaskProvider>
         </AuthProvider>
       </Router>
     </ThemeProvider>
