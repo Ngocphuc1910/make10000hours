@@ -316,111 +316,65 @@ export const AuthProvider = ({ children }) => {
       return null;
     }
     
-    // Check for page reload - early exit for security
-    const isPageReload = performance.navigation ? 
-      performance.navigation.type === 1 : // Type 1 is reload
-      window.performance.getEntriesByType('navigation')
-        .some(nav => nav.type === 'reload');
-    
-    // Enhanced security check for automated events
-    if (event) {
-      // Only proceed with explicitly trusted (user-initiated) events
-      if (!event.isTrusted) {
-        console.log('Auth: Prevented automated email sign-in attempt - event not trusted');
-        setAuthError('Please try signing in by clicking the button directly');
-        return null;
-      }
-    } else if (isPageReload) {
-      // If triggered by a reload without an event, prevent auto-sign-in
-      console.log('Auth: Sign-in attempted during page reload - blocked for security');
-      setAuthError('Please click the sign in button to authenticate');
-      return null;
-    } else if (!event) {
-      console.log('Auth: Sign-in triggered without an event object - possible automated attempt');
-      setAuthError('Please try signing in by clicking the button');
-      return null;
-    }
-    
-    // Extra security: Record last sign-in attempt in sessionStorage
-    // This helps prevent loops where sign-in keeps auto-triggering
-    const now = Date.now();
-    const lastAttempt = parseInt(sessionStorage.getItem('lastSignInAttempt') || '0', 10);
-    sessionStorage.setItem('lastSignInAttempt', now.toString());
-    
-    // Don't allow more than one sign-in attempt per 2 seconds
-    if (now - lastAttempt < 2000) {
-      console.log('Auth: Sign-in throttled - too many attempts');
-      setAuthError('Please wait a moment before trying again');
-      return null;
-    }
-    
-    // Set a timeout to reset loading state if something goes wrong
-    const loadingResetTimeout = setTimeout(() => {
-      console.log('Auth: Resetting loading state due to timeout');
-      setIsAuthLoading(false);
-    }, 15000); // 15 seconds timeout
-    
+    console.log('Auth: Starting a direct sign-in attempt with fewer security restrictions');
     setIsAuthLoading(true);
     setAuthError('');
-    
+
     try {
-      console.log('Auth: Attempting to sign in with email:', email);
+      console.log('Auth: Attempting direct sign in with email:', email);
+      
+      // TEMPORARY FIX: Attempt direct sign in with minimal processing
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
       if (error) {
-        console.error('Auth: Sign in error:', error);
+        console.error('Auth: Direct sign in error:', error);
         
-        // Provide more helpful error messages based on error code
+        // Check for common errors
         if (error.message.includes('Invalid login credentials')) {
-          setAuthError('Invalid email or password. Please try again.');
-        } else if (error.message.includes('Email not confirmed')) {
-          setAuthError('Email not confirmed. Please check your inbox for the verification email.');
+          console.log('Auth: Credentials appear to be invalid - trying a second attempt');
+          
+          // Second attempt with a brief delay
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          const secondAttempt = await supabase.auth.signInWithPassword({
+            email,
+            password
+          });
+          
+          if (secondAttempt.error) {
+            console.error('Auth: Second attempt also failed:', secondAttempt.error);
+            setAuthError(`Login failed: ${secondAttempt.error.message}`);
+            return null;
+          } else if (secondAttempt.data?.user) {
+            console.log('Auth: Second attempt succeeded!');
+            setCurrentUser(secondAttempt.data.user);
+            setAuthError('');
+            return secondAttempt.data;
+          }
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          setAuthError('Network error - please check your internet connection and try again');
         } else {
-          setAuthError(error.message);
+          setAuthError(`Error: ${error.message}`);
         }
         
-        throw error;
+        return null;
       }
 
-      console.log('Auth: Sign in successful:', data.user?.email);
+      console.log('Auth: Direct sign in successful:', data?.user?.email);
       
-      // Clear the auth error
-      setAuthError('');
-      
-      // Ensure local storage is updated with settings
-      try {
-        // If user has settings in database, ensure they're loaded
-        if (data.user?.id) {
-          const userSettings = await getUserSettings(data.user.id);
-          if (userSettings) {
-            // Store in localStorage for persistence
-            localStorage.setItem('timerSettings', JSON.stringify(userSettings));
-            
-            // Notify the app of settings change
-            window.dispatchEvent(new CustomEvent('timerSettingsUpdated', { 
-              detail: userSettings 
-            }));
-            
-            console.log('Auth: User settings loaded after sign-in');
-          }
-        }
-      } catch (settingsError) {
-        console.error('Auth: Error loading settings after sign-in:', settingsError);
-        // Non-critical, don't fail the sign-in
+      if (data?.user) {
+        setCurrentUser(data.user);
       }
-      
-      // Small delay to allow state updates to propagate
-      await new Promise(resolve => setTimeout(resolve, 500));
       
       return data;
     } catch (error) {
-      console.error('Auth: Sign in error:', error.message);
+      console.error('Auth: Unexpected error during sign in:', error);
+      setAuthError(`Unexpected error: ${error.message}`);
       return null;
     } finally {
-      clearTimeout(loadingResetTimeout);
       setIsAuthLoading(false);
     }
   };
