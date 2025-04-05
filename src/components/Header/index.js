@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Settings, User, LogOut } from 'lucide-react';
-import LoginModal from '../LoginModal';
-import SignupModal from '../SignupModal';
+import { LoginModal, SignupModal, SettingsModal } from '../modals';
 import { useAuth } from '../../hooks/useAuth';
-import { ThemeToggle } from '../ThemeToggle';
-import SettingsModal from '../SettingsModal';
+import { ThemeToggle } from '../theme';
 
 // Always show login button in production
 const FORCE_SHOW_LOGIN = false;
