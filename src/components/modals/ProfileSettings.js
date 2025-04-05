@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Save, X, Camera } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../../hooks/useAuth';
+import supabase from '../../lib/supabase';
 
 const ProfileSettings = ({ onClose }) => {
   const { userProfile, updateProfile, isAuthLoading, authError } = useAuth();

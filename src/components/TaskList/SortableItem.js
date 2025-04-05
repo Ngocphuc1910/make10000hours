@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, CheckSquare, Square } from 'lucide-react';
-import { useTheme } from '../../components/ThemeProvider';
+import { useTheme } from '../theme';
 
 const SortableSessionItem = ({ 
   session, 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Clock, Check, AlertCircle, Github } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../../hooks/useAuth';
 
 const SignupModal = ({ onClose, onSwitchToLogin }) => {
   const [email, setEmail] = useState('');

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, KeySquare, Check } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../../hooks/useAuth';
 
 const ForgotPasswordModal = ({ onClose, onSwitchToLogin }) => {
   const [email, setEmail] = useState('');

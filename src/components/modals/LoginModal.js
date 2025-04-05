@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, Clock, Github, AlertCircle } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../../hooks/useAuth';
 import ForgotPasswordModal from './ForgotPasswordModal';
-import testSupabaseConnection from '../lib/testSupabase';
-import { checkSupabaseConnection, advancedSupabaseTest, checkForCORSIssues } from '../utils/networkUtils';
-import { checkInternetConnection } from '../utils/networkUtils';
+import testSupabaseConnection from '../../lib/testSupabase';
+import { checkSupabaseConnection, advancedSupabaseTest, checkForCORSIssues } from '../../utils/networkUtils';
+import { checkInternetConnection } from '../../utils/networkUtils';
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://ccxhdmyfmfwincvzqjhg.supabase.co';
 
