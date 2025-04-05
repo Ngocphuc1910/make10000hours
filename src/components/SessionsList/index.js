@@ -16,6 +16,8 @@ import {
 } from '@dnd-kit/sortable';
 import SortableSessionItem from '../TaskList/SortableItem';
 import TaskDialog from '../TaskList/TaskDialog';
+import { useTasks } from '../../hooks/useTasks';
+import { useAuth } from '../../hooks/useAuth';
 
 const SessionsList = forwardRef((props, ref) => {
   const [sessions, setSessions] = useState([]);
@@ -23,6 +25,16 @@ const SessionsList = forwardRef((props, ref) => {
   const [activeSessionId, setActiveSessionId] = useState(null);
   
   const { onTaskSelect } = props;
+  const { currentUser } = useAuth();
+  
+  // Get tasks context functions
+  const { 
+    addSessionTask, 
+    setActiveTask, 
+    moveToMainTasks, 
+    sessionTasks,
+    updateTask
+  } = useTasks();
   
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
@@ -31,39 +43,45 @@ const SessionsList = forwardRef((props, ref) => {
     }
   }));
   
-  // Load sessions from localStorage on component mount
+  // Load sessions from TaskContext's sessionTasks when they change
   useEffect(() => {
-    const savedSessions = JSON.parse(localStorage.getItem('pomodoro-sessions') || '[]');
-    if (savedSessions.length > 0) {
-      setSessions(savedSessions);
-      // Set the first task as active by default
-      if (savedSessions.length > 0 && !activeSessionId) {
-        setActiveSessionId(savedSessions[0].id);
-        
-        // Notify parent component about the active task
-        if (onTaskSelect) {
-          onTaskSelect(savedSessions[0]);
-        }
-      }
-    } else {
+    console.log('DEBUGGING: SessionsList - sessionTasks from context changed, mapping to sessions');
+    if (sessionTasks && sessionTasks.length > 0) {
+      // Map sessionTasks to session format for display
+      const mappedSessions = sessionTasks.map(task => ({
+        id: task.id,
+        title: task.title,
+        time: task.time || `Added at ${new Date(task.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        duration: `${task.estimatedPomodoros * 25}min`,
+        completed: task.completed
+      }));
+      
+      setSessions(mappedSessions);
+    }
+  }, [sessionTasks]);
+  
+  // Only load default sessions if there are no sessionTasks and no existing sessions
+  useEffect(() => {
+    if (sessionTasks.length === 0 && sessions.length === 0) {
+      console.log('DEBUGGING: SessionsList - No saved sessions, using defaults');
       // Default sessions if none exist
       const defaultSessions = [
         {
-          id: "1",
+          id: "default-1",
           title: "UI Design Research",
           time: "Completed at 10:30 AM",
           duration: "25min",
           completed: false
         },
         {
-          id: "2",
+          id: "default-2",
           title: "Project Planning",
           time: "Completed at 11:00 AM",
           duration: "25min",
           completed: false
         },
         {
-          id: "3",
+          id: "default-3",
           title: "Client Meeting",
           time: "Completed at 11:45 AM",
           duration: "25min",
@@ -72,20 +90,8 @@ const SessionsList = forwardRef((props, ref) => {
       ];
       
       setSessions(defaultSessions);
-      // Set the first task as active by default
-      setActiveSessionId("1");
-      
-      // Notify parent component about the active task
-      if (onTaskSelect) {
-        onTaskSelect(defaultSessions[0]);
-      }
     }
-  }, [onTaskSelect, activeSessionId]);
-  
-  // Save sessions to localStorage when they change
-  useEffect(() => {
-    localStorage.setItem('pomodoro-sessions', JSON.stringify(sessions));
-  }, [sessions]);
+  }, [sessions.length, sessionTasks.length]);
   
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -111,55 +117,56 @@ const SessionsList = forwardRef((props, ref) => {
     }
   };
   
-  const handleAddTask = (task) => {
-    const newSession = {
-      id: task.id,
-      title: task.title,
-      time: `Added at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-      duration: `${task.estimatedPomodoros * 25}min`,
-      completed: false
-    };
+  const handleAddTask = async (task) => {
+    console.log('DEBUGGING: SessionsList - handleAddTask called with task:', task);
     
-    setSessions((prevSessions) => [newSession, ...prevSessions]);
-    // Set newly added task as active
-    setActiveSessionId(task.id);
+    // Add to session tasks list using context
+    const newTask = await addSessionTask({
+      ...task,
+      // Add additional data needed for database compatibility
+      projectId: null,  // Can be updated if project selection is available
+      priority: 0,      // Default priority
+    });
     
-    // Notify parent component about the active task
-    if (onTaskSelect) {
-      onTaskSelect(newSession);
-    }
+    console.log('DEBUGGING: SessionsList - New session task created:', newTask);
+    
+    // The session entry will be created automatically from sessionTasks via useEffect
+    
+    return newTask;
   };
   
   // Function to toggle task completion status
   const handleToggleComplete = (id) => {
-    // Find the task and update its completed status
-    const updatedSessions = sessions.map(session => 
-      session.id === id ? { ...session, completed: !session.completed } : session
-    );
+    console.log('DEBUGGING: SessionsList - handleToggleComplete called for ID:', id);
     
-    // Update the sessions state
-    setSessions(updatedSessions);
-    
-    // If the completed task is the active one, update the parent
-    if (id === activeSessionId && onTaskSelect) {
-      const updatedTask = updatedSessions.find(session => session.id === id);
-      if (updatedTask) {
-        onTaskSelect(updatedTask);
-      }
-    }
-    
-    // Save to localStorage immediately
-    localStorage.setItem('pomodoro-sessions', JSON.stringify(updatedSessions));
+    // Use the updateTask function from the context that was already destructured at the top level
+    updateTask(id, { completed: !sessions.find(s => s.id === id)?.completed });
   };
   
   // Function to select a task
   const handleSelectSession = (id) => {
+    console.log('DEBUGGING: SessionsList - handleSelectSession called with ID:', id);
+    
+    // Set the active session ID locally
     setActiveSessionId(id);
     
-    // Find the selected task and notify parent component
+    // Find the selected task
     const selectedTask = sessions.find(session => session.id === id);
-    if (selectedTask && onTaskSelect) {
-      onTaskSelect(selectedTask);
+    console.log('DEBUGGING: SessionsList - Found selected session:', selectedTask);
+    
+    if (selectedTask) {
+      // Set as active task in context (this just updates active ID)
+      setActiveTask(id);
+      console.log('DEBUGGING: SessionsList - Set active task ID in context');
+        
+      // NOW notify parent with explicit selection to move to main tasks
+      if (onTaskSelect) {
+        console.log('DEBUGGING: SessionsList - EXPLICITLY notifying parent to move task to main list');
+        // This is an explicit user selection - SHOULD move to main tasks list
+        onTaskSelect(selectedTask, true);
+      }
+    } else {
+      console.log('DEBUGGING: SessionsList - No session found with ID:', id);
     }
   };
   
