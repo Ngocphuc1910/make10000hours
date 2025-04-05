@@ -6,7 +6,7 @@ This document describes how user settings are implemented in the Make10000Hours 
 
 ## Database Structure
 
-We store user settings in the `user_settings` table in Supabase. The table has the following structure:
+We store user settings in the `user_settings` table in Supabase. The table schema can be found in `supabase/migrations/20240317_user_settings_table.sql`. The table has the following structure:
 
 ```sql
 CREATE TABLE IF NOT EXISTS user_settings (
@@ -23,6 +23,12 @@ Key points:
 - Each user has a single row in the table (enforced by the UNIQUE constraint)
 - All settings are stored in a single JSONB column called `settings`
 - This approach allows us to add new settings without requiring database schema changes
+
+## SQL Files Organization
+
+The SQL files are organized in the following structure:
+- `supabase/migrations/` - Contains database schema changes and table creation scripts
+- `supabase/functions/` - Contains utility functions for managing user settings
 
 ## Adding New Settings
 
