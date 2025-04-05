@@ -19,38 +19,7 @@ import {
   X
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
-import { 
-  DndContext, 
-  closestCenter, 
-  KeyboardSensor, 
-  PointerSensor, 
-  useSensor, 
-  useSensors,
-  TouchSensor,
-  MeasuringStrategy,
-  defaultDropAnimationSideEffects
-} from '@dnd-kit/core';
-import { restrictToVerticalAxis, snapCenterToCursor } from '@dnd-kit/modifiers';
-import { 
-  SortableContext, 
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  arrayMove
-} from '@dnd-kit/sortable';
-import SortableSessionItem from './SortableItem';
 import TaskDialog from './TaskDialog';
-
-// Custom drop animation for smoother experience
-const dropAnimation = {
-  sideEffects: defaultDropAnimationSideEffects({
-    styles: {
-      active: {
-        opacity: '0.5',
-      },
-    },
-  }),
-  duration: 100, // Faster drop animation for better responsiveness
-};
 
 const TaskList = () => {
   const { currentUser } = useAuth();
@@ -61,138 +30,25 @@ const TaskList = () => {
     updateTask, 
     deleteTask, 
     setActiveTask, 
-    clearCompletedTasks 
+    clearCompletedTasks,
+    addSessionTask
   } = useTasks();
   
   const [newTaskText, setNewTaskText] = useState('');
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editText, setEditText] = useState('');
-  const [sessions, setSessions] = useState([]);
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
-  
-  // Load sessions from localStorage on component mount
-  useEffect(() => {
-    const savedSessions = JSON.parse(localStorage.getItem('pomodoro-sessions') || '[]');
-    if (savedSessions.length > 0) {
-      setSessions(savedSessions);
-    } else {
-      // Default sessions if none exist
-      setSessions([
-        {
-          id: "1",
-          title: "UI Design Research",
-          time: "Completed at 10:30 AM",
-          duration: "25min",
-        },
-        {
-          id: "2",
-          title: "Project Planning",
-          time: "Completed at 11:00 AM",
-          duration: "25min",
-        },
-        {
-          id: "3",
-          title: "Client Meeting",
-          time: "Completed at 11:45 AM",
-          duration: "25min",
-        },
-      ]);
-    }
-  }, []);
-  
-  // Save sessions to localStorage when they change
-  useEffect(() => {
-    localStorage.setItem('pomodoro-sessions', JSON.stringify(sessions));
-  }, [sessions]);
-  
-  // Add function to move items up/down as alternative to drag and drop
-  const moveSessionItem = (sessionId, direction) => {
-    const sessionIndex = sessions.findIndex(s => s.id === sessionId);
-    if (sessionIndex === -1) return;
-    
-    // Don't move if at the boundaries
-    if (direction === 'up' && sessionIndex === 0) return;
-    if (direction === 'down' && sessionIndex === sessions.length - 1) return;
-    
-    const newIndex = direction === 'up' ? sessionIndex - 1 : sessionIndex + 1;
-    
-    // Use arrayMove helper from dnd-kit for consistency
-    const newSessions = arrayMove(sessions, sessionIndex, newIndex);
-    setSessions(newSessions);
-    
-    // Provide haptic feedback if supported
-    if (navigator.vibrate) {
-      navigator.vibrate(20); // Short vibration for feedback
-    }
-  };
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      // Lower the activation distance to make it more responsive on mobile
-      activationConstraint: {
-        distance: 8, // Reduced from default for better mobile experience
-        tolerance: 5,
-        delay: 0, // No delay for pointer to feel more responsive
-      },
-    }),
-    useSensor(TouchSensor, {
-      // Specific for touch devices with long press activation 
-      activationConstraint: {
-        delay: 250, // Delay for long press 
-        tolerance: 10,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-  
-  const handleDragStart = (event) => {
-    // Add class to body to prevent unwanted scroll behavior during drag
-    document.body.classList.add('dragging');
-  };
-  
-  const handleDragEnd = (event) => {
-    // Remove class from body when drag ends
-    document.body.classList.remove('dragging');
-    
-    const { active, over } = event;
-    
-    if (over && active.id !== over.id) {
-      setSessions((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over.id);
-        
-        const newItems = [...items];
-        const [removed] = newItems.splice(oldIndex, 1);
-        newItems.splice(newIndex, 0, removed);
-        
-        return newItems;
-      });
-    }
-  };
-  
-  const handleAddTask = (task) => {
-    const newSession = {
-      id: task.id,
-      title: task.title,
-      time: `Added at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-      duration: `${task.estimatedPomodoros * 25}min`,
-    };
-    
-    setSessions((prevSessions) => [newSession, ...prevSessions]);
-  };
   
   const handleStartEditing = (task) => {
     setEditingTaskId(task.id);
-    setEditText(task.text);
+    setEditText(task.title || task.text || '');
   };
   
   const handleUpdateTask = (e) => {
     e.preventDefault();
     if (editText.trim() === '') return;
     
-    updateTask(editingTaskId, { text: editText });
+    updateTask(editingTaskId, { title: editText.trim() });
     setEditingTaskId(null);
   };
   
@@ -206,6 +62,41 @@ const TaskList = () => {
     const completedCount = tasks.filter(task => task.completed).length;
     return Math.round((completedCount / tasks.length) * 100);
   };
+  
+  // Handle adding a task
+  const handleAddTask = (task) => {
+    console.log('DEBUGGING: TaskList - handleAddTask called with task:', task);
+    
+    try {
+      // Add the task to the session list only, not the main task list
+      const newTask = addSessionTask(task);
+      console.log('DEBUGGING: TaskList - Task added to session list:', newTask);
+      
+      // Explicitly NOT setting the task as active or moving it to main tasks
+      console.log('DEBUGGING: TaskList - Task created but intentionally not set as active');
+      
+      return newTask; // Return the new task for reference
+    } catch (error) {
+      console.error('DEBUGGING: TaskList - Error adding task:', error);
+      return null;
+    }
+  };
+  
+  // Debug tasks changes
+  useEffect(() => {
+    console.log('TaskList - tasks state changed:', tasks);
+  }, [tasks]);
+  
+  // Debug session tasks changes
+  useEffect(() => {
+    const { sessionTasks } = useTasks();
+    console.log('TaskList - sessionTasks state available:', sessionTasks ? sessionTasks.length : 'unavailable');
+  }, []);
+  
+  // Debug activeTaskId changes
+  useEffect(() => {
+    console.log('TaskList - activeTaskId changed:', activeTaskId);
+  }, [activeTaskId]);
   
   return (
     <Card className="bg-white/10 backdrop-blur-sm text-white border-none shadow-lg">
@@ -224,7 +115,28 @@ const TaskList = () => {
       <CardContent className="pb-2">
         <form 
           className="flex gap-2 mb-4" 
-          onSubmit={handleAddTask}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!newTaskText.trim()) return;
+            
+            console.log('DEBUGGING: TaskList - Quick add form submitted with text:', newTaskText);
+            
+            // Create a basic task object
+            const task = {
+              id: Date.now().toString(), // Generate a unique ID
+              title: newTaskText.trim(),
+              estimatedPomodoros: 1,
+              description: '',
+              createdAt: new Date().toISOString()
+            };
+            
+            // Add as a session task, not directly to the main task list
+            const newTask = handleAddTask(task);
+            console.log('DEBUGGING: TaskList - Quick add task result:', newTask);
+            
+            // Clear the input
+            setNewTaskText('');
+          }}
         >
           <input
             type="text"
@@ -242,7 +154,7 @@ const TaskList = () => {
         <div className="mt-2 space-y-1">
           {tasks.length === 0 ? (
             <div className="py-8 text-center opacity-70">
-              <p>No tasks yet. Add a task to get started!</p>
+              <p>No active tasks yet. Select a session to see the task here.</p>
             </div>
           ) : (
             <ul className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
@@ -312,7 +224,7 @@ const TaskList = () => {
                         )}
                         onClick={() => !task.completed && setActiveTask(task.id)}
                       >
-                        {task.text}
+                        {task.title || task.text}
                       </span>
                       
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -358,87 +270,6 @@ const TaskList = () => {
           </Button>
         </CardFooter>
       )}
-      
-      <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="font-semibold text-lg">Today's Sessions</h2>
-          <button 
-            onClick={() => setIsTaskDialogOpen(true)}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-        </div>
-        
-        {/* Mobile instruction hint - improved with clearer instructions */}
-        <div className="text-sm text-gray-500 mb-2 md:hidden">
-          <p className="mb-1">Press and hold the grip icon to drag and reorder items</p>
-          <p>Or use the up/down buttons for easier reordering</p>
-        </div>
-        
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          modifiers={[
-            restrictToVerticalAxis,
-            snapCenterToCursor
-          ]}
-          autoScroll={{
-            threshold: {
-              x: 0,
-              y: 0.2, // Start scrolling when dragged item is 20% from edge
-            },
-            speed: {
-              x: 10,
-              y: 10, // Scroll speed
-            }
-          }}
-          measuring={{
-            droppable: {
-              strategy: MeasuringStrategy.Always,
-            },
-          }}
-          // Add this prop for smooth drop animation
-          dropAnimation={dropAnimation}
-        >
-          <SortableContext items={sessions.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-2">
-              {sessions.map((session) => (
-                <SortableSessionItem 
-                  key={session.id} 
-                  session={session} 
-                  onToggleComplete={(id) => {
-                    // Handle task completion toggle
-                    const updatedSessions = sessions.map(s => 
-                      s.id === id ? {...s, completed: !s.completed} : s
-                    );
-                    setSessions(updatedSessions);
-                  }}
-                  isSelected={false}
-                  onSelectTask={() => {}} // Add implementation if needed
-                  // Pass move functions for the up/down buttons
-                  onMoveUp={(e) => {
-                    e?.stopPropagation();
-                    moveSessionItem(session.id, 'up');
-                  }}
-                  onMoveDown={(e) => {
-                    e?.stopPropagation();
-                    moveSessionItem(session.id, 'down');
-                  }}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-        
-        {sessions.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            No sessions yet. Add a task to get started!
-          </div>
-        )}
-      </div>
       
       <TaskDialog 
         isOpen={isTaskDialogOpen} 
