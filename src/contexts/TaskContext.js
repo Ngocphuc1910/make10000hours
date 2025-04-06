@@ -1,13 +1,13 @@
-import React, { createContext, useState, useEffect } from 'react';
-import { getTasks, createTask, updateTask as updateTaskInDb, deleteTask as deleteTaskInDb } from '../lib/database';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import { getTasks, updateTask, deleteTask, createTask } from '../lib/database';
 import { useAuth } from '../hooks/useAuth';
 import { 
-  syncTaskCreate, 
   syncTaskUpdate, 
   syncTaskDelete, 
   getPendingOperations, 
   clearPendingOperations 
 } from '../services/taskSyncService';
+import { syncTaskCreate, syncTaskFetch } from '../services/syncService';
 
 export const TaskContext = createContext();
 
@@ -18,101 +18,149 @@ export const TaskProvider = ({ children }) => {
   const [sessionTasks, setSessionTasks] = useState([]); // Store session tasks that aren't in the main task list yet
   const [syncStatus, setSyncStatus] = useState('idle'); // 'idle', 'syncing', 'error'
   const [pendingChanges, setPendingChanges] = useState(0);
+  const [databaseError, setDatabaseError] = useState(null); // Store database connection error
   const { currentUser } = useAuth();
 
-  // Load tasks from database when user changes
+  // Load tasks when user changes or component mounts
   useEffect(() => {
-    const loadTasks = async () => {
-      if (!currentUser) {
-        // If no user is logged in, try localStorage as fallback
-        try {
-          setLoading(true);
-          
-          // Load from localStorage
-          const savedTasks = JSON.parse(localStorage.getItem('pomodoro-tasks') || '[]');
-          setTasks(savedTasks);
-          
-          // Load session tasks
-          const savedSessionTasks = JSON.parse(localStorage.getItem('pomodoro-session-tasks') || '[]');
-          setSessionTasks(savedSessionTasks);
-          
-          // Load active task
-          const savedActiveTaskId = localStorage.getItem('pomodoro-active-task-id');
-          if (savedActiveTaskId) {
-            setActiveTaskId(savedActiveTaskId);
-          }
-        } catch (error) {
-          console.error('Error loading tasks from localStorage:', error);
-        } finally {
-          setLoading(false);
-        }
-        return;
-      }
-      
-      try {
-        setLoading(true);
-        setSyncStatus('syncing');
-        
-        // Load from database
-        const dbTasks = await getTasks(currentUser.id);
-        console.log('Tasks loaded from database:', dbTasks);
-        
-        // Map database format to app format
-        const mappedTasks = dbTasks.map(dbTask => ({
-          id: dbTask.id,
-          title: dbTask.name,
-          description: dbTask.description,
-          completed: dbTask.status === 'completed',
-          estimatedPomodoros: dbTask.estimated_pomodoros,
-          pomodoros: dbTask.completed_pomodoros,
-          projectId: dbTask.project_id,
-          priority: dbTask.priority,
-          createdAt: dbTask.created_at,
-          isSessionTask: dbTask.status === 'session'
-        }));
-        
-        // Split into regular tasks and session tasks
-        const regularTasks = mappedTasks.filter(task => !task.isSessionTask);
-        const dbSessionTasks = mappedTasks.filter(task => task.isSessionTask);
-        
-        setTasks(regularTasks);
-        
-        // Merge with any session tasks from localStorage for backward compatibility
-        const localSessionTasks = JSON.parse(localStorage.getItem('pomodoro-session-tasks') || '[]');
-        const mergedSessionTasks = [
-          ...dbSessionTasks,
-          ...localSessionTasks.filter(localTask => {
-            // Only include local tasks that aren't already in the DB session tasks
-            return !dbSessionTasks.some(dbTask => dbTask.id === localTask.id);
-          })
-        ];
-        
-        setSessionTasks(mergedSessionTasks);
-        
-        // Load active task
-        const savedActiveTaskId = localStorage.getItem('pomodoro-active-task-id');
-        if (savedActiveTaskId) {
-          setActiveTaskId(savedActiveTaskId);
-        }
-        
-        setSyncStatus('idle');
-      } catch (error) {
-        console.error('Error loading tasks from database:', error);
-        setSyncStatus('error');
-        
-        // Fallback to localStorage if database fails
-        const savedTasks = JSON.parse(localStorage.getItem('pomodoro-tasks') || '[]');
-        setTasks(savedTasks);
-        
-        const savedSessionTasks = JSON.parse(localStorage.getItem('pomodoro-session-tasks') || '[]');
-        setSessionTasks(savedSessionTasks);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
+    console.log('DEBUGGING: TaskContext - User or component changed, loading tasks');
     loadTasks();
   }, [currentUser]);
+
+  // Check for database errors in returned tasks
+  useEffect(() => {
+    // Look for tasks with error status or api-error in the ID
+    const errorTask = [...tasks, ...sessionTasks].find(
+      task => task.status === 'error' || 
+              (task.id && task.id.startsWith('api-error-'))
+    );
+    
+    if (errorTask) {
+      console.error('DEBUGGING: TaskContext - Found error task:', errorTask);
+      setDatabaseError(errorTask.error_message || 'Error connecting to database - tasks will not persist');
+      setSyncStatus('error');
+    } else if (databaseError) {
+      // Clear error if no error tasks are found anymore
+      setDatabaseError(null);
+    }
+  }, [tasks, sessionTasks]);
+
+  // Load tasks from database or localStorage
+  const loadTasks = async () => {
+    console.log('DEBUGGING: TaskContext - loadTasks called');
+    setLoading(true);
+    setSyncStatus('syncing');
+    
+    try {
+      // First, try to load from localStorage to ensure we have something immediately
+      const savedSessionTasks = localStorage.getItem('pomodoro-session-tasks');
+      const localSessionTasks = savedSessionTasks ? JSON.parse(savedSessionTasks) : [];
+      console.log(`DEBUGGING: TaskContext - Loaded ${localSessionTasks.length} session tasks from localStorage`);
+      
+      // Set session tasks from localStorage first for immediate UI update
+      setSessionTasks(localSessionTasks);
+      
+      // If user is logged in, try to load from database
+      if (currentUser) {
+        console.log('DEBUGGING: TaskContext - User is logged in, loading tasks from database');
+        const dbTasks = await getTasks(currentUser.id);
+        
+        if (dbTasks) {
+          console.log(`DEBUGGING: TaskContext - Loaded ${dbTasks.length} tasks from database`);
+          
+          // Process all database tasks
+          const mainTasksList = [];
+          const sessionTasksList = [];
+          
+          dbTasks.forEach(task => {
+            // Normalize task object
+            const normalizedTask = {
+              id: task.id,
+              title: task.name || task.text || 'Untitled Task',
+              description: task.description || '',
+              completed: task.status === 'completed',
+              estimatedPomodoros: task.estimated_pomodoros || 1,
+              pomodoros: task.completed_pomodoros || 0,
+              projectId: task.project_id,
+              createdAt: task.created_at,
+              synced: true
+            };
+            
+            // Separate into main tasks and session tasks based on status
+            if (task.status === 'session' || 
+                (task.notes && task.notes.includes('session'))) {
+              sessionTasksList.push(normalizedTask);
+            } else {
+              mainTasksList.push(normalizedTask);
+            }
+          });
+          
+          // Merge database session tasks with local ones (prefer database)
+          const dbSessionIds = sessionTasksList.map(task => task.id);
+          const mergedSessionTasks = [
+            ...sessionTasksList,
+            ...localSessionTasks.filter(task => 
+              // Keep local tasks that don't exist in database
+              task.id && !task.id.includes('temp-') && !dbSessionIds.includes(task.id)
+            )
+          ];
+          
+          // Update state with merged session tasks
+          console.log(`DEBUGGING: TaskContext - Setting ${mergedSessionTasks.length} session tasks after merging`);
+          setSessionTasks(mergedSessionTasks);
+          
+          // Update state with database main tasks
+          console.log(`DEBUGGING: TaskContext - Setting ${mainTasksList.length} main tasks`);
+          setTasks(mainTasksList);
+          
+          // Save merged session tasks to localStorage for persistence
+          localStorage.setItem('pomodoro-session-tasks', JSON.stringify(mergedSessionTasks));
+          localStorage.setItem('pomodoro-tasks', JSON.stringify(mainTasksList));
+          
+          setSyncStatus('idle');
+        } else {
+          console.warn('DEBUGGING: TaskContext - No tasks returned from database, using localStorage only');
+          // Fall back to localStorage for main tasks
+          const savedTasks = localStorage.getItem('pomodoro-tasks');
+          const localTasks = savedTasks ? JSON.parse(savedTasks) : [];
+          setTasks(localTasks);
+          setSyncStatus('error');
+        }
+      } else {
+        console.log('DEBUGGING: TaskContext - No user logged in, using localStorage only');
+        // No user logged in, load from localStorage
+        const savedTasks = localStorage.getItem('pomodoro-tasks');
+        const localTasks = savedTasks ? JSON.parse(savedTasks) : [];
+        setTasks(localTasks);
+        setSyncStatus('idle');
+      }
+    } catch (error) {
+      console.error('DEBUGGING: TaskContext - Error loading tasks:', error);
+      
+      // Fall back to localStorage for both task types
+      try {
+        const savedTasks = localStorage.getItem('pomodoro-tasks');
+        const savedSessionTasks = localStorage.getItem('pomodoro-session-tasks');
+        
+        const localTasks = savedTasks ? JSON.parse(savedTasks) : [];
+        const localSessionTasks = savedSessionTasks ? JSON.parse(savedSessionTasks) : [];
+        
+        console.log(`DEBUGGING: TaskContext - Fallback: Loading ${localTasks.length} tasks and ${localSessionTasks.length} session tasks from localStorage`);
+        
+        setTasks(localTasks);
+        setSessionTasks(localSessionTasks);
+      } catch (localStorageError) {
+        console.error('DEBUGGING: TaskContext - Error loading from localStorage:', localStorageError);
+        // Last resort - empty arrays
+        setTasks([]);
+        setSessionTasks([]);
+      }
+      
+      setSyncStatus('error');
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // Check for pending operations and update UI
   useEffect(() => {
@@ -158,8 +206,12 @@ export const TaskProvider = ({ children }) => {
   
   // Add a new task directly to the main task list
   const addTask = async (taskData) => {
-    const newTaskBase = {
+    console.log('DEBUGGING: TaskContext - addTask called with task:', taskData);
+    
+    // Ensure task has a title
+    const validatedTaskData = {
       ...taskData,
+      title: taskData.title || 'Untitled Task', // Never allow empty title
       completed: false
     };
     
@@ -172,7 +224,7 @@ export const TaskProvider = ({ children }) => {
       // Create a new task with the temporary ID
       newTask = {
         id: tempId,
-        ...newTaskBase,
+        ...validatedTaskData,
         createdAt: new Date().toISOString(),
         synced: false
       };
@@ -180,69 +232,68 @@ export const TaskProvider = ({ children }) => {
       // Add to state immediately for UI responsiveness
       setTasks(prevTasks => [...prevTasks, newTask]);
       
+      // Always save to local storage to ensure persistence
+      localStorage.setItem('pomodoro-tasks', JSON.stringify([...tasks, newTask]));
+      
       // Try to save to database in the background
       try {
         setSyncStatus('syncing');
         
         // Use the sync service
         const dbTask = await syncTaskCreate(currentUser.id, {
-          ...newTaskBase,
-          title: taskData.title,
-          description: taskData.description || '',
-          estimatedPomodoros: taskData.estimatedPomodoros || 1,
-          pomodoros: taskData.pomodoros || 0,
-          priority: taskData.priority || 0,
-          projectId: taskData.projectId || null
+          title: validatedTaskData.title,
+          description: validatedTaskData.description || '',
+          status: validatedTaskData.completed ? 'completed' : 'todo',
+          estimatedPomodoros: validatedTaskData.estimatedPomodoros || 1,
+          pomodoros: validatedTaskData.pomodoros || 0,
+          projectId: validatedTaskData.projectId || null
         });
         
         if (dbTask) {
-          // Replace the temporary task with the database task
-          setTasks(prevTasks => prevTasks.map(task => 
+          // Replace the temporary task with the database version
+          const updatedTasks = tasks.map(task => 
             task.id === tempId ? {
               id: dbTask.id,
-              title: dbTask.name,
+              title: dbTask.name || dbTask.text,
               description: dbTask.description,
               completed: dbTask.status === 'completed',
               estimatedPomodoros: dbTask.estimated_pomodoros,
-              pomodoros: dbTask.completed_pomodoros,
+              pomodoros: dbTask.completed_pomodoros || 0,
               projectId: dbTask.project_id,
-              priority: dbTask.priority,
               createdAt: dbTask.created_at,
               synced: true
             } : task
-          ));
+          );
           
-          // Update the newTask reference to return
-          newTask = {
-            id: dbTask.id,
-            title: dbTask.name,
-            description: dbTask.description,
-            completed: dbTask.status === 'completed',
-            estimatedPomodoros: dbTask.estimated_pomodoros,
-            pomodoros: dbTask.completed_pomodoros,
-            projectId: dbTask.project_id,
-            priority: dbTask.priority,
-            createdAt: dbTask.created_at,
-            synced: true
-          };
+          setTasks(updatedTasks);
+          // Update localStorage with the updated task
+          localStorage.setItem('pomodoro-tasks', JSON.stringify(updatedTasks));
+          
+          // Update the returned task reference
+          newTask.id = dbTask.id;
+          newTask.synced = true;
           
           setSyncStatus('idle');
+          console.log('DEBUGGING: TaskContext - Task saved to database with ID:', dbTask.id);
         }
       } catch (error) {
-        console.error('Error adding task to database:', error);
+        console.error('DEBUGGING: TaskContext - Error saving task to database:', error);
         setSyncStatus('error');
-        // Task will remain with tempId and synced: false
-        // The sync service will handle retries
+        // Even if database sync fails, the task is still in local storage and tasks state
+        console.log('DEBUGGING: TaskContext - Task will remain in local storage despite database error');
       }
     } else {
-      // No user logged in, use local storage only
+      // No user logged in, just use localStorage
       newTask = {
-        id: Date.now().toString(),
-        ...newTaskBase,
+        id: Date.now().toString(), // Simple numeric ID
+        ...validatedTaskData,
         createdAt: new Date().toISOString(),
-        synced: true // Mark as synced even though it's only in localStorage
+        synced: true // Mark as synced since there's no database to sync with
       };
+      
+      // Add to state
       setTasks(prevTasks => [...prevTasks, newTask]);
+      // localStorage will be updated via useEffect
     }
     
     return newTask;
@@ -250,117 +301,126 @@ export const TaskProvider = ({ children }) => {
   
   // Add a session task without adding it to the main task list yet
   const addSessionTask = async (taskData) => {
-    console.log('DEBUGGING: TaskContext - addSessionTask called with:', taskData);
+    console.log('DEBUGGING: TaskContext - addSessionTask called with task:', taskData);
     
-    let newTask;
+    // Ensure task has required fields
+    const validatedTaskData = {
+      ...taskData,
+      title: taskData.title || 'Untitled Task', // Never allow empty title
+      description: taskData.description || '',
+      estimatedPomodoros: parseInt(taskData.estimatedPomodoros, 10) || 1,
+      pomodoros: parseInt(taskData.pomodoros, 10) || 0
+    };
     
-    if (currentUser) {
-      // Create a temporary ID for immediate UI update
-      const tempId = `temp-session-${Date.now()}`;
-      
-      // Create the task object with temporary ID
-      newTask = {
-        id: tempId,
-        ...taskData,
-        createdAt: taskData.createdAt || new Date().toISOString(),
-        completed: false,
-        synced: false
-      };
-      
-      // Add to session tasks immediately for responsive UI
-      setSessionTasks(prevSessionTasks => {
-        // Check if task with similar properties already exists
-        const taskExists = prevSessionTasks.some(task => 
-          task.title === taskData.title && 
-          new Date(task.createdAt).toDateString() === new Date().toDateString()
-        );
-        
-        if (taskExists) {
-          console.log('DEBUGGING: TaskContext - Similar task already exists in session tasks, not adding duplicate');
-          return prevSessionTasks;
-        }
-        
-        return [...prevSessionTasks, newTask];
-      });
-      
-      // Try to save to database in the background
-      try {
-        setSyncStatus('syncing');
-        
-        // Use the sync service
-        const dbTask = await syncTaskCreate(currentUser.id, {
-          ...taskData,
-          title: taskData.title,
-          description: taskData.description || '',
-          status: 'session', // Special status to identify session tasks
-          priority: taskData.priority || 0,
-          estimatedPomodoros: taskData.estimatedPomodoros || 1,
-          pomodoros: 0,
-          position: 0,
-          projectId: taskData.projectId || null
-        });
-        
-        if (dbTask) {
-          // Replace the temporary task with the database version
-          setSessionTasks(prevSessionTasks => prevSessionTasks.map(task => 
-            task.id === tempId ? {
-              id: dbTask.id,
-              title: dbTask.name,
-              description: dbTask.description,
-              completed: dbTask.status === 'completed',
-              estimatedPomodoros: dbTask.estimated_pomodoros,
-              pomodoros: dbTask.completed_pomodoros || 0,
-              projectId: dbTask.project_id,
-              priority: dbTask.priority,
-              createdAt: dbTask.created_at,
-              synced: true
-            } : task
-          ));
-          
-          // Update the returned task reference
-          newTask = {
-            id: dbTask.id,
-            title: dbTask.name,
-            description: dbTask.description,
-            completed: dbTask.status === 'completed',
-            estimatedPomodoros: dbTask.estimated_pomodoros,
-            pomodoros: dbTask.completed_pomodoros || 0,
-            projectId: dbTask.project_id,
-            priority: dbTask.priority,
-            createdAt: dbTask.created_at,
-            synced: true
-          };
-          
-          setSyncStatus('idle');
-        }
-      } catch (error) {
-        console.error('Error adding session task to database:', error);
-        setSyncStatus('error');
-        // The sync service will handle retries
-      }
-    } else {
-      // No user logged in, use local storage only
-      newTask = {
-        id: taskData.id || Date.now().toString(),
-        ...taskData,
-        createdAt: taskData.createdAt || new Date().toISOString(),
-        completed: false,
-        synced: true // Mark as synced even though it's only in localStorage
-      };
-      
-      setSessionTasks(prevSessionTasks => {
-        // Check if task with this ID already exists in session tasks
-        const taskExists = prevSessionTasks.some(task => task.id === newTask.id);
-        if (taskExists) {
-          console.log('DEBUGGING: TaskContext - Task with ID already exists in session tasks, not adding duplicate');
-          return prevSessionTasks;
-        }
-        
-        return [...prevSessionTasks, newTask];
-      });
+    // Create a temporary ID for immediate UI update
+    const tempId = `temp-${Date.now()}`;
+    
+    // Create a new task with the temporary ID
+    const newTask = {
+      id: tempId,
+      ...validatedTaskData,
+      createdAt: new Date().toISOString(),
+      synced: false
+    };
+    
+    // Check for duplicates before adding
+    const isDuplicate = sessionTasks.some(
+      task => task.title.toLowerCase() === validatedTaskData.title.toLowerCase()
+    );
+    
+    if (isDuplicate) {
+      console.warn('DEBUGGING: TaskContext - Duplicate task detected, not adding:', validatedTaskData.title);
+      return null;
     }
     
-    console.log('DEBUGGING: TaskContext - New session task created:', newTask);
+    // Add to state immediately for UI responsiveness
+    setSessionTasks(prevSessionTasks => [...prevSessionTasks, newTask]);
+    
+    // Always save to local storage to ensure persistence
+    const updatedSessionTasks = [...sessionTasks, newTask];
+    localStorage.setItem('pomodoro-session-tasks', JSON.stringify(updatedSessionTasks));
+    
+    // Try to save to database in the background
+    try {
+      setSyncStatus('syncing');
+      
+      if (currentUser) {
+        // Use the sync service from syncService.js, not taskSyncService.js
+        console.log('DEBUGGING: TaskContext - Using syncService to create session task for user:', currentUser.id);
+        
+        const dbTaskData = {
+          title: validatedTaskData.title,
+          description: validatedTaskData.description || '',
+          status: 'session', // Special status to identify session tasks
+          estimatedPomodoros: validatedTaskData.estimatedPomodoros || 1,
+          pomodoros: validatedTaskData.pomodoros || 0,
+          projectId: validatedTaskData.projectId || null
+        };
+        
+        console.log('DEBUGGING: TaskContext - Sending task data to syncTaskCreate:', dbTaskData);
+        
+        const dbTask = await syncTaskCreate(currentUser.id, dbTaskData);
+        
+        console.log('DEBUGGING: TaskContext - Result from syncTaskCreate:', dbTask);
+        
+        if (dbTask && dbTask.id) {
+          // Check if we got a real database ID (UUID) or a local fallback ID
+          const isRealDatabaseId = dbTask.id && typeof dbTask.id === 'string' && 
+                                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dbTask.id);
+          
+          console.log('DEBUGGING: TaskContext - Got task ID:', dbTask.id, 'Is real database ID:', isRealDatabaseId);
+          
+          // Replace the temporary task with the database version
+          setSessionTasks(prevSessionTasks => {
+            const updatedTasks = prevSessionTasks.map(task => 
+              task.id === tempId ? {
+                id: dbTask.id,
+                title: dbTask.name || dbTask.text || validatedTaskData.title,
+                description: dbTask.description || validatedTaskData.description || '',
+                completed: dbTask.status === 'completed',
+                estimatedPomodoros: dbTask.estimated_pomodoros || validatedTaskData.estimatedPomodoros || 1,
+                pomodoros: dbTask.completed_pomodoros || 0,
+                projectId: dbTask.project_id,
+                createdAt: dbTask.created_at || new Date().toISOString(),
+                synced: isRealDatabaseId // Only mark as synced if we got a real database ID
+              } : task
+            );
+            
+            console.log('DEBUGGING: TaskContext - Updated session tasks after DB save:', updatedTasks.length);
+            
+            // Update localStorage with the updated task
+            localStorage.setItem('pomodoro-session-tasks', JSON.stringify(updatedTasks));
+            
+            return updatedTasks;
+          });
+          
+          // Update the returned task reference
+          newTask.id = dbTask.id;
+          newTask.synced = isRealDatabaseId;
+          
+          setSyncStatus(isRealDatabaseId ? 'idle' : 'error');
+          
+          if (isRealDatabaseId) {
+            console.log('DEBUGGING: TaskContext - Session task successfully saved to database with ID:', dbTask.id);
+          } else {
+            console.error('DEBUGGING: TaskContext - Got non-database ID from syncTaskCreate:', dbTask.id);
+          }
+        } else {
+          console.error('DEBUGGING: TaskContext - Failed to save task to database, keeping temporary task');
+          setSyncStatus('error');
+        }
+      } else {
+        // No user logged in, just store in localStorage (already done via useEffect)
+        console.log('DEBUGGING: TaskContext - No user logged in, task saved to localStorage only');
+        setSyncStatus('idle');
+      }
+    } catch (error) {
+      console.error('DEBUGGING: TaskContext - Error saving session task to database:', error);
+      setSyncStatus('error');
+      // Even if database sync fails, the task is still in local storage and sessionTasks state
+      console.log('DEBUGGING: TaskContext - Task will remain in local storage despite database error');
+    }
+    
     return newTask;
   };
   
@@ -387,6 +447,14 @@ export const TaskProvider = ({ children }) => {
       return;
     }
     
+    // Skip if taskId is a default or temporary ID
+    if (taskId.startsWith('default-') || taskId.startsWith('temp-') || 
+        taskId.startsWith('local-') || taskId.startsWith('error-') || 
+        taskId.startsWith('exception-')) {
+      console.log('DEBUGGING: TaskContext - Skipping moveToMainTasks for non-database task ID:', taskId);
+      return;
+    }
+    
     // First check if it already exists in the main tasks array
     const existsInMainTasks = tasks.some(task => task.id === taskId);
     console.log('DEBUGGING: TaskContext - Task already exists in main tasks?', existsInMainTasks);
@@ -409,7 +477,12 @@ export const TaskProvider = ({ children }) => {
           setSyncStatus('syncing');
           
           // Update the status in database from 'session' to 'todo'
-          await syncTaskUpdate(currentUser.id, taskId, { status: 'todo' });
+          // But we'll keep a copy in the session tasks
+          await syncTaskUpdate(currentUser.id, taskId, { 
+            status: 'todo'
+            // Note: In the actual DB, tasks are differentiated by the [SESSION_TASK] prefix
+            // in the notes field, which is handled in the sync service
+          });
           console.log('Task status updated in database from session to todo');
           
           setSyncStatus('idle');
@@ -427,10 +500,13 @@ export const TaskProvider = ({ children }) => {
           return prevTasks;
         }
         
-        // Add to main tasks
+        // Add to main tasks but DON'T remove from session tasks
         console.log('DEBUGGING: TaskContext - Adding session task to main tasks list');
-        return [...prevTasks, sessionTask];
+        return [...prevTasks, { ...sessionTask }];
       });
+      
+      // We don't remove the task from sessionTasks anymore
+      console.log('DEBUGGING: TaskContext - Task kept in session tasks for visibility');
     } else {
       // Task not found in session tasks, look elsewhere
       console.log('DEBUGGING: TaskContext - Task not found in session tasks, looking in other sources');
@@ -611,6 +687,11 @@ export const TaskProvider = ({ children }) => {
     }
   };
   
+  // Add this function to the context
+  const getDatabaseError = () => {
+    return databaseError;
+  };
+  
   const value = {
     tasks,
     sessionTasks,
@@ -626,7 +707,8 @@ export const TaskProvider = ({ children }) => {
     clearCompletedTasks,
     getTaskById,
     moveToMainTasks,
-    syncPendingChanges
+    syncPendingChanges,
+    getDatabaseError
   };
   
   return (

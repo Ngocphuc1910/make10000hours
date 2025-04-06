@@ -1,21 +1,37 @@
 import React, { useState } from 'react';
 import { Plus, Check } from 'lucide-react';
 import { useTask } from '../../hooks/useTask';
+import { useAuth } from '../../hooks/useAuth';
 
 const QuickActions = () => {
   const [newTask, setNewTask] = useState('');
-  const { addTask } = useTask();
+  const { addTask, addSessionTask } = useTask();
+  const { currentUser } = useAuth();
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (newTask.trim()) {
-      addTask({
-        title: newTask,
+    const taskTitle = newTask.trim();
+    
+    if (taskTitle) {
+      console.log('QuickActions: Adding session task with title:', taskTitle);
+      console.log('QuickActions: Current user is:', currentUser?.id || 'not logged in');
+      
+      addSessionTask({
+        title: taskTitle,
         completed: false,
         pomodoros: 0,
         estimatedPomodoros: 1,
+      })
+      .then(createdTask => {
+        console.log('QuickActions: Task created successfully:', createdTask);
+      })
+      .catch(error => {
+        console.error('QuickActions: Error creating task:', error);
       });
+      
       setNewTask('');
+    } else {
+      console.log('QuickActions: Cannot add task with empty title');
     }
   };
 

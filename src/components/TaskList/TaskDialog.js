@@ -31,11 +31,11 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
     const task = {
       title: title.trim(),
       description: description.trim(),
-      estimatedPomodoros: parseInt(estimatedPomodoros, 10),
+      estimatedPomodoros: parseInt(estimatedPomodoros, 10) || 1, // Ensure we have a valid number
       completed: false
     };
     
-    console.log('DEBUGGING: TaskDialog - Submitting task:', task);
+    console.log('DEBUGGING: TaskDialog - Submitting task with estimatedPomodoros:', task.estimatedPomodoros);
     
     // Call the onAddTask function provided by parent
     onAddTask(task);

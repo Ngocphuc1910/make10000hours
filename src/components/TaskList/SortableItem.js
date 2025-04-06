@@ -22,7 +22,6 @@ const SortableSessionItem = ({
   const { theme } = useTheme();
 
   const style = {
-    transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
     touchAction: 'none', // Prevents browser handling of touch events
@@ -113,13 +112,15 @@ const SortableSessionItem = ({
           <h3 className={`font-medium ${session.completed ? 'line-through text-gray-400 dark:text-gray-500' : ''}`}>
             {session.title}
           </h3>
-          <p className="text-sm text-gray-500">{session.time}</p>
+          <p className="text-sm text-gray-500">
+            {session.time || `Added at ${new Date(session.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+          </p>
         </div>
       </div>
       
       <div className="flex items-center">
         <div className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-3">
-          {session.duration}
+          {session.duration || `${(session.estimatedPomodoros || 1) * 25}min`}
         </div>
         
         {/* Move buttons for alternative to drag and drop (mobile friendly) */}

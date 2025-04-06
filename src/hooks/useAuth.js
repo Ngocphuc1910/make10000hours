@@ -84,15 +84,100 @@ export const AuthProvider = ({ children }) => {
   // Assign signOut to ref for use in callbacks
   signOutRef.current = signOut;
 
-  // Fetch user profile - wrapped in useCallback to prevent unnecessary rerenders
-  const fetchUserProfile = useCallback(async (userId) => {
+  // Helper function to fetch user profile
+  const fetchUserProfile = async (user) => {
+    console.log('DEBUGGING: useAuth - fetchUserProfile called for user:', user?.id);
+    
+    if (!user) {
+      console.log('DEBUGGING: useAuth - No user provided to fetchUserProfile');
+      return null;
+    }
+    
     try {
-      console.log("Fetching user profile for:", userId);
-      const profile = await getUserProfile(userId);
-      setUserProfile(profile);
-      console.log("Profile fetched:", profile);
+      // Get user profile from database
+      const profile = await getUserProfile(user.id);
+      console.log('DEBUGGING: useAuth - Profile fetched:', profile);
+      
+      if (profile) {
+        // We have a valid profile
+        return profile;
+      } else {
+        console.log('DEBUGGING: useAuth - No profile found, creating default profile');
+        
+        // Create a default profile if none exists
+        try {
+          // Attempt to create a basic profile
+          const newProfile = await createOrUpdateUserProfile({
+            id: user.id,
+            email: user.email,
+            full_name: user.user_metadata?.full_name || '',
+            avatar_url: user.user_metadata?.avatar_url || ''
+          });
+          
+          if (newProfile) {
+            console.log('DEBUGGING: useAuth - Created new profile:', newProfile);
+            return newProfile;
+          } else {
+            // Failed to create profile but still return a basic object for app to function
+            console.warn('DEBUGGING: useAuth - Failed to create profile, using fallback');
+            return {
+              id: user.id,
+              email: user.email,
+              full_name: user.user_metadata?.full_name || '',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
+          }
+        } catch (createError) {
+          console.error('DEBUGGING: useAuth - Error creating profile:', createError);
+          // Return a basic profile object to prevent app crashes
+          return {
+            id: user.id,
+            email: user.email,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+        }
+      }
     } catch (error) {
-      console.error("Error fetching user profile:", error);
+      console.error('DEBUGGING: useAuth - Error fetching profile:', error);
+      
+      // Return a basic profile object to prevent app crashes
+      return {
+        id: user.id,
+        email: user.email,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    }
+  };
+
+  // Fetch user profile - wrapped in useCallback to prevent unnecessary rerenders
+  const fetchUserProfileAndUpdate = useCallback(async (user) => {
+    try {
+      console.log("Fetching user profile for:", user?.id);
+      
+      if (!user) {
+        console.log('No user provided to fetchUserProfileAndUpdate');
+        setUserProfile(null);
+        return;
+      }
+      
+      const profile = await fetchUserProfile(user);
+      setUserProfile(profile);
+      console.log("Profile updated in state:", profile);
+      
+    } catch (error) {
+      console.error("Error updating user profile in state:", error);
+      // Set a default profile to prevent app crashes
+      if (user) {
+        setUserProfile({
+          id: user.id,
+          email: user.email,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      }
     }
   }, []);
 
@@ -220,8 +305,8 @@ export const AuthProvider = ({ children }) => {
               } else if (refreshData?.session && isSubscribed) {
                 console.log("Auth: Session refreshed successfully");
                 setCurrentUser(refreshData.session.user);
-                if (fetchUserProfile) {
-                  await fetchUserProfile(refreshData.session.user.id);
+                if (fetchUserProfileAndUpdate) {
+                  await fetchUserProfileAndUpdate(refreshData.session.user);
                 }
               }
             } catch (refreshErr) {
@@ -230,8 +315,8 @@ export const AuthProvider = ({ children }) => {
           } else {
             // Token is valid, set user
             setCurrentUser(session.user);
-            if (fetchUserProfile && isSubscribed) {
-              await fetchUserProfile(session.user.id);
+            if (fetchUserProfileAndUpdate && isSubscribed) {
+              await fetchUserProfileAndUpdate(session.user);
             }
           }
         } else if (isSubscribed) {
@@ -274,8 +359,8 @@ export const AuthProvider = ({ children }) => {
           setTimeout(() => {
             if (isSubscribed) {
               setCurrentUser(session.user);
-              if (fetchUserProfile) {
-                fetchUserProfile(session.user.id).catch(err => {
+              if (fetchUserProfileAndUpdate) {
+                fetchUserProfileAndUpdate(session.user).catch(err => {
                   console.error("Auth: Error fetching profile after auth change:", err);
                 });
               }
@@ -306,7 +391,7 @@ export const AuthProvider = ({ children }) => {
         authListener.subscription.unsubscribe();
       }
     };
-  }, []); // Empty dependency array intentional - eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // Intentionally empty - we only want this to run once when the component mounts
 
   // Email sign in
   const emailSignIn = async (email, password, event) => {
@@ -424,7 +509,7 @@ export const AuthProvider = ({ children }) => {
           console.log('Profile created successfully:', profile);
           
           // Fetch the user profile to update state
-          await fetchUserProfile(data.user.id);
+          await fetchUserProfileAndUpdate(data.user);
         } catch (profileError) {
           console.error("Error creating user profile:", profileError);
           // We don't throw here to prevent blocking the auth flow
@@ -619,7 +704,7 @@ export const AuthProvider = ({ children }) => {
       });
       
       // Refresh profile data
-      await fetchUserProfile(currentUser.id);
+      await fetchUserProfileAndUpdate(currentUser);
       
       return true;
     } catch (error) {
@@ -645,7 +730,7 @@ export const AuthProvider = ({ children }) => {
     authError,
     setAuthError,
     isAuthLoading,
-    refreshProfile: () => currentUser && fetchUserProfile(currentUser.id)
+    refreshProfile: () => currentUser && fetchUserProfileAndUpdate(currentUser)
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

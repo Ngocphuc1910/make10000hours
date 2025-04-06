@@ -1,12 +1,11 @@
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 
-// Get Supabase URL and key from environment or use default test values
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://ccxhdmyfmfwincvzqjhg.supabase.co';
-const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNjeGhkbXlmbWZ3aW5jdnpxamhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2ODUzNjE0ODUsImV4cCI6MjAwMDkzNzQ4NX0.i1rDcQOGOm4r6u4qdOSECzOOJntZLl_iAapHRxP6RNw';
+// Official Supabase URL and key from your dashboard
+const supabaseUrl = 'https://ccxhdmyfmfwincvzqjhg.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNjeGhkbXlmbWZ3aW5jdnpxamhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2ODUzNjE0ODUsImV4cCI6MjAwMDkzNzQ4NX0.i1rDcQOGOm4r6u4qdOSECzOOJntZLl_iAapHRxP6RNw';
 
-console.log('Supabase URL:', supabaseUrl);
-console.log('Supabase Key available:', !!supabaseKey);
+console.log('Connecting to Supabase...');
 
 // Initialize Supabase client
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -15,6 +14,7 @@ const userEmail = 'ngocphuc159tl@gmail.com';
 
 async function listAllUsers() {
   try {
+    console.log('Fetching all users...');
     const { data: users, error } = await supabase
       .from('profiles')
       .select('*');
@@ -37,6 +37,7 @@ async function listAllUsers() {
 
 async function listAllTasks() {
   try {
+    console.log('Fetching all tasks...');
     const { data: tasks, error } = await supabase
       .from('tasks')
       .select('*')
@@ -60,6 +61,8 @@ async function listAllTasks() {
 
 async function getUserTasks(email) {
   try {
+    console.log(`Looking for user with email: ${email}`);
+    
     // First find the user with this email
     const { data: userData, error: userError } = await supabase
       .from('profiles')
@@ -69,6 +72,11 @@ async function getUserTasks(email) {
     
     if (userError) {
       console.error('Error finding user:', userError.message);
+      
+      // Try listing all users anyway
+      console.log('Trying to list all users instead:');
+      await listAllUsers();
+      
       return;
     }
     
@@ -76,6 +84,7 @@ async function getUserTasks(email) {
       console.log(`No user found with email: ${email}`);
       
       // Show all users instead
+      console.log('Listing all available users:');
       await listAllUsers();
       
       return;
@@ -84,6 +93,7 @@ async function getUserTasks(email) {
     console.log(`Found user: ${userData.id} (${userData.email})`);
     
     // Now get tasks for this user
+    console.log(`Fetching tasks for user ID: ${userData.id}`);
     const { data: tasks, error: tasksError } = await supabase
       .from('tasks')
       .select('*')
@@ -95,14 +105,16 @@ async function getUserTasks(email) {
       return;
     }
     
-    console.log(`Found ${tasks.length} tasks for user ${email}:`);
-    if (tasks.length === 0) {
-      console.log('No tasks found. Listing all tasks instead:');
+    if (!tasks || tasks.length === 0) {
+      console.log(`No tasks found for user ${email}.`);
+      console.log('Trying to list all tasks instead:');
       await listAllTasks();
       return [];
     }
     
+    console.log(`Found ${tasks.length} tasks for user ${email}:`);
     console.log(JSON.stringify(tasks, null, 2));
+    
     return tasks;
   } catch (error) {
     console.error('Unexpected error:', error.message);
