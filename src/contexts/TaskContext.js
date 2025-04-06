@@ -105,6 +105,14 @@ export const TaskProvider = ({ children }) => {
             )
           ];
           
+          // Sort merged tasks by creation date (oldest first) to ensure consistent ordering
+          // This ensures that new tasks will appear at the bottom of the list
+          mergedSessionTasks.sort((a, b) => {
+            const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+            const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+            return dateA - dateB;
+          });
+          
           // Update state with merged session tasks
           console.log(`DEBUGGING: TaskContext - Setting ${mergedSessionTasks.length} session tasks after merging`);
           setSessionTasks(mergedSessionTasks);
@@ -131,7 +139,20 @@ export const TaskProvider = ({ children }) => {
         // No user logged in, load from localStorage
         const savedTasks = localStorage.getItem('pomodoro-tasks');
         const localTasks = savedTasks ? JSON.parse(savedTasks) : [];
+
+        // Get session tasks from localStorage when no user is logged in
+        const savedSessionTasks = localStorage.getItem('pomodoro-session-tasks');
+        const localSessionTasks = savedSessionTasks ? JSON.parse(savedSessionTasks) : [];
+
+        // Sort session tasks by creation date (oldest first) for consistent ordering
+        localSessionTasks.sort((a, b) => {
+          const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+          const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+          return dateA - dateB;
+        });
+
         setTasks(localTasks);
+        setSessionTasks(localSessionTasks);
         setSyncStatus('idle');
       }
     } catch (error) {
@@ -146,6 +167,13 @@ export const TaskProvider = ({ children }) => {
         const localSessionTasks = savedSessionTasks ? JSON.parse(savedSessionTasks) : [];
         
         console.log(`DEBUGGING: TaskContext - Fallback: Loading ${localTasks.length} tasks and ${localSessionTasks.length} session tasks from localStorage`);
+        
+        // Sort session tasks by creation date (oldest first) for consistent ordering
+        localSessionTasks.sort((a, b) => {
+          const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+          const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+          return dateA - dateB;
+        });
         
         setTasks(localTasks);
         setSessionTasks(localSessionTasks);
@@ -315,6 +343,17 @@ export const TaskProvider = ({ children }) => {
     // Create a temporary ID for immediate UI update
     const tempId = `temp-${Date.now()}`;
     
+    // More robust duplicate check
+    const titleLowerCase = validatedTaskData.title.toLowerCase().trim();
+    const isDuplicate = sessionTasks.some(
+      task => task.title.toLowerCase().trim() === titleLowerCase
+    );
+    
+    if (isDuplicate) {
+      console.warn('DEBUGGING: TaskContext - Duplicate task detected, not adding:', validatedTaskData.title);
+      return null;
+    }
+    
     // Create a new task with the temporary ID
     const newTask = {
       id: tempId,
@@ -323,22 +362,25 @@ export const TaskProvider = ({ children }) => {
       synced: false
     };
     
-    // Check for duplicates before adding
-    const isDuplicate = sessionTasks.some(
-      task => task.title.toLowerCase() === validatedTaskData.title.toLowerCase()
-    );
-    
-    if (isDuplicate) {
-      console.warn('DEBUGGING: TaskContext - Duplicate task detected, not adding:', validatedTaskData.title);
-      return null;
-    }
-    
-    // Add to state immediately for UI responsiveness
-    setSessionTasks(prevSessionTasks => [...prevSessionTasks, newTask]);
-    
-    // Always save to local storage to ensure persistence
-    const updatedSessionTasks = [...sessionTasks, newTask];
-    localStorage.setItem('pomodoro-session-tasks', JSON.stringify(updatedSessionTasks));
+    // Add to state immediately for UI responsiveness, using a callback to reference the current state
+    setSessionTasks(prevSessionTasks => {
+      // Double-check for duplicates with the latest state
+      const duplicateExists = prevSessionTasks.some(task => 
+        task.title.toLowerCase().trim() === titleLowerCase
+      );
+      
+      if (duplicateExists) {
+        console.warn('DEBUGGING: TaskContext - Duplicate found on second check, not adding:', validatedTaskData.title);
+        return prevSessionTasks; // Return unchanged state if duplicate found
+      }
+      
+      // Add new task to the end of the array to maintain consistent order
+      // This ensures new tasks will be displayed at the bottom of the session list
+      const newSessionTasks = [...prevSessionTasks, newTask];
+      // Update localStorage here to ensure it matches state
+      localStorage.setItem('pomodoro-session-tasks', JSON.stringify(newSessionTasks));
+      return newSessionTasks;
+    });
     
     // Try to save to database in the background
     try {
@@ -372,6 +414,12 @@ export const TaskProvider = ({ children }) => {
           
           // Replace the temporary task with the database version
           setSessionTasks(prevSessionTasks => {
+            // Check if the task still exists (user might have deleted it already)
+            if (!prevSessionTasks.some(task => task.id === tempId)) {
+              console.log('DEBUGGING: TaskContext - Temp task no longer exists, not updating');
+              return prevSessionTasks;
+            }
+            
             const updatedTasks = prevSessionTasks.map(task => 
               task.id === tempId ? {
                 id: dbTask.id,
