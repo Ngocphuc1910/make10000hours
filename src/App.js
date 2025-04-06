@@ -15,6 +15,7 @@ import { useTasks } from './hooks/useTasks';
 import { TaskProvider } from './contexts/TaskContext';
 import TaskDebugView from './components/TaskDebugView';
 import TaskDialog from './components/TaskList/TaskDialog';
+import KeyboardShortcuts from './components/KeyboardShortcuts';
 
 // Make test function available in the global scope for console debugging
 window.testSupabaseConnection = testSupabaseConnection;
@@ -57,24 +58,8 @@ function MainApp() {
   // Reference to the SessionsList component to access its methods
   const sessionsListRef = useRef(null);
 
-  // Add keyboard shortcut for new task (Shift+N)
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      // Check for Shift+N (shiftKey for Shift)
-      if (e.shiftKey && e.key === 'N') {
-        e.preventDefault(); // Prevent default browser behavior
-        setIsTaskDialogOpen(true); // Open the task dialog
-      }
-    };
-
-    // Add event listener
-    window.addEventListener('keydown', handleKeyDown);
-
-    // Cleanup
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
+  // Function to open task dialog that can be passed to KeyboardShortcuts
+  const openTaskDialog = () => setIsTaskDialogOpen(true);
 
   // Handle adding a new task from the dialog
   const handleAddTask = (task) => {
@@ -397,6 +382,9 @@ function MainApp() {
     <div className="min-h-screen bg-gray-100 dark:bg-gradient-to-br dark:from-gray-900 dark:to-gray-800 text-gray-900 dark:text-white">
       {/* Header */}
       <Header />
+      
+      {/* Keyboard shortcuts */}
+      <KeyboardShortcuts openTaskDialog={openTaskDialog} />
       
       <main className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
