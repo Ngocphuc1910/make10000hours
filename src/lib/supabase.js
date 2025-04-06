@@ -10,15 +10,6 @@ console.log('- URL:', supabaseUrl);
 console.log('- Key length:', supabaseAnonKey ? supabaseAnonKey.length : 0);
 console.log('- Key first/last chars:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 10)}...${supabaseAnonKey.substring(supabaseAnonKey.length - 10)}` : 'N/A');
 
-// Force clear any potentially corrupted auth data in localStorage
-console.log('Clearing previous Supabase auth data...');
-Object.keys(localStorage).forEach(key => {
-  if (key.includes('sb-') && key.includes('auth')) {
-    console.log(`Removing key: ${key}`);
-    localStorage.removeItem(key);
-  }
-});
-
 // Check for placeholder values
 const isPlaceholder = 
   !supabaseUrl || 
