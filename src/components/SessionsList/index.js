@@ -19,10 +19,38 @@ import TaskDialog from '../TaskList/TaskDialog';
 import { useTasks } from '../../hooks/useTasks';
 import { useAuth } from '../../hooks/useAuth';
 
+// Default sessions when no user data is available
+const getDefaultSessions = () => {
+  return [
+    {
+      id: "default-1",
+      title: "UI Design Research",
+      time: "Completed at 10:30 AM",
+      duration: "25min",
+      completed: false
+    },
+    {
+      id: "default-2",
+      title: "Project Planning",
+      time: "Completed at 11:00 AM",
+      duration: "25min",
+      completed: false
+    },
+    {
+      id: "default-3",
+      title: "Client Meeting",
+      time: "Completed at 11:45 AM",
+      duration: "25min",
+      completed: false
+    },
+  ];
+};
+
 const SessionsList = forwardRef((props, ref) => {
   const [sessions, setSessions] = useState([]);
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   
   const { onTaskSelect } = props;
   const { currentUser } = useAuth();
@@ -36,6 +64,11 @@ const SessionsList = forwardRef((props, ref) => {
     updateTask
   } = useTasks();
   
+  // Debug on component mount
+  useEffect(() => {
+    console.log('SessionsList: Component mounted, current user:', currentUser?.id);
+  }, [currentUser]);
+  
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
     openTaskDialog: () => {
@@ -45,24 +78,75 @@ const SessionsList = forwardRef((props, ref) => {
   
   // Load sessions from TaskContext's sessionTasks when they change
   useEffect(() => {
-    console.log('DEBUGGING: SessionsList - sessionTasks from context changed, mapping to sessions');
-    if (sessionTasks && sessionTasks.length > 0) {
-      // Map sessionTasks to session format for display
-      const mappedSessions = sessionTasks.map(task => ({
-        id: task.id,
-        title: task.title,
-        time: task.time || `Added at ${new Date(task.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-        duration: `${task.estimatedPomodoros * 25}min`,
-        completed: task.completed
-      }));
+    console.log(`DEBUGGING: SessionsList - sessionTasks changed, length: ${sessionTasks.length}`);
+    if (sessionTasks.length > 0) {
+      console.log('DEBUGGING: SessionsList - Sample tasks:', sessionTasks.slice(0, 3));
       
-      setSessions(mappedSessions);
+      // Map session tasks to display format
+      const mappedSessions = sessionTasks.map(task => {
+        console.log(`DEBUGGING: SessionsList - Mapping session task: ${task.id}, "${task.title}"`);
+        return {
+          id: task.id,
+          title: task.title || 'Untitled Task',
+          estimatedPomodoros: task.estimatedPomodoros || 1,
+          completed: task.completed || false
+        };
+      });
+      
+      // If previous sessions exist, keep them and add any new ones
+      setSessions(prevSessions => {
+        // Get current session IDs for comparison
+        const currentIds = prevSessions.map(s => s.id);
+        // Get new session IDs
+        const newIds = mappedSessions.map(s => s.id);
+        
+        // Log if any task IDs will be added or removed
+        const added = newIds.filter(id => !currentIds.includes(id));
+        const removed = currentIds.filter(id => !newIds.includes(id));
+        
+        if (added.length > 0) {
+          console.log(`DEBUGGING: SessionsList - Adding ${added.length} new tasks to sessions`);
+        }
+        
+        if (removed.length > 0) {
+          console.log(`DEBUGGING: SessionsList - Removing ${removed.length} tasks from sessions`);
+          console.log('DEBUGGING: SessionsList - Tasks being removed:', removed);
+        }
+          
+        // Never clear sessions, only add new tasks or update existing ones
+        const updatedSessions = [...prevSessions];
+        
+        // Update existing tasks
+        updatedSessions.forEach((session, index) => {
+          const matchingTask = mappedSessions.find(task => task.id === session.id);
+          if (matchingTask) {
+            updatedSessions[index] = { ...session, ...matchingTask };
+          }
+        });
+        
+        // Add new tasks
+        mappedSessions.forEach(task => {
+          if (!currentIds.includes(task.id)) {
+            updatedSessions.push(task);
+          }
+        });
+        
+        return updatedSessions;
+      });
+    } else if (isLoading) {
+      // Don't clear sessions while loading
+      console.log('DEBUGGING: SessionsList - No session tasks, but still loading');
+    } else if (!currentUser) {
+      // Only use default sessions if no user is logged in and no session tasks
+      console.log('DEBUGGING: SessionsList - No session tasks and no user, using defaults');
+      setSessions(getDefaultSessions());
     }
-  }, [sessionTasks]);
+  }, [sessionTasks, isLoading, currentUser]);
   
   // Only load default sessions if there are no sessionTasks and no existing sessions
+  // and no user is logged in
   useEffect(() => {
-    if (sessionTasks.length === 0 && sessions.length === 0) {
+    if (sessionTasks.length === 0 && sessions.length === 0 && !currentUser) {
       console.log('DEBUGGING: SessionsList - No saved sessions, using defaults');
       // Default sessions if none exist
       const defaultSessions = [
@@ -91,7 +175,7 @@ const SessionsList = forwardRef((props, ref) => {
       
       setSessions(defaultSessions);
     }
-  }, [sessions.length, sessionTasks.length]);
+  }, [sessions.length, sessionTasks.length, currentUser]);
   
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -117,22 +201,57 @@ const SessionsList = forwardRef((props, ref) => {
     }
   };
   
-  const handleAddTask = async (task) => {
-    console.log('DEBUGGING: SessionsList - handleAddTask called with task:', task);
+  // Add a new session task
+  const handleAddTask = async (formData, sessionIndex) => {
+    console.log('DEBUGGING: SessionsList - handleAddTask called with data:', formData);
+    console.log('DEBUGGING: SessionsList - Current user:', currentUser?.id || 'not logged in');
     
-    // Add to session tasks list using context
-    const newTask = await addSessionTask({
-      ...task,
-      // Add additional data needed for database compatibility
-      projectId: null,  // Can be updated if project selection is available
-      priority: 0,      // Default priority
-    });
-    
-    console.log('DEBUGGING: SessionsList - New session task created:', newTask);
-    
-    // The session entry will be created automatically from sessionTasks via useEffect
-    
-    return newTask;
+    try {
+      setIsLoading(true); // Set loading state to prevent double-clicks
+      
+      // Validate the form data
+      if (!formData.title?.trim()) {
+        console.error('DEBUGGING: SessionsList - Cannot create task with empty title');
+        return;
+      }
+      
+      // Check if a task with the same title already exists
+      const taskExists = sessions.some(session => 
+        session.title.toLowerCase() === formData.title.trim().toLowerCase()
+      );
+      
+      if (taskExists) {
+        console.warn('DEBUGGING: SessionsList - Task with this title already exists, skipping creation');
+        return;
+      }
+      
+      // Create a valid task object with proper fields
+      const taskData = {
+        title: formData.title.trim(),
+        description: formData.description || '',
+        estimatedPomodoros: parseInt(formData.estimatedPomodoros, 10) || 1,
+        completed: false,
+        status: 'session' // Explicitly mark as session task
+      };
+      
+      // Add the task to the session tasks list
+      const createdTask = await addSessionTask(taskData);
+      
+      if (createdTask) {
+        console.log('DEBUGGING: SessionsList - Session task created successfully:', createdTask);
+        
+        // Format the new session from the task - but don't add it directly here
+        // The task will be added via the useEffect that watches sessionTasks
+        console.log('DEBUGGING: SessionsList - Task will be added to UI via sessionTasks useEffect');
+      } else {
+        console.error('DEBUGGING: SessionsList - Failed to create session task');
+      }
+    } catch (error) {
+      console.error('DEBUGGING: SessionsList - Error adding session task:', error);
+    } finally {
+      setIsLoading(false); // Clear loading state
+      setIsTaskDialogOpen(false); // Close the dialog
+    }
   };
   
   // Function to toggle task completion status
@@ -158,6 +277,10 @@ const SessionsList = forwardRef((props, ref) => {
       // Set as active task in context (this just updates active ID)
       setActiveTask(id);
       console.log('DEBUGGING: SessionsList - Set active task ID in context');
+      
+      // Move selected task to main tasks list
+      moveToMainTasks(id);
+      console.log('DEBUGGING: SessionsList - Moved task to main tasks list');
         
       // NOW notify parent with explicit selection to move to main tasks
       if (onTaskSelect) {
