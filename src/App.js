@@ -14,6 +14,7 @@ import { ThemeProvider } from './components/theme';
 import { useTasks } from './hooks/useTasks';
 import { TaskProvider } from './contexts/TaskContext';
 import TaskDebugView from './components/TaskDebugView';
+import TaskDialog from './components/TaskList/TaskDialog';
 
 // Make test function available in the global scope for console debugging
 window.testSupabaseConnection = testSupabaseConnection;
@@ -40,7 +41,7 @@ const LoadingFallback = () => (
 
 function MainApp() {
   const { currentUser, isAuthLoading } = useAuth();
-  const { setActiveTask, moveToMainTasks } = useTasks();
+  const { setActiveTask, moveToMainTasks, addTask } = useTasks();
   const [loading, setLoading] = useState(true);
   // Get settings from localStorage or use defaults
   const [settings, setSettings] = useState(defaultSettings);
@@ -51,9 +52,36 @@ function MainApp() {
   // eslint-disable-next-line no-unused-vars
   const [sessionsCompleted, setSessionsCompleted] = useState(0);
   const [selectedTask, setSelectedTask] = useState(null);
+  const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
   
   // Reference to the SessionsList component to access its methods
   const sessionsListRef = useRef(null);
+
+  // Add keyboard shortcut for new task (Shift+N)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Check for Shift+N (shiftKey for Shift)
+      if (e.shiftKey && e.key === 'N') {
+        e.preventDefault(); // Prevent default browser behavior
+        setIsTaskDialogOpen(true); // Open the task dialog
+      }
+    };
+
+    // Add event listener
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  // Handle adding a new task from the dialog
+  const handleAddTask = (task) => {
+    // Use the existing addTask function from the hook
+    addTask(task);
+    setIsTaskDialogOpen(false);
+  };
 
   // Initial loading effect
   useEffect(() => {
@@ -366,11 +394,11 @@ function MainApp() {
   }
   
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 dark:text-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white">
       {/* Header */}
       <Header />
       
-      <main className="container mx-auto px-4 py-6">
+      <main className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           {/* Left sidebar */}
           <div className="md:col-span-3 space-y-6">
@@ -561,6 +589,13 @@ function MainApp() {
           </div>
         </div>
       </main>
+      
+      {/* Add TaskDialog component */}
+      {React.createElement(TaskDialog, {
+        isOpen: isTaskDialogOpen,
+        onClose: () => setIsTaskDialogOpen(false),
+        onAddTask: handleAddTask
+      })}
     </div>
   );
 }
