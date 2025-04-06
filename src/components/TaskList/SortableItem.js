@@ -36,8 +36,22 @@ const SortableSessionItem = ({
     e.stopPropagation();
     // Prevent default browser behavior
     e.preventDefault();
+    
+    console.log('DEBUGGING: SortableItem - Checkbox clicked for session:', session.id);
+    
+    // Explicitly check if this is a default task for debugging
+    if (session.id.startsWith('default-')) {
+      console.log('DEBUGGING: SortableItem - This is a default task');
+    }
+    
     // Toggle completion status
-    onToggleComplete(session.id);
+    if (onToggleComplete) {
+      console.log('DEBUGGING: SortableItem - Calling onToggleComplete with ID:', session.id);
+      onToggleComplete(session.id);
+    } else {
+      console.error('DEBUGGING: SortableItem - onToggleComplete is not defined for session:', session.id);
+    }
+    
     // Return false to further ensure the event doesn't propagate
     return false;
   };
@@ -93,10 +107,20 @@ const SortableSessionItem = ({
       <div className="flex items-center">
         {/* Checkbox with improved click handling */}
         <div 
-          className="cursor-pointer text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 mr-3 z-10 touch-target touch-feedback"
+          className="cursor-pointer text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 mr-3 z-10 touch-target touch-feedback p-2 -m-2"
           onClick={handleCheckboxClick}
+          onTouchStart={(e) => { e.stopPropagation(); }}
+          onTouchEnd={(e) => { e.stopPropagation(); handleCheckboxClick(e); }}
           onMouseDown={(e) => e.stopPropagation()}
           onMouseUp={(e) => e.stopPropagation()}
+          role="checkbox"
+          aria-checked={session.completed}
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              handleCheckboxClick(e);
+            }
+          }}
         >
           {session.completed ? (
             <CheckSquare className="h-5 w-5 text-blue-500" />

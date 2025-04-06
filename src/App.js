@@ -603,15 +603,6 @@ function App() {
   
   return (
     <ThemeProvider>
-      {/* Database status indicator */}
-      {dbChecking ? (
-        <div className="db-status checking">Checking database...</div>
-      ) : dbConnected ? (
-        <div className="db-status connected">DB Connected</div>
-      ) : (
-        <div className="db-status error">DB Connection Error</div>
-      )}
-      
       <Router basename="/">
         <AuthProvider>
           <TaskProvider>

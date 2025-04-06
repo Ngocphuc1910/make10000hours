@@ -82,57 +82,55 @@ const SessionsList = forwardRef((props, ref) => {
     if (sessionTasks.length > 0) {
       console.log('DEBUGGING: SessionsList - Sample tasks:', sessionTasks.slice(0, 3));
       
-      // Map session tasks to display format
-      const mappedSessions = sessionTasks.map(task => {
+      // Map session tasks to display format - deduplicate by ID first
+      const uniqueTasks = {};
+      sessionTasks.forEach(task => {
+        if (task.id) {
+          // Keep only the most recent task with each ID
+          uniqueTasks[task.id] = task;
+        }
+      });
+      
+      // Convert back to array
+      const uniqueTasksArray = Object.values(uniqueTasks);
+      console.log(`DEBUGGING: SessionsList - Removed ${sessionTasks.length - uniqueTasksArray.length} duplicate task IDs`);
+      
+      const mappedSessions = uniqueTasksArray.map(task => {
         console.log(`DEBUGGING: SessionsList - Mapping session task: ${task.id}, "${task.title}"`);
         return {
           id: task.id,
           title: task.title || 'Untitled Task',
           estimatedPomodoros: task.estimatedPomodoros || 1,
-          completed: task.completed || false
+          completed: task.completed || false,
+          createdAt: task.createdAt || new Date().toISOString() // Ensure we have createdAt for sorting
         };
       });
       
-      // If previous sessions exist, keep them and add any new ones
+      // Sort by creation date (oldest first) so new tasks appear at the bottom
+      mappedSessions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      
+      // Replace all non-default sessions with the mapped ones
       setSessions(prevSessions => {
-        // Get current session IDs for comparison
-        const currentIds = prevSessions.map(s => s.id);
-        // Get new session IDs
-        const newIds = mappedSessions.map(s => s.id);
+        // Keep only default tasks
+        const defaultTasks = prevSessions.filter(s => s.id.startsWith('default-'));
         
-        // Log if any task IDs will be added or removed
-        const added = newIds.filter(id => !currentIds.includes(id));
-        const removed = currentIds.filter(id => !newIds.includes(id));
-        
-        if (added.length > 0) {
-          console.log(`DEBUGGING: SessionsList - Adding ${added.length} new tasks to sessions`);
-        }
-        
-        if (removed.length > 0) {
-          console.log(`DEBUGGING: SessionsList - Removing ${removed.length} tasks from sessions`);
-          console.log('DEBUGGING: SessionsList - Tasks being removed:', removed);
-        }
-          
-        // Never clear sessions, only add new tasks or update existing ones
-        const updatedSessions = [...prevSessions];
-        
-        // Update existing tasks
-        updatedSessions.forEach((session, index) => {
-          const matchingTask = mappedSessions.find(task => task.id === session.id);
-          if (matchingTask) {
-            updatedSessions[index] = { ...session, ...matchingTask };
+        // Create a set of IDs to deduplicate
+        const existingIds = new Set(defaultTasks.map(task => task.id));
+        const dedupedMappedSessions = mappedSessions.filter(task => {
+          // Only add tasks with IDs that don't already exist in default tasks
+          const shouldAdd = !existingIds.has(task.id);
+          if (shouldAdd) {
+            existingIds.add(task.id); // Add to set for future checks
           }
+          return shouldAdd;
         });
         
-        // Add new tasks
-        mappedSessions.forEach(task => {
-          if (!currentIds.includes(task.id)) {
-            updatedSessions.push(task);
-          }
-        });
-        
-        return updatedSessions;
+        // Add all tasks from sessionTasks (will have unique IDs)
+        // Default tasks stay at the top, followed by regular tasks sorted by creation time
+        return [...defaultTasks, ...dedupedMappedSessions];
       });
+      
+      console.log('DEBUGGING: SessionsList - Updated sessions state with mappedSessions');
     } else if (isLoading) {
       // Don't clear sessions while loading
       console.log('DEBUGGING: SessionsList - No session tasks, but still loading');
@@ -215,9 +213,12 @@ const SessionsList = forwardRef((props, ref) => {
         return;
       }
       
-      // Check if a task with the same title already exists
+      // Enhanced duplicate check: check sessions and sessionTasks 
+      const taskTitle = formData.title.trim().toLowerCase();
       const taskExists = sessions.some(session => 
-        session.title.toLowerCase() === formData.title.trim().toLowerCase()
+        session.title.toLowerCase() === taskTitle
+      ) || sessionTasks.some(task => 
+        task.title.toLowerCase() === taskTitle
       );
       
       if (taskExists) {
@@ -235,14 +236,13 @@ const SessionsList = forwardRef((props, ref) => {
       };
       
       // Add the task to the session tasks list
+      // We don't need to manually update the sessions state here
+      // The useEffect watching sessionTasks will handle it
       const createdTask = await addSessionTask(taskData);
       
       if (createdTask) {
         console.log('DEBUGGING: SessionsList - Session task created successfully:', createdTask);
-        
-        // Format the new session from the task - but don't add it directly here
-        // The task will be added via the useEffect that watches sessionTasks
-        console.log('DEBUGGING: SessionsList - Task will be added to UI via sessionTasks useEffect');
+        // Don't add to sessions state directly - it will be handled by the useEffect
       } else {
         console.error('DEBUGGING: SessionsList - Failed to create session task');
       }
@@ -258,8 +258,19 @@ const SessionsList = forwardRef((props, ref) => {
   const handleToggleComplete = (id) => {
     console.log('DEBUGGING: SessionsList - handleToggleComplete called for ID:', id);
     
-    // Use the updateTask function from the context that was already destructured at the top level
-    updateTask(id, { completed: !sessions.find(s => s.id === id)?.completed });
+    // Check if this is a default task
+    if (id.startsWith('default-')) {
+      console.log('DEBUGGING: SessionsList - Handling default task completion toggle');
+      // For default tasks, update the sessions state directly
+      setSessions(prevSessions =>
+        prevSessions.map(session =>
+          session.id === id ? { ...session, completed: !session.completed } : session
+        )
+      );
+    } else {
+      // For normal tasks, use the updateTask function from the context
+      updateTask(id, { completed: !sessions.find(s => s.id === id)?.completed });
+    }
   };
   
   // Function to select a task
@@ -274,19 +285,30 @@ const SessionsList = forwardRef((props, ref) => {
     console.log('DEBUGGING: SessionsList - Found selected session:', selectedTask);
     
     if (selectedTask) {
-      // Set as active task in context (this just updates active ID)
-      setActiveTask(id);
-      console.log('DEBUGGING: SessionsList - Set active task ID in context');
-      
-      // Move selected task to main tasks list
-      moveToMainTasks(id);
-      console.log('DEBUGGING: SessionsList - Moved task to main tasks list');
+      // Check if this is a default task
+      if (id.startsWith('default-')) {
+        console.log('DEBUGGING: SessionsList - Selected a default task, handling locally');
+        // For default tasks, just update the local state but don't try to move to main tasks
+        if (onTaskSelect) {
+          // Notify parent but don't move to main tasks (false parameter)
+          onTaskSelect(selectedTask, false);
+        }
+      } else {
+        // Normal task - set as active and move to main tasks
+        // Set as active task in context (this just updates active ID)
+        setActiveTask(id);
+        console.log('DEBUGGING: SessionsList - Set active task ID in context');
         
-      // NOW notify parent with explicit selection to move to main tasks
-      if (onTaskSelect) {
-        console.log('DEBUGGING: SessionsList - EXPLICITLY notifying parent to move task to main list');
-        // This is an explicit user selection - SHOULD move to main tasks list
-        onTaskSelect(selectedTask, true);
+        // Move selected task to main tasks list
+        moveToMainTasks(id);
+        console.log('DEBUGGING: SessionsList - Moved task to main tasks list');
+        
+        // NOW notify parent with explicit selection to move to main tasks
+        if (onTaskSelect) {
+          console.log('DEBUGGING: SessionsList - EXPLICITLY notifying parent to move task to main list');
+          // This is an explicit user selection - SHOULD move to main tasks list
+          onTaskSelect(selectedTask, true);
+        }
       }
     } else {
       console.log('DEBUGGING: SessionsList - No session found with ID:', id);
