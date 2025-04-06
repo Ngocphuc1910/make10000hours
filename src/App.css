@@ -1,0 +1,29 @@
+/* Database connection status indicator */
+.db-status {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 9999;
+  color: white;
+  opacity: 0.8;
+  transition: opacity 0.3s;
+}
+
+.db-status:hover {
+  opacity: 1;
+}
+
+.db-status.checking {
+  background-color: #f39c12;
+}
+
+.db-status.connected {
+  background-color: #27ae60;
+}
+
+.db-status.error {
+  background-color: #e74c3c;
+} 

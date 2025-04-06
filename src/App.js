@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './styles/globals.css';
 import './styles/touch.css'; // Import touch-specific optimizations
@@ -13,6 +13,7 @@ import testSupabaseConnection from './lib/testSupabase';
 import { ThemeProvider } from './components/theme';
 import { useTasks } from './hooks/useTasks';
 import { TaskProvider } from './contexts/TaskContext';
+import TaskDebugView from './components/TaskDebugView';
 
 // Make test function available in the global scope for console debugging
 window.testSupabaseConnection = testSupabaseConnection;
@@ -568,8 +569,49 @@ function App() {
   // Fix the incorrect basename - just use "/" for root or blank for custom domain
   console.log("App component mounted");
   
+  const [dbConnected, setDbConnected] = useState(false);
+  const [dbChecking, setDbChecking] = useState(true);
+
+  // Check database connection on load
+  useEffect(() => {
+    const checkDbConnection = async () => {
+      try {
+        setDbChecking(true);
+        // Import Supabase directly
+        const supabase = (await import('./lib/supabase')).default;
+        
+        // Check connection by selecting from tasks
+        const { data, error } = await supabase.from('tasks').select('*').limit(1);
+        
+        if (error) {
+          console.error('Database connection error:', error);
+          setDbConnected(false);
+        } else {
+          console.log('Database connected successfully');
+          setDbConnected(true);
+        }
+      } catch (e) {
+        console.error('Error checking database connection:', e);
+        setDbConnected(false);
+      } finally {
+        setDbChecking(false);
+      }
+    };
+
+    checkDbConnection();
+  }, []);
+  
   return (
     <ThemeProvider>
+      {/* Database status indicator */}
+      {dbChecking ? (
+        <div className="db-status checking">Checking database...</div>
+      ) : dbConnected ? (
+        <div className="db-status connected">DB Connected</div>
+      ) : (
+        <div className="db-status error">DB Connection Error</div>
+      )}
+      
       <Router basename="/">
         <AuthProvider>
           <TaskProvider>
@@ -578,6 +620,7 @@ function App() {
                 <Route path="/" element={<MainApp />} />
                 <Route path="/reset-password" element={<ResetPasswordForm />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="/debug/tasks" element={<TaskDebugView />} />
               </Routes>
             </Suspense>
           </TaskProvider>
