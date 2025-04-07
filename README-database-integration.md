@@ -95,7 +95,6 @@ The application handles database errors with the following strategies:
 - Operations in the retry queue are retried with exponential backoff
 - The UI displays the sync status and number of pending operations
 
-## Usage Example
 
 ```javascript
 import { useTasks } from '../hooks/useTasks';
