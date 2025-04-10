@@ -12,7 +12,7 @@ There was a mismatch between the database schema and the code:
 This mismatch caused issues with task creation and retrieval.
 
 ## Files Created
-## Files Created
+## Files Create
 
 1. **Migration SQL** - `supabase/migrations/20240406_fix_tasks_schema.sql`
    - Renames existing columns to match code expectations
