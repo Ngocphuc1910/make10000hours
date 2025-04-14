@@ -16,6 +16,8 @@ import { TaskProvider } from './contexts/TaskContext';
 import TaskDebugView from './components/TaskDebugView';
 import TaskDialog from './components/TaskList/TaskDialog';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
+import TaskItemTest from './components/TaskList/TaskItemTest';
+import TaskItemDebug from './components/TaskList/TaskItemDebug';
 
 // Make test function available in the global scope for console debugging
 window.testSupabaseConnection = testSupabaseConnection;
@@ -635,6 +637,8 @@ function App() {
                 <Route path="/reset-password" element={<ResetPasswordForm />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/debug/tasks" element={<TaskDebugView />} />
+                <Route path="/test-task-layout" element={<TaskItemTest />} />
+                <Route path="/debug-task-layout" element={<TaskItemDebug />} />
               </Routes>
             </Suspense>
           </TaskProvider>
