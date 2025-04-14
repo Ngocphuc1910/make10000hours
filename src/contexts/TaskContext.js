@@ -86,6 +86,8 @@ export const TaskProvider = ({ children }) => {
               synced: true
             };
             
+            console.log(`DEBUGGING: TaskContext - Normalized task ${task.id}: title="${task.name || task.text || 'Untitled Task'}", description="${task.description || 'EMPTY'}"`);
+            
             // Separate into main tasks and session tasks based on status
             if (task.status === 'session' || 
                 (task.notes && task.notes.includes('session'))) {
@@ -590,6 +592,8 @@ export const TaskProvider = ({ children }) => {
   
   // Update a task
   const updateTask = async (taskId, taskData) => {
+    console.log(`DEBUGGING: TaskContext - updateTask called for ID ${taskId} with data:`, taskData);
+    
     // Update locally first for UI responsiveness
     // Update in main tasks if it exists there
     setTasks(prevTasks => 

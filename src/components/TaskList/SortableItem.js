@@ -98,7 +98,7 @@ const SortableSessionItem = ({
       ref={setNodeRef}
       style={style}
       onClick={() => onSelectTask(session.id)}
-      className={`flex justify-between items-center py-3 px-3 border-b border-gray-200 dark:border-gray-700 last:border-0 cursor-pointer
+      className={`flex justify-between items-center py-4 px-3 border-b border-gray-200 dark:border-gray-700 last:border-0 cursor-pointer
         ${isDragging ? 'bg-gray-50 dark:bg-gray-800 rounded-lg drop-animation' : ''} 
         ${isSelected ? 'bg-gray-50 dark:bg-gray-800' : ''}
         ${isTouched ? 'bg-gray-100 dark:bg-gray-700' : ''}
@@ -107,7 +107,7 @@ const SortableSessionItem = ({
       <div className="flex items-center">
         {/* Checkbox with improved click handling */}
         <div 
-          className="cursor-pointer text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 mr-3 z-10 touch-target touch-feedback p-2 -m-2"
+          className="cursor-pointer text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 mr-3 z-10 touch-target touch-feedback p-2 -m-2 flex items-center"
           onClick={handleCheckboxClick}
           onTouchStart={(e) => { e.stopPropagation(); }}
           onTouchEnd={(e) => { e.stopPropagation(); handleCheckboxClick(e); }}
@@ -129,16 +129,27 @@ const SortableSessionItem = ({
           )}
         </div>
         
-        {/* Left border indicator with elegant styling */}
-        <div className={`w-1 h-12 rounded mr-3 ${isSelected ? 'bg-gray-900 dark:bg-white' : 'bg-gray-200 dark:bg-gray-600'}`}></div>
+        {/* Left border indicator with fixed height and width */}
+        <div 
+          className={`rounded mr-3 flex-shrink-0 ${isSelected ? 'bg-gray-900 dark:bg-white' : 'bg-gray-200 dark:bg-gray-600'}`} 
+          style={{ 
+            width: '4px', 
+            height: '56px',
+            minWidth: '4px', 
+            boxSizing: 'border-box',
+            boxShadow: '0 0 0 1px rgba(0,0,0,0.05)'
+          }}
+        ></div>
         
-        <div>
+        <div className="flex flex-col">
           <h3 className={`font-medium ${session.completed ? 'line-through text-gray-400 dark:text-gray-500' : ''}`}>
             {session.title}
           </h3>
-          <p className="text-sm text-gray-500">
-            {session.time || `Added at ${new Date(session.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-          </p>
+          {session.description && session.description.trim() !== '' && (
+            <p className="text-sm text-gray-500 mt-1 leading-relaxed">
+              {session.description}
+            </p>
+          )}
         </div>
       </div>
       
