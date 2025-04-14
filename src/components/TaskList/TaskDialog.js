@@ -1,20 +1,45 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Clock, Plus, Minus } from 'lucide-react';
+import { Clock, Plus, Minus, Loader2, FolderPlus } from 'lucide-react';
+import { getProjects } from '../../lib/database';
+import { useAuth } from '../../hooks/useAuth';
+import ProjectDialog from '../Projects/ProjectDialog';
 
 const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [project, setProject] = useState('work');
+  const [projectId, setProjectId] = useState('');
   const [priority, setPriority] = useState('medium');
   const [estimatedPomodoros, setEstimatedPomodoros] = useState(1);
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
   const titleInputRef = useRef(null);
+  const { currentUser } = useAuth();
   
   // Focus the title input when the dialog opens
   useEffect(() => {
     if (isOpen && titleInputRef.current) {
       titleInputRef.current.focus();
     }
-  }, [isOpen]);
+    
+    // Load projects when dialog opens
+    if (isOpen && currentUser) {
+      loadProjects();
+    }
+  }, [isOpen, currentUser]);
+  
+  const loadProjects = async () => {
+    try {
+      setLoadingProjects(true);
+      const projectData = await getProjects(currentUser.id);
+      setProjects(projectData || []);
+    } catch (error) {
+      console.error('Error loading projects:', error);
+      setProjects([]);
+    } finally {
+      setLoadingProjects(false);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -31,6 +56,8 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
     const task = {
       title: title.trim(),
       description: description.trim(),
+      projectId: projectId || null,
+      priority: priority,
       estimatedPomodoros: parseInt(estimatedPomodoros, 10) || 1, // Ensure we have a valid number
       completed: false
     };
@@ -50,9 +77,16 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
   const resetForm = () => {
     setTitle('');
     setDescription('');
-    setProject('work');
+    setProjectId('');
     setPriority('medium');
     setEstimatedPomodoros(1);
+  };
+  
+  const handleProjectCreated = (newProject) => {
+    // Add the new project to the projects list
+    setProjects([...projects, newProject]);
+    // Automatically select the newly created project
+    setProjectId(newProject.id);
   };
   
   if (!isOpen) return null;
@@ -106,17 +140,40 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
               <label htmlFor="project" className="block text-sm font-medium mb-1">
                 Project
               </label>
-              <select
-                id="project"
-                value={project}
-                onChange={(e) => setProject(e.target.value)}
-                className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900"
-              >
-                <option value="none">No Project</option>
-                <option value="work">Work</option>
-                <option value="study">Study</option>
-                <option value="personal">Personal</option>
-              </select>
+              <div className="flex gap-2">
+                <select
+                  id="project"
+                  value={projectId}
+                  onChange={(e) => setProjectId(e.target.value)}
+                  className="flex-1 rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900"
+                  disabled={loadingProjects}
+                >
+                  <option value="">No Project</option>
+                  {loadingProjects ? (
+                    <option disabled>Loading projects...</option>
+                  ) : (
+                    projects.map(project => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setIsProjectDialogOpen(true)}
+                  className="p-2 rounded-md border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  title="Create New Project"
+                >
+                  <FolderPlus className="h-5 w-5" />
+                </button>
+              </div>
+              {loadingProjects && (
+                <div className="flex items-center mt-1 text-xs text-gray-500">
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  <span>Loading projects...</span>
+                </div>
+              )}
             </div>
             
             <div>
@@ -185,6 +242,13 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
           </div>
         </form>
       </div>
+      
+      {/* Project creation dialog */}
+      <ProjectDialog 
+        isOpen={isProjectDialogOpen}
+        onClose={() => setIsProjectDialogOpen(false)}
+        onProjectCreated={handleProjectCreated}
+      />
     </div>
   );
 };
