@@ -16,7 +16,8 @@ import {
   Trash2, 
   Plus, 
   CheckCircle, 
-  X
+  X,
+  FileText
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import TaskDialog from './TaskDialog';
@@ -35,20 +36,26 @@ const TaskList = () => {
   } = useTasks();
   
   const [newTaskText, setNewTaskText] = useState('');
+  const [newTaskDescription, setNewTaskDescription] = useState('');
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editText, setEditText] = useState('');
+  const [editDescription, setEditDescription] = useState('');
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
   
   const handleStartEditing = (task) => {
     setEditingTaskId(task.id);
     setEditText(task.title || task.text || '');
+    setEditDescription(task.description || '');
   };
   
   const handleUpdateTask = (e) => {
     e.preventDefault();
     if (editText.trim() === '') return;
     
-    updateTask(editingTaskId, { title: editText.trim() });
+    updateTask(editingTaskId, { 
+      title: editText.trim(),
+      description: editDescription.trim()
+    });
     setEditingTaskId(null);
   };
   
@@ -85,6 +92,10 @@ const TaskList = () => {
   // Debug tasks changes
   useEffect(() => {
     console.log('TaskList - tasks state changed:', tasks);
+    // Debug descriptions more clearly
+    tasks.forEach(task => {
+      console.log(`Task ID ${task.id} "${task.title || task.text}" description: "${task.description || 'EMPTY'}", full task:`, task);
+    });
   }, [tasks]);
   
   // Debug session tasks changes
@@ -114,7 +125,7 @@ const TaskList = () => {
       
       <CardContent className="pb-2">
         <form 
-          className="flex gap-2 mb-4" 
+          className="flex flex-col gap-2 mb-4" 
           onSubmit={(e) => {
             e.preventDefault();
             if (!newTaskText.trim()) return;
@@ -125,8 +136,8 @@ const TaskList = () => {
             const task = {
               id: Date.now().toString(), // Generate a unique ID
               title: newTaskText.trim(),
+              description: newTaskDescription.trim(),
               estimatedPomodoros: 1,
-              description: '',
               createdAt: new Date().toISOString()
             };
             
@@ -134,21 +145,31 @@ const TaskList = () => {
             const newTask = handleAddTask(task);
             console.log('DEBUGGING: TaskList - Quick add task result:', newTask);
             
-            // Clear the input
+            // Clear the inputs
             setNewTaskText('');
+            setNewTaskDescription('');
           }}
         >
-          <input
-            type="text"
-            placeholder="Add a new task..."
-            value={newTaskText}
-            onChange={(e) => setNewTaskText(e.target.value)}
-            className="flex-1 bg-white/10 border-none rounded-md px-3 py-2 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/30"
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Add a new task..."
+              value={newTaskText}
+              onChange={(e) => setNewTaskText(e.target.value)}
+              className="flex-1 bg-white/10 border-none rounded-md px-3 py-2 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/30"
+            />
+            <Button type="submit" variant="timer" size="sm" className="px-3">
+              <Plus className="w-5 h-5" />
+              <span className="sr-only">Add</span>
+            </Button>
+          </div>
+          <textarea
+            placeholder="Add a description (optional)..."
+            value={newTaskDescription}
+            onChange={(e) => setNewTaskDescription(e.target.value)}
+            className="flex-1 bg-white/10 border-none rounded-md px-3 py-2 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/30 text-sm"
+            rows={2}
           />
-          <Button type="submit" variant="timer" size="sm" className="px-3">
-            <Plus className="w-5 h-5" />
-            <span className="sr-only">Add</span>
-          </Button>
         </form>
         
         <div className="mt-2 space-y-1">
@@ -170,7 +191,7 @@ const TaskList = () => {
                   {editingTaskId === task.id ? (
                     <form 
                       onSubmit={handleUpdateTask}
-                      className="flex items-center gap-2 p-2"
+                      className="flex flex-col gap-2 p-2"
                     >
                       <input
                         type="text"
@@ -179,75 +200,97 @@ const TaskList = () => {
                         className="flex-1 bg-white/10 border-none rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/30"
                         autoFocus
                       />
-                      <Button 
-                        type="submit" 
-                        variant="ghost" 
-                        size="sm" 
-                        className="p-1 h-8 w-8"
-                      >
-                        <CheckCircle className="w-5 h-5" />
-                        <span className="sr-only">Save</span>
-                      </Button>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => setEditingTaskId(null)}
-                        className="p-1 h-8 w-8"
-                      >
-                        <X className="w-5 h-5" />
-                        <span className="sr-only">Cancel</span>
-                      </Button>
+                      <textarea
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        placeholder="Add a description..."
+                        className="flex-1 bg-white/10 border-none rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/30 text-sm"
+                        rows={2}
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <Button 
+                          type="submit" 
+                          variant="ghost" 
+                          size="sm" 
+                          className="p-1 h-8 w-8"
+                        >
+                          <CheckCircle className="w-5 h-5" />
+                          <span className="sr-only">Save</span>
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => setEditingTaskId(null)}
+                          className="p-1 h-8 w-8"
+                        >
+                          <X className="w-5 h-5" />
+                          <span className="sr-only">Cancel</span>
+                        </Button>
+                      </div>
                     </form>
                   ) : (
-                    <div className="flex items-center gap-2 p-2">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleComplete(task)}
-                        className="flex-shrink-0 p-1 rounded-full hover:bg-white/10"
-                      >
-                        {task.completed ? (
-                          <CheckCircle2 className="w-5 h-5" />
-                        ) : (
-                          <Circle className="w-5 h-5" />
-                        )}
-                        <span className="sr-only">
-                          {task.completed ? 'Mark as incomplete' : 'Mark as complete'}
-                        </span>
-                      </button>
-                      
-                      <span 
-                        className={cn(
-                          "flex-1 cursor-pointer",
-                          task.completed ? 'line-through' : '',
-                          !task.completed && 'hover:underline'
-                        )}
-                        onClick={() => !task.completed && setActiveTask(task.id)}
-                      >
-                        {task.title || task.text}
-                      </span>
-                      
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {!task.completed && (
+                    <div className="flex flex-col gap-1 p-2 w-full">
+                      <div className="flex items-center gap-2 w-full">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleComplete(task)}
+                          className="flex-shrink-0 p-1 rounded-full hover:bg-white/10"
+                        >
+                          {task.completed ? (
+                            <CheckCircle2 className="w-5 h-5" />
+                          ) : (
+                            <Circle className="w-5 h-5" />
+                          )}
+                          <span className="sr-only">
+                            {task.completed ? 'Mark as incomplete' : 'Mark as complete'}
+                          </span>
+                        </button>
+                        
+                        <div className="flex-1 flex flex-col">
+                          <span 
+                            className={cn(
+                              "cursor-pointer",
+                              task.completed ? 'line-through' : '',
+                              !task.completed && 'hover:underline'
+                            )}
+                            onClick={() => !task.completed && setActiveTask(task.id)}
+                          >
+                            {task.title || task.text}
+                            {task.description && task.description.trim() !== '' && (
+                              <FileText className="inline-block ml-2 w-3 h-3 text-white/50" />
+                            )}
+                          </span>
+                          
+                          {task.description && task.description.trim() !== '' && (
+                            <div className="text-sm text-white/70 mt-1 break-words bg-white/5 p-1 rounded">
+                              {task.description}
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {!task.completed && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleStartEditing(task)}
+                              className="p-1 h-8 w-8"
+                            >
+                              <Edit className="w-4 h-4" />
+                              <span className="sr-only">Edit</span>
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleStartEditing(task)}
-                            className="p-1 h-8 w-8"
+                            onClick={() => deleteTask(task.id)}
+                            className="p-1 h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
                           >
-                            <Edit className="w-4 h-4" />
-                            <span className="sr-only">Edit</span>
+                            <Trash2 className="w-4 h-4" />
+                            <span className="sr-only">Delete</span>
                           </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteTask(task.id)}
-                          className="p-1 h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          <span className="sr-only">Delete</span>
-                        </Button>
+                        </div>
                       </div>
                     </div>
                   )}

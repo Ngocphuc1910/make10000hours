@@ -25,21 +25,21 @@ const getDefaultSessions = () => {
     {
       id: "default-1",
       title: "UI Design Research",
-      time: "Completed at 10:30 AM",
+      description: "",
       duration: "25min",
       completed: false
     },
     {
       id: "default-2",
       title: "Project Planning",
-      time: "Completed at 11:00 AM",
+      description: "",
       duration: "25min",
       completed: false
     },
     {
       id: "default-3",
       title: "Client Meeting",
-      time: "Completed at 11:45 AM",
+      description: "",
       duration: "25min",
       completed: false
     },
@@ -100,6 +100,7 @@ const SessionsList = forwardRef((props, ref) => {
         return {
           id: task.id,
           title: task.title || 'Untitled Task',
+          description: task.description || '',
           estimatedPomodoros: task.estimatedPomodoros || 1,
           completed: task.completed || false,
           createdAt: task.createdAt || new Date().toISOString() // Ensure we have createdAt for sorting
@@ -151,21 +152,21 @@ const SessionsList = forwardRef((props, ref) => {
         {
           id: "default-1",
           title: "UI Design Research",
-          time: "Completed at 10:30 AM",
+          description: "",
           duration: "25min",
           completed: false
         },
         {
           id: "default-2",
           title: "Project Planning",
-          time: "Completed at 11:00 AM",
+          description: "",
           duration: "25min",
           completed: false
         },
         {
           id: "default-3",
           title: "Client Meeting",
-          time: "Completed at 11:45 AM",
+          description: "",
           duration: "25min",
           completed: false
         },

@@ -35,7 +35,7 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
       completed: false
     };
     
-    console.log('DEBUGGING: TaskDialog - Submitting task with estimatedPomodoros:', task.estimatedPomodoros);
+    console.log('DEBUGGING: TaskDialog - Submitting task:', task);
     
     // Call the onAddTask function provided by parent
     onAddTask(task);
@@ -95,7 +95,11 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Add notes or details about this task"
                 className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 min-h-[80px] bg-white dark:bg-gray-900"
+                maxLength={500}
               />
+              <div className="text-xs text-right text-gray-500">
+                {description.length}/500
+              </div>
             </div>
             
             <div>

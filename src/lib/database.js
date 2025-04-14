@@ -474,6 +474,8 @@ export const getTasks = async (userId, projectId = null) => {
       description = task.notes.replace('[SESSION_TASK] ', '');
     }
     
+    console.log(`Database: Task ${task.id} notes -> description mapping: "${task.notes || 'EMPTY'}" -> "${description || 'EMPTY'}"`);
+    
     return {
       id: task.id,
       user_id: task.user_id,
@@ -669,10 +671,13 @@ export const updateTask = async (taskId, updates) => {
     const dbUpdates = {};
     
     if (updates.name !== undefined) dbUpdates.text = updates.name;
+    if (updates.title !== undefined) dbUpdates.text = updates.title; // Also handle title field
     if (updates.description !== undefined) dbUpdates.notes = updates.description;
-    if (updates.status !== undefined) {
-      dbUpdates.completed = updates.status === 'completed';
-      if (updates.status === 'completed') {
+    
+    // Handle completed/status conversion
+    if (updates.completed !== undefined) {
+      dbUpdates.completed = updates.completed;
+      if (updates.completed) {
         dbUpdates.completed_at = new Date().toISOString();
       } else {
         dbUpdates.completed_at = null;
@@ -723,13 +728,21 @@ export const updateTask = async (taskId, updates) => {
     
     // Convert the response back to the expected format
     const task = data[0];
+    
+    // Determine the description, handling session task markers
+    let description = task.notes || '';
+    if (task.notes && task.notes.startsWith('[SESSION_TASK]')) {
+      description = task.notes.replace('[SESSION_TASK] ', '');
+    }
+    
     return {
       id: task.id,
       user_id: task.user_id,
       project_id: task.project_id,
       name: task.text,
-      description: task.notes,
-      status: task.completed ? 'completed' : 'todo',
+      description: description, // Include properly processed description
+      status: task.completed ? 'completed' : 
+              (task.notes && task.notes.startsWith('[SESSION_TASK]')) ? 'session' : 'todo',
       estimated_pomodoros: task.target_pomodoros || 0,
       completed_pomodoros: task.pomodoro_count || 0,
       due_date: task.due_date,
