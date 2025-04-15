@@ -46,13 +46,6 @@ const getDefaultSessions = () => {
   ];
 };
 
-// Custom CSS to ensure consistent divider styling
-const sessionListStyles = {
-  wrapper: {
-    // No additional styling needed for wrapper
-  }
-};
-
 const SessionsList = forwardRef((props, ref) => {
   const [sessions, setSessions] = useState([]);
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
@@ -323,30 +316,6 @@ const SessionsList = forwardRef((props, ref) => {
     }
   };
   
-  // Add the missing handleMoveSession function
-  const handleMoveSession = (index, direction) => {
-    console.log(`DEBUGGING: SessionsList - Moving session at index ${index} ${direction}`);
-    
-    // Don't proceed if there are no sessions or only one session
-    if (!sessions || sessions.length <= 1) {
-      return;
-    }
-    
-    setSessions(prevSessions => {
-      const newSessions = [...prevSessions];
-      
-      if (direction === 'up' && index > 0) {
-        // Swap with the previous item
-        [newSessions[index], newSessions[index - 1]] = [newSessions[index - 1], newSessions[index]];
-      } else if (direction === 'down' && index < newSessions.length - 1) {
-        // Swap with the next item
-        [newSessions[index], newSessions[index + 1]] = [newSessions[index + 1], newSessions[index]];
-      }
-      
-      return newSessions;
-    });
-  };
-  
   return (
     <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
       <div className="flex justify-between items-center mb-4">
@@ -366,18 +335,15 @@ const SessionsList = forwardRef((props, ref) => {
         modifiers={[restrictToVerticalAxis]}
       >
         <SortableContext items={sessions.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-          <div className="space-y-0" style={sessionListStyles.wrapper}>
-            {sessions.map((session, index) => (
-              <div key={session.id} className="session-item">
-                <SortableSessionItem 
-                  session={session} 
-                  onToggleComplete={handleToggleComplete}
-                  isSelected={session.id === activeSessionId}
-                  onSelectTask={handleSelectSession}
-                  onMoveUp={() => handleMoveSession(index, 'up')}
-                  onMoveDown={() => handleMoveSession(index, 'down')}
-                />
-              </div>
+          <div className="space-y-0 divide-y divide-gray-100 dark:divide-gray-700">
+            {sessions.map((session) => (
+              <SortableSessionItem 
+                key={session.id} 
+                session={session} 
+                onToggleComplete={handleToggleComplete}
+                isSelected={session.id === activeSessionId}
+                onSelectTask={handleSelectSession}
+              />
             ))}
           </div>
         </SortableContext>
