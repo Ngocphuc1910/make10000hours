@@ -222,4 +222,41 @@ body {
 /* Remove transition from hover effects for a cleaner, more minimalist feel */
 button, a {
   transition: none;
-} 
+}
+
+/* Customized task dividers */
+.task-divider,
+.task-item + .task-item,
+.session-item + .session-item {
+  position: relative;
+}
+
+.task-divider::after,
+.task-item + .task-item::before,
+.session-item + .session-item::before {
+  content: "";
+  position: absolute;
+  left: 70px;  /* Start from checkbox area */
+  right: 70px; /* End at drag icon area */
+  height: 1px;
+  top: 0;
+  background-color: rgba(255, 255, 255, 0.05); /* Much more subtle divider for dark mode */
+}
+
+/* Light mode styling */
+@media (prefers-color-scheme: light) {
+  .task-divider::after,
+  .task-item + .task-item::before,
+  .session-item + .session-item::before {
+    background-color: rgba(0, 0, 0, 0.03); /* Very subtle divider for light mode */
+  }
+}
+
+/* Dark mode with class-based toggle */
+.dark .task-divider::after,
+.dark .task-item + .task-item::before,
+.dark .session-item + .session-item::before {
+  background-color: rgba(255, 255, 255, 0.05); /* Much more subtle divider for dark mode */
+}
+
+/* Add additional styling */ 
