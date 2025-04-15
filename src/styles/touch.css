@@ -15,8 +15,9 @@
 
   /* Improved touch feedback */
   .touch-feedback:active {
-    transform: scale(0.97);
-    transition: transform 0.1s ease;
+    transform: scale(0.95);
+    transition: transform 0.08s ease;
+    background-color: rgba(0, 0, 0, 0.05);
   }
 
   /* Enhanced active states */
@@ -31,7 +32,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.05);
+    background: rgba(0, 0, 0, 0.1);
     border-radius: inherit;
   }
 
@@ -39,6 +40,20 @@
   .magnetic-snap {
     transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   }
+  
+  /* Make drag indicator more noticeable on touch devices */
+  .drag-indicator {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.05);
+  }
+  
+  .drag-indicator:active {
+    background-color: rgba(0, 0, 0, 0.03);
+  }
+}
+
+/* Global touch detection indicator */
+body.touch-detected .drag-indicator:active {
+  background-color: rgba(0, 0, 0, 0.05);
 }
 
 /* Prevent text selection during drag */
@@ -55,6 +70,27 @@
 
 .drag-handle:active {
   cursor: grabbing;
+}
+
+/* Subtle visual indicator for draggable items */
+.drag-indicator {
+  position: relative;
+}
+
+@media (hover: hover) {
+  /* Only show on devices with hover capability */
+  .drag-indicator:hover::after {
+    content: '';
+    position: absolute;
+    width: 40px;
+    height: 8px;
+    right: 12px;
+    top: 4px;
+    background-image: radial-gradient(circle, rgba(0,0,0,0.1) 1px, transparent 2px);
+    background-size: 8px 8px;
+    opacity: 0.5;
+    pointer-events: none;
+  }
 }
 
 /* Smooth animation for dropped items */
