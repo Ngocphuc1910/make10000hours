@@ -177,7 +177,13 @@ const SessionsList = forwardRef((props, ref) => {
   }, [sessions.length, sessionTasks.length, currentUser]);
   
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      // Configure the pointer sensor to activate only after a delay or movement
+      activationConstraint: {
+        delay: 150, // Reduced from 250ms to 150ms for faster activation
+        tolerance: 8, // Increased from 5px to 8px to allow more movement during delay
+      }
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
