@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, CheckSquare, Square } from 'lucide-react';
+import { CheckSquare, Square } from 'lucide-react';
 import { useTheme } from '../theme';
 
 const SortableSessionItem = ({ 
@@ -15,6 +15,7 @@ const SortableSessionItem = ({
   const [isTouched, setIsTouched] = useState(false);
   const [isLongPressed, setIsLongPressed] = useState(false);
   const [touchTimeout, setTouchTimeout] = useState(null);
+  const [isDragStarted, setIsDragStarted] = useState(false);
   
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: session.id,
@@ -29,6 +30,7 @@ const SortableSessionItem = ({
     boxShadow: isDragging ? '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' : 'none',
     zIndex: isDragging ? 50 : 'auto',
     transform: isDragging ? `${CSS.Transform.toString(transform)} scale(1.02)` : CSS.Transform.toString(transform),
+    cursor: isLongPressed ? 'grabbing' : 'pointer',
   };
 
   const handleCheckboxClick = (e) => {
@@ -58,19 +60,41 @@ const SortableSessionItem = ({
 
   // Handle long press for mobile - improved implementation
   const handleTouchStart = (e) => {
+    // Don't trigger long press for checkbox area or move buttons
+    if (e.target.closest('[role="checkbox"]') || 
+        e.target.closest('button') ||
+        e.target.tagName === 'svg' ||
+        e.target.tagName === 'path') {
+      return;
+    }
+    
     setIsTouched(true);
     
     // Clear any existing timeout
     if (touchTimeout) clearTimeout(touchTimeout);
     
-    // Set a new timeout for long press detection
+    // Set a new timeout for long press detection - reduced from 300ms to 200ms for faster response
     const timeout = setTimeout(() => {
       setIsLongPressed(true);
+      setIsDragStarted(true);
       // Trigger vibration if supported for haptic feedback
       if (navigator.vibrate) {
-        navigator.vibrate(50); // 50ms vibration
+        navigator.vibrate([30, 30]); // Double vibration pattern for better feedback
       }
-    }, 300); // 300ms is a good time for long press
+      
+      // Add a more noticeable pulse animation to indicate drag is ready
+      const el = e.currentTarget;
+      if (el) {
+        el.animate([
+          { transform: 'scale(1)', opacity: '1' },
+          { transform: 'scale(1.05)', opacity: '0.9' },
+          { transform: 'scale(1)', opacity: '1' }
+        ], {
+          duration: 250,
+          iterations: 1
+        });
+      }
+    }, 200); // Reduced from 300ms to 200ms for faster response
     
     setTouchTimeout(timeout);
   };
@@ -84,6 +108,14 @@ const SortableSessionItem = ({
       clearTimeout(touchTimeout);
       setTouchTimeout(null);
     }
+    
+    // If the drag wasn't started (no long press), handle it as a click
+    if (!isDragStarted) {
+      // onClick will fire normally
+    }
+    
+    // Reset drag started state
+    setIsDragStarted(false);
   };
   
   // Clean up timeout on unmount
@@ -93,16 +125,44 @@ const SortableSessionItem = ({
     };
   }, [touchTimeout]);
 
+  const handleClick = () => {
+    // Only trigger select if not dragging
+    if (!isDragging && !isLongPressed) {
+      onSelectTask(session.id);
+    }
+  };
+  
+  // Add visual feedback immediately when touched
+  useEffect(() => {
+    if (isTouched) {
+      // Add subtle background color change to show touch is detected
+      document.body.classList.add('touch-detected');
+    } else {
+      document.body.classList.remove('touch-detected');
+    }
+    
+    return () => {
+      document.body.classList.remove('touch-detected');
+    };
+  }, [isTouched]);
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      onClick={() => onSelectTask(session.id)}
-      className={`flex justify-between items-center py-4 px-3 border-b border-gray-200 dark:border-gray-700 last:border-0 cursor-pointer
+      {...attributes}
+      {...listeners}
+      onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      className={`flex justify-between items-center py-4 px-3 border-b border-gray-200 dark:border-gray-700 last:border-0
         ${isDragging ? 'bg-gray-50 dark:bg-gray-800 rounded-lg drop-animation' : ''} 
         ${isSelected ? 'bg-gray-50 dark:bg-gray-800' : ''}
         ${isTouched ? 'bg-gray-100 dark:bg-gray-700' : ''}
-        transition-all duration-200 ease-in-out no-select magnetic-snap`}
+        ${isLongPressed ? 'scale-[1.01] bg-gray-100 dark:bg-gray-700' : ''}
+        transition-all duration-200 ease-in-out no-select magnetic-snap touch-manipulation drag-indicator`}
+      aria-label={`Task: ${session.title}. Long press to drag.`}
+      data-draggable="true"
     >
       <div className="flex items-center">
         {/* Checkbox with improved click handling */}
@@ -162,7 +222,10 @@ const SortableSessionItem = ({
         <div className="flex flex-col mr-2 md:hidden">
           <button 
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 touch-target touch-feedback touch-active"
-            onClick={onMoveUp}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveUp();
+            }}
             aria-label="Move up"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -171,30 +234,16 @@ const SortableSessionItem = ({
           </button>
           <button 
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 touch-target touch-feedback touch-active"
-            onClick={onMoveDown}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveDown();
+            }}
             aria-label="Move down"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="m6 9 6 6 6-6"/>
             </svg>
           </button>
-        </div>
-        
-        {/* Enhanced drag handle with larger touch target */}
-        <div
-          {...attributes}
-          {...listeners}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          className={`cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 
-                     p-3 -m-2 touch-manipulation rounded-full touch-target drag-handle
-                     ${isLongPressed ? 'bg-gray-200 dark:bg-gray-600' : ''}
-                     transition-colors duration-200`}
-          onClick={(e) => e.stopPropagation()} // Prevent triggering the parent onClick
-          style={{ minWidth: '48px', minHeight: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <GripVertical className="h-6 w-6" />
-          <span className="sr-only md:hidden">Drag to reorder</span>
         </div>
       </div>
     </div>
