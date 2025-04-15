@@ -186,7 +186,7 @@ const TaskList = () => {
                 return (
                   <li 
                     key={task.id} 
-                    className="rounded-md"
+                    className="rounded-md task-item"
                   >
                     {editingTaskId === task.id ? (
                       <form 

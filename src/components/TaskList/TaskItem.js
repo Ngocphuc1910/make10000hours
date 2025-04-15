@@ -36,6 +36,36 @@ const TaskItem = ({
     completed: task.completed
   });
 
+  // Create checkbox style with vertical stroke inside
+  const checkboxStyle = isActive ? {
+    borderLeftWidth: '4px',
+    borderLeftColor: 'var(--sidebar-foreground, #ffffff)', // Use theme variable with white fallback
+  } : {
+    borderLeftWidth: '4px',
+    borderLeftColor: 'transparent',
+  };
+
+  // Create vertical stroke that goes between checkbox and content
+  const verticalStrokeStyle = isActive ? {
+    width: '4px',
+    height: 'calc(100% - 35px)', // Reduced height to not include time estimation
+    backgroundColor: 'var(--sidebar-foreground, rgba(255, 255, 255, 0.5))', // Reduced opacity for less brightness
+    borderRadius: '2px',
+    position: 'relative',
+    alignSelf: 'flex-start', // Align to top instead of stretching
+    marginTop: '3px', // Slight top margin to align with title
+    display: 'block'
+  } : {
+    width: '4px',
+    height: 'calc(100% - 35px)', // Reduced height to not include time estimation
+    backgroundColor: 'transparent',
+    borderRadius: '2px',
+    position: 'relative',
+    alignSelf: 'flex-start', // Align to top instead of stretching
+    marginTop: '3px', // Slight top margin to align with title
+    display: 'block'
+  };
+
   // The content section with title, description, and metadata
   const TaskContent = () => (
     <div className="flex-1 flex flex-col">
@@ -84,12 +114,12 @@ const TaskItem = ({
 
   return (
     <div className={cn(
-      "flex gap-3 p-2 rounded-md group",
+      "flex p-2 rounded-md group items-start", // Changed to items-start
       task.completed ? 'opacity-70' : '',
       isActive && !task.completed ? 'bg-white/10' : 'hover:bg-white/5'
     )}>
       {/* Checkbox */}
-      <div className="pt-0.5">
+      <div className="flex items-center pt-0.5">
         <button
           type="button"
           onClick={() => onToggleComplete(task)}
@@ -103,11 +133,14 @@ const TaskItem = ({
         </button>
       </div>
       
+      {/* Vertical stroke between checkbox and content */}
+      <div style={verticalStrokeStyle} className="mx-3"></div>
+      
       {/* Task Content */}
       <TaskContent />
       
       {/* Actions */}
-      <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity pt-0.5">
         <button
           type="button"
           onClick={() => onStartEditing(task)}
