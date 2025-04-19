@@ -10,6 +10,14 @@
       "env": {
         "NODE_TLS_REJECT_UNAUTHORIZED": "0"
       }
+    },
+    "@magicuidesign/mcp": {
+      "command": "npx",
+      "args": ["-y", "@magicuidesign/mcp@latest"]
+    },
+    "shadcn-ui-server": {
+      "command": "npx",
+      "args": ["-y", "shadcn-ui-mcp-server"]
     }
   }
-} 
+}

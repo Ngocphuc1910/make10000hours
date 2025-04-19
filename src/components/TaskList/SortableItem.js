@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CheckSquare, Square } from 'lucide-react';
+import { CheckSquare, Square, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTheme } from '../theme';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 
 const SortableSessionItem = ({ 
   session, 
@@ -16,11 +17,35 @@ const SortableSessionItem = ({
   const [isLongPressed, setIsLongPressed] = useState(false);
   const [touchTimeout, setTouchTimeout] = useState(null);
   const [isDragStarted, setIsDragStarted] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const contentWrapperRef = useRef(null);
+  const verticalIndicatorRef = useRef(null);
   
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: session.id,
   });
   const { theme } = useTheme();
+
+  // Update vertical indicator height when content changes
+  useEffect(() => {
+    if (isOpen && contentWrapperRef.current && verticalIndicatorRef.current) {
+      const updateHeight = () => {
+        const totalHeight = contentWrapperRef.current.offsetHeight;
+        if (totalHeight > 0) {
+          verticalIndicatorRef.current.style.height = `${totalHeight}px`;
+        }
+      };
+      
+      // Update immediately and after a short delay to account for transition
+      updateHeight();
+      const timeoutId = setTimeout(updateHeight, 300);
+      
+      return () => clearTimeout(timeoutId);
+    } else if (verticalIndicatorRef.current) {
+      // Reset to default height when collapsed
+      verticalIndicatorRef.current.style.height = '56px';
+    }
+  }, [isOpen]);
 
   const style = {
     transition,
@@ -146,6 +171,23 @@ const SortableSessionItem = ({
     };
   }, [isTouched]);
 
+  // Prevent click event when collapsible trigger is clicked
+  const handleCollapsibleClick = (e) => {
+    e.stopPropagation();
+  };
+
+  const hasDescription = session.description && session.description.trim() !== '';
+  
+  // Create a short preview of the description
+  const getDescriptionPreview = () => {
+    if (!hasDescription) return '';
+    
+    const trimmedDesc = session.description.trim();
+    return trimmedDesc.length > 60 
+      ? trimmedDesc.substring(0, 60) + '...' 
+      : trimmedDesc;
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -155,7 +197,7 @@ const SortableSessionItem = ({
       onClick={handleClick}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      className={`flex justify-between items-center py-4 px-3 border-b border-gray-200 dark:border-gray-700 last:border-0
+      className={`flex flex-col justify-between py-4 px-3 border-b border-gray-200 dark:border-gray-700 last:border-0
         ${isDragging ? 'bg-gray-50 dark:bg-gray-800 rounded-lg drop-animation' : ''} 
         ${isSelected ? 'bg-gray-50 dark:bg-gray-800' : ''}
         ${isTouched ? 'bg-gray-100 dark:bg-gray-700' : ''}
@@ -164,88 +206,206 @@ const SortableSessionItem = ({
       aria-label={`Task: ${session.title}. Long press to drag.`}
       data-draggable="true"
     >
-      <div className="flex items-center">
-        {/* Checkbox with improved click handling */}
-        <div 
-          className="cursor-pointer text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 mr-3 z-10 touch-target touch-feedback p-2 -m-2 flex items-center"
-          onClick={handleCheckboxClick}
-          onTouchStart={(e) => { e.stopPropagation(); }}
-          onTouchEnd={(e) => { e.stopPropagation(); handleCheckboxClick(e); }}
-          onMouseDown={(e) => e.stopPropagation()}
-          onMouseUp={(e) => e.stopPropagation()}
-          role="checkbox"
-          aria-checked={session.completed}
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              handleCheckboxClick(e);
-            }
-          }}
-        >
-          {session.completed ? (
-            <CheckSquare className="h-5 w-5 text-blue-500" />
-          ) : (
-            <Square className="h-5 w-5" />
-          )}
+      {hasDescription ? (
+        <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
+          <div className="flex justify-between items-start">
+            <div className="flex items-start" ref={contentWrapperRef}>
+              {/* Checkbox with improved click handling */}
+              <div 
+                className="cursor-pointer text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 mr-3 z-10 touch-target touch-feedback p-2 -m-2 flex items-center mt-0.5"
+                onClick={handleCheckboxClick}
+                onTouchStart={(e) => { e.stopPropagation(); }}
+                onTouchEnd={(e) => { e.stopPropagation(); handleCheckboxClick(e); }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseUp={(e) => e.stopPropagation()}
+                role="checkbox"
+                aria-checked={session.completed}
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    handleCheckboxClick(e);
+                  }
+                }}
+              >
+                {session.completed ? (
+                  <CheckSquare className="h-5 w-5 text-blue-500" />
+                ) : (
+                  <Square className="h-5 w-5" />
+                )}
+              </div>
+              
+              {/* Left border indicator with dynamic height */}
+              <div 
+                ref={verticalIndicatorRef}
+                className={`rounded mr-3 flex-shrink-0 transition-all duration-300 ${isSelected ? 'bg-gray-900 dark:bg-white' : 'bg-gray-200 dark:bg-gray-600'}`} 
+                style={{ 
+                  width: '4px', 
+                  height: '56px',
+                  minWidth: '4px', 
+                  boxSizing: 'border-box',
+                  boxShadow: '0 0 0 1px rgba(0,0,0,0.05)'
+                }}
+              ></div>
+              
+              <div className="flex flex-col flex-1">
+                <div className="flex items-center">
+                  <h3 className={`font-medium ${session.completed ? 'line-through text-gray-400 dark:text-gray-500' : ''}`}>
+                    {session.title}
+                  </h3>
+                  
+                  {/* Collapsible trigger moved next to title */}
+                  <CollapsibleTrigger asChild onClick={handleCollapsibleClick}>
+                    <button 
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 ml-2"
+                      aria-label={isOpen ? "Hide details" : "Show details"}
+                    >
+                      {isOpen ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+                  </CollapsibleTrigger>
+                </div>
+                
+                {!isOpen && (
+                  <p className="text-sm text-gray-500 mt-1 line-clamp-1">
+                    {getDescriptionPreview()}
+                  </p>
+                )}
+                
+                {/* Collapsible content shifted here to be within the wrapper */}
+                {isOpen && (
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 whitespace-pre-wrap">
+                      {session.description}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex items-center">
+              <div className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-3">
+                {session.duration || `${(session.estimatedPomodoros || 1) * 25}min`}
+              </div>
+              
+              {/* Move buttons for alternative to drag and drop (mobile friendly) */}
+              <div className="flex flex-col md:hidden">
+                <button 
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 touch-target touch-feedback touch-active"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMoveUp();
+                  }}
+                  aria-label="Move up"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m18 15-6-6-6 6"/>
+                  </svg>
+                </button>
+                <button 
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 touch-target touch-feedback touch-active"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMoveDown();
+                  }}
+                  aria-label="Move down"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m6 9 6 6 6-6"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Empty CollapsibleContent to maintain the collapsible behavior */}
+          <CollapsibleContent className="hidden">
+            {/* Content moved to within the wrapper div for better vertical stroke alignment */}
+          </CollapsibleContent>
+        </Collapsible>
+      ) : (
+        <div className="flex justify-between items-center">
+          <div className="flex items-center">
+            {/* Checkbox with improved click handling */}
+            <div 
+              className="cursor-pointer text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 mr-3 z-10 touch-target touch-feedback p-2 -m-2 flex items-center"
+              onClick={handleCheckboxClick}
+              onTouchStart={(e) => { e.stopPropagation(); }}
+              onTouchEnd={(e) => { e.stopPropagation(); handleCheckboxClick(e); }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onMouseUp={(e) => e.stopPropagation()}
+              role="checkbox"
+              aria-checked={session.completed}
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  handleCheckboxClick(e);
+                }
+              }}
+            >
+              {session.completed ? (
+                <CheckSquare className="h-5 w-5 text-blue-500" />
+              ) : (
+                <Square className="h-5 w-5" />
+              )}
+            </div>
+            
+            {/* Left border indicator with fixed height and width */}
+            <div 
+              className={`rounded mr-3 flex-shrink-0 ${isSelected ? 'bg-gray-900 dark:bg-white' : 'bg-gray-200 dark:bg-gray-600'}`} 
+              style={{ 
+                width: '4px', 
+                height: '56px',
+                minWidth: '4px', 
+                boxSizing: 'border-box',
+                boxShadow: '0 0 0 1px rgba(0,0,0,0.05)'
+              }}
+            ></div>
+            
+            <div className="flex flex-col flex-1">
+              <h3 className={`font-medium ${session.completed ? 'line-through text-gray-400 dark:text-gray-500' : ''}`}>
+                {session.title}
+              </h3>
+            </div>
+          </div>
+          
+          <div className="flex items-center">
+            <div className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-3">
+              {session.duration || `${(session.estimatedPomodoros || 1) * 25}min`}
+            </div>
+            
+            {/* Move buttons for alternative to drag and drop (mobile friendly) */}
+            <div className="flex flex-col md:hidden">
+              <button 
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 touch-target touch-feedback touch-active"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveUp();
+                }}
+                aria-label="Move up"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m18 15-6-6-6 6"/>
+                </svg>
+              </button>
+              <button 
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 touch-target touch-feedback touch-active"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveDown();
+                }}
+                aria-label="Move down"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m6 9 6 6 6-6"/>
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
-        
-        {/* Left border indicator with fixed height and width */}
-        <div 
-          className={`rounded mr-3 flex-shrink-0 ${isSelected ? 'bg-gray-900 dark:bg-white' : 'bg-gray-200 dark:bg-gray-600'}`} 
-          style={{ 
-            width: '4px', 
-            height: '56px',
-            minWidth: '4px', 
-            boxSizing: 'border-box',
-            boxShadow: '0 0 0 1px rgba(0,0,0,0.05)'
-          }}
-        ></div>
-        
-        <div className="flex flex-col">
-          <h3 className={`font-medium ${session.completed ? 'line-through text-gray-400 dark:text-gray-500' : ''}`}>
-            {session.title}
-          </h3>
-          {session.description && session.description.trim() !== '' && (
-            <p className="text-sm text-gray-500 mt-1 leading-relaxed">
-              {session.description}
-            </p>
-          )}
-        </div>
-      </div>
-      
-      <div className="flex items-center">
-        <div className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-3">
-          {session.duration || `${(session.estimatedPomodoros || 1) * 25}min`}
-        </div>
-        
-        {/* Move buttons for alternative to drag and drop (mobile friendly) */}
-        <div className="flex flex-col mr-2 md:hidden">
-          <button 
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 touch-target touch-feedback touch-active"
-            onClick={(e) => {
-              e.stopPropagation();
-              onMoveUp();
-            }}
-            aria-label="Move up"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m18 15-6-6-6 6"/>
-            </svg>
-          </button>
-          <button 
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 touch-target touch-feedback touch-active"
-            onClick={(e) => {
-              e.stopPropagation();
-              onMoveDown();
-            }}
-            aria-label="Move down"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m6 9 6 6 6-6"/>
-            </svg>
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
