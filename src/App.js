@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './styles/globals.css';
 import './styles/touch.css'; // Import touch-specific optimizations
-import { Play, Pause, RotateCcw, SkipForward, Plus, FolderPlus } from 'lucide-react';
+import { Play, Pause, RotateCcw, SkipForward, Plus, FolderPlus, X } from 'lucide-react';
 import SessionsList from './components/SessionsList';
 import Header from './components/Header';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { ResetPasswordForm, AuthCallback } from './components/auth';
 import Achievements from './components/Achievements';
+import QuickActions from './components/QuickActions';
 import { getUserSettings } from './lib/database';
 import testSupabaseConnection from './lib/testSupabase';
 import { ThemeProvider } from './components/theme';
@@ -56,6 +57,7 @@ function MainApp() {
   const [sessionsCompleted, setSessionsCompleted] = useState(0);
   const [selectedTask, setSelectedTask] = useState(null);
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
+  const [showQuickActions, setShowQuickActions] = useState(true);
   
   // Reference to the SessionsList component to access its methods
   const sessionsListRef = useRef(null);
@@ -381,8 +383,7 @@ function MainApp() {
   }
   
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gradient-to-br dark:from-gray-900 dark:to-gray-800 text-gray-900 dark:text-white">
-      {/* Header */}
+    <div className="min-h-screen bg-gray-100 dark:bg-gradient-to-br dark:from-gray-900 dark:to-gray-800 text-gray-900 dark:text-white pb-20">
       <Header />
       
       {/* Keyboard shortcuts */}
@@ -393,36 +394,28 @@ function MainApp() {
           {/* Left sidebar */}
           <div className="md:col-span-3 space-y-6">
             {/* Quick Actions */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
-              <h2 className="font-semibold text-lg mb-4">Quick Actions</h2>
-              
-              <div className="space-y-2">
+            {showQuickActions && (
+              <div className="relative">
                 <button 
-                  className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white p-3 rounded-md"
-                  onClick={startTimer}
+                  onClick={() => setShowQuickActions(false)}
+                  className="absolute top-2 right-2 z-10 w-6 h-6 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-full flex items-center justify-center hover:bg-gray-300 dark:hover:bg-gray-600"
+                  aria-label="Hide quick actions"
                 >
-                  <Play className="w-4 h-4" />
-                  <span>Quick Start</span>
+                  <X className="w-4 h-4" />
                 </button>
-                
-                <button 
-                  className="w-full flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-700 p-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-                  onClick={() => {
-                    if (sessionsListRef.current) {
-                      sessionsListRef.current.openTaskDialog();
-                    }
-                  }}
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>New Task</span>
-                </button>
-                
-                <button className="w-full flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-700 p-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <FolderPlus className="w-4 h-4" />
-                  <span>New Project</span>
-                </button>
+                <QuickActions />
               </div>
-            </div>
+            )}
+            
+            {/* Show button when Quick Actions is hidden */}
+            {!showQuickActions && (
+              <button
+                onClick={() => setShowQuickActions(true)}
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-3 text-center w-full hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Show Quick Actions
+              </button>
+            )}
           </div>
           
           {/* Main content */}

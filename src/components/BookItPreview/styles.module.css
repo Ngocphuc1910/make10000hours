@@ -1,0 +1,365 @@
+/* Overlay and Modal Styles */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal {
+  background-color: #f5f5f5;
+  width: 400px;
+  max-width: 90%;
+  max-height: 90vh;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: #001F3E;
+  color: white;
+}
+
+.closeButton {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #f2f7ff;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Top Navigation Bar */
+.navBar {
+  background-color: white;
+  padding: 12px 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.statusBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px 8px;
+  font-size: 12px;
+  color: #001F3E;
+}
+
+.navBarContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+}
+
+.title {
+  font-weight: 600;
+  font-size: 16px;
+  color: #001F3E;
+}
+
+/* Profile Section */
+.profileSection {
+  padding: 12px 16px;
+  background-color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.profileInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  position: relative;
+}
+
+.avatarCircle {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: #eaeaea;
+  border: 2px solid rgba(143, 154, 168, 0.6);
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+}
+
+.userName {
+  font-weight: 500;
+  color: #334C65;
+}
+
+.userLocation {
+  color: #334C65;
+  font-size: 14px;
+}
+
+.actionIcons {
+  display: flex;
+  gap: 12px;
+}
+
+.separator {
+  height: 8px;
+  background-color: #f2f7ff;
+}
+
+/* Main Sections */
+.mainSection {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sectionHeader h4 {
+  font-weight: 600;
+  font-size: 16px;
+  margin: 0;
+  color: #000;
+}
+
+/* Card Groups */
+.cardGroup {
+  display: flex;
+  gap: 10px;
+}
+
+.card {
+  flex: 1;
+  background-color: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0px 2px 12px rgba(0, 0, 0, 0.05);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.cardImage {
+  height: 100px;
+  background-color: #eaeaea;
+  position: relative;
+}
+
+.badmintonIcon {
+  position: absolute;
+  top: 12px;
+  left: 15px;
+  width: 24px;
+  height: 24px;
+  background-color: #ddd;
+  border-radius: 4px;
+}
+
+.cardContent {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cardTitle {
+  font-weight: 600;
+  font-size: 16px;
+  color: #000;
+}
+
+.cardDescription {
+  font-size: 14px;
+  color: #747474;
+  text-align: right;
+}
+
+/* Courts Section */
+.courtsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.courtsSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sectionTitle {
+  font-weight: 600;
+  font-size: 16px;
+  color: #000;
+}
+
+.filterIcons {
+  display: flex;
+  gap: 12px;
+}
+
+/* Filter Chips */
+.filterChips {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.chip {
+  white-space: nowrap;
+  padding: 9px 12px;
+  border-radius: 100px;
+  background-color: #E7F6FF;
+  font-size: 14px;
+  color: #001F3E;
+}
+
+.chipActive {
+  background-color: white;
+  border: 1px solid #0033C9;
+  color: #0033C9;
+}
+
+/* Court Cards */
+.courtCard {
+  background-color: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0px 2px 12px rgba(0, 0, 0, 0.05);
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.courtCardImage {
+  height: 160px;
+  background-color: #eaeaea;
+}
+
+.courtCardContent {
+  padding: 12px;
+}
+
+.courtCardTitle {
+  font-weight: 600;
+  font-size: 14px;
+  color: #001F3E;
+  margin-bottom: 4px;
+}
+
+.courtCardLocation {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.distance {
+  font-size: 12px;
+  font-weight: 500;
+  color: #66798B;
+}
+
+.address {
+  font-size: 12px;
+  color: #66798B;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.courtCardFooter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rating, .bookingCount {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #66798B;
+  margin-right: 8px;
+}
+
+.amenities {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.amenityIcon {
+  width: 20px;
+  height: 20px;
+  background-color: #eaeaea;
+  border-radius: 4px;
+}
+
+.bookmarkIcon {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+/* Bottom Navigation */
+.bottomNav {
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 0;
+  background-color: white;
+  border-top: 1px solid #eaeaea;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  margin-top: auto;
+}
+
+.navItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.navText {
+  font-size: 12px;
+}
+
+.navItem:first-child {
+  color: #00CF6A;
+}
+
+.navItem:last-child {
+  color: #66798B;
+} 
