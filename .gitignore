@@ -34,3 +34,5 @@ firebase-debug.*.log*
 /.cursor/mcp.json# Ignore MCP configuration files that may contain secrets
 **/.cursor/mcp.json
 mcp.json
+figma-postComment.js
+figma-update-design.js
