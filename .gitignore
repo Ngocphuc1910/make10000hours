@@ -31,4 +31,6 @@ firebase-debug.*.log*
 /.vscode
 # Screenshot
 /.Screenshot
-/.cursor/mcp.json
+/.cursor/mcp.json# Ignore MCP configuration files that may contain secrets
+**/.cursor/mcp.json
+mcp.json
