@@ -66,6 +66,15 @@ const TaskItem = ({
     display: 'block'
   };
 
+  // Convert pomodoros to minutes (assuming 1 pomodoro = 25 minutes)
+  const pomoToMinutes = (pomodoros) => (pomodoros || 0) * 25;
+  
+  // Get time spent in minutes
+  const timeSpentMinutes = pomoToMinutes(task.pomodoros || 0);
+  
+  // Get estimated time in minutes
+  const estimatedTimeMinutes = pomoToMinutes(task.estimatedPomodoros || 1);
+
   // The content section with title, description, and metadata
   const TaskContent = () => (
     <div className="flex-1 flex flex-col">
@@ -99,7 +108,7 @@ const TaskItem = ({
         {/* Left side - Time estimation */}
         <div className="flex items-center gap-1 text-white/60">
           <Clock className="w-3 h-3" />
-          <span>{task.pomodoros || 0}/{task.estimatedPomodoros || 1} pomodoros</span>
+          <span>{timeSpentMinutes}/{estimatedTimeMinutes}m</span>
         </div>
         
         {/* Right side - Project tag */}

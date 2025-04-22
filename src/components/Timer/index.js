@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Play, Pause, SkipForward, RotateCcw, Settings, Image } from 'lucide-react';
+import { Play, Pause, SkipForward, RotateCcw, Settings, Image, Clock, ChevronDown } from 'lucide-react';
 import { useTimer } from '../../hooks/useTimer';
 import { useTasks } from '../../hooks/useTasks';
 import '../../styles/Timer.css';
@@ -21,7 +21,7 @@ const Timer = () => {
     skipTimer
   } = useTimer();
   
-  const { tasks, activeTaskId } = useTasks();
+  const { tasks, activeTaskId, setActiveTask } = useTasks();
   
   // Find the active task
   const activeTask = tasks.find(task => task.id === activeTaskId);
@@ -30,6 +30,10 @@ const Timer = () => {
   const audioRef = useRef(null);
   const [showSettings, setShowSettings] = useState(false);
   const [backgroundImage, setBackgroundImage] = useState('');
+  const [showTaskDropdown, setShowTaskDropdown] = useState(false);
+  
+  // Convert pomodoros to minutes (assuming 1 pomodoro = 25 minutes)
+  const pomoToMinutes = (pomodoros) => (pomodoros || 0) * 25;
   
   // Local state for timer settings form
   const [settingsForm, setSettingsForm] = useState({
@@ -149,6 +153,26 @@ const Timer = () => {
     });
     setShowSettings(false);
   };
+
+  // Handle task switch
+  const handleTaskSwitch = (taskId) => {
+    setActiveTask(taskId);
+    setShowTaskDropdown(false);
+  };
+  
+  // Close task dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showTaskDropdown && !event.target.closest('.task-dropdown-container')) {
+        setShowTaskDropdown(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showTaskDropdown]);
   
   return (
     <div className={`rounded-xl p-6 ${getBackgroundColor()}`}>
@@ -281,21 +305,112 @@ const Timer = () => {
       </div>
       
       {/* Current task display */}
-      <div className="border-t border-gray-200 dark:border-gray-800 pt-6 mt-6 w-full grid grid-cols-2 gap-4">
+      <div className="border-t border-gray-200 dark:border-gray-800 pt-6 mt-6 w-full">
+        <div className="text-sm text-gray-500 dark:text-gray-400 mb-2 flex justify-between items-center">
+          <span>Current Task</span>
+          {mode === 'pomodoro' && (
+            <button 
+              onClick={() => setShowTaskDropdown(!showTaskDropdown)}
+              className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20 flex items-center gap-1"
+            >
+              Switch task <ChevronDown className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+        
         {activeTask ? (
-          <>
-            <div>
-              <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Current Task</div>
-              <div className="font-medium">{activeTask.text}</div>
+          <div className="relative task-dropdown-container">
+            <div className="p-3 rounded-md bg-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+              <div className="font-medium mb-1">{activeTask.title || activeTask.text}</div>
+              
+              <div className="flex justify-between items-center text-xs text-gray-400">
+                <div className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  <span>
+                    {pomoToMinutes(activeTask.pomodoros || 0)}/{pomoToMinutes(activeTask.estimatedPomodoros || 1)}m
+                  </span>
+                </div>
+                {activeTask.projectId && (
+                  <div className="bg-white/10 px-2 py-0.5 rounded text-white/70">
+                    Project
+                  </div>
+                )}
+              </div>
             </div>
-            <div>
-              <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Project</div>
-              <div className="font-medium">Work</div>
-            </div>
-          </>
+            
+            {/* Task dropdown */}
+            {showTaskDropdown && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 max-h-60 overflow-y-auto">
+                <div className="p-2 text-sm font-medium border-b border-gray-200 dark:border-gray-700">
+                  Switch active task
+                </div>
+                {tasks.filter(task => !task.completed).length === 0 ? (
+                  <div className="p-4 text-center text-gray-500">
+                    No tasks available
+                  </div>
+                ) : (
+                  <div className="py-1">
+                    {tasks
+                      .filter(task => !task.completed)
+                      .map(task => (
+                        <div
+                          key={task.id}
+                          className={`px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex justify-between items-center ${
+                            task.id === activeTaskId ? 'bg-gray-100 dark:bg-gray-700' : ''
+                          }`}
+                          onClick={() => handleTaskSwitch(task.id)}
+                        >
+                          <span className="truncate">{task.title || task.text}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                            {pomoToMinutes(task.pomodoros || 0)}/{pomoToMinutes(task.estimatedPomodoros || 1)}m
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         ) : (
-          <div className="col-span-2 text-center text-gray-500 dark:text-gray-400">
-            No active task selected
+          <div className="p-4 text-center bg-white/5 rounded-md">
+            <p className="text-gray-400 mb-2">No active task selected</p>
+            <button 
+              onClick={() => setShowTaskDropdown(!showTaskDropdown)}
+              className="text-xs px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 flex items-center gap-1 mx-auto"
+            >
+              Select a task <ChevronDown className="w-3 h-3" />
+            </button>
+            
+            {/* Task dropdown when no active task */}
+            {showTaskDropdown && (
+              <div className="absolute left-4 right-4 mt-1 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 max-h-60 overflow-y-auto">
+                <div className="p-2 text-sm font-medium border-b border-gray-200 dark:border-gray-700">
+                  Select a task
+                </div>
+                {tasks.filter(task => !task.completed).length === 0 ? (
+                  <div className="p-4 text-center text-gray-500">
+                    No tasks available
+                  </div>
+                ) : (
+                  <div className="py-1">
+                    {tasks
+                      .filter(task => !task.completed)
+                      .map(task => (
+                        <div
+                          key={task.id}
+                          className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex justify-between items-center"
+                          onClick={() => handleTaskSwitch(task.id)}
+                        >
+                          <span className="truncate">{task.title || task.text}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                            {pomoToMinutes(task.pomodoros || 0)}/{pomoToMinutes(task.estimatedPomodoros || 1)}m
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
