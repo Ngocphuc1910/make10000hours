@@ -804,29 +804,120 @@ export const deleteTask = async (taskId) => {
   }
 };
 
+// This function can be called during app initialization to ensure the table exists
+export const ensurePomodoroSessionsTable = async () => {
+  try {
+    // Check if the table exists by doing a simple query
+    const { error: checkError } = await supabase
+      .from('pomodoro_sessions')
+      .select('id')
+      .limit(1);
+    
+    // If no error, table exists
+    if (!checkError) {
+      console.log('pomodoro_sessions table exists');
+      return true;
+    }
+    
+    // If error indicates table doesn't exist, create it
+    if (checkError.code === '42P01' || checkError.message.includes('relation "pomodoro_sessions" does not exist')) {
+      console.log('pomodoro_sessions table does not exist, creating...');
+      
+      // Create the table using SQL
+      const { error: createError } = await supabase.rpc('create_pomodoro_sessions_table');
+      
+      if (createError) {
+        console.error('Error creating pomodoro_sessions table:', createError);
+        return false;
+      }
+      
+      console.log('pomodoro_sessions table created successfully');
+      return true;
+    }
+    
+    console.error('Unexpected error checking pomodoro_sessions table:', checkError);
+    return false;
+  } catch (error) {
+    console.error('Error in ensurePomodoroSessionsTable:', error);
+    return false;
+  }
+};
+
 /**
  * Pomodoro session operations
  */
 export const getPomodoroSessions = async (userId, limit = 20) => {
-  const { data, error } = await supabase
-    .from('pomodoro_sessions')
-    .select('*, tasks(name, project_id), projects(name)')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase
+      .from('pomodoro_sessions')
+      .select('*, tasks(name, project_id), projects(name)')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    
+    if (error) {
+      console.error('Error fetching pomodoro sessions:', error);
+      
+      // If table doesn't exist, return empty array
+      if (error.code === '42P01' || error.message.includes('relation "pomodoro_sessions" does not exist')) {
+        console.log('pomodoro_sessions table does not exist, attempting to create');
+        await ensurePomodoroSessionsTable();
+        return [];
+      }
+      
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Unexpected error in getPomodoroSessions:', error);
+    return [];
+  }
 };
 
 export const createPomodoroSession = async (sessionData) => {
-  const { data, error } = await supabase
-    .from('pomodoro_sessions')
-    .insert(sessionData)
-    .select();
-  
-  if (error) throw error;
-  return data[0];
+  try {
+    // Ensure required fields
+    const validatedSessionData = {
+      user_id: sessionData.user_id,
+      task_id: sessionData.task_id,
+      start_time: sessionData.start_time || new Date().toISOString(),
+      end_time: sessionData.end_time,
+      duration: sessionData.duration || 0,
+      completed: sessionData.completed || false,
+      created_at: new Date().toISOString()
+    };
+    
+    const { data, error } = await supabase
+      .from('pomodoro_sessions')
+      .insert(validatedSessionData)
+      .select();
+    
+    if (error) {
+      console.error('Error creating pomodoro session:', error);
+      
+      // If table doesn't exist, try to create it
+      if (error.code === '42P01' || error.message.includes('relation "pomodoro_sessions" does not exist')) {
+        await ensurePomodoroSessionsTable();
+        
+        // Try again after creating the table
+        const { data: retryData, error: retryError } = await supabase
+          .from('pomodoro_sessions')
+          .insert(validatedSessionData)
+          .select();
+        
+        if (retryError) throw retryError;
+        return retryData[0];
+      }
+      
+      throw error;
+    }
+    
+    return data[0];
+  } catch (error) {
+    console.error('Unexpected error in createPomodoroSession:', error);
+    throw error;
+  }
 };
 
 export const updatePomodoroSession = async (sessionId, updates) => {
