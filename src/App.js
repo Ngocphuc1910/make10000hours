@@ -1,24 +1,30 @@
-import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './styles/globals.css';
 import './styles/touch.css'; // Import touch-specific optimizations
-import { Play, Pause, RotateCcw, SkipForward, Plus, FolderPlus, X } from 'lucide-react';
+import { Play, Pause, RotateCcw, SkipForward, Plus, FolderPlus, X, Clock } from 'lucide-react';
 import SessionsList from './components/SessionsList';
 import Header from './components/Header';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { ResetPasswordForm, AuthCallback } from './components/auth';
 import Achievements from './components/Achievements';
 import QuickActions from './components/QuickActions';
-import { getUserSettings } from './lib/database';
+import { getUserSettings, ensurePomodoroSessionsTable } from './lib/database';
 import testSupabaseConnection from './lib/testSupabase';
 import { ThemeProvider } from './components/theme';
 import { useTasks } from './hooks/useTasks';
 import { TaskProvider } from './contexts/TaskContext';
+import { SessionProvider } from './contexts/SessionContext';
 import TaskDebugView from './components/TaskDebugView';
 import TaskDialog from './components/TaskList/TaskDialog';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
 import TaskItemTest from './components/TaskList/TaskItemTest';
 import TaskItemDebug from './components/TaskList/TaskItemDebug';
+import { useSession } from './hooks/useSession';
+import ProgressTracker from './components/ProgressTracker';
+import SessionStats from './components/SessionStats';
+import SessionHistory from './components/SessionHistory';
+import SessionDebugView from './components/SessionDebugView';
 
 // Make test function available in the global scope for console debugging
 window.testSupabaseConnection = testSupabaseConnection;
@@ -43,9 +49,22 @@ const LoadingFallback = () => (
   </div>
 );
 
+// Add this helper function before the MainApp component
+function formatTaskTime(task) {
+  // Convert pomodoros to minutes (assuming 1 pomodoro = 25 minutes)
+  const pomoToMinutes = (pomodoros) => (pomodoros || 0) * 25;
+  
+  // Get time spent and estimated time in minutes
+  const timeSpentMinutes = pomoToMinutes(task?.pomodoros || 0);
+  const estimatedTimeMinutes = pomoToMinutes(task?.estimatedPomodoros || 1);
+  
+  return `${timeSpentMinutes}/${estimatedTimeMinutes}m`;
+}
+
 function MainApp() {
   const { currentUser, isAuthLoading } = useAuth();
   const { setActiveTask, moveToMainTasks, addTask } = useTasks();
+  const { startSession, completeSession, activeSessionId } = useSession();
   const [loading, setLoading] = useState(true);
   // Get settings from localStorage or use defaults
   const [settings, setSettings] = useState(defaultSettings);
@@ -256,16 +275,22 @@ function MainApp() {
   };
   
   // Timer functions
-  const startTimer = () => {
+  const startTimer = useCallback(() => {
     setIsActive(true);
     setIsPaused(false);
-  };
+    
+    // Start a session if in pomodoro mode and a task is selected
+    if (mode === 'pomodoro' && selectedTask?.id && !activeSessionId) {
+      console.log('Starting session for task:', selectedTask.id);
+      startSession(selectedTask.id);
+    }
+  }, [mode, selectedTask, activeSessionId, startSession]);
   
   const pauseTimer = () => {
     setIsPaused(true);
   };
   
-  const resetTimer = () => {
+  const resetTimer = useCallback(() => {
     if (mode === 'pomodoro') {
       setTime(settings.pomodoroTime * 60);
     } else if (mode === 'shortBreak') {
@@ -275,12 +300,17 @@ function MainApp() {
     }
     setIsActive(false);
     setIsPaused(true);
-  };
+  }, [mode, settings]);
   
-  const skipTimer = () => {
+  const skipTimer = useCallback(() => {
+    // If in pomodoro mode and a session is active, complete it
+    if (mode === 'pomodoro' && activeSessionId) {
+      completeSession(activeSessionId, settings.pomodoroTime * 60);
+    }
+    
     resetTimer();
     setSessionsCompleted(prev => prev + 1);
-  };
+  }, [mode, activeSessionId, completeSession, settings.pomodoroTime, resetTimer]);
   
   // Handle mode changes with respect to settings
   const handleModeChange = (newMode) => {
@@ -303,14 +333,36 @@ function MainApp() {
   // Timer effect
   useEffect(() => {
     let interval = null;
+    let sessionStartTime = null;
     
     if (isActive && !isPaused) {
+      // If starting a pomodoro session, record the start time
+      if (mode === 'pomodoro' && activeSessionId) {
+        sessionStartTime = Date.now();
+      }
+      
       interval = setInterval(() => {
         setTime((prevTime) => {
           if (prevTime <= 1) {
             clearInterval(interval);
             setIsActive(false);
             setSessionsCompleted(prev => prev + 1);
+            
+            // If in pomodoro mode and a session is active, complete it
+            if (mode === 'pomodoro' && activeSessionId) {
+              console.log(`Completing session ${activeSessionId} after timer finished`);
+              
+              // Calculate actual duration based on the elapsed time
+              let actualDuration = settings.pomodoroTime * 60; // Default to full duration
+              
+              if (sessionStartTime) {
+                // Calculate elapsed time in seconds
+                const elapsedMilliseconds = Date.now() - sessionStartTime;
+                actualDuration = Math.round(elapsedMilliseconds / 1000);
+              }
+              
+              completeSession(activeSessionId, actualDuration);
+            }
             
             // Auto-start next session if enabled
             if (settings.autoStartSessions) {
@@ -327,7 +379,14 @@ function MainApp() {
               setTimeout(() => {
                 setMode(nextMode);
                 setTimeout(() => {
-                  startTimer();
+                  // If switching back to pomodoro and a task is selected, start a new session
+                  if (nextMode === 'pomodoro' && selectedTask?.id) {
+                    startTimer(); // This will call startSession via the startTimer function
+                  } else {
+                    // For breaks, just start the timer without a session
+                    setIsActive(true);
+                    setIsPaused(false);
+                  }
                 }, 500);
               }, 500);
             }
@@ -342,7 +401,7 @@ function MainApp() {
     }
     
     return () => clearInterval(interval);
-  }, [isActive, isPaused, mode, settings]);
+  }, [isActive, isPaused, mode, settings, activeSessionId, completeSession, selectedTask, startTimer]);
   
   // Handle task selection from SessionsList 
   const handleTaskSelection = (task, isExplicitSelection = true) => {
@@ -416,6 +475,12 @@ function MainApp() {
                 Show Quick Actions
               </button>
             )}
+            
+            {/* Session Statistics */}
+            <SessionStats />
+            
+            {/* Session History */}
+            <SessionHistory limit={3} />
           </div>
           
           {/* Main content */}
@@ -487,7 +552,19 @@ function MainApp() {
                 <div className="flex justify-between items-center">
                   <div className="text-left">
                     <div className="text-sm text-gray-500 dark:text-gray-400">Current Task</div>
-                    <div className="font-medium">{selectedTask ? selectedTask.title : "Select a task"}</div>
+                    <div className="font-medium">
+                      {selectedTask ? (
+                        <div className="flex items-center gap-2">
+                          <span>{selectedTask.title}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatTaskTime(selectedTask)}
+                          </span>
+                        </div>
+                      ) : (
+                        "Select a task"
+                      )}
+                    </div>
                   </div>
                   <div className="text-right">
                     <div className="text-sm text-gray-500 dark:text-gray-400">Project</div>
@@ -506,34 +583,8 @@ function MainApp() {
           
           {/* Right sidebar */}
           <div className="md:col-span-3 space-y-6">
-            {/* Progress Tracker */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
-              <h2 className="font-semibold text-lg mb-4">Progress to 10,000 Hours</h2>
-              
-              <div className="mb-2 flex justify-between text-sm">
-                <span>2,500 hours</span>
-                <span>10,000 hours</span>
-              </div>
-              
-              <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-6">
-                <div 
-                  className="h-full bg-gray-400 dark:bg-gray-500" 
-                  style={{ width: '25%' }}
-                ></div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
-                  <div className="text-sm text-gray-500 dark:text-gray-400">Daily Average</div>
-                  <div className="text-xl font-bold">2.5 hrs</div>
-                </div>
-                
-                <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
-                  <div className="text-sm text-gray-500 dark:text-gray-400">Remaining</div>
-                  <div className="text-xl font-bold">7,500 hrs</div>
-                </div>
-              </div>
-            </div>
+            {/* Progress Tracker - now using session data */}
+            <ProgressTracker />
             
             {/* Achievements */}
             <Achievements />
@@ -607,6 +658,9 @@ function App() {
         } else {
           console.log('Database connected successfully');
           setDbConnected(true);
+          
+          // Ensure pomodoro_sessions table exists
+          await ensurePomodoroSessionsTable();
         }
       } catch (e) {
         console.error('Error checking database connection:', e);
@@ -624,16 +678,19 @@ function App() {
       <Router basename="/">
         <AuthProvider>
           <TaskProvider>
-            <Suspense fallback={<LoadingFallback />}>
-              <Routes>
-                <Route path="/" element={<MainApp />} />
-                <Route path="/reset-password" element={<ResetPasswordForm />} />
-                <Route path="/auth/callback" element={<AuthCallback />} />
-                <Route path="/debug/tasks" element={<TaskDebugView />} />
-                <Route path="/test-task-layout" element={<TaskItemTest />} />
-                <Route path="/debug-task-layout" element={<TaskItemDebug />} />
-              </Routes>
-            </Suspense>
+            <SessionProvider>
+              <Suspense fallback={<LoadingFallback />}>
+                <Routes>
+                  <Route path="/" element={<MainApp />} />
+                  <Route path="/reset-password" element={<ResetPasswordForm />} />
+                  <Route path="/auth/callback" element={<AuthCallback />} />
+                  <Route path="/debug/tasks" element={<TaskDebugView />} />
+                  <Route path="/debug/sessions" element={<SessionDebugView />} />
+                  <Route path="/test-task-layout" element={<TaskItemTest />} />
+                  <Route path="/debug-task-layout" element={<TaskItemDebug />} />
+                </Routes>
+              </Suspense>
+            </SessionProvider>
           </TaskProvider>
         </AuthProvider>
       </Router>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CheckSquare, Square, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckSquare, Square, ChevronDown, ChevronUp, Clock } from 'lucide-react';
 import { useTheme } from '../theme';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 
@@ -25,6 +25,18 @@ const SortableSessionItem = ({
     id: session.id,
   });
   const { theme } = useTheme();
+
+  // Helper function to format time display
+  const formatTaskTime = (session) => {
+    // Convert pomodoros to minutes (assuming 1 pomodoro = 25 minutes)
+    const pomoToMinutes = (pomodoros) => (pomodoros || 0) * 25;
+    
+    // Get time spent and estimated time in minutes
+    const timeSpentMinutes = pomoToMinutes(session?.pomodoros || 0);
+    const estimatedTimeMinutes = pomoToMinutes(session?.estimatedPomodoros || 1);
+    
+    return `${timeSpentMinutes}/${estimatedTimeMinutes}m`;
+  };
 
   // Update vertical indicator height when content changes
   useEffect(() => {
@@ -286,8 +298,9 @@ const SortableSessionItem = ({
             </div>
             
             <div className="flex items-center">
-              <div className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-3">
-                {session.duration || `${(session.estimatedPomodoros || 1) * 25}min`}
+              <div className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-3 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                {formatTaskTime(session)}
               </div>
               
               {/* Move buttons for alternative to drag and drop (mobile friendly) */}
@@ -372,8 +385,9 @@ const SortableSessionItem = ({
           </div>
           
           <div className="flex items-center">
-            <div className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-3">
-              {session.duration || `${(session.estimatedPomodoros || 1) * 25}min`}
+            <div className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-3 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+              {formatTaskTime(session)}
             </div>
             
             {/* Move buttons for alternative to drag and drop (mobile friendly) */}
