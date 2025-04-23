@@ -22,9 +22,8 @@ import TaskItemTest from './components/TaskList/TaskItemTest';
 import TaskItemDebug from './components/TaskList/TaskItemDebug';
 import { useSession } from './hooks/useSession';
 import ProgressTracker from './components/ProgressTracker';
-import SessionStats from './components/SessionStats';
-import SessionHistory from './components/SessionHistory';
 import SessionDebugView from './components/SessionDebugView';
+import { SettingsProvider } from './contexts/SettingsContext';
 
 // Make test function available in the global scope for console debugging
 window.testSupabaseConnection = testSupabaseConnection;
@@ -50,21 +49,23 @@ const LoadingFallback = () => (
 );
 
 // Add this helper function before the MainApp component
-function formatTaskTime(task) {
-  // Convert pomodoros to minutes (assuming 1 pomodoro = 25 minutes)
-  const pomoToMinutes = (pomodoros) => (pomodoros || 0) * 25;
+function formatTaskTime(task, settings) {
+  const pomodoroTime = settings?.pomodoroTime || 25;
   
-  // Get time spent and estimated time in minutes
-  const timeSpentMinutes = pomoToMinutes(task?.pomodoros || 0);
-  const estimatedTimeMinutes = pomoToMinutes(task?.estimatedPomodoros || 1);
+  // Check if we have direct timeSpent value (in hours)
+  const timeSpentMinutes = task?.timeSpent ? Math.round(task.timeSpent * 60) : 0;
+  
+  // For estimated time, check timeEstimated first, then fall back to estimatedPomodoros
+  const estimatedTimeMinutes = task?.timeEstimated || 
+    (task?.estimatedPomodoros ? task.estimatedPomodoros * pomodoroTime : pomodoroTime);
   
   return `${timeSpentMinutes}/${estimatedTimeMinutes}m`;
 }
 
 function MainApp() {
   const { currentUser, isAuthLoading } = useAuth();
-  const { setActiveTask, moveToMainTasks, addTask } = useTasks();
-  const { startSession, completeSession, activeSessionId } = useSession();
+  const { setActiveTask, moveToMainTasks, addTask, updateTask } = useTasks();
+  const { startSession, completeSession, activeSessionId, updateSessionDuration } = useSession();
   const [loading, setLoading] = useState(true);
   // Get settings from localStorage or use defaults
   const [settings, setSettings] = useState(defaultSettings);
@@ -282,12 +283,21 @@ function MainApp() {
     // Start a session if in pomodoro mode and a task is selected
     if (mode === 'pomodoro' && selectedTask?.id && !activeSessionId) {
       console.log('Starting session for task:', selectedTask.id);
-      startSession(selectedTask.id);
+      startSession(selectedTask.id)
+        .then(session => {
+          if (session) {
+            console.log('Session started successfully:', session.id);
+          } else {
+            console.error('Failed to start session');
+          }
+        })
+        .catch(err => console.error('Error starting session:', err));
     }
   }, [mode, selectedTask, activeSessionId, startSession]);
   
   const pauseTimer = () => {
     setIsPaused(true);
+    console.log('Timer paused');
   };
   
   const resetTimer = useCallback(() => {
@@ -300,12 +310,20 @@ function MainApp() {
     }
     setIsActive(false);
     setIsPaused(true);
+    console.log('Timer reset');
   }, [mode, settings]);
   
   const skipTimer = useCallback(() => {
     // If in pomodoro mode and a session is active, complete it
     if (mode === 'pomodoro' && activeSessionId) {
-      completeSession(activeSessionId, settings.pomodoroTime * 60);
+      console.log('Skipping timer and completing session:', activeSessionId);
+      completeSession(activeSessionId, settings.pomodoroTime * 60)
+        .then(success => {
+          console.log('Session completed after skip:', success ? 'success' : 'failed');
+        })
+        .catch(err => console.error('Error completing session after skip:', err));
+    } else {
+      console.log('Skipping timer (no active session)');
     }
     
     resetTimer();
@@ -334,15 +352,69 @@ function MainApp() {
   useEffect(() => {
     let interval = null;
     let sessionStartTime = null;
+    let lastMinuteLogged = null;
     
     if (isActive && !isPaused) {
       // If starting a pomodoro session, record the start time
       if (mode === 'pomodoro' && activeSessionId) {
         sessionStartTime = Date.now();
+        lastMinuteLogged = Math.floor(time / 60); // Initial full minutes remaining
+        console.log(`Starting timer with ${lastMinuteLogged} minutes remaining`);
       }
       
       interval = setInterval(() => {
         setTime((prevTime) => {
+          // Log time spent at each minute threshold for pomodoro sessions
+          if (mode === 'pomodoro' && activeSessionId && selectedTask?.id) {
+            const currentMinutesRemaining = Math.floor(prevTime / 60);
+            
+            // If we've passed a full minute threshold
+            if (currentMinutesRemaining < lastMinuteLogged) {
+              const minutesPassed = lastMinuteLogged - currentMinutesRemaining;
+              console.log(`Timer passed minute threshold: ${lastMinuteLogged} -> ${currentMinutesRemaining}, logging ${minutesPassed} minute(s)`);
+              
+              // Update the lastMinuteLogged for next threshold
+              lastMinuteLogged = currentMinutesRemaining;
+              
+              // Calculate elapsed time in seconds since start
+              const elapsedSeconds = settings.pomodoroTime * 60 - prevTime;
+              console.log(`Elapsed seconds: ${elapsedSeconds}`);
+              
+              // Update the session duration without completing it
+              try {
+                if (updateSessionDuration && activeSessionId) {
+                  updateSessionDuration(activeSessionId, elapsedSeconds)
+                    .then(success => {
+                      console.log(`Updated session duration: ${success ? 'success' : 'failed'}`);
+                      
+                      // Also update the local task state to show progress
+                      if (selectedTask && updateTask) {
+                        // Calculate elapsed hours for timeSpent
+                        const elapsedHours = elapsedSeconds / 3600;
+                        
+                        // Update task with partial time spent
+                        updateTask(selectedTask.id, {
+                          timeSpent: elapsedHours
+                        })
+                        .then(() => {
+                          // Also update the local selectedTask state for immediate UI feedback
+                          setSelectedTask(prev => ({
+                            ...prev,
+                            timeSpent: elapsedHours
+                          }));
+                        })
+                        .catch(err => console.error('Error updating task during timer:', err));
+                      }
+                    })
+                    .catch(err => console.error('Error updating session duration:', err));
+                }
+              } catch (err) {
+                console.error('Error updating incremental time:', err);
+              }
+            }
+          }
+          
+          // Handle timer completion
           if (prevTime <= 1) {
             clearInterval(interval);
             setIsActive(false);
@@ -350,7 +422,7 @@ function MainApp() {
             
             // If in pomodoro mode and a session is active, complete it
             if (mode === 'pomodoro' && activeSessionId) {
-              console.log(`Completing session ${activeSessionId} after timer finished`);
+              console.log(`Timer finished, completing session ${activeSessionId}`);
               
               // Calculate actual duration based on the elapsed time
               let actualDuration = settings.pomodoroTime * 60; // Default to full duration
@@ -359,9 +431,41 @@ function MainApp() {
                 // Calculate elapsed time in seconds
                 const elapsedMilliseconds = Date.now() - sessionStartTime;
                 actualDuration = Math.round(elapsedMilliseconds / 1000);
+                console.log(`Calculated actual duration: ${actualDuration} seconds`);
               }
               
-              completeSession(activeSessionId, actualDuration);
+              // Complete the session with the actual duration
+              completeSession(activeSessionId, actualDuration)
+                .then(success => {
+                  console.log(`Session completed after timer finished: ${success ? 'success' : 'failed'}`);
+                  
+                  // If the session was completed successfully, update the task
+                  if (success && selectedTask) {
+                    // Calculate elapsed hours and pomodoros
+                    const elapsedHours = actualDuration / 3600;
+                    // Use pomodoroTime from settings (in minutes) * 60 to get seconds
+                    const pomodoroSeconds = settings.pomodoroTime * 60;
+                    const elapsedPomodoros = Math.floor(actualDuration / pomodoroSeconds);
+                    
+                    // Update the task with the final time spent
+                    if (updateTask) {
+                      updateTask(selectedTask.id, {
+                        timeSpent: elapsedHours,
+                        pomodoros: elapsedPomodoros
+                      })
+                      .then(() => {
+                        // Update the local selectedTask state for immediate UI feedback
+                        setSelectedTask(prev => ({
+                          ...prev,
+                          timeSpent: elapsedHours,
+                          pomodoros: elapsedPomodoros
+                        }));
+                      })
+                      .catch(err => console.error('Error updating task after session completion:', err));
+                    }
+                  }
+                })
+                .catch(err => console.error('Error completing session after timer finished:', err));
             }
             
             // Auto-start next session if enabled
@@ -374,6 +478,8 @@ function MainApp() {
               } else {
                 nextMode = 'pomodoro';
               }
+              
+              console.log(`Auto-starting next mode: ${nextMode}`);
               
               // Change mode and start timer
               setTimeout(() => {
@@ -401,7 +507,7 @@ function MainApp() {
     }
     
     return () => clearInterval(interval);
-  }, [isActive, isPaused, mode, settings, activeSessionId, completeSession, selectedTask, startTimer]);
+  }, [isActive, isPaused, mode, settings, activeSessionId, completeSession, selectedTask, startTimer, updateSessionDuration, updateTask]);
   
   // Handle task selection from SessionsList 
   const handleTaskSelection = (task, isExplicitSelection = true) => {
@@ -476,11 +582,37 @@ function MainApp() {
               </button>
             )}
             
-            {/* Session Statistics */}
-            <SessionStats />
-            
-            {/* Session History */}
-            <SessionHistory limit={3} />
+            {/* Projects */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="font-semibold text-lg">Projects</h2>
+                <button className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="space-y-3">
+                {projects.map(project => {
+                  const progress = (project.completedTasks / project.tasks) * 100;
+                  
+                  return (
+                    <div key={project.id} className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md cursor-pointer">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium">{project.name}</span>
+                        <span className="text-xs text-gray-500">{project.completedTasks}/{project.tasks}</span>
+                      </div>
+                      
+                      <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gray-400 dark:bg-gray-500" 
+                          style={{ width: `${progress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
           
           {/* Main content */}
@@ -558,7 +690,7 @@ function MainApp() {
                           <span>{selectedTask.title}</span>
                           <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                             <Clock className="w-3 h-3" />
-                            {formatTaskTime(selectedTask)}
+                            {formatTaskTime(selectedTask, settings)}
                           </span>
                         </div>
                       ) : (
@@ -588,38 +720,6 @@ function MainApp() {
             
             {/* Achievements */}
             <Achievements />
-            
-            {/* Projects - moved from left sidebar */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="font-semibold text-lg">Projects</h2>
-                <button className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-              
-              <div className="space-y-3">
-                {projects.map(project => {
-                  const progress = (project.completedTasks / project.tasks) * 100;
-                  
-                  return (
-                    <div key={project.id} className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md cursor-pointer">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium">{project.name}</span>
-                        <span className="text-xs text-gray-500">{project.completedTasks}/{project.tasks}</span>
-                      </div>
-                      
-                      <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gray-400 dark:bg-gray-500" 
-                          style={{ width: `${progress}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           </div>
         </div>
       </main>
@@ -640,6 +740,7 @@ function App() {
   
   const [dbConnected, setDbConnected] = useState(false);
   const [dbChecking, setDbChecking] = useState(true);
+  const [tableCreated, setTableCreated] = useState(false);
 
   // Check database connection on load
   useEffect(() => {
@@ -649,22 +750,59 @@ function App() {
         // Import Supabase directly
         const supabase = (await import('./lib/supabase')).default;
         
-        // Check connection by selecting from tasks
-        const { data, error } = await supabase.from('tasks').select('*').limit(1);
-        
-        if (error) {
-          console.error('Database connection error:', error);
-          setDbConnected(false);
-        } else {
-          console.log('Database connected successfully');
-          setDbConnected(true);
+        // First: Test basic database connection
+        console.log('App: Testing database connection...');
+        try {
+          const { data, error } = await supabase.from('tasks').select('*').limit(1);
           
-          // Ensure pomodoro_sessions table exists
-          await ensurePomodoroSessionsTable();
+          if (error) {
+            console.error('App: Database connection error:', error);
+            setDbConnected(false);
+          } else {
+            console.log('App: Database connected successfully');
+            setDbConnected(true);
+            
+            // Now explicitly ensure the pomodoro_sessions table exists
+            console.log('App: Ensuring pomodoro_sessions table exists during startup...');
+            try {
+              const success = await ensurePomodoroSessionsTable();
+              console.log('App: pomodoro_sessions table status:', success ? 'created/exists' : 'creation failed');
+              setTableCreated(success);
+              
+              // If table creation was successful, verify it exists by querying it
+              if (success) {
+                try {
+                  console.log('App: Verifying pomodoro_sessions table...');
+                  const { error: sessionError } = await supabase
+                    .from('pomodoro_sessions')
+                    .select('id')
+                    .limit(1);
+                  
+                  if (sessionError) {
+                    console.error('App: Error accessing pomodoro_sessions table:', sessionError);
+                    setTableCreated(false);
+                  } else {
+                    console.log('App: pomodoro_sessions table verified successfully');
+                    setTableCreated(true);
+                  }
+                } catch (verifyError) {
+                  console.error('App: Error verifying table:', verifyError);
+                  setTableCreated(false);
+                }
+              }
+            } catch (tableError) {
+              console.error('App: Error creating table:', tableError);
+              setTableCreated(false);
+            }
+          }
+        } catch (connectionError) {
+          console.error('App: Error testing database connection:', connectionError);
+          setDbConnected(false);
         }
       } catch (e) {
-        console.error('Error checking database connection:', e);
+        console.error('App: General error checking database:', e);
         setDbConnected(false);
+        setTableCreated(false);
       } finally {
         setDbChecking(false);
       }
@@ -677,25 +815,27 @@ function App() {
     <ThemeProvider>
       <Router basename="/">
         <AuthProvider>
-          <TaskProvider>
-            <SessionProvider>
-              <Suspense fallback={<LoadingFallback />}>
-                <Routes>
-                  <Route path="/" element={<MainApp />} />
-                  <Route path="/reset-password" element={<ResetPasswordForm />} />
-                  <Route path="/auth/callback" element={<AuthCallback />} />
-                  <Route path="/debug/tasks" element={<TaskDebugView />} />
-                  <Route path="/debug/sessions" element={<SessionDebugView />} />
-                  <Route path="/test-task-layout" element={<TaskItemTest />} />
-                  <Route path="/debug-task-layout" element={<TaskItemDebug />} />
-                </Routes>
-              </Suspense>
-            </SessionProvider>
-          </TaskProvider>
+          <SettingsProvider>
+            <TaskProvider>
+              <SessionProvider>
+                <Suspense fallback={<LoadingFallback />}>
+                  <Routes>
+                    <Route path="/" element={<MainApp />} />
+                    <Route path="/reset-password" element={<ResetPasswordForm />} />
+                    <Route path="/auth/callback" element={<AuthCallback />} />
+                    <Route path="/debug/tasks" element={<TaskDebugView />} />
+                    <Route path="/debug/sessions" element={<SessionDebugView />} />
+                    <Route path="/test-task-layout" element={<TaskItemTest />} />
+                    <Route path="/debug-task-layout" element={<TaskItemDebug />} />
+                  </Routes>
+                </Suspense>
+              </SessionProvider>
+            </TaskProvider>
+          </SettingsProvider>
         </AuthProvider>
       </Router>
     </ThemeProvider>
   );
 }
 
-export default App; 
+export default App;
