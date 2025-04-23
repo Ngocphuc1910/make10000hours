@@ -1,7 +1,9 @@
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
-import { getPomodoroSessions, createPomodoroSession, updatePomodoroSession } from '../lib/database';
+import { getPomodoroSessions, createPomodoroSession, updatePomodoroSession, updateTask } from '../lib/database';
 import { useAuth } from '../hooks/useAuth';
 import { TaskContext } from './TaskContext';
+import { SettingsContext } from './SettingsContext';
+import supabase from '../lib/supabase';
 
 export const SessionContext = createContext();
 
@@ -10,8 +12,22 @@ export const SessionProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeSessionId, setActiveSessionId] = useState(null);
+  const [activeDuration, setActiveDuration] = useState(0); // For tracking active session duration
   const { currentUser } = useAuth();
   const { getTaskById } = useContext(TaskContext);
+  
+  // Get settings context safely with fallback
+  const settingsContext = useContext(SettingsContext);
+  // Default pomodoro time if settings not available
+  const DEFAULT_POMODORO_TIME = 25;
+  
+  // Get pomodoro time from settings or use default
+  const getPomodoroTime = () => {
+    return settingsContext?.settings?.pomodoroTime || DEFAULT_POMODORO_TIME;
+  };
+  
+  // Get pomodoro session length in seconds
+  const pomodoroSeconds = getPomodoroTime() * 60;
   
   // Load sessions when user changes or component mounts
   useEffect(() => {
@@ -51,6 +67,9 @@ export const SessionProvider = ({ children }) => {
           duration: currentDuration
         };
         
+        // Update active duration for real-time tracking
+        setActiveDuration(currentDuration);
+        
         return updatedSessions;
       });
     }, 1000); // Update every second
@@ -75,12 +94,17 @@ export const SessionProvider = ({ children }) => {
           taskId: session.task_id,
           startTime: session.start_time,
           endTime: session.end_time,
-          duration: session.duration, // in seconds
+          duration: session.duration || 0, // in seconds, ensure it has a value
           completed: !!session.completed,
-          taskName: session.tasks?.name || 'Untitled Task',
+          taskName: session.tasks?.name || session.tasks?.text || 'Untitled Task',
           projectId: session.tasks?.project_id,
           projectName: session.projects?.name,
-          synced: true
+          synced: true,
+          // Store raw database data for debugging/diagnosis
+          _raw: {
+            session_id: session.id,
+            duration: session.duration
+          }
         }));
         
         setSessions(normalizedSessions);
@@ -101,13 +125,135 @@ export const SessionProvider = ({ children }) => {
     }
   };
 
+  // Complete a session
+  const completeSession = useCallback(async (sessionId, duration) => {
+    try {
+      console.log(`SessionContext: Completing session ${sessionId}`);
+      
+      // Find the session in our state
+      const sessionIndex = sessions.findIndex(s => s.id === sessionId);
+      if (sessionIndex === -1) {
+        console.error('SessionContext: Cannot complete unknown session:', sessionId);
+        return false;
+      }
+      
+      // Update the session with completion data
+      const session = sessions[sessionIndex];
+      const endTime = new Date().toISOString();
+      
+      // If duration wasn't provided, calculate it from the start time
+      let calculatedDuration = duration;
+      if (!calculatedDuration && session.startTime) {
+        calculatedDuration = Math.floor((new Date() - new Date(session.startTime)) / 1000);
+        console.log(`SessionContext: Calculated duration: ${calculatedDuration} seconds`);
+      }
+      
+      // Ensure we have a valid duration
+      if (!calculatedDuration || calculatedDuration < 0) {
+        console.warn('SessionContext: Invalid duration detected, using default');
+        calculatedDuration = getPomodoroTime() * 60; // Use helper function for pomodoroTime
+      }
+      
+      const updatedSession = {
+        ...session,
+        endTime: endTime,
+        duration: calculatedDuration,
+        completed: true
+      };
+      
+      console.log('SessionContext: Session data for completion:', updatedSession);
+      
+      // Update in database if possible
+      let databaseUpdateSuccessful = false;
+      if (currentUser?.id && !session.id.startsWith('local-')) {
+        try {
+          console.log('SessionContext: Updating session in database');
+          await updatePomodoroSession(sessionId, {
+            end_time: endTime,
+            duration: updatedSession.duration,
+            completed: true
+          });
+          updatedSession.synced = true;
+          databaseUpdateSuccessful = true;
+          console.log('SessionContext: Database update successful');
+          
+          // Try to update the associated task's pomodoros if it exists
+          if (session.taskId) {
+            // Convert seconds to hours for timeSpent (stored as double precision)
+            const durationHours = updatedSession.duration / 3600;
+            
+            try {
+              console.log(`SessionContext: Updating task ${session.taskId} with completed session data`);
+              // Get current task data to calculate incremental values
+              const taskUpdateData = {
+                timeSpent: durationHours // Set absolute time spent for this session
+              };
+              
+              // If the duration is long enough for a pomodoro, increment the count
+              const currentPomodoroSeconds = getPomodoroTime() * 60;
+              if (updatedSession.duration >= currentPomodoroSeconds) {
+                const pomodoroCount = Math.floor(updatedSession.duration / currentPomodoroSeconds);
+                taskUpdateData.pomodoro_count = pomodoroCount;
+              }
+              
+              await updateTask(session.taskId, taskUpdateData);
+              console.log(`Session completed for task ${session.taskId}: updated timeSpent to ${durationHours} hours`);
+            } catch (taskUpdateErr) {
+              console.error('Error updating task timeSpent on completion:', taskUpdateErr);
+            }
+          }
+        } catch (err) {
+          console.error('SessionContext: Error updating session in database:', err);
+          updatedSession.synced = false;
+        }
+      } else {
+        console.log('SessionContext: No database update (offline or local session)');
+      }
+      
+      // Update local state regardless of database success
+      const updatedSessions = [...sessions];
+      updatedSessions[sessionIndex] = updatedSession;
+      setSessions(updatedSessions);
+      
+      // Clear active session ID if this was the active one
+      if (activeSessionId === sessionId) {
+        console.log('SessionContext: Clearing active session ID');
+        setActiveSessionId(null);
+      }
+      
+      // Update localStorage for offline access
+      localStorage.setItem('pomodoro-sessions', JSON.stringify(updatedSessions));
+      
+      return databaseUpdateSuccessful;
+    } catch (error) {
+      console.error('SessionContext: Error completing session:', error);
+      // Still try to update local state if possible
+      try {
+        if (activeSessionId === sessionId) {
+          setActiveSessionId(null);
+        }
+      } catch (e) {
+        console.error('SessionContext: Error clearing active session:', e);
+      }
+      return false;
+    }
+  }, [sessions, activeSessionId, currentUser, updateTask]);
+
   // Start a new session
   const startSession = useCallback(async (taskId) => {
     try {
+      console.log(`SessionContext: Starting session for task ID: ${taskId}`);
+      
       const task = getTaskById(taskId);
       if (!task) {
         console.error('SessionContext: Cannot start session for unknown task:', taskId);
         return null;
+      }
+      
+      // First check if there's already an active session
+      if (activeSessionId) {
+        console.warn('SessionContext: There is already an active session, completing it first');
+        await completeSession(activeSessionId);
       }
       
       // Create a new session object
@@ -120,105 +266,173 @@ export const SessionProvider = ({ children }) => {
       };
       
       let sessionId;
+      let sessionCreatedInDb = false;
       
       // Save to database if user is logged in
       if (currentUser?.id) {
         try {
+          console.log('SessionContext: Creating session in database');
           const createdSession = await createPomodoroSession(newSession);
           sessionId = createdSession.id;
+          sessionCreatedInDb = true;
+          console.log(`SessionContext: Session created with ID: ${sessionId}`);
         } catch (err) {
           console.error('SessionContext: Error creating session in database:', err);
           // Generate temporary ID for offline mode
           sessionId = `local-${Date.now()}`;
+          console.log(`SessionContext: Using local ID instead: ${sessionId}`);
         }
       } else {
         // Generate ID for offline mode
         sessionId = `local-${Date.now()}`;
+        console.log(`SessionContext: Using local ID (not logged in): ${sessionId}`);
       }
       
-      // Add to local state with the ID
+      // Properly normalize the session data for consistent format
       const sessionWithId = { 
-        ...newSession, 
         id: sessionId,
-        taskName: task.title,
-        projectId: task.projectId,
-        synced: !!currentUser?.id
+        userId: currentUser?.id,
+        taskId: taskId,
+        startTime: newSession.start_time,
+        endTime: null,
+        duration: 0,
+        completed: false,
+        taskName: task.title || task.text || 'Untitled Task',
+        projectId: task.projectId || task.project_id,
+        synced: sessionCreatedInDb,
+        createdAt: new Date().toISOString()
       };
       
+      console.log('SessionContext: Adding session to local state:', sessionWithId);
+      
+      // Update state with new session at the beginning of the array
       setSessions(prev => [sessionWithId, ...prev]);
       setActiveSessionId(sessionId);
       
-      // Update localStorage
+      // Update localStorage for offline access
       const updatedSessions = [sessionWithId, ...sessions];
       localStorage.setItem('pomodoro-sessions', JSON.stringify(updatedSessions));
       
       return sessionWithId;
     } catch (error) {
-      console.error('SessionContext: Error starting session:', error);
+      console.error('SessionContext: Unexpected error starting session:', error);
       return null;
     }
-  }, [currentUser, getTaskById, sessions]);
+  }, [currentUser, getTaskById, sessions, activeSessionId, completeSession]);
 
-  // Complete a session
-  const completeSession = useCallback(async (sessionId, duration) => {
+  // Update session duration (for real-time tracking)
+  const updateSessionDuration = async (sessionId, durationInSeconds) => {
+    console.log(`DEBUGGING: SessionContext - updateSessionDuration called with sessionId=${sessionId}, durationInSeconds=${durationInSeconds}`);
+    
+    // First, find the session in our local state
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) {
+      console.error(`DEBUGGING: SessionContext - Session with ID ${sessionId} not found`);
+      return false;
+    }
+    
+    // Calculate hours for database storage (convert seconds to hours)
+    const durationInHours = durationInSeconds / 3600;
+    
+    // Get the task associated with this session
+    const taskId = session.taskId;
+    
     try {
-      // Find the session in our state
-      const sessionIndex = sessions.findIndex(s => s.id === sessionId);
-      if (sessionIndex === -1) {
-        console.error('SessionContext: Cannot complete unknown session:', sessionId);
-        return false;
-      }
+      // Update local state first for immediate UI response
+      setActiveDuration(durationInSeconds);
       
-      // Update the session with completion data
-      const session = sessions[sessionIndex];
-      const endTime = new Date().toISOString();
-      const updatedSession = {
-        ...session,
-        endTime: endTime,
-        duration: duration || Math.floor((new Date() - new Date(session.startTime)) / 1000),
-        completed: true
-      };
+      // Determine if we should force a save (e.g., every minute or on significant changes)
+      const shouldForceSave = durationInSeconds % 60 === 0;
       
-      // Update in database if possible
-      if (currentUser?.id && !session.id.startsWith('local-')) {
-        try {
-          await updatePomodoroSession(sessionId, {
-            end_time: endTime,
-            duration: updatedSession.duration,
-            completed: true
-          });
-          updatedSession.synced = true;
-          
-          // Try to update the associated task's pomodoros if it exists
-          if (session.taskId) {
-            // This would update the task's completed pomodoros in the database
-            // A direct implementation would require TaskContext methods
-            console.log('Session completed for task:', session.taskId, 'with duration:', updatedSession.duration);
+      // Every minute, update the database to avoid excessive writes
+      if (durationInSeconds % 60 === 0 || shouldForceSave) {
+        console.log(`DEBUGGING: SessionContext - Saving session duration to database: ${durationInSeconds} seconds (${durationInHours} hours)`);
+        
+        // If we have a Supabase connection, update the database
+        if (supabase && currentUser) {
+          // Update the session record
+          const { data: updatedSession, error: sessionError } = await supabase
+            .from('sessions')
+            .update({ 
+              duration: durationInHours
+            })
+            .eq('id', sessionId)
+            .select('*')
+            .single();
+            
+          if (sessionError) {
+            console.error('DEBUGGING: SessionContext - Error updating session duration:', sessionError);
+            return false;
           }
-        } catch (err) {
-          console.error('SessionContext: Error updating session in database:', err);
-          updatedSession.synced = false;
+          
+          console.log('DEBUGGING: SessionContext - Session duration updated successfully:', updatedSession);
+          
+          // If we have a task ID, also update the task's timeSpent
+          if (taskId) {
+            console.log(`DEBUGGING: SessionContext - Updating timeSpent for task ${taskId}`);
+            
+            // Calculate the duration in minutes for the task's timeSpent
+            const durationInMinutes = Math.floor(durationInSeconds / 60);
+            
+            // First get the current task to know its timeSpent
+            const { data: currentTask, error: fetchError } = await supabase
+              .from('tasks')
+              .select('timeSpent')
+              .eq('id', taskId)
+              .single();
+              
+            if (fetchError) {
+              console.error('DEBUGGING: SessionContext - Error fetching task for timeSpent update:', fetchError);
+              return false;
+            }
+            
+            // Calculate the difference between the current session duration and what was previously recorded
+            // This ensures we're only adding the new time spent, not double-counting
+            const previousSessionDuration = session.previousDuration || 0; // In seconds
+            const previousMinutes = Math.floor(previousSessionDuration / 60);
+            const minutesToAdd = durationInMinutes - previousMinutes;
+            
+            console.log(`DEBUGGING: SessionContext - Previous minutes: ${previousMinutes}, Current minutes: ${durationInMinutes}, Adding: ${minutesToAdd}`);
+            
+            // Store the current duration as previous for next update
+            session.previousDuration = durationInSeconds;
+            
+            // Only update if there's actual new time to add
+            if (minutesToAdd > 0) {
+              // Ensure timeSpent is a number and add the new minutes
+              const currentTimeSpent = typeof currentTask.timeSpent === 'number' ? currentTask.timeSpent : 0;
+              const newTimeSpent = currentTimeSpent + minutesToAdd;
+              
+              console.log(`DEBUGGING: SessionContext - Current timeSpent: ${currentTimeSpent}, New timeSpent: ${newTimeSpent}`);
+              
+              // Update the task record
+              const { data: updatedTask, error: taskError } = await supabase
+                .from('tasks')
+                .update({ 
+                  timeSpent: newTimeSpent
+                })
+                .eq('id', taskId)
+                .select('*')
+                .single();
+                
+              if (taskError) {
+                console.error('DEBUGGING: SessionContext - Error updating task timeSpent:', taskError);
+              } else {
+                console.log('DEBUGGING: SessionContext - Task timeSpent updated successfully:', updatedTask);
+              }
+            }
+          }
+          
+          return true;
         }
       }
       
-      // Update local state
-      const updatedSessions = [...sessions];
-      updatedSessions[sessionIndex] = updatedSession;
-      setSessions(updatedSessions);
-      
-      if (activeSessionId === sessionId) {
-        setActiveSessionId(null);
-      }
-      
-      // Update localStorage
-      localStorage.setItem('pomodoro-sessions', JSON.stringify(updatedSessions));
-      
       return true;
     } catch (error) {
-      console.error('SessionContext: Error completing session:', error);
+      console.error('DEBUGGING: SessionContext - Error in updateSessionDuration:', error);
       return false;
     }
-  }, [sessions, activeSessionId, currentUser]);
+  };
 
   // Get active session
   const getActiveSession = useCallback(() => {
@@ -279,6 +493,7 @@ export const SessionProvider = ({ children }) => {
       activeSessionId,
       startSession,
       completeSession,
+      updateSessionDuration,
       getActiveSession,
       getTotalHours,
       getSessionsByTask,

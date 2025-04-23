@@ -485,6 +485,8 @@ export const getTasks = async (userId, projectId = null) => {
       status: status, // Use the determined status
       estimated_pomodoros: task.target_pomodoros || 0, // Map target_pomodoros to estimated_pomodoros
       completed_pomodoros: task.pomodoro_count || 0, // Map pomodoro_count to completed_pomodoros
+      timeSpent: parseFloat(task.timeSpent) || 0, // Include timeSpent field (in hours)
+      timeEstimated: parseInt(task.timeEstimated, 10) || 25, // Include timeEstimated field (in minutes)
       due_date: task.due_date,
       is_archived: task.is_archived || false,
       created_at: task.created_at,
@@ -513,7 +515,9 @@ export const createTask = async (userId, taskData) => {
       completed_at: taskData.status === 'completed' ? new Date().toISOString() : null,
       pomodoro_count: parseInt(taskData.pomodoros, 10) || 0, // DB column is 'pomodoro_count'
       target_pomodoros: parseInt(taskData.estimatedPomodoros, 10) || 1, // DB column is 'target_pomodoros'
-      project_id: taskData.projectId || null
+      project_id: taskData.projectId || null,
+      timeEstimated: parseInt(taskData.timeEstimated, 10) || 25, // Add the timeEstimated field
+      timeSpent: parseFloat(taskData.timeSpent) || 0 // Add the timeSpent field (in hours)
     };
     
     console.log('DEBUGGING: database.js - Saving task to database with data:', dbTaskData);
@@ -544,6 +548,8 @@ export const createTask = async (userId, taskData) => {
           pomodoro_count: dbTaskData.pomodoro_count,
           target_pomodoros: dbTaskData.target_pomodoros,
           project_id: dbTaskData.project_id,
+          timeSpent: parseFloat(dbTaskData.timeSpent) || 0,
+          timeEstimated: parseInt(dbTaskData.timeEstimated, 10) || 25,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -595,6 +601,13 @@ export const createTask = async (userId, taskData) => {
           notes: dbTaskData.notes,
           status: 'error',
           error_message: 'Invalid API key - tasks cannot be saved to database',
+          completed: dbTaskData.completed,
+          completed_at: dbTaskData.completed_at,
+          pomodoro_count: dbTaskData.pomodoro_count,
+          target_pomodoros: dbTaskData.target_pomodoros,
+          project_id: dbTaskData.project_id,
+          timeSpent: parseFloat(dbTaskData.timeSpent) || 0,
+          timeEstimated: parseInt(dbTaskData.timeEstimated, 10) || 25,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -614,6 +627,8 @@ export const createTask = async (userId, taskData) => {
         status: taskData.status || 'todo',
         estimated_pomodoros: dbTaskData.target_pomodoros,
         completed_pomodoros: dbTaskData.pomodoro_count,
+        timeSpent: parseFloat(dbTaskData.timeSpent) || 0,
+        timeEstimated: parseInt(dbTaskData.timeEstimated, 10) || 25,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -635,6 +650,10 @@ export const createTask = async (userId, taskData) => {
       estimated_pomodoros: data.target_pomodoros || 1,
       completed_pomodoros: data.pomodoro_count || 0,
       project_id: data.project_id,
+      timeSpent: parseFloat(data.timeSpent) || 0,
+      timeEstimated: parseInt(data.timeEstimated, 10) || 25,
+      due_date: data.due_date,
+      is_archived: data.is_archived || false,
       created_at: data.created_at,
       updated_at: data.updated_at
     };
@@ -687,6 +706,8 @@ export const updateTask = async (taskId, updates) => {
     if (updates.completed_pomodoros !== undefined) dbUpdates.pomodoro_count = updates.completed_pomodoros;
     if (updates.is_archived !== undefined) dbUpdates.is_archived = updates.is_archived;
     if (updates.due_date !== undefined) dbUpdates.due_date = updates.due_date;
+    if (updates.timeEstimated !== undefined) dbUpdates.timeEstimated = parseInt(updates.timeEstimated, 10) || 25;
+    if (updates.timeSpent !== undefined) dbUpdates.timeSpent = parseFloat(updates.timeSpent) || 0; // Store timeSpent in hours
     
     dbUpdates.updated_at = new Date().toISOString();
     
@@ -745,6 +766,8 @@ export const updateTask = async (taskId, updates) => {
               (task.notes && task.notes.startsWith('[SESSION_TASK]')) ? 'session' : 'todo',
       estimated_pomodoros: task.target_pomodoros || 0,
       completed_pomodoros: task.pomodoro_count || 0,
+      timeSpent: parseFloat(task.timeSpent) || 0,
+      timeEstimated: parseInt(task.timeEstimated, 10) || 25,
       due_date: task.due_date,
       is_archived: task.is_archived || false,
       created_at: task.created_at,
@@ -807,6 +830,8 @@ export const deleteTask = async (taskId) => {
 // This function can be called during app initialization to ensure the table exists
 export const ensurePomodoroSessionsTable = async () => {
   try {
+    console.log('Checking if pomodoro_sessions table exists...');
+    
     // Check if the table exists by doing a simple query
     const { error: checkError } = await supabase
       .from('pomodoro_sessions')
@@ -820,19 +845,95 @@ export const ensurePomodoroSessionsTable = async () => {
     }
     
     // If error indicates table doesn't exist, create it
-    if (checkError.code === '42P01' || checkError.message.includes('relation "pomodoro_sessions" does not exist')) {
-      console.log('pomodoro_sessions table does not exist, creating...');
+    if (checkError.code === '42P01' || checkError.message?.includes('relation "pomodoro_sessions" does not exist')) {
+      console.log('pomodoro_sessions table does not exist, attempting to create...');
       
-      // Create the table using SQL
-      const { error: createError } = await supabase.rpc('create_pomodoro_sessions_table');
+      // Direct SQL approach as the most reliable method
+      console.log('Creating table with direct SQL...');
+      const { error: sqlError } = await supabase.query(`
+        CREATE TABLE IF NOT EXISTS public.pomodoro_sessions (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          user_id UUID NOT NULL,
+          task_id UUID,
+          start_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+          end_time TIMESTAMP WITH TIME ZONE,
+          duration INTEGER NOT NULL DEFAULT 0,
+          completed BOOLEAN NOT NULL DEFAULT false,
+          created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+        );
+        
+        -- Enable RLS
+        ALTER TABLE public.pomodoro_sessions ENABLE ROW LEVEL SECURITY;
+        
+        -- Create basic policies
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_policy 
+            WHERE schemaname = 'public' 
+            AND tablename = 'pomodoro_sessions' 
+            AND policyname = 'pomodoro_sessions_select_policy'
+          ) THEN
+            CREATE POLICY pomodoro_sessions_select_policy ON public.pomodoro_sessions
+              FOR SELECT USING (auth.uid() = user_id);
+          END IF;
+          
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_policy 
+            WHERE schemaname = 'public' 
+            AND tablename = 'pomodoro_sessions' 
+            AND policyname = 'pomodoro_sessions_insert_policy'
+          ) THEN
+            CREATE POLICY pomodoro_sessions_insert_policy ON public.pomodoro_sessions
+              FOR INSERT WITH CHECK (auth.uid() = user_id);
+          END IF;
+          
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_policy 
+            WHERE schemaname = 'public' 
+            AND tablename = 'pomodoro_sessions' 
+            AND policyname = 'pomodoro_sessions_update_policy'
+          ) THEN
+            CREATE POLICY pomodoro_sessions_update_policy ON public.pomodoro_sessions
+              FOR UPDATE USING (auth.uid() = user_id);
+          END IF;
+          
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_policy 
+            WHERE schemaname = 'public' 
+            AND tablename = 'pomodoro_sessions' 
+            AND policyname = 'pomodoro_sessions_delete_policy'
+          ) THEN
+            CREATE POLICY pomodoro_sessions_delete_policy ON public.pomodoro_sessions
+              FOR DELETE USING (auth.uid() = user_id);
+          END IF;
+        END
+        $$;
+        
+        -- Grant permissions
+        GRANT ALL ON public.pomodoro_sessions TO authenticated;
+      `);
       
-      if (createError) {
-        console.error('Error creating pomodoro_sessions table:', createError);
-        return false;
+      if (sqlError) {
+        console.error('Error with direct SQL creation of pomodoro_sessions table:', sqlError);
+        // Final fallback - try RPC method
+        try {
+          console.log('Trying RPC method as last resort...');
+          const { error: rpcError } = await supabase.rpc('create_pomodoro_sessions_table');
+          if (rpcError) {
+            console.error('All table creation methods failed:', rpcError);
+            return false;
+          }
+          console.log('Successfully created table with RPC function');
+          return true;
+        } catch (rpcException) {
+          console.error('Exception during RPC table creation:', rpcException);
+          return false;
+        }
+      } else {
+        console.log('Successfully created pomodoro_sessions table with direct SQL');
+        return true;
       }
-      
-      console.log('pomodoro_sessions table created successfully');
-      return true;
     }
     
     console.error('Unexpected error checking pomodoro_sessions table:', checkError);

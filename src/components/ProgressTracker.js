@@ -1,19 +1,31 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useSession } from '../hooks/useSession';
 import { TrendingUp, Timer, Calendar } from 'lucide-react';
 
 const ProgressTracker = () => {
-  const { sessions, getTotalHours } = useSession();
+  const { sessions, getTotalHours, activeSessionId } = useSession();
+  const [realTimeHours, setRealTimeHours] = useState(0);
   
-  // Get total hours logged
-  const totalHours = useMemo(() => {
-    return getTotalHours();
-  }, [getTotalHours]);
+  // Update total hours in real-time when a session is active
+  useEffect(() => {
+    // Calculate initial hours
+    setRealTimeHours(getTotalHours());
+    
+    // If no active session, no need for real-time updates
+    if (!activeSessionId) return;
+    
+    // Update every second when a session is active
+    const interval = setInterval(() => {
+      setRealTimeHours(getTotalHours());
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [getTotalHours, activeSessionId, sessions]);
   
   // Calculate percentage completion
   const percentComplete = useMemo(() => {
-    return Math.min(100, (totalHours / 10000) * 100);
-  }, [totalHours]);
+    return Math.min(100, (realTimeHours / 10000) * 100);
+  }, [realTimeHours]);
   
   // Calculate daily average
   const dailyAverage = useMemo(() => {
@@ -27,11 +39,11 @@ const ProgressTracker = () => {
     // Calculate days elapsed (minimum 1 to avoid division by zero)
     const daysElapsed = Math.max(1, Math.ceil((today - earliestDate) / (1000 * 60 * 60 * 24)));
     
-    return totalHours / daysElapsed;
-  }, [sessions, totalHours]);
+    return realTimeHours / daysElapsed;
+  }, [sessions, realTimeHours]);
   
   // Calculate time remaining
-  const hoursRemaining = 10000 - totalHours;
+  const hoursRemaining = 10000 - realTimeHours;
   
   // Calculate estimated completion date
   const estimatedCompletionDate = useMemo(() => {
@@ -53,7 +65,7 @@ const ProgressTracker = () => {
       <h2 className="font-semibold text-lg mb-4">Progress to 10,000 Hours</h2>
       
       <div className="mb-2 flex justify-between text-sm">
-        <span>{Math.round(totalHours)} hours</span>
+        <span>{Math.round(realTimeHours)} hours</span>
         <span>10,000 hours</span>
       </div>
       

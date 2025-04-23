@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { 
   CheckCircle2, 
   Circle, 
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import ProjectBadge from './ProjectBadge';
+import { SettingsContext } from '../../contexts/SettingsContext';
 
 /**
  * TaskItem component with a clean, structured layout
@@ -25,6 +26,9 @@ const TaskItem = ({
   onStartEditing, 
   onDelete 
 }) => {
+  const { settings } = useContext(SettingsContext);
+  const minutesPerPomodoro = settings?.pomodoroTime || 25;
+  
   // For debugging
   console.log('TaskItem rendering:', {
     id: task.id,
@@ -66,14 +70,18 @@ const TaskItem = ({
     display: 'block'
   };
 
-  // Convert pomodoros to minutes (assuming 1 pomodoro = 25 minutes)
-  const pomoToMinutes = (pomodoros) => (pomodoros || 0) * 25;
+  // Convert pomodoros to minutes using the dynamic pomodoro time setting
+  const pomoToMinutes = (pomodoros) => (pomodoros || 0) * minutesPerPomodoro;
   
-  // Get time spent in minutes
-  const timeSpentMinutes = pomoToMinutes(task.pomodoros || 0);
+  // Get time spent in minutes - prefer direct timeSpent field if available
+  const timeSpentMinutes = task.timeSpent !== undefined 
+    ? Math.round(task.timeSpent * 60) // Convert hours to minutes
+    : pomoToMinutes(task.pomodoros || 0);
   
-  // Get estimated time in minutes
-  const estimatedTimeMinutes = pomoToMinutes(task.estimatedPomodoros || 1);
+  // Get estimated time in minutes - prefer direct timeEstimated field if available
+  const estimatedTimeMinutes = task.timeEstimated !== undefined
+    ? task.timeEstimated
+    : pomoToMinutes(task.estimatedPomodoros || 1);
 
   // The content section with title, description, and metadata
   const TaskContent = () => (

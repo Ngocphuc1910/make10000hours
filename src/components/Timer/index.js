@@ -32,8 +32,8 @@ const Timer = () => {
   const [backgroundImage, setBackgroundImage] = useState('');
   const [showTaskDropdown, setShowTaskDropdown] = useState(false);
   
-  // Convert pomodoros to minutes (assuming 1 pomodoro = 25 minutes)
-  const pomoToMinutes = (pomodoros) => (pomodoros || 0) * 25;
+  // Convert pomodoros to minutes using current pomodoro time setting
+  const pomoToMinutes = (pomodoros) => (pomodoros || 0) * pomodoroTime;
   
   // Local state for timer settings form
   const [settingsForm, setSettingsForm] = useState({
