@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import { Clock, Plus, Minus } from 'lucide-react';
+import { SettingsContext } from '../../contexts/SettingsContext';
 
 const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
   const [title, setTitle] = useState('');
@@ -8,6 +9,13 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
   const [priority, setPriority] = useState('medium');
   const [estimatedPomodoros, setEstimatedPomodoros] = useState(1);
   const titleInputRef = useRef(null);
+  const { settings } = useContext(SettingsContext);
+  
+  // Calculate minutes per pomodoro based on settings
+  const minutesPerPomodoro = settings?.pomodoroTime || 25;
+  
+  // Initialize timeEstimated after we have settings
+  const [timeEstimated, setTimeEstimated] = useState(minutesPerPomodoro);
   
   // Focus the title input when the dialog opens
   useEffect(() => {
@@ -15,6 +23,23 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
       titleInputRef.current.focus();
     }
   }, [isOpen]);
+
+  // Update timeEstimated when estimatedPomodoros changes
+  useEffect(() => {
+    setTimeEstimated(estimatedPomodoros * minutesPerPomodoro);
+  }, [estimatedPomodoros, minutesPerPomodoro]);
+
+  // Update estimatedPomodoros when timeEstimated is manually changed
+  const handleTimeEstimatedChange = (e) => {
+    const newValue = Math.max(1, parseInt(e.target.value) || 1);
+    setTimeEstimated(newValue);
+    
+    // Update pomodoros if time is changed (but don't trigger another update cycle)
+    if (newValue % minutesPerPomodoro === 0) {
+      // Only update if it's a clean multiple
+      setEstimatedPomodoros(newValue / minutesPerPomodoro);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -32,6 +57,8 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
       title: title.trim(),
       description: description.trim(),
       estimatedPomodoros: parseInt(estimatedPomodoros, 10) || 1, // Ensure we have a valid number
+      timeEstimated: parseInt(timeEstimated, 10) || minutesPerPomodoro, // Include time estimation in minutes
+      timeSpent: 0, // Initialize with zero time spent
       completed: false
     };
     
@@ -53,6 +80,7 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
     setProject('work');
     setPriority('medium');
     setEstimatedPomodoros(1);
+    setTimeEstimated(minutesPerPomodoro);
   };
   
   if (!isOpen) return null;
@@ -162,8 +190,26 @@ const TaskDialog = ({ isOpen, onClose, onAddTask }) => {
                 </button>
                 
                 <span className="text-gray-500 text-sm ml-2">
-                  Est. {estimatedPomodoros * 25} min
+                  Est. {estimatedPomodoros * minutesPerPomodoro} min
                 </span>
+              </div>
+            </div>
+            
+            {/* Time Estimation Field (in minutes) */}
+            <div>
+              <label htmlFor="timeEstimated" className="block text-sm font-medium mb-1">
+                Time Estimation (minutes)
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="timeEstimated"
+                  type="number"
+                  value={timeEstimated}
+                  onChange={handleTimeEstimatedChange}
+                  min="1"
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900"
+                />
+                <span className="text-gray-500 text-sm">minutes</span>
               </div>
             </div>
           </div>

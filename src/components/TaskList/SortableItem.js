@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { CheckSquare, Square, ChevronDown, ChevronUp, Clock } from 'lucide-react';
 import { useTheme } from '../theme';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
+import { SettingsContext } from '../../contexts/SettingsContext';
 
 const SortableSessionItem = ({ 
   session, 
@@ -20,6 +21,7 @@ const SortableSessionItem = ({
   const [isOpen, setIsOpen] = useState(false);
   const contentWrapperRef = useRef(null);
   const verticalIndicatorRef = useRef(null);
+  const { settings } = useContext(SettingsContext);
   
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: session.id,
@@ -28,14 +30,31 @@ const SortableSessionItem = ({
 
   // Helper function to format time display
   const formatTaskTime = (session) => {
-    // Convert pomodoros to minutes (assuming 1 pomodoro = 25 minutes)
-    const pomoToMinutes = (pomodoros) => (pomodoros || 0) * 25;
+    const pomodoroTime = settings?.pomodoroTime || 25;
     
-    // Get time spent and estimated time in minutes
-    const timeSpentMinutes = pomoToMinutes(session?.pomodoros || 0);
-    const estimatedTimeMinutes = pomoToMinutes(session?.estimatedPomodoros || 1);
+    // Use direct timeSpent value (in hours) if available, fall back to pomodoro calculation
+    let timeSpentMinutes = 0;
+    if (session?.timeSpent !== undefined && session?.timeSpent !== null) {
+      timeSpentMinutes = Math.round(session.timeSpent * 60);
+    } else if (session?.pomodoros) {
+      timeSpentMinutes = pomoToMinutes(session.pomodoros);
+    }
+    
+    // Use direct timeEstimated value if available, fall back to estimatedPomodoros
+    let estimatedTimeMinutes = 25; // Default to 25 minutes (1 pomodoro)
+    if (session?.timeEstimated) {
+      estimatedTimeMinutes = session.timeEstimated;
+    } else if (session?.estimatedPomodoros) {
+      estimatedTimeMinutes = pomoToMinutes(session.estimatedPomodoros);
+    }
     
     return `${timeSpentMinutes}/${estimatedTimeMinutes}m`;
+  };
+
+  // Keep the pomoToMinutes helper for backward compatibility
+  const pomoToMinutes = (pomodoros) => {
+    const pomodoroTime = settings?.pomodoroTime || 25;
+    return (pomodoros || 0) * pomodoroTime;
   };
 
   // Update vertical indicator height when content changes

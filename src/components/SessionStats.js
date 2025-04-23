@@ -3,7 +3,7 @@ import { useSession } from '../hooks/useSession';
 import { Clock, Calendar, CheckCircle } from 'lucide-react';
 
 const SessionStats = () => {
-  const { sessions, getTotalHours } = useSession();
+  const { sessions, getTotalHours, activeSessionId } = useSession();
   const [stats, setStats] = useState({
     totalHours: 0,
     todayHours: 0,
@@ -12,7 +12,25 @@ const SessionStats = () => {
     completedSessions: 0
   });
 
+  // Force regular updates when a session is active
   useEffect(() => {
+    if (!activeSessionId) return;
+    
+    // Update stats every second when a session is active
+    const interval = setInterval(() => {
+      calculateStats();
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [activeSessionId]);
+
+  // Calculate statistics whenever sessions change
+  useEffect(() => {
+    calculateStats();
+  }, [sessions]); 
+
+  // Extract calculation to a separate function so it can be called from multiple places
+  const calculateStats = () => {
     if (!sessions.length) return;
 
     // Calculate statistics
@@ -25,11 +43,11 @@ const SessionStats = () => {
     const completedSessions = sessions.filter(s => s.completed);
     const todaySessions = sessions.filter(s => {
       const sessionDate = new Date(s.startTime);
-      return sessionDate >= today && s.completed;
+      return sessionDate >= today;
     });
     const weekSessions = sessions.filter(s => {
       const sessionDate = new Date(s.startTime);
-      return sessionDate >= oneWeekAgo && s.completed;
+      return sessionDate >= oneWeekAgo;
     });
 
     // Calculate hours
@@ -50,7 +68,7 @@ const SessionStats = () => {
       totalSessions: sessions.length,
       completedSessions: completedSessions.length
     });
-  }, [sessions, getTotalHours]);
+  };
 
   const formatHours = (hours) => {
     return hours.toFixed(1);

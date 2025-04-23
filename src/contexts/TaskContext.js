@@ -8,6 +8,7 @@ import {
   clearPendingOperations 
 } from '../services/taskSyncService';
 import { syncTaskCreate, syncTaskFetch } from '../services/syncService';
+import { SettingsContext } from './SettingsContext';
 
 export const TaskContext = createContext();
 
@@ -20,6 +21,16 @@ export const TaskProvider = ({ children }) => {
   const [pendingChanges, setPendingChanges] = useState(0);
   const [databaseError, setDatabaseError] = useState(null); // Store database connection error
   const { currentUser } = useAuth();
+  
+  // Get settings context safely with fallback
+  const settingsContext = useContext(SettingsContext);
+  // Default pomodoro time if settings not available
+  const DEFAULT_POMODORO_TIME = 25;
+  
+  // Get pomodoro time from settings or use default
+  const getPomodoroTime = () => {
+    return settingsContext?.settings?.pomodoroTime || DEFAULT_POMODORO_TIME;
+  };
 
   // Load tasks when user changes or component mounts
   useEffect(() => {
@@ -81,12 +92,14 @@ export const TaskProvider = ({ children }) => {
               completed: task.status === 'completed',
               estimatedPomodoros: task.estimated_pomodoros || 1,
               pomodoros: task.completed_pomodoros || 0,
+              timeSpent: parseFloat(task.timeSpent) || 0, // Correctly set timeSpent (in hours)
+              timeEstimated: parseInt(task.timeEstimated, 10) || (task.estimated_pomodoros * getPomodoroTime()), // Use settings
               projectId: task.project_id,
               createdAt: task.created_at,
               synced: true
             };
             
-            console.log(`DEBUGGING: TaskContext - Normalized task ${task.id}: title="${task.name || task.text || 'Untitled Task'}", description="${task.description || 'EMPTY'}"`);
+            console.log(`DEBUGGING: TaskContext - Normalized task ${task.id}: title="${task.name || task.text || 'Untitled Task'}", timeSpent=${normalizedTask.timeSpent}, timeEstimated=${normalizedTask.timeEstimated}`);
             
             // Separate into main tasks and session tasks based on status
             if (task.status === 'session' || 
@@ -133,7 +146,15 @@ export const TaskProvider = ({ children }) => {
           // Fall back to localStorage for main tasks
           const savedTasks = localStorage.getItem('pomodoro-tasks');
           const localTasks = savedTasks ? JSON.parse(savedTasks) : [];
-          setTasks(localTasks);
+          
+          // Ensure all localStorage tasks have timeSpent and timeEstimated fields
+          const normalizedLocalTasks = localTasks.map(task => ({
+            ...task,
+            timeSpent: task.timeSpent || 0,
+            timeEstimated: task.timeEstimated || (task.estimatedPomodoros * getPomodoroTime())
+          }));
+          
+          setTasks(normalizedLocalTasks);
           setSyncStatus('error');
         }
       } else {
@@ -146,15 +167,29 @@ export const TaskProvider = ({ children }) => {
         const savedSessionTasks = localStorage.getItem('pomodoro-session-tasks');
         const localSessionTasks = savedSessionTasks ? JSON.parse(savedSessionTasks) : [];
 
+        // Ensure all localStorage tasks have timeSpent and timeEstimated fields
+        const normalizedLocalTasks = localTasks.map(task => ({
+          ...task,
+          timeSpent: task.timeSpent || 0,
+          timeEstimated: task.timeEstimated || (task.estimatedPomodoros * getPomodoroTime())
+        }));
+        
+        // Ensure all localStorage session tasks have timeSpent and timeEstimated fields
+        const normalizedLocalSessionTasks = localSessionTasks.map(task => ({
+          ...task,
+          timeSpent: task.timeSpent || 0,
+          timeEstimated: task.timeEstimated || (task.estimatedPomodoros * getPomodoroTime())
+        }));
+
         // Sort session tasks by creation date (oldest first) for consistent ordering
-        localSessionTasks.sort((a, b) => {
+        normalizedLocalSessionTasks.sort((a, b) => {
           const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
           const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
           return dateA - dateB;
         });
 
-        setTasks(localTasks);
-        setSessionTasks(localSessionTasks);
+        setTasks(normalizedLocalTasks);
+        setSessionTasks(normalizedLocalSessionTasks);
         setSyncStatus('idle');
       }
     } catch (error) {
@@ -234,104 +269,107 @@ export const TaskProvider = ({ children }) => {
     }
   }, [activeTaskId]);
   
-  // Add a new task directly to the main task list
-  const addTask = async (taskData) => {
-    console.log('DEBUGGING: TaskContext - addTask called with task:', taskData);
+  // Add a new task
+  const addTask = async (taskData = {}) => {
+    // Ensure task has title
+    const title = taskData.title || 'Untitled Task';
+    const estimatedPomodoros = taskData.estimatedPomodoros || 1;
     
-    // Ensure task has a title
-    const validatedTaskData = {
-      ...taskData,
-      title: taskData.title || 'Untitled Task', // Never allow empty title
-      completed: false
+    // Calculate timeEstimated based on estimatedPomodoros and settings
+    const pomodoroTime = getPomodoroTime();
+    const timeEstimated = estimatedPomodoros * pomodoroTime;
+    
+    console.log(`DEBUGGING: TaskContext - addTask called with title="${title}", estimatedPomodoros=${estimatedPomodoros}, calculated timeEstimated=${timeEstimated}`);
+    
+    // Create task object with timeSpent initialized to 0
+    const task = {
+      title,
+      description: taskData.description || '',
+      completed: false,
+      estimatedPomodoros,
+      pomodoros: 0,
+      timeSpent: 0,
+      timeEstimated,
+      projectId: taskData.projectId || null,
+      createdAt: new Date().toISOString()
     };
     
-    let newTask;
-    
+    // If user is logged in, save to database
     if (currentUser) {
       // Create a temporary ID for immediate UI update
-      const tempId = `temp-${Date.now()}`;
+      const tempId = `temp-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+      const taskWithTempId = { ...task, id: tempId, synced: false };
       
-      // Create a new task with the temporary ID
-      newTask = {
-        id: tempId,
-        ...validatedTaskData,
-        createdAt: new Date().toISOString(),
-        synced: false
-      };
+      // Add to state and localStorage immediately for responsive UI
+      setTasks(prevTasks => {
+        const newTasks = [...prevTasks, taskWithTempId];
+        localStorage.setItem('pomodoro-tasks', JSON.stringify(newTasks));
+        return newTasks;
+      });
       
-      // Add to state immediately for UI responsiveness
-      setTasks(prevTasks => [...prevTasks, newTask]);
-      
-      // Always save to local storage to ensure persistence
-      localStorage.setItem('pomodoro-tasks', JSON.stringify([...tasks, newTask]));
-      
-      // Try to save to database in the background
+      // Save to database in background
       try {
-        setSyncStatus('syncing');
-        
-        // Use the sync service
-        const dbTask = await syncTaskCreate(currentUser.id, {
-          title: validatedTaskData.title,
-          description: validatedTaskData.description || '',
-          status: validatedTaskData.completed ? 'completed' : 'todo',
-          estimatedPomodoros: validatedTaskData.estimatedPomodoros || 1,
-          pomodoros: validatedTaskData.pomodoros || 0,
-          projectId: validatedTaskData.projectId || null
+        console.log('DEBUGGING: TaskContext - Saving task to database:', task);
+        // Fix for undefined saveTask - use createTask instead
+        const savedTask = await createTask(currentUser.id, {
+          user_id: currentUser.id,
+          name: task.title,
+          description: task.description,
+          status: task.completed ? 'completed' : 'active',
+          estimated_pomodoros: task.estimatedPomodoros,
+          completed_pomodoros: task.pomodoros,
+          project_id: task.projectId,
+          timeSpent: task.timeSpent, // Save timeSpent to database
+          timeEstimated: task.timeEstimated // Save timeEstimated to database
         });
         
-        if (dbTask) {
-          // Replace the temporary task with the database version
-          const updatedTasks = tasks.map(task => 
-            task.id === tempId ? {
-              id: dbTask.id,
-              title: dbTask.name || dbTask.text,
-              description: dbTask.description,
-              completed: dbTask.status === 'completed',
-              estimatedPomodoros: dbTask.estimated_pomodoros,
-              pomodoros: dbTask.completed_pomodoros || 0,
-              projectId: dbTask.project_id,
-              createdAt: dbTask.created_at,
-              synced: true
-            } : task
-          );
-          
-          setTasks(updatedTasks);
-          // Update localStorage with the updated task
-          localStorage.setItem('pomodoro-tasks', JSON.stringify(updatedTasks));
-          
-          // Update the returned task reference
-          newTask.id = dbTask.id;
-          newTask.synced = true;
-          
-          setSyncStatus('idle');
-          console.log('DEBUGGING: TaskContext - Task saved to database with ID:', dbTask.id);
+        if (savedTask) {
+          console.log('DEBUGGING: TaskContext - Task saved successfully with ID:', savedTask.id);
+          // Replace temporary task with saved task
+          setTasks(prevTasks => {
+            const updatedTasks = prevTasks.map(t => 
+              t.id === tempId 
+              ? { 
+                  ...t, 
+                  id: savedTask.id, 
+                  synced: true, 
+                  createdAt: savedTask.created_at 
+                } 
+              : t
+            );
+            localStorage.setItem('pomodoro-tasks', JSON.stringify(updatedTasks));
+            return updatedTasks;
+          });
+        } else {
+          console.error('DEBUGGING: TaskContext - Failed to save task to database');
+          setSyncStatus('error');
         }
       } catch (error) {
         console.error('DEBUGGING: TaskContext - Error saving task to database:', error);
         setSyncStatus('error');
-        // Even if database sync fails, the task is still in local storage and tasks state
-        console.log('DEBUGGING: TaskContext - Task will remain in local storage despite database error');
       }
     } else {
       // No user logged in, just use localStorage
-      newTask = {
-        id: Date.now().toString(), // Simple numeric ID
-        ...validatedTaskData,
-        createdAt: new Date().toISOString(),
-        synced: true // Mark as synced since there's no database to sync with
-      };
+      // Generate a simple numeric ID for the task
+      const localId = `local-${Date.now()}`;
+      const newTask = { ...task, id: localId, synced: true };
       
-      // Add to state
-      setTasks(prevTasks => [...prevTasks, newTask]);
-      // localStorage will be updated via useEffect
+      // Add to state and localStorage
+      setTasks(prevTasks => {
+        const newTasks = [...prevTasks, newTask];
+        localStorage.setItem('pomodoro-tasks', JSON.stringify(newTasks));
+        return newTasks;
+      });
     }
-    
-    return newTask;
   };
   
   // Add a session task without adding it to the main task list yet
   const addSessionTask = async (taskData) => {
     console.log('DEBUGGING: TaskContext - addSessionTask called with task:', taskData);
+    
+    // Get pomodoro time from settings or use default
+    const pomodoroTime = getPomodoroTime();
+    console.log(`DEBUGGING: TaskContext - Using pomodoroTime from settings: ${pomodoroTime}`);
     
     // Ensure task has required fields
     const validatedTaskData = {
@@ -339,7 +377,9 @@ export const TaskProvider = ({ children }) => {
       title: taskData.title || 'Untitled Task', // Never allow empty title
       description: taskData.description || '',
       estimatedPomodoros: parseInt(taskData.estimatedPomodoros, 10) || 1,
-      pomodoros: parseInt(taskData.pomodoros, 10) || 0
+      pomodoros: parseInt(taskData.pomodoros, 10) || 0,
+      timeSpent: 0, // Initialize with zero time spent
+      timeEstimated: taskData.timeEstimated || (taskData.estimatedPomodoros * pomodoroTime) // Use provided value or calculate using settings
     };
     
     // Create a temporary ID for immediate UI update
@@ -398,7 +438,9 @@ export const TaskProvider = ({ children }) => {
           status: 'session', // Special status to identify session tasks
           estimatedPomodoros: validatedTaskData.estimatedPomodoros || 1,
           pomodoros: validatedTaskData.pomodoros || 0,
-          projectId: validatedTaskData.projectId || null
+          projectId: validatedTaskData.projectId || null,
+          timeSpent: 0, // Always initialize timeSpent to 0
+          timeEstimated: validatedTaskData.timeEstimated // Use the timeEstimated value
         };
         
         console.log('DEBUGGING: TaskContext - Sending task data to syncTaskCreate:', dbTaskData);
@@ -430,6 +472,8 @@ export const TaskProvider = ({ children }) => {
                 completed: dbTask.status === 'completed',
                 estimatedPomodoros: dbTask.estimated_pomodoros || validatedTaskData.estimatedPomodoros || 1,
                 pomodoros: dbTask.completed_pomodoros || 0,
+                timeSpent: parseFloat(dbTask.timeSpent) || 0, // Include timeSpent (in hours)
+                timeEstimated: parseInt(dbTask.timeEstimated, 10) || pomodoroTime, // Include timeEstimated (in minutes) with settings
                 projectId: dbTask.project_id,
                 createdAt: dbTask.created_at || new Date().toISOString(),
                 synced: isRealDatabaseId // Only mark as synced if we got a real database ID
