@@ -196,8 +196,13 @@ export const SessionProvider = ({ children }) => {
                 taskUpdateData.pomodoro_count = pomodoroCount;
               }
               
+              // Store timeSpent in the database in the original units (minutes)
+              const durationMinutes = Math.round(updatedSession.duration / 60);
+              taskUpdateData.timeSpent = durationMinutes;
+              console.log(`SessionContext: Setting timeSpent to ${durationMinutes} minutes for task ${session.taskId}`);
+              
               await updateTask(session.taskId, taskUpdateData);
-              console.log(`Session completed for task ${session.taskId}: updated timeSpent to ${durationHours} hours`);
+              console.log(`Session completed for task ${session.taskId}: updated timeSpent to ${durationMinutes} minutes`);
             } catch (taskUpdateErr) {
               console.error('Error updating task timeSpent on completion:', taskUpdateErr);
             }
@@ -354,7 +359,7 @@ export const SessionProvider = ({ children }) => {
           const { data: updatedSession, error: sessionError } = await supabase
             .from('sessions')
             .update({ 
-              duration: durationInHours
+              duration: Math.floor(durationInSeconds / 60) // Store as minutes
             })
             .eq('id', sessionId)
             .select('*')
@@ -370,9 +375,6 @@ export const SessionProvider = ({ children }) => {
           // If we have a task ID, also update the task's timeSpent
           if (taskId) {
             console.log(`DEBUGGING: SessionContext - Updating timeSpent for task ${taskId}`);
-            
-            // Calculate the duration in minutes for the task's timeSpent
-            const durationInMinutes = Math.floor(durationInSeconds / 60);
             
             // First get the current task to know its timeSpent
             const { data: currentTask, error: fetchError } = await supabase
@@ -390,26 +392,27 @@ export const SessionProvider = ({ children }) => {
             // This ensures we're only adding the new time spent, not double-counting
             const previousSessionDuration = session.previousDuration || 0; // In seconds
             const previousMinutes = Math.floor(previousSessionDuration / 60);
-            const minutesToAdd = durationInMinutes - previousMinutes;
+            const currentMinutes = Math.floor(durationInSeconds / 60);
+            const minutesToAdd = currentMinutes - previousMinutes;
             
-            console.log(`DEBUGGING: SessionContext - Previous minutes: ${previousMinutes}, Current minutes: ${durationInMinutes}, Adding: ${minutesToAdd}`);
+            console.log(`DEBUGGING: SessionContext - Previous minutes: ${previousMinutes}, Current minutes: ${currentMinutes}, Adding: ${minutesToAdd}`);
             
             // Store the current duration as previous for next update
             session.previousDuration = durationInSeconds;
             
             // Only update if there's actual new time to add
             if (minutesToAdd > 0) {
-              // Ensure timeSpent is a number and add the new minutes
+              // Ensure timeSpent is a number and add the new minutes (using minutes directly, not converting to hours)
               const currentTimeSpent = typeof currentTask.timeSpent === 'number' ? currentTask.timeSpent : 0;
               const newTimeSpent = currentTimeSpent + minutesToAdd;
               
-              console.log(`DEBUGGING: SessionContext - Current timeSpent: ${currentTimeSpent}, New timeSpent: ${newTimeSpent}`);
+              console.log(`DEBUGGING: SessionContext - Current timeSpent: ${currentTimeSpent} minutes, New timeSpent: ${newTimeSpent} minutes`);
               
-              // Update the task record
+              // Update the task record, storing timeSpent directly in minutes
               const { data: updatedTask, error: taskError } = await supabase
                 .from('tasks')
                 .update({ 
-                  timeSpent: newTimeSpent
+                  timeSpent: newTimeSpent // Store in minutes
                 })
                 .eq('id', taskId)
                 .select('*')

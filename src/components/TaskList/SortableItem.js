@@ -32,20 +32,30 @@ const SortableSessionItem = ({
   const formatTaskTime = (session) => {
     const pomodoroTime = settings?.pomodoroTime || 25;
     
-    // Use direct timeSpent value (in hours) if available, fall back to pomodoro calculation
+    if (!session) return "0/0m";
+    
+    console.log(`Formatting task ${session.id}: timeSpent=${session.timeSpent}, timeEstimated=${session.timeEstimated}`);
+    
+    // For timeSpent, use the value directly as minutes instead of converting from hours
     let timeSpentMinutes = 0;
     if (session?.timeSpent !== undefined && session?.timeSpent !== null) {
-      timeSpentMinutes = Math.round(session.timeSpent * 60);
+      // Use the timeSpent value directly as minutes (don't multiply by 60)
+      timeSpentMinutes = Math.round(parseFloat(session.timeSpent));
+      console.log(`Task ${session.id || 'unknown'}: Using timeSpent value directly as minutes: ${timeSpentMinutes}`);
     } else if (session?.pomodoros) {
       timeSpentMinutes = pomoToMinutes(session.pomodoros);
+      console.log(`Task ${session.id || 'unknown'}: Calculated from pomodoros: ${timeSpentMinutes}`);
     }
     
-    // Use direct timeEstimated value if available, fall back to estimatedPomodoros
+    // For timeEstimated, also use the value directly as minutes
     let estimatedTimeMinutes = 25; // Default to 25 minutes (1 pomodoro)
-    if (session?.timeEstimated) {
-      estimatedTimeMinutes = session.timeEstimated;
+    if (session?.timeEstimated !== undefined && session?.timeEstimated !== null) {
+      // Use the timeEstimated value directly as minutes
+      estimatedTimeMinutes = Math.round(parseFloat(session.timeEstimated));
+      console.log(`Task ${session.id || 'unknown'}: Using timeEstimated value directly as minutes: ${estimatedTimeMinutes}`);
     } else if (session?.estimatedPomodoros) {
       estimatedTimeMinutes = pomoToMinutes(session.estimatedPomodoros);
+      console.log(`Task ${session.id || 'unknown'}: Calculated from estimatedPomodoros: ${estimatedTimeMinutes}`);
     }
     
     return `${timeSpentMinutes}/${estimatedTimeMinutes}m`;
