@@ -97,11 +97,21 @@ const SessionsList = forwardRef((props, ref) => {
       
       const mappedSessions = uniqueTasksArray.map(task => {
         console.log(`DEBUGGING: SessionsList - Mapping session task: ${task.id}, "${task.title}"`);
+        
+        // Include all properties for debugging
+        if (task.timeSpent !== undefined || task.timeEstimated !== undefined) {
+          console.log(`DEBUGGING: SessionsList - Task ${task.id} has time values: timeSpent=${task.timeSpent}, timeEstimated=${task.timeEstimated}`);
+        }
+        
         return {
           id: task.id,
           title: task.title || 'Untitled Task',
           description: task.description || '',
           estimatedPomodoros: task.estimatedPomodoros || 1,
+          // Explicitly include timeSpent and timeEstimated
+          timeSpent: task.timeSpent !== undefined ? task.timeSpent : 0,
+          timeEstimated: task.timeEstimated !== undefined ? task.timeEstimated : (task.estimatedPomodoros || 1) * 25,
+          pomodoros: task.pomodoros || 0,
           completed: task.completed || false,
           createdAt: task.createdAt || new Date().toISOString() // Ensure we have createdAt for sorting
         };
