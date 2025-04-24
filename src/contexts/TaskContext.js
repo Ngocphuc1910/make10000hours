@@ -92,8 +92,8 @@ export const TaskProvider = ({ children }) => {
               completed: task.status === 'completed',
               estimatedPomodoros: task.estimated_pomodoros || 1,
               pomodoros: task.completed_pomodoros || 0,
-              timeSpent: parseFloat(task.timeSpent) || 0, // Correctly set timeSpent (in hours)
-              timeEstimated: parseInt(task.timeEstimated, 10) || (task.estimated_pomodoros * getPomodoroTime()), // Use settings
+              timeSpent: task.timeSpent !== undefined ? parseFloat(task.timeSpent) : 0, // Parse timeSpent as stored
+              timeEstimated: task.timeEstimated !== undefined ? parseFloat(task.timeEstimated) : (task.estimated_pomodoros * getPomodoroTime()), // Parse timeEstimated as stored
               projectId: task.project_id,
               createdAt: task.created_at,
               synced: true
@@ -379,8 +379,13 @@ export const TaskProvider = ({ children }) => {
       estimatedPomodoros: parseInt(taskData.estimatedPomodoros, 10) || 1,
       pomodoros: parseInt(taskData.pomodoros, 10) || 0,
       timeSpent: 0, // Initialize with zero time spent
-      timeEstimated: taskData.timeEstimated || (taskData.estimatedPomodoros * pomodoroTime) // Use provided value or calculate using settings
+      // Store timeEstimated in minutes directly
+      timeEstimated: taskData.timeEstimated !== undefined 
+        ? parseFloat(taskData.timeEstimated)
+        : (taskData.estimatedPomodoros * pomodoroTime) // Calculate from pomodoros * minutes per pomodoro
     };
+    
+    console.log(`DEBUGGING: TaskContext - Task data validated. timeEstimated=${validatedTaskData.timeEstimated} minutes, estimatedPomodoros=${validatedTaskData.estimatedPomodoros}`);
     
     // Create a temporary ID for immediate UI update
     const tempId = `temp-${Date.now()}`;

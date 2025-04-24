@@ -52,12 +52,39 @@ const LoadingFallback = () => (
 function formatTaskTime(task, settings) {
   const pomodoroTime = settings?.pomodoroTime || 25;
   
-  // Check if we have direct timeSpent value (in hours)
-  const timeSpentMinutes = task?.timeSpent ? Math.round(task.timeSpent * 60) : 0;
+  if (!task) return "0/0m";
   
-  // For estimated time, check timeEstimated first, then fall back to estimatedPomodoros
-  const estimatedTimeMinutes = task?.timeEstimated || 
-    (task?.estimatedPomodoros ? task.estimatedPomodoros * pomodoroTime : pomodoroTime);
+  // Check for direct database values first with proper unit handling
+  let timeSpentMinutes = 0;
+  if (task.timeSpent !== undefined) {
+    // Check if timeSpent is already in minutes (value > 5 likely indicates minutes, not hours)
+    if (task.timeSpent > 5) {
+      timeSpentMinutes = Math.round(task.timeSpent);
+      console.log(`Task ${task.id}: Treating timeSpent ${task.timeSpent} as minutes directly`);
+    } else {
+      // Otherwise treat as hours and convert to minutes
+      timeSpentMinutes = Math.round(task.timeSpent * 60);
+      console.log(`Task ${task.id}: Converting timeSpent ${task.timeSpent} from hours to ${timeSpentMinutes} minutes`);
+    }
+  }
+  
+  // For estimated time with similar unit handling
+  let estimatedTimeMinutes = 0;
+  if (task.timeEstimated !== undefined) {
+    // Check if timeEstimated is already in minutes
+    if (task.timeEstimated > 5) {
+      estimatedTimeMinutes = Math.round(task.timeEstimated);
+      console.log(`Task ${task.id}: Treating timeEstimated ${task.timeEstimated} as minutes directly`);
+    } else {
+      // Otherwise use pomodoro calculation
+      estimatedTimeMinutes = task.estimatedPomodoros ? task.estimatedPomodoros * pomodoroTime : pomodoroTime;
+      console.log(`Task ${task.id}: Using estimatedPomodoros ${task.estimatedPomodoros || 1} * ${pomodoroTime} = ${estimatedTimeMinutes} minutes`);
+    }
+  } else if (task.estimatedPomodoros) {
+    estimatedTimeMinutes = task.estimatedPomodoros * pomodoroTime;
+  } else {
+    estimatedTimeMinutes = pomodoroTime;
+  }
   
   return `${timeSpentMinutes}/${estimatedTimeMinutes}m`;
 }
@@ -389,18 +416,19 @@ function MainApp() {
                       
                       // Also update the local task state to show progress
                       if (selectedTask && updateTask) {
-                        // Calculate elapsed hours for timeSpent
-                        const elapsedHours = elapsedSeconds / 3600;
+                        // Calculate elapsed minutes for timeSpent
+                        const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+                        console.log(`Timer minute update: Task ${selectedTask.id} - ${elapsedMinutes} minutes elapsed`);
                         
-                        // Update task with partial time spent
+                        // Update task with partial time spent (in minutes)
                         updateTask(selectedTask.id, {
-                          timeSpent: elapsedHours
+                          timeSpent: elapsedMinutes
                         })
                         .then(() => {
                           // Also update the local selectedTask state for immediate UI feedback
                           setSelectedTask(prev => ({
                             ...prev,
-                            timeSpent: elapsedHours
+                            timeSpent: elapsedMinutes
                           }));
                         })
                         .catch(err => console.error('Error updating task during timer:', err));
@@ -441,25 +469,28 @@ function MainApp() {
                   
                   // If the session was completed successfully, update the task
                   if (success && selectedTask) {
-                    // Calculate elapsed hours and pomodoros
-                    const elapsedHours = actualDuration / 3600;
+                    // Calculate elapsed minutes (not hours) for timeSpent
+                    const elapsedMinutes = Math.round(actualDuration / 60);
+                    console.log(`Timer finished: Elapsed minutes for task ${selectedTask.id}: ${elapsedMinutes}`);
+                    
                     // Use pomodoroTime from settings (in minutes) * 60 to get seconds
                     const pomodoroSeconds = settings.pomodoroTime * 60;
                     const elapsedPomodoros = Math.floor(actualDuration / pomodoroSeconds);
                     
-                    // Update the task with the final time spent
+                    // Update the task with the final time spent (in minutes)
                     if (updateTask) {
                       updateTask(selectedTask.id, {
-                        timeSpent: elapsedHours,
+                        timeSpent: elapsedMinutes, // Store as minutes in the database
                         pomodoros: elapsedPomodoros
                       })
                       .then(() => {
                         // Update the local selectedTask state for immediate UI feedback
                         setSelectedTask(prev => ({
                           ...prev,
-                          timeSpent: elapsedHours,
+                          timeSpent: elapsedMinutes,
                           pomodoros: elapsedPomodoros
                         }));
+                        console.log(`Timer finished: Updated task ${selectedTask.id} timeSpent to ${elapsedMinutes} minutes`);
                       })
                       .catch(err => console.error('Error updating task after session completion:', err));
                     }
