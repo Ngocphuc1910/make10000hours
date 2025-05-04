@@ -30,7 +30,8 @@
     "react-scripts": "^5.0.1",
     "tailwind-merge": "^1.14.0",
     "tw-animate-css": "^1.2.4",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "worker-timers": "^8.0.20"
   },
   "scripts": {
     "start": "react-scripts start",

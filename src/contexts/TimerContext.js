@@ -4,12 +4,55 @@ import supabase from '../lib/supabase';
 
 export const TimerContext = createContext();
 
+// Constants for storage keys with a unique prefix to avoid conflicts
+const TIMER_PREFIX = 'make10000hrs_timer_';
+const STORAGE_END_TIME = `${TIMER_PREFIX}end_time`;
+const STORAGE_START_TIMESTAMP = `${TIMER_PREFIX}start_timestamp`; // When timer was started (for absolute reference)
+const STORAGE_DURATION = `${TIMER_PREFIX}duration`; // Original duration in seconds
+const STORAGE_MODE = `${TIMER_PREFIX}mode`;
+const STORAGE_IS_ACTIVE = `${TIMER_PREFIX}is_active`;
+const STORAGE_IS_PAUSED = `${TIMER_PREFIX}is_paused`;
+const STORAGE_PAUSED_REMAINING = `${TIMER_PREFIX}paused_remaining`;
+const STORAGE_COMPLETED_POMODOROS = `${TIMER_PREFIX}completed_pomos`;
+
+const DEBUG_MODE = true; // Set to true to enable detailed console logging
+
+// Debugging function
+const timerLog = (message, data = null) => {
+  if (!DEBUG_MODE) return;
+  const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+  if (data) {
+    console.log(`[Timer ${timestamp}] ${message}`, data);
+  } else {
+    console.log(`[Timer ${timestamp}] ${message}`);
+  }
+};
+
+const saveToStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error(`Error saving to localStorage: ${key}`, error);
+  }
+};
+
+const getFromStorage = (key, defaultValue = null) => {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : defaultValue;
+  } catch (error) {
+    console.error(`Error reading from localStorage: ${key}`, error);
+    return defaultValue;
+  }
+};
+
 export const TimerProvider = ({ children }) => {
   // Timer states
   const [mode, setMode] = useState('pomodoro');
   const [isActive, setIsActive] = useState(false);
   const [isPaused, setIsPaused] = useState(true);
   const [currentTime, setCurrentTime] = useState(25 * 60); // 25 mins in seconds
+  const [completedPomodoros, setCompletedPomodoros] = useState(0);
   
   // Timer settings
   const [pomodoroTime, setPomodoroTime] = useState(25);
@@ -17,13 +60,12 @@ export const TimerProvider = ({ children }) => {
   const [longBreakTime, setLongBreakTime] = useState(15);
   const [autoStartBreaks, setAutoStartBreaks] = useState(false);
   const [autoStartPomodoros, setAutoStartPomodoros] = useState(false);
-  const [completedPomodoros, setCompletedPomodoros] = useState(0);
   const [longBreakInterval, setLongBreakInterval] = useState(4);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   
   // Sound settings
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [volume, setVolume] = useState(0.5); // 0 to 1
+  const [volume, setVolume] = useState(0.5);
   
   // Refs
   const timerRef = useRef(null);
@@ -32,125 +74,362 @@ export const TimerProvider = ({ children }) => {
   // Initialize audio
   useEffect(() => {
     audioRef.current = new Audio();
+    
+    // Load completed pomodoros from storage
+    const storedPomodoros = getFromStorage(STORAGE_COMPLETED_POMODOROS, 0);
+    setCompletedPomodoros(storedPomodoros);
+    
+    // Cleanup on unmount
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.src = '';
       }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
     };
   }, []);
-  
-  // Helper function to reset timer based on current mode - use useCallback to avoid dependency issues
-  const handleResetTimer = useCallback(() => {
-    switch (mode) {
-      case 'shortBreak':
-        setCurrentTime(shortBreakTime * 60);
-        break;
-      case 'longBreak':
-        setCurrentTime(longBreakTime * 60);
-        break;
-      default:
-        setCurrentTime(pomodoroTime * 60);
+
+  // Get timer duration based on mode
+  const getTimerDuration = useCallback((timerMode) => {
+    const modeToUse = timerMode || mode;
+    switch (modeToUse) {
+      case 'shortBreak': return shortBreakTime * 60;
+      case 'longBreak': return longBreakTime * 60;
+      default: return pomodoroTime * 60;
+    }
+  }, [mode, pomodoroTime, shortBreakTime, longBreakTime]);
+
+  // Calculate remaining time based on end time (or paused time)
+  const calculateRemainingTime = useCallback(() => {
+    // Get the current state from localStorage
+    const storedIsActive = getFromStorage(STORAGE_IS_ACTIVE, false);
+    const storedIsPaused = getFromStorage(STORAGE_IS_PAUSED, true);
+    
+    if (!storedIsActive) {
+      // If timer is not active, return the default duration for the current mode
+      timerLog('Timer not active, returning default duration');
+      return getTimerDuration();
     }
     
+    if (storedIsPaused) {
+      // If timer is paused, return the stored remaining time
+      const pausedRemaining = getFromStorage(STORAGE_PAUSED_REMAINING);
+      timerLog('Timer paused, returning stored remaining time', pausedRemaining);
+      return pausedRemaining !== null ? pausedRemaining : getTimerDuration();
+    }
+    
+    // If timer is active and not paused, calculate the remaining time
+    const endTime = getFromStorage(STORAGE_END_TIME);
+    const duration = getFromStorage(STORAGE_DURATION);
+    const startTime = getFromStorage(STORAGE_START_TIMESTAMP);
+    
+    if (!endTime || !startTime || !duration) {
+      timerLog('Missing timer data, returning default duration', { endTime, startTime, duration });
+      return getTimerDuration();
+    }
+    
+    const now = Date.now();
+    
+    // Check if timer started in the past and verification is possible
+    if (now < endTime) {
+      // Timer is still running
+      const remaining = Math.max(0, Math.ceil((endTime - now) / 1000));
+      timerLog('Timer running, calculated remaining time', { remaining, endTime, now });
+      return remaining;
+    } else {
+      // Timer has completed
+      timerLog('Timer completed, returning 0');
+      return 0;
+    }
+  }, [getTimerDuration]);
+
+  // Sync UI with localStorage state
+  const syncUIWithStorage = useCallback(() => {
+    const storedMode = getFromStorage(STORAGE_MODE, 'pomodoro');
+    const storedIsActive = getFromStorage(STORAGE_IS_ACTIVE, false);
+    const storedIsPaused = getFromStorage(STORAGE_IS_PAUSED, true);
+    
+    // Update React state with localStorage values
+    setMode(storedMode);
+    setIsActive(storedIsActive);
+    setIsPaused(storedIsPaused);
+    
+    // Calculate and set the current time
+    const remaining = calculateRemainingTime();
+    setCurrentTime(remaining);
+    
+    timerLog('Synced UI with localStorage', { 
+      mode: storedMode, 
+      isActive: storedIsActive, 
+      isPaused: storedIsPaused, 
+      time: remaining 
+    });
+    
+    // If timer has completed (remaining = 0 but timer is active and not paused)
+    if (remaining === 0 && storedIsActive && !storedIsPaused) {
+      timerLog('Detected completed timer during sync, handling completion');
+      handleTimerComplete();
+      return;
+    }
+    
+    // Setup interval if timer is active and not paused
+    if (storedIsActive && !storedIsPaused) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      
+      timerRef.current = setInterval(() => {
+        const remaining = calculateRemainingTime();
+        setCurrentTime(remaining);
+        
+        if (remaining === 0) {
+          timerLog('Timer reached zero during interval, handling completion');
+          handleTimerComplete();
+        }
+      }, 1000);
+      
+      timerLog('Started timer interval');
+    }
+  }, [calculateRemainingTime, handleTimerComplete]);
+
+  // Handle timer completion
+  const handleTimerComplete = useCallback(() => {
+    timerLog('Handling timer completion');
+    
+    // Stop the timer interval
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    // Get the current mode before changing it
+    const completedMode = getFromStorage(STORAGE_MODE, mode);
+    
+    // Clear the active timer
+    saveToStorage(STORAGE_IS_ACTIVE, false);
+    saveToStorage(STORAGE_IS_PAUSED, true);
+    saveToStorage(STORAGE_END_TIME, null);
+    saveToStorage(STORAGE_START_TIMESTAMP, null);
+    
+    // Update UI state
     setIsActive(false);
     setIsPaused(true);
-  }, [mode, pomodoroTime, shortBreakTime, longBreakTime]);
-  
-  // Handle timer completion - use useCallback to avoid dependency issues
-  const handleTimerComplete = useCallback(() => {
-    // Play sound if enabled
+    
+    // Play completion sound
     if (soundEnabled) {
-      const soundFile = mode === 'pomodoro' 
-        ? '/sounds/break.mp3' 
-        : '/sounds/backtowork.mp3';
-      
-      if (audioRef.current) {
-        audioRef.current.src = soundFile;
-        audioRef.current.volume = volume;
-        audioRef.current.play().catch(e => console.error('Error playing sound:', e));
+      const soundFile = completedMode === 'pomodoro' ? '/sounds/break.mp3' : '/sounds/backtowork.mp3';
+      try {
+        if (audioRef.current) {
+          audioRef.current.src = soundFile;
+          audioRef.current.volume = volume;
+          audioRef.current.play().catch(e => console.error('Error playing sound:', e));
+        }
+      } catch (error) {
+        console.error('Error playing sound:', error);
       }
     }
     
-    // Update completed pomodoros count
-    if (mode === 'pomodoro') {
-      setCompletedPomodoros(prev => prev + 1);
+    // Update completed pomodoros count if we just completed a pomodoro
+    if (completedMode === 'pomodoro') {
+      const newCount = completedPomodoros + 1;
+      setCompletedPomodoros(newCount);
+      saveToStorage(STORAGE_COMPLETED_POMODOROS, newCount);
+      timerLog('Updated completed pomodoros', newCount);
     }
     
-    // Determine next timer mode
+    // Determine next mode
     let nextMode;
-    if (mode === 'pomodoro') {
-      // After pomodoro, check if we need a long break or short break
-      const pomodoros = completedPomodoros + (mode === 'pomodoro' ? 1 : 0);
+    if (completedMode === 'pomodoro') {
+      const pomodoros = completedPomodoros + (completedMode === 'pomodoro' ? 1 : 0);
       nextMode = pomodoros % longBreakInterval === 0 ? 'longBreak' : 'shortBreak';
     } else {
-      // After any break, go back to pomodoro
       nextMode = 'pomodoro';
     }
     
-    // Update timer mode
+    // Set next mode
     setMode(nextMode);
+    saveToStorage(STORAGE_MODE, nextMode);
     
-    // Auto-start next timer if setting is enabled
+    // Get duration for next mode
+    const nextDuration = getTimerDuration(nextMode);
+    setCurrentTime(nextDuration);
+    
+    timerLog(`Set next mode to ${nextMode} with duration ${nextDuration}`);
+    
+    // Auto-start next timer?
     const shouldAutoStart = 
       (nextMode === 'pomodoro' && autoStartPomodoros) || 
       ((nextMode === 'shortBreak' || nextMode === 'longBreak') && autoStartBreaks);
     
     if (shouldAutoStart) {
-      setIsActive(true);
-      setIsPaused(false);
-    } else {
-      setIsActive(false);
-      setIsPaused(true);
+      timerLog(`Auto-starting next timer: ${nextMode}`);
+      // Start with a slight delay
+      setTimeout(() => {
+        startTimer(nextDuration);
+      }, 300);
     }
   }, [
-    mode, 
-    soundEnabled, 
-    volume, 
-    completedPomodoros, 
-    longBreakInterval, 
-    autoStartPomodoros, 
-    autoStartBreaks
+    mode,
+    soundEnabled,
+    volume,
+    completedPomodoros,
+    longBreakInterval,
+    autoStartPomodoros,
+    autoStartBreaks,
+    getTimerDuration
   ]);
-  
-  // Load settings from database first, then localStorage as fallback
+
+  // Function to start the timer
+  const startTimer = useCallback((duration) => {
+    const seconds = duration || currentTime;
+    const now = Date.now();
+    const endTime = now + (seconds * 1000);
+    
+    timerLog(`Starting timer for ${seconds} seconds`, { now, endTime });
+    
+    // Clear any existing interval
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    
+    // Store timer state in localStorage
+    saveToStorage(STORAGE_END_TIME, endTime);
+    saveToStorage(STORAGE_START_TIMESTAMP, now);
+    saveToStorage(STORAGE_DURATION, seconds);
+    saveToStorage(STORAGE_IS_ACTIVE, true);
+    saveToStorage(STORAGE_IS_PAUSED, false);
+    saveToStorage(STORAGE_PAUSED_REMAINING, null);
+    saveToStorage(STORAGE_MODE, mode);
+    
+    // Update React state
+    setIsActive(true);
+    setIsPaused(false);
+    
+    // Start interval to update timer display
+    timerRef.current = setInterval(() => {
+      const remaining = calculateRemainingTime();
+      setCurrentTime(remaining);
+      
+      if (remaining <= 0) {
+        timerLog('Timer reached zero');
+        handleTimerComplete();
+      }
+    }, 1000);
+  }, [currentTime, mode, calculateRemainingTime, handleTimerComplete]);
+
+  // Function to pause the timer
+  const pauseTimer = useCallback(() => {
+    timerLog('Pausing timer');
+    
+    // Stop interval
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    // Calculate the current remaining time
+    const remaining = calculateRemainingTime();
+    
+    // Store pause state
+    saveToStorage(STORAGE_IS_PAUSED, true);
+    saveToStorage(STORAGE_PAUSED_REMAINING, remaining);
+    saveToStorage(STORAGE_END_TIME, null); // Clear end time when paused
+    
+    // Update React state
+    setIsPaused(true);
+    setCurrentTime(remaining);
+    
+    timerLog(`Paused with ${remaining} seconds remaining`);
+  }, [calculateRemainingTime]);
+
+  // Function to reset the timer
+  const resetTimer = useCallback(() => {
+    timerLog('Resetting timer');
+    
+    // Stop interval
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    // Clear timer state in localStorage
+    saveToStorage(STORAGE_END_TIME, null);
+    saveToStorage(STORAGE_START_TIMESTAMP, null);
+    saveToStorage(STORAGE_IS_ACTIVE, false);
+    saveToStorage(STORAGE_IS_PAUSED, true);
+    saveToStorage(STORAGE_PAUSED_REMAINING, null);
+    
+    // Get default time for current mode
+    const defaultTime = getTimerDuration();
+    
+    // Update React state
+    setIsActive(false);
+    setIsPaused(true);
+    setCurrentTime(defaultTime);
+    
+    timerLog(`Reset to ${defaultTime} seconds`);
+  }, [getTimerDuration]);
+
+  // Function to skip the current timer
+  const skipTimer = useCallback(() => {
+    timerLog('Skipping timer');
+    
+    // Stop interval
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    // Handle completion to set up next timer
+    handleTimerComplete();
+  }, [handleTimerComplete]);
+
+  // Update timer when tab becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        timerLog('Tab became visible, syncing timer state');
+        
+        // Force a re-calculation of remaining time and sync UI
+        syncUIWithStorage();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Also sync when component mounts
+    if (document.visibilityState === 'visible') {
+      // Small delay to ensure all hooks are set up first
+      setTimeout(() => {
+        timerLog('Initial visibility sync');
+        syncUIWithStorage();
+      }, 300);
+    }
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [syncUIWithStorage]);
+
+  // Load settings once on mount
   useEffect(() => {
     const loadSettings = async () => {
+      timerLog('Loading settings');
+      
       try {
-        console.log("TimerContext: Loading settings");
-        let settingsLoaded = false;
+        let loadedFromDB = false;
         
-        // Try to get user from Supabase session 
-        const { data: { session }, error } = await supabase.auth.getSession();
-        let user = null;
-        
-        if (error) {
-          console.error("TimerContext: Session error:", error);
-        } else if (session) {
-          user = session.user;
-          console.log("TimerContext: Found logged in user from session:", user?.id);
-          
-          // Load token expiry info for debugging
-          if (session.expires_at) {
-            const expiresAt = new Date(session.expires_at * 1000);
-            const now = new Date();
-            console.log("TimerContext: Session expires at:", expiresAt.toISOString());
-            console.log("TimerContext: Time until expiry:", Math.floor((expiresAt - now) / 1000 / 60), "minutes");
-          }
-        } else {
-          console.log("TimerContext: No active session found");
-        }
-        
-        // If user is logged in, try to load settings from database
-        if (user?.id) {
+        // Try to get settings from database if logged in
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) {
           try {
-            console.log("TimerContext: Fetching settings from database");
-            const dbSettings = await getUserSettings(user.id);
-            
+            const dbSettings = await getUserSettings(session.user.id);
             if (dbSettings) {
-              console.log("TimerContext: Loaded settings from database:", dbSettings);
+              timerLog('Loaded settings from database', dbSettings);
               
-              // Update all timer settings from database - ensure all values are set
+              // Apply settings
               setPomodoroTime(Number(dbSettings.pomodoroTime) || 25);
               setShortBreakTime(Number(dbSettings.shortBreakTime) || 5);
               setLongBreakTime(Number(dbSettings.longBreakTime) || 15);
@@ -158,34 +437,25 @@ export const TimerProvider = ({ children }) => {
               setAutoStartBreaks(!!dbSettings.shortBreakEnabled);
               setLongBreakInterval(Number(dbSettings.longBreakInterval) || 4);
               
-              // Also update localStorage for consistency
+              // Save to localStorage
               localStorage.setItem('timerSettings', JSON.stringify(dbSettings));
               
-              settingsLoaded = true;
-              
-              // Reset timer based on mode and new settings
-              handleResetTimer();
-              
-              console.log("TimerContext: Settings applied from database");
+              loadedFromDB = true;
             }
-          } catch (err) {
-            console.error("TimerContext: Error loading settings from database:", err);
-            // Fall through to localStorage
+          } catch (error) {
+            console.error('Error loading settings from database:', error);
           }
         }
         
-        // If settings weren't loaded from DB, try localStorage
-        if (!settingsLoaded) {
-          try {
-            // Fallback to localStorage
-            const savedSettingsStr = localStorage.getItem('timerSettings');
-            console.log("TimerContext: Loading from localStorage:", savedSettingsStr ? "found data" : "no data");
-            
-            if (savedSettingsStr) {
+        // If not loaded from database, try localStorage
+        if (!loadedFromDB) {
+          const savedSettingsStr = localStorage.getItem('timerSettings');
+          if (savedSettingsStr) {
+            try {
               const savedSettings = JSON.parse(savedSettingsStr);
-              console.log("TimerContext: Parsed localStorage settings:", savedSettings);
+              timerLog('Loaded settings from localStorage', savedSettings);
               
-              // Use values from localStorage, with fallbacks
+              // Apply settings
               setPomodoroTime(Number(savedSettings.pomodoroTime) || 25);
               setShortBreakTime(Number(savedSettings.shortBreakTime) || 5);
               setLongBreakTime(Number(savedSettings.longBreakTime) || 15);
@@ -194,243 +464,107 @@ export const TimerProvider = ({ children }) => {
               setLongBreakInterval(Number(savedSettings.longBreakInterval) || 4);
               setSoundEnabled(savedSettings.soundEnabled !== false);
               setVolume(Number(savedSettings.volume) || 0.5);
-              
-              console.log("TimerContext: Applied settings from localStorage");
-            } else {
-              console.log("TimerContext: No localStorage settings found, using defaults");
+            } catch (error) {
+              console.error('Error parsing localStorage settings:', error);
             }
-          } catch (err) {
-            console.error("TimerContext: Error parsing localStorage settings:", err);
           }
         }
         
-        // Mark settings as loaded regardless of source
+        // Mark settings as loaded
         setSettingsLoaded(true);
-        
-        // Set initial time based on mode
-        handleResetTimer();
-      } catch (err) {
-        console.error("TimerContext: Unexpected error loading settings:", err);
-        // Still mark as loaded so app can function
-        setSettingsLoaded(true);
+        timerLog('Settings loaded');
+      } catch (error) {
+        console.error('Error loading settings:', error);
+        setSettingsLoaded(true); // Mark as loaded anyway
       }
     };
     
     loadSettings();
   }, []);
-  
-  // Listen for timerSettingsUpdated events from any component, with debouncing
+
+  // Handle timer settings update events
   useEffect(() => {
-    // Debounce handler to avoid multiple rapid updates
-    let settingsUpdateTimeout = null;
-    
     const handleSettingsUpdated = (event) => {
       const newSettings = event.detail;
-      console.log("TimerContext: Received settings update event:", newSettings);
+      if (!newSettings) return;
       
-      if (!newSettings) {
-        console.warn("TimerContext: Received empty settings update event");
-        return;
+      timerLog('Received settings update event', newSettings);
+      
+      // Apply settings
+      if (newSettings.pomodoroTime !== undefined) setPomodoroTime(Number(newSettings.pomodoroTime));
+      if (newSettings.shortBreakTime !== undefined) setShortBreakTime(Number(newSettings.shortBreakTime));
+      if (newSettings.longBreakTime !== undefined) setLongBreakTime(Number(newSettings.longBreakTime));
+      if (newSettings.autoStartSessions !== undefined) setAutoStartPomodoros(!!newSettings.autoStartSessions);
+      if (newSettings.autoStartBreaks !== undefined) setAutoStartBreaks(!!newSettings.autoStartBreaks);
+      if (newSettings.shortBreakEnabled !== undefined) setAutoStartBreaks(!!newSettings.shortBreakEnabled);
+      if (newSettings.longBreakInterval !== undefined) setLongBreakInterval(Number(newSettings.longBreakInterval));
+      if (newSettings.soundEnabled !== undefined) setSoundEnabled(!!newSettings.soundEnabled);
+      if (newSettings.volume !== undefined) setVolume(Number(newSettings.volume));
+      
+      // If timer is not active, update display time
+      if (!isActive) {
+        const newTime = getTimerDuration();
+        setCurrentTime(newTime);
+        timerLog(`Updated display time to ${newTime} seconds`);
       }
       
-      // Clear any existing timeout to debounce multiple rapid updates
-      if (settingsUpdateTimeout) {
-        clearTimeout(settingsUpdateTimeout);
+      // Save settings to localStorage
+      try {
+        const settingsToSave = {
+          pomodoroTime: Number(newSettings.pomodoroTime) || pomodoroTime,
+          shortBreakTime: Number(newSettings.shortBreakTime) || shortBreakTime,
+          longBreakTime: Number(newSettings.longBreakTime) || longBreakTime,
+          autoStartSessions: newSettings.autoStartSessions !== undefined ? !!newSettings.autoStartSessions : autoStartPomodoros,
+          shortBreakEnabled: newSettings.shortBreakEnabled !== undefined ? !!newSettings.shortBreakEnabled : autoStartBreaks,
+          longBreakInterval: Number(newSettings.longBreakInterval) || longBreakInterval,
+          soundEnabled: newSettings.soundEnabled !== undefined ? !!newSettings.soundEnabled : soundEnabled,
+          volume: newSettings.volume !== undefined ? Number(newSettings.volume) : volume
+        };
+        localStorage.setItem('timerSettings', JSON.stringify(settingsToSave));
+        timerLog('Saved settings to localStorage', settingsToSave);
+      } catch (error) {
+        console.error('Error saving settings to localStorage:', error);
       }
-      
-      // Set a short timeout to batch multiple settings updates
-      settingsUpdateTimeout = setTimeout(() => {
-        console.log("TimerContext: Applying settings update from event");
-        
-        // Update all settings from the event with type validation
-        if (newSettings.pomodoroTime !== undefined) {
-          const value = Number(newSettings.pomodoroTime);
-          if (!isNaN(value) && value > 0) setPomodoroTime(value);
-        }
-        
-        if (newSettings.shortBreakTime !== undefined) {
-          const value = Number(newSettings.shortBreakTime);
-          if (!isNaN(value) && value > 0) setShortBreakTime(value);
-        }
-        
-        if (newSettings.longBreakTime !== undefined) {
-          const value = Number(newSettings.longBreakTime);
-          if (!isNaN(value) && value > 0) setLongBreakTime(value);
-        }
-        
-        if (newSettings.autoStartSessions !== undefined) setAutoStartPomodoros(!!newSettings.autoStartSessions);
-        if (newSettings.autoStartBreaks !== undefined) setAutoStartBreaks(!!newSettings.autoStartBreaks);
-        if (newSettings.shortBreakEnabled !== undefined) setAutoStartBreaks(!!newSettings.shortBreakEnabled);
-        
-        if (newSettings.longBreakInterval !== undefined) {
-          const value = Number(newSettings.longBreakInterval);
-          if (!isNaN(value) && value > 0) setLongBreakInterval(value);
-        }
-        
-        if (newSettings.soundEnabled !== undefined) setSoundEnabled(!!newSettings.soundEnabled);
-        
-        if (newSettings.volume !== undefined) {
-          const value = Number(newSettings.volume);
-          if (!isNaN(value) && value >= 0 && value <= 1) setVolume(value);
-        }
-        
-        // Reset the timer with new settings if needed
-        if (mode === 'pomodoro' && newSettings.pomodoroTime !== undefined) {
-          const value = Number(newSettings.pomodoroTime);
-          if (!isNaN(value) && value > 0) setCurrentTime(value * 60);
-        } else if (mode === 'shortBreak' && newSettings.shortBreakTime !== undefined) {
-          const value = Number(newSettings.shortBreakTime);
-          if (!isNaN(value) && value > 0) setCurrentTime(value * 60);
-        } else if (mode === 'longBreak' && newSettings.longBreakTime !== undefined) {
-          const value = Number(newSettings.longBreakTime);
-          if (!isNaN(value) && value > 0) setCurrentTime(value * 60);
-        }
-        
-        // Also update localStorage for persistence, ensuring conversion from seconds to minutes
-        try {
-          const settingsToSave = {
-            pomodoroTime: Number(newSettings.pomodoroTime) || pomodoroTime,
-            shortBreakTime: Number(newSettings.shortBreakTime) || shortBreakTime,
-            longBreakTime: Number(newSettings.longBreakTime) || longBreakTime,
-            autoStartSessions: newSettings.autoStartSessions !== undefined ? 
-              !!newSettings.autoStartSessions : autoStartPomodoros,
-            shortBreakEnabled: newSettings.shortBreakEnabled !== undefined ?
-              !!newSettings.shortBreakEnabled : autoStartBreaks,
-            longBreakInterval: Number(newSettings.longBreakInterval) || longBreakInterval,
-            soundEnabled: newSettings.soundEnabled !== undefined ? 
-              !!newSettings.soundEnabled : soundEnabled,
-            volume: Number(newSettings.volume) !== undefined ? 
-              Number(newSettings.volume) : volume
-          };
-          
-          localStorage.setItem('timerSettings', JSON.stringify(settingsToSave));
-          console.log("TimerContext: Updated localStorage with settings:", settingsToSave);
-        } catch (err) {
-          console.error("TimerContext: Error saving settings to localStorage:", err);
-        }
-        
-        console.log("TimerContext: Applied settings from event");
-      }, 50); // Small debounce delay
     };
     
     window.addEventListener('timerSettingsUpdated', handleSettingsUpdated);
     
     return () => {
       window.removeEventListener('timerSettingsUpdated', handleSettingsUpdated);
-      if (settingsUpdateTimeout) {
-        clearTimeout(settingsUpdateTimeout);
-      }
     };
-  }, [mode, pomodoroTime, shortBreakTime, longBreakTime, autoStartPomodoros, autoStartBreaks, longBreakInterval, soundEnabled, volume]);
-  
-  // Reset timer when mode changes
-  useEffect(() => {
-    handleResetTimer();
-  }, [mode, handleResetTimer]); // Now handleResetTimer is a dependency
-  
-  // Timer interval
-  useEffect(() => {
-    if (isActive && !isPaused) {
-      timerRef.current = setInterval(() => {
-        setCurrentTime((prevTime) => {
-          if (prevTime <= 1) {
-            clearInterval(timerRef.current);
-            handleTimerComplete();
-            return 0;
-          }
-          return prevTime - 1;
-        });
-      }, 1000);
-    } else {
-      clearInterval(timerRef.current);
-    }
+  }, [isActive, getTimerDuration, pomodoroTime, shortBreakTime, longBreakTime, autoStartPomodoros, autoStartBreaks, longBreakInterval, soundEnabled, volume]);
+
+  // Function to switch timer mode
+  const switchMode = useCallback((newMode) => {
+    if (newMode === mode) return;
     
-    return () => clearInterval(timerRef.current);
-  }, [isActive, isPaused, handleTimerComplete]); // Make sure handleTimerComplete is included
-  
-  // Timer control functions
-  const startTimer = () => {
-    setIsActive(true);
-    setIsPaused(false);
-  };
-  
-  const pauseTimer = () => {
-    setIsPaused(true);
-  };
-  
-  const resetTimer = () => {
-    handleResetTimer();
-  };
-  
-  const skipTimer = () => {
-    handleTimerComplete();
-  };
-  
-  // Update timer settings
-  const updateTimerSettings = (settings) => {
-    if (!settingsLoaded) return;
+    timerLog(`Switching mode to ${newMode}`);
     
-    console.log("TimerContext: Updating settings:", settings);
+    // Reset timer
+    resetTimer();
     
-    if (settings.pomodoroTime !== undefined) {
-      setPomodoroTime(settings.pomodoroTime);
-      if (mode === 'pomodoro') setCurrentTime(settings.pomodoroTime * 60);
-    }
+    // Change mode
+    setMode(newMode);
+    saveToStorage(STORAGE_MODE, newMode);
     
-    if (settings.shortBreakTime !== undefined) {
-      setShortBreakTime(settings.shortBreakTime);
-      if (mode === 'shortBreak') setCurrentTime(settings.shortBreakTime * 60);
-    }
+    // Set appropriate time
+    const newDuration = getTimerDuration(newMode);
+    setCurrentTime(newDuration);
     
-    if (settings.longBreakTime !== undefined) {
-      setLongBreakTime(settings.longBreakTime);
-      if (mode === 'longBreak') setCurrentTime(settings.longBreakTime * 60);
-    }
-    
-    if (settings.autoStartBreaks !== undefined) {
-      setAutoStartBreaks(settings.autoStartBreaks);
-    }
-    
-    if (settings.autoStartPomodoros !== undefined || settings.autoStartSessions !== undefined) {
-      // Handle both names for compatibility
-      const newValue = settings.autoStartPomodoros !== undefined ? 
-        settings.autoStartPomodoros : settings.autoStartSessions;
-      setAutoStartPomodoros(newValue);
-    }
-    
-    if (settings.longBreakInterval !== undefined) {
-      setLongBreakInterval(settings.longBreakInterval);
-    }
-    
-    if (settings.soundEnabled !== undefined) {
-      setSoundEnabled(settings.soundEnabled);
-    }
-    
-    if (settings.volume !== undefined) {
-      setVolume(settings.volume);
-    }
-    
-    // Also update localStorage to keep everything in sync
-    const updatedSettings = {
-      pomodoroTime: settings.pomodoroTime !== undefined ? settings.pomodoroTime : pomodoroTime,
-      shortBreakTime: settings.shortBreakTime !== undefined ? settings.shortBreakTime : shortBreakTime,
-      longBreakTime: settings.longBreakTime !== undefined ? settings.longBreakTime : longBreakTime,
-      autoStartBreaks: settings.autoStartBreaks !== undefined ? settings.autoStartBreaks : autoStartBreaks,
-      autoStartPomodoros: settings.autoStartPomodoros !== undefined ? settings.autoStartPomodoros : autoStartPomodoros,
-      autoStartSessions: settings.autoStartSessions !== undefined ? settings.autoStartSessions : autoStartPomodoros,
-      longBreakInterval: settings.longBreakInterval !== undefined ? settings.longBreakInterval : longBreakInterval,
-      soundEnabled: settings.soundEnabled !== undefined ? settings.soundEnabled : soundEnabled,
-      volume: settings.volume !== undefined ? settings.volume : volume,
-      shortBreakEnabled: true,
-      longBreakEnabled: true
-    };
-    
-    localStorage.setItem('timerSettings', JSON.stringify(updatedSettings));
-  };
-  
+    timerLog(`Switched to ${newMode} with duration ${newDuration}`);
+  }, [mode, resetTimer, getTimerDuration]);
+
+  // Settings update function (for external components)
+  const updateTimerSettings = useCallback((settings) => {
+    timerLog('Dispatching settings update event', settings);
+    const event = new CustomEvent('timerSettingsUpdated', { detail: settings });
+    window.dispatchEvent(event);
+  }, []);
+
+  // Context value
   const value = {
     mode,
-    setMode,
+    switchMode,
     isActive,
     isPaused,
     currentTime,
@@ -450,7 +584,7 @@ export const TimerProvider = ({ children }) => {
     updateTimerSettings,
     settingsLoaded
   };
-  
+
   return (
     <TimerContext.Provider value={value}>
       {children}

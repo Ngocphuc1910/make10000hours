@@ -32,7 +32,7 @@ exports.handler = async function(event, context) {
           'Access-Control-Allow-Origin': '*',
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           success: false, 
           error: {
             message: error.message,
