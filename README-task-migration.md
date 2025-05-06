@@ -88,3 +88,5 @@ This ensures backward compatibility with any code that still uses the `completed
 | completed (boolean) | status (text)        |
 
 The `completed` field is kept for backward compatibility but will stay in sync with the new `status` field. 
+
+try to add the focus mode but do not work
