@@ -23,6 +23,20 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   
   const isSelected = currentTaskId === task.id;
   
+  // Status indicator styles
+  const getStatusIndicator = () => {
+    switch (task.status) {
+      case 'pomodoro':
+        return <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-1.5"></span>;
+      case 'todo':
+        return <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1.5"></span>;
+      case 'completed':
+        return <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1.5"></span>;
+      default:
+        return null;
+    }
+  };
+  
   const handleTaskClick = (e: React.MouseEvent) => {
     // Ignore clicks on checkbox, edit button, or expand button
     if (
@@ -68,6 +82,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
       onClick={handleTaskClick}
       style={{ borderWidth: isSelected ? '2px' : '1px' }}
       data-task-id={task.id}
+      data-status={task.status}
     >
       <div className="mr-3">
         <CustomCheckbox 
@@ -86,9 +101,12 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                 {task.title}
               </h4>
               <div className="flex items-center mt-0.5 text-xs text-left">
-                <span className={`flex items-center ${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
-                  {project.name}
-                </span>
+                <div className="flex items-center">
+                  {getStatusIndicator()}
+                  <span className={`${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
+                    {project.name}
+                  </span>
+                </div>
                 <span className="mx-2 text-gray-300">•</span>
                 <span className={`flex items-center ${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
                   <i className="ri-time-line mr-1"></i>

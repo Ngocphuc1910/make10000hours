@@ -29,6 +29,7 @@ export const FocusTimeTrend: React.FC = () => {
       case 'weekly':
         dateFormatter = (date: Date) => {
           const weekStart = new Date(date);
+          // Set to start of week (Sunday)
           weekStart.setDate(date.getDate() - date.getDay());
           const weekEnd = new Date(weekStart);
           weekEnd.setDate(weekStart.getDate() + 6);
@@ -37,7 +38,10 @@ export const FocusTimeTrend: React.FC = () => {
         };
         groupingFunction = (date: Date) => {
           const weekStart = new Date(date);
+          // Set to start of week (Sunday)
           weekStart.setDate(date.getDate() - date.getDay());
+          // Set to start of day
+          weekStart.setHours(0, 0, 0, 0);
           return weekStart.toISOString().split('T')[0];
         };
         break;
@@ -46,7 +50,8 @@ export const FocusTimeTrend: React.FC = () => {
           return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
         };
         groupingFunction = (date: Date) => {
-          return `${date.getFullYear()}-${date.getMonth() + 1}`;
+          // Use yyyy-MM format for month grouping
+          return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
         };
         break;
       case 'daily':
@@ -77,6 +82,18 @@ export const FocusTimeTrend: React.FC = () => {
     const allDates: Date[] = [];
     const current = new Date(dateRange.startDate);
     
+    // Ensure we start on the right boundary for weekly/monthly views
+    if (timeUnit === 'weekly') {
+      // Move to start of week (Sunday)
+      current.setDate(current.getDate() - current.getDay());
+    } else if (timeUnit === 'monthly') {
+      // Move to start of month
+      current.setDate(1);
+    }
+    
+    // Set to start of day
+    current.setHours(0, 0, 0, 0);
+    
     while (current <= dateRange.endDate) {
       allDates.push(new Date(current));
       
@@ -96,7 +113,7 @@ export const FocusTimeTrend: React.FC = () => {
       
       chartData.push({
         date: dateFormatter(date),
-        value: timeUnit === 'daily' ? value : Math.round(value)
+        value // Always use the aggregated value, don't round
       });
     });
     
@@ -175,7 +192,7 @@ export const FocusTimeTrend: React.FC = () => {
           },
           yAxis: {
             type: 'value',
-            name: 'Hours Focused',
+            name: 'Minutes Focused',
             nameLocation: 'middle',
             nameGap: 50,
             nameTextStyle: {
@@ -200,10 +217,12 @@ export const FocusTimeTrend: React.FC = () => {
               fontSize: 12,
               margin: 16,
               formatter: function(value: number) {
+                // Minutes to hours conversion for display
                 return `${Math.floor(value / 60)}h`;
               }
             },
             max: function(value: { max: number }) {
+              // Ensure the max value is a nice round number of hours
               const hourValue = value.max / 60;
               return Math.ceil(hourValue) * 60;
             }

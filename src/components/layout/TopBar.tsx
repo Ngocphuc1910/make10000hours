@@ -23,18 +23,18 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
           onClick={toggleRightSidebar}
           aria-label={isRightSidebarOpen ? "Hide Tasks Panel" : "Show Tasks Panel"}
         >
-          <div className="w-5 h-5 flex items-center justify-center">
+          <span className="w-5 h-5 flex items-center justify-center">
             <i className={`ri-${isRightSidebarOpen ? 'layout-right-2-line' : 'layout-right-line'}`}></i>
-          </div>
+          </span>
         </button>
         
         <button 
           className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
           aria-label="Notifications"
         >
-          <div className="w-5 h-5 flex items-center justify-center">
+          <span className="w-5 h-5 flex items-center justify-center">
             <i className="ri-notification-line"></i>
-          </div>
+          </span>
         </button>
         
         <button 
@@ -43,9 +43,9 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
           onClick={toggleFocusMode}
           aria-label="Toggle Focus Mode"
         >
-          <div className="w-5 h-5 flex items-center justify-center">
+          <span className="w-5 h-5 flex items-center justify-center">
             <i className="ri-fullscreen-line" id="focusModeIcon"></i>
-          </div>
+          </span>
         </button>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { Sidebar } from './Sidebar';
+import Sidebar from '../../layout/Sidebar';
 import { Header } from './Header';
 
 export const DashboardLayout: React.FC = () => {
