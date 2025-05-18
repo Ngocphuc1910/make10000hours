@@ -1,6 +1,4 @@
 import React from 'react';
-import { Card } from '../ui/Card';
-import { Button } from '../ui/Button';
 import { AverageFocusTime } from './widgets/AverageFocusTime';
 import { FocusStreak } from './widgets/FocusStreak';
 import { TopProjects } from './widgets/TopProjects';

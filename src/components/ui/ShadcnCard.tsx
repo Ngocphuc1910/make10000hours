@@ -1,6 +1,6 @@
 import React from 'react';
 import { styles } from './shadcn-style';
-import { CardProps } from '../../types';
+import type { CardProps } from '../../types';
 
 const ShadcnCard: React.FC<CardProps> = ({ 
   children, 
