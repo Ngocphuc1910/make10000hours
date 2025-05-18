@@ -122,7 +122,7 @@ export const TaskList: React.FC<TaskListProps> = ({
                 return (
                   <TaskForm 
                     key={task.id} 
-                    editingTaskId={task.id} 
+                    task={task}
                     onCancel={handleCancelForm} 
                   />
                 );
