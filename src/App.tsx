@@ -112,7 +112,6 @@ const App = (): React.JSX.Element => {
           <Route path="settings" element={<SettingsPage />} />
         </Route>
         <Route path="support" element={<SupportPageWithLayout />} />
-        <Route path="*" element={<Navigate to="pomodoro" replace />} />
       </Routes>
       <ToastContainer />
     </Router>
