@@ -1,0 +1,18 @@
+[class^="ri-"], [class*=" ri-"] {
+  font-family: 'remixicon' !important;
+  font-style: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ri-dashboard-line:before { content: "\ec44"; }
+.ri-task-line:before { content: "\f0dc"; }
+.ri-timer-line:before { content: "\f0f7"; }
+.ri-calendar-line:before { content: "\ead1"; }
+.ri-settings-line:before { content: "\f0c4"; }
+.ri-question-line:before { content: "\f02a"; }
+.ri-arrow-left-s-line:before { content: "\ea64"; }
+.ri-arrow-right-s-line:before { content: "\ea6e"; }
+.ri-notification-line:before { content: "\eefc"; }
+.ri-arrow-down-s-line:before { content: "\ea4e"; }
+.ri-fire-line:before { content: "\ec9d"; } 
