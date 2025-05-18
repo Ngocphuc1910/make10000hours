@@ -5,7 +5,7 @@ import { TopProjects } from './widgets/TopProjects';
 import { TopTasks } from './widgets/TopTasks';
 import { FocusTimeTrend } from './widgets/FocusTimeTrend';
 
-export const DashboardPage: React.FC = () => {
+export const DashboardContent: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Focus Time Statistics Section */}
