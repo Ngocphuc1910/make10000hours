@@ -83,4 +83,122 @@
   color: #d32f2f;
   font-size: 14px;
   margin-top: 4px;
+}
+
+/* Icon styles */
+:where([class^="ri-"])::before { 
+  content: "\f3c2"; 
+}
+
+/* Custom styles for app components */
+/* Timer-related styles */
+.timer-circle {
+  position: relative;
+}
+
+.timer-circle-bg {
+  stroke: #e5e7eb;
+  stroke-width: 12;
+  fill: none;
+}
+
+.timer-circle-progress {
+  fill: none;
+  stroke: #BB5F5A;
+  stroke-width: 12;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transition: stroke-dashoffset 1s linear;
+}
+
+.timer-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  width: 100%;
+}
+
+/* Task-related styles */
+.task-card {
+  transition: all 0.2s ease;
+}
+
+.task-card.opacity-70 {
+  opacity: 0.7;
+  border-style: dashed;
+  border-width: 1px;
+}
+
+.task-card.bg-gray-50 {
+  background-color: #F9FAFB;
+}
+
+/* Compact view for task list */
+#rightSidebar.compact-view .task-card {
+  padding: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+#rightSidebar.compact-view .task-description {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Toast notification */
+.toast-notification {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background-color: #BB5F5A;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  transform: translateY(100%);
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 1000;
+}
+
+.toast-notification.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* Animation for completing tasks */
+.task-complete-animation {
+  position: absolute;
+  pointer-events: none;
+  animation: celebrate 0.6s ease-out forwards;
+}
+
+@keyframes celebrate {
+  0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+}
+
+/* Fade-in animation */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Sidebar transitions */
+#sidebar {
+  overflow: hidden;
+  transition: width 0.3s ease;
 } 

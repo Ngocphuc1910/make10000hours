@@ -1,214 +1,312 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Card from '../../ui/Card';
-import ReactECharts from 'echarts-for-react';
+import { useFocusStore } from '../../../store/useFocusStore';
+import type { TimeUnit } from '../../../types';
+import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
+
+type ChartDataPoint = {
+  date: string;
+  value: number;
+};
 
 export const FocusTimeTrend: React.FC = () => {
-  const [activeView, setActiveView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [chartInstance, setChartInstance] = useState<any>(null);
+  const { focusSessions, dateRange, timeUnit, setTimeUnit } = useFocusStore();
   
-  // Generate random data for the chart
-  const generateChartData = (viewMode: 'daily' | 'weekly' | 'monthly') => {
-    const dates: string[] = [];
-    const data: number[] = [];
+  // Generate chart data based on focus sessions and time unit
+  const generateChartData = (): ChartDataPoint[] => {
+    if (focusSessions.length === 0) return [];
     
-    // Current date
-    const today = new Date();
+    // Create a Map to aggregate focus time by date
+    const timeByDate = new Map<string, number>();
     
-    if (viewMode === 'daily') {
-      // Generate data for the last 14 days
-      for (let i = 13; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(today.getDate() - i);
-        dates.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-        
-        // Random hours between 0.5 and 4.5
-        const hours = (Math.random() * 4) + 0.5;
-        data.push(parseFloat(hours.toFixed(1)));
+    // Create date formatter based on time unit
+    let dateFormatter: (date: Date) => string;
+    let groupingFunction: (date: Date) => string;
+    
+    switch (timeUnit) {
+      case 'weekly':
+        dateFormatter = (date: Date) => {
+          const weekStart = new Date(date);
+          weekStart.setDate(date.getDate() - date.getDay());
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 6);
+          
+          return `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+        };
+        groupingFunction = (date: Date) => {
+          const weekStart = new Date(date);
+          weekStart.setDate(date.getDate() - date.getDay());
+          return weekStart.toISOString().split('T')[0];
+        };
+        break;
+      case 'monthly':
+        dateFormatter = (date: Date) => {
+          return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        };
+        groupingFunction = (date: Date) => {
+          return `${date.getFullYear()}-${date.getMonth() + 1}`;
+        };
+        break;
+      case 'daily':
+      default:
+        dateFormatter = (date: Date) => {
+          return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        };
+        groupingFunction = (date: Date) => {
+          return date.toISOString().split('T')[0];
+        };
+    }
+    
+    // Aggregate focus time by date unit
+    focusSessions.forEach(session => {
+      const sessionDate = new Date(session.startTime);
+      
+      if (sessionDate >= dateRange.startDate && sessionDate <= dateRange.endDate) {
+        const dateKey = groupingFunction(sessionDate);
+        const currentValue = timeByDate.get(dateKey) || 0;
+        timeByDate.set(dateKey, currentValue + session.duration);
       }
-    } else if (viewMode === 'weekly') {
-      // Generate data for the last 8 weeks
-      for (let i = 7; i >= 0; i--) {
-        const startDate = new Date();
-        startDate.setDate(today.getDate() - (i * 7));
-        const endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + 6);
-        
-        const label = `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-        dates.push(label);
-        
-        // Random hours between 5 and 20 for weekly
-        const hours = (Math.random() * 15) + 5;
-        data.push(parseFloat(hours.toFixed(1)));
-      }
-    } else {
-      // Generate data for the last 6 months
-      for (let i = 5; i >= 0; i--) {
-        const date = new Date();
-        date.setMonth(today.getMonth() - i);
-        dates.push(date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
-        
-        // Random hours between 20 and 80 for monthly
-        const hours = (Math.random() * 60) + 20;
-        data.push(Math.round(hours));
+    });
+    
+    // Convert the Map to an array of ChartDataPoint
+    const chartData: ChartDataPoint[] = [];
+    
+    // Create an array of all date keys in the range
+    const allDates: Date[] = [];
+    const current = new Date(dateRange.startDate);
+    
+    while (current <= dateRange.endDate) {
+      allDates.push(new Date(current));
+      
+      if (timeUnit === 'daily') {
+        current.setDate(current.getDate() + 1);
+      } else if (timeUnit === 'weekly') {
+        current.setDate(current.getDate() + 7);
+      } else if (timeUnit === 'monthly') {
+        current.setMonth(current.getMonth() + 1);
       }
     }
     
-    return { dates, data };
+    // Use all dates to create chart data
+    allDates.forEach(date => {
+      const dateKey = groupingFunction(date);
+      const value = timeByDate.get(dateKey) || 0;
+      
+      chartData.push({
+        date: dateFormatter(date),
+        value: timeUnit === 'daily' ? value : Math.round(value)
+      });
+    });
+    
+    return chartData;
   };
   
-  const [chartData, setChartData] = useState(generateChartData('daily'));
-  
-  // Update chart data when view changes
+  // Initialize and update chart
   useEffect(() => {
-    setChartData(generateChartData(activeView));
-  }, [activeView]);
-  
-  // ECharts option
-  const getOption = () => {
-    return {
-      tooltip: {
-        trigger: 'axis',
-        formatter: function(params: any) {
-          const value = params[0].value;
-          let timeFormat = '';
-          
-          if (activeView === 'daily') {
-            const hours = Math.floor(value);
-            const minutes = Math.round((value % 1) * 60);
-            timeFormat = `${hours}h ${minutes}m`;
-          } else {
-            timeFormat = `${value}h`;
-          }
-          
-          return `
-            <div class="font-medium">${params[0].name}</div>
-            <div class="flex items-center mt-1">
-              <span style="display:inline-block;margin-right:4px;border-radius:10px;width:10px;height:10px;background-color:#57B5E7;"></span>
-              <span>Focus Time: ${timeFormat}</span>
-            </div>
-          `;
+    if (!chartRef.current) return;
+    
+    // Import ECharts dynamically
+    const loadECharts = async () => {
+      try {
+        const echarts = await import('echarts');
+        
+        // Clear existing chart if it exists
+        if (chartInstance) {
+          chartInstance.dispose();
         }
-      },
-      grid: {
-        left: '8%',
-        right: '8%',
-        bottom: '12%',
-        top: '12%',
-        containLabel: true
-      },
-      xAxis: {
-        type: 'category',
-        boundaryGap: true,
-        data: chartData.dates,
-        axisLine: {
-          lineStyle: {
-            color: '#e5e7eb'
-          }
-        },
-        axisLabel: {
-          color: '#6b7280',
-          formatter: function(value: string) {
-            if (value.includes(' - ')) {
-              return value.split(' - ')[0];
+        
+        // Initialize chart
+        const myChart = echarts.init(chartRef.current);
+        setChartInstance(myChart);
+        
+        // Generate chart data
+        const data = generateChartData();
+        
+        // Create chart options
+        const option = {
+          animation: false,
+          tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            borderColor: '#e5e7eb',
+            borderWidth: 1,
+            padding: [8, 12],
+            textStyle: {
+              color: '#1f2937',
+              fontSize: 13
+            },
+            formatter: (params: any) => {
+              const value = params[0].value;
+              return `<div style="font-weight: 500">${params[0].name}</div>
+                <div style="display: flex; align-items: center; margin-top: 4px">
+                  <span style="display: inline-block; margin-right: 4px; border-radius: 10px; width: 10px; height: 10px; background-color: #57B5E7;"></span>
+                  <span>Focus Time: ${formatMinutesToHoursAndMinutes(value)}</span>
+                </div>`;
             }
-            return value;
-          }
-        }
-      },
-      yAxis: {
-        type: 'value',
-        name: 'Hours Focused',
-        nameLocation: 'middle',
-        nameGap: 50,
-        nameTextStyle: {
-          color: '#6b7280',
-          fontWeight: 500
-        },
-        axisLine: {
-          show: false
-        },
-        axisTick: {
-          show: false
-        },
-        splitLine: {
-          lineStyle: {
-            color: '#f3f4f6',
-            type: 'dashed'
-          }
-        },
-        axisLabel: {
-          color: '#6b7280',
-          formatter: '{value}h'
-        }
-      },
-      series: [
-        {
-          name: 'Focus Time',
-          type: 'bar',
-          barWidth: '40%',
-          itemStyle: {
-            color: '#57B5E7',
-            borderRadius: [6, 6, 0, 0]
           },
-          label: {
-            show: true,
-            position: 'top',
-            formatter: function(params: any) {
-              if (activeView === 'daily') {
-                const hours = Math.floor(params.value);
-                const minutes = Math.round((params.value % 1) * 60);
-                return `${hours}h ${minutes}m`;
+          grid: {
+            left: '8%',
+            right: '8%',
+            bottom: '12%',
+            top: '12%',
+            containLabel: true
+          },
+          xAxis: {
+            type: 'category',
+            boundaryGap: true,
+            data: data.map(item => item.date),
+            axisLine: {
+              lineStyle: {
+                color: '#e5e7eb',
+                width: 2
               }
-              return `${params.value}h`;
+            },
+            axisLabel: {
+              color: '#6b7280',
+              fontSize: 12,
+              margin: 16,
+              formatter: function(value: string) {
+                const parts = value.split(' ');
+                return parts.length > 1 ? `${parts[0]}\n${parts[1]}` : value;
+              }
             }
           },
-          data: chartData.data
-        }
-      ]
-    };
-  };
-
-  return (
-    <Card 
-      title="Focus Time Trend"
-      action={
-        <div className="inline-flex rounded-full bg-gray-100 p-1">
-          <button 
-            type="button" 
-            className={`px-4 py-1.5 text-sm font-medium rounded-full ${
-              activeView === 'daily' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-            }`}
-            onClick={() => setActiveView('daily')}
-          >
-            Daily
-          </button>
-          <button 
-            type="button" 
-            className={`px-4 py-1.5 text-sm font-medium rounded-full ${
-              activeView === 'weekly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-            }`}
-            onClick={() => setActiveView('weekly')}
-          >
-            Weekly
-          </button>
-          <button 
-            type="button" 
-            className={`px-4 py-1.5 text-sm font-medium rounded-full ${
-              activeView === 'monthly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-            }`}
-            onClick={() => setActiveView('monthly')}
-          >
-            Monthly
-          </button>
-        </div>
+          yAxis: {
+            type: 'value',
+            name: 'Hours Focused',
+            nameLocation: 'middle',
+            nameGap: 50,
+            nameTextStyle: {
+              color: '#6b7280',
+              fontSize: 13,
+              fontWeight: 500
+            },
+            axisLine: {
+              show: false
+            },
+            axisTick: {
+              show: false
+            },
+            splitLine: {
+              lineStyle: {
+                color: '#f3f4f6',
+                type: 'dashed'
+              }
+            },
+            axisLabel: {
+              color: '#6b7280',
+              fontSize: 12,
+              margin: 16,
+              formatter: function(value: number) {
+                return `${Math.floor(value / 60)}h`;
+              }
+            },
+            max: function(value: { max: number }) {
+              const hourValue = value.max / 60;
+              return Math.ceil(hourValue) * 60;
+            }
+          },
+          series: [
+            {
+              name: 'Focus Time',
+              type: 'bar',
+              barWidth: '40%',
+              itemStyle: {
+                color: '#57B5E7',
+                borderRadius: [6, 6, 0, 0]
+              },
+              label: {
+                show: true,
+                position: 'top',
+                fontSize: 12,
+                color: '#6b7280',
+                formatter: function(params: { value: number }) {
+                  const hours = Math.floor(params.value / 60);
+                  const minutes = params.value % 60;
+                  if (minutes === 0) {
+                    return `${hours}h`;
+                  } else {
+                    return `${hours}h ${minutes}m`;
+                  }
+                }
+              },
+              data: data.map(item => item.value)
+            }
+          ]
+        };
+        
+        // Set chart options
+        myChart.setOption(option);
+        
+        // Handle window resize
+        const handleResize = () => {
+          myChart.resize();
+        };
+        
+        window.addEventListener('resize', handleResize);
+        
+        return () => {
+          window.removeEventListener('resize', handleResize);
+          myChart.dispose();
+        };
+      } catch (error) {
+        console.error('Error loading ECharts:', error);
       }
-    >
-      <div style={{ height: '320px' }}>
-        <ReactECharts 
-          option={getOption()} 
-          style={{ height: '100%', width: '100%' }} 
-          opts={{ renderer: 'canvas' }}
-        />
+    };
+    
+    loadECharts();
+  }, [chartRef, timeUnit, dateRange, focusSessions]);
+  
+  // Change the time unit
+  const handleTimeUnitChange = (unit: TimeUnit) => {
+    setTimeUnit(unit);
+  };
+  
+  return (
+    <Card title="Focus Time Trend">
+      <div className="flex items-center justify-between mb-6">
+        <div></div>
+        <div className="flex items-center space-x-2">
+          <div className="inline-flex rounded-full bg-gray-100 p-1">
+            <button 
+              type="button" 
+              className={`px-4 py-1.5 text-sm font-medium rounded-full ${
+                timeUnit === 'daily' 
+                  ? 'bg-white text-gray-900 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+              onClick={() => handleTimeUnitChange('daily')}
+            >
+              Daily
+            </button>
+            <button 
+              type="button" 
+              className={`px-4 py-1.5 text-sm font-medium rounded-full ${
+                timeUnit === 'weekly' 
+                  ? 'bg-white text-gray-900 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+              onClick={() => handleTimeUnitChange('weekly')}
+            >
+              Weekly
+            </button>
+            <button 
+              type="button" 
+              className={`px-4 py-1.5 text-sm font-medium rounded-full ${
+                timeUnit === 'monthly' 
+                  ? 'bg-white text-gray-900 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+              onClick={() => handleTimeUnitChange('monthly')}
+            >
+              Monthly
+            </button>
+          </div>
+        </div>
       </div>
+      <div ref={chartRef} className="w-full h-80"></div>
     </Card>
   );
 }; 
