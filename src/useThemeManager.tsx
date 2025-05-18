@@ -1,5 +1,5 @@
 import { useTheme } from './ThemeContext';
-import { Theme } from './types';
+import type { Theme } from './types';
 
 interface ThemeManager {
   theme: Theme;
