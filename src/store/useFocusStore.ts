@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { 
+import type { 
   User, 
   FocusSession, 
   Project, 

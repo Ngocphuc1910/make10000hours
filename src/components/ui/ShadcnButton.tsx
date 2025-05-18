@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { styles, colors } from './shadcn-style';
-import { ButtonProps } from '../../types';
+import type { ButtonProps } from '../../types';
 
 const ShadcnButton: React.FC<ButtonProps> = ({ 
   children,

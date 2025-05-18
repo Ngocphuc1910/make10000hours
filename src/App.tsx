@@ -1,23 +1,19 @@
-import React, { useState } from 'react';
+import React from 'react';
 import './App.css';
-import Product from './product';
-import { Link } from 'react-router-dom';
-import Input from './form';
-import { useTheme } from './ThemeContext';
-import TodoList from './ToDoList';
-import MemoExample from './MemoExample';
+import './styles/dashboard.css';
+import { Link, Routes, Route, BrowserRouter as Router } from 'react-router-dom';
 import useThemeManager from './useThemeManager';
-import Login from './login';
-import LifecycleExample from './LifecycleExample';
-import AsyncAwaitDemo from './AsyncAwaitDemo';
-import PromisesDemo from './PromisesDemo';
 import ShadcnCard from './components/ui/ShadcnCard';
 import ShadcnButton from './components/ui/ShadcnButton';
 import { styles, colors } from './components/ui/shadcn-style';
-import { NavLinkProps } from './types';
+
+// Dashboard imports
+import { DashboardLayout } from './components/dashboard/layout/DashboardLayout';
+import { DashboardPage } from './components/dashboard/DashboardPage';
+import { ProjectsPage } from './components/dashboard/ProjectsPage';
 
 // Simple component to display current theme from context
-const ThemeDisplay: React.FC = () => {
+function ThemeDisplay() {
   const { theme, toggleTheme } = useThemeManager();
   
   return (
@@ -35,7 +31,7 @@ const ThemeDisplay: React.FC = () => {
   );
 }
 
-const App: React.FC = () => {
+function HomePage() {
   return (
     <div className="App" style={{ 
       minHeight: '100vh',
@@ -61,7 +57,7 @@ const App: React.FC = () => {
             opacity: 0.9,
             marginBottom: '2rem'
           }}>
-            Your React application is running successfully on localhost:3000
+            Your React application is running successfully on localhost:3001
           </p>
         </div>
       </header>
@@ -82,6 +78,8 @@ const App: React.FC = () => {
               padding: '0.5rem 0',
             }}>
               <NavLink to="/">Home</NavLink>
+              <NavLink to="/dashboard">Dashboard</NavLink>
+              <NavLink to="/dashboard/projects">Projects & Tasks</NavLink>
               <NavLink to="/product">Product</NavLink>
               <NavLink to="/colorpicker">Color Picker</NavLink>
               <NavLink to="/form">Form</NavLink>
@@ -97,7 +95,7 @@ const App: React.FC = () => {
         </div>
       </div>
       
-      <main style={{ ...styles.container as React.CSSProperties, padding: '2rem 1rem' }}>
+      <main style={{ ...(styles.container as React.CSSProperties), padding: '2rem 1rem' }}>
         <div style={{ display: 'grid', gap: '2rem', gridTemplateColumns: '1fr', marginBottom: '2rem' }}>
           <ThemeDisplay />
           
@@ -224,10 +222,10 @@ const App: React.FC = () => {
 }
 
 // Custom NavLink component
-const NavLink: React.FC<NavLinkProps> = ({ to, children }) => {
-  const [isHovering, setIsHovering] = useState<boolean>(false);
+function NavLink({ to, children } : { to: string; children: React.ReactNode }) {
+  const [isHovering, setIsHovering] = React.useState(false);
   
-  const linkStyle: React.CSSProperties = {
+  const linkStyle = {
     color: isHovering ? colors.primary : colors.mutedForeground,
     fontSize: '0.875rem',
     fontWeight: '500',
@@ -252,4 +250,21 @@ const NavLink: React.FC<NavLinkProps> = ({ to, children }) => {
   );
 }
 
-export default App; 
+const App = (): React.JSX.Element => {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/dashboard/*" element={<DashboardLayout />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="projects" element={<ProjectsPage />} />
+          <Route path="timer" element={<div>Pomodoro Timer Coming Soon</div>} />
+          <Route path="calendar" element={<div>Calendar Coming Soon</div>} />
+          <Route path="settings" element={<div>Settings Coming Soon</div>} />
+        </Route>
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
