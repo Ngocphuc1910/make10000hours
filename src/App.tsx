@@ -75,15 +75,15 @@ const App = (): React.JSX.Element => {
   return (
     <Router>
       <Routes>
-        <Route path="/pomodoro" element={<PomodoroPageWithLayout />} />
-        <Route path="/projects" element={<ProjectsPageWithLayout />} />
-        <Route path="/dashboard/*" element={<DashboardLayout />}>
+        <Route path="pomodoro" element={<PomodoroPageWithLayout />} />
+        <Route path="projects" element={<ProjectsPageWithLayout />} />
+        <Route path="dashboard/*" element={<DashboardLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
-        <Route path="/support" element={<SupportPageWithLayout />} />
-        <Route path="*" element={<Navigate to="/pomodoro" replace />} />
+        <Route path="support" element={<SupportPageWithLayout />} />
+        <Route path="*" element={<Navigate to="pomodoro" replace />} />
       </Routes>
       <ToastContainer />
     </Router>
