@@ -103,6 +103,7 @@ const App = (): React.JSX.Element => {
   return (
     <Router>
       <Routes>
+        <Route path="/" element={<PomodoroPageWithLayout />} />
         <Route path="pomodoro" element={<PomodoroPageWithLayout />} />
         <Route path="projects" element={<ProjectsPageWithLayout />} />
         <Route path="dashboard/*" element={<DashboardLayout />}>
