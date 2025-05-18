@@ -26,14 +26,33 @@ export const formatPercentage = (value: number, decimals = 2): string => {
 };
 
 /**
- * Get a formatted date string
+ * Format seconds into MM:SS format
+ */
+export const formatTime = (seconds: number): string => {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  
+  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+};
+
+/**
+ * Format date to a readable string
  */
 export const formatDate = (date: Date): string => {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  }).format(date);
+  const options: Intl.DateTimeFormatOptions = { 
+    month: 'short', 
+    day: 'numeric', 
+    year: 'numeric' 
+  };
+  
+  return date.toLocaleDateString('en-US', options);
+};
+
+/**
+ * Get current date formatted
+ */
+export const getCurrentFormattedDate = (): string => {
+  return formatDate(new Date());
 };
 
 /**
@@ -98,4 +117,28 @@ export const getLastNDays = (days: number): Date[] => {
     result.push(date);
   }
   return result.reverse(); // Return in ascending order
+};
+
+/**
+ * Formats minutes into hours and minutes (e.g., "3h 24m")
+ */
+export const formatMinutesToHoursAndMinutes = (totalMinutes: number): string => {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  
+  if (hours === 0) {
+    return `${minutes}m`;
+  } else if (minutes === 0) {
+    return `${hours}h`;
+  } else {
+    return `${hours}h ${minutes}m`;
+  }
+};
+
+/**
+ * Calculate percentage completed
+ */
+export const calculatePercentage = (current: number, total: number): number => {
+  if (total === 0) return 0;
+  return Math.min(100, Math.round((current / total) * 100));
 }; 
