@@ -3,7 +3,7 @@ import './App.css';
 import './remixicon.css';
 import './typography.css';
 import './styles.css';
-import { Routes, Route, Navigate, Link, BrowserRouter as Router } from 'react-router-dom';
+import { Routes, Route, Navigate, Link, HashRouter as Router } from 'react-router-dom';
 import PomodoroPage from './components/pages/PomodoroPage';
 import DashboardPage from './components/pages/DashboardPage';
 import MainLayout from './components/layout/MainLayout';
