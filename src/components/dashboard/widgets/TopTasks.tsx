@@ -1,26 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Card from '../../ui/Card';
 import { useFocusStore } from '../../../store/useFocusStore';
 import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
 
 export const TopTasks: React.FC = () => {
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const { tasks, projects } = useFocusStore();
+  const { tasks, projects, selectedDate, getTasksByDate } = useFocusStore();
+  const [displayTasks, setDisplayTasks] = useState<typeof tasks>([]);
   
   // Format the selected date
-  const formattedDate = selectedDate.toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric'
-  });
+  const formattedDate = selectedDate 
+    ? selectedDate.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      })
+    : new Date().toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      });
   
-  // Sort tasks by focus time (descending) and filter completed/active
-  const sortedTasks = [...tasks]
-    .sort((a, b) => b.totalFocusTime - a.totalFocusTime)
-    .slice(0, 7); // Top 7 tasks
+  // Update tasks when selected date changes
+  useEffect(() => {
+    if (selectedDate) {
+      // Get tasks for the selected date
+      const tasksForDate = getTasksByDate(selectedDate);
+      setDisplayTasks(tasksForDate);
+    } else {
+      // Default to top tasks by focus time
+      const topTasks = [...tasks]
+        .sort((a, b) => b.totalFocusTime - a.totalFocusTime)
+        .slice(0, 7);
+      setDisplayTasks(topTasks);
+    }
+  }, [selectedDate, tasks, getTasksByDate]);
   
   // Show empty state if no tasks
-  if (sortedTasks.length === 0) {
+  if (displayTasks.length === 0) {
     return (
       <Card 
         title="Top Tasks" 
@@ -38,7 +54,9 @@ export const TopTasks: React.FC = () => {
             <div className="w-12 h-12 mx-auto mb-4 text-gray-400 flex items-center justify-center">
               <i className="ri-calendar-event-line ri-2x"></i>
             </div>
-            <p className="text-gray-500 text-sm">No tasks found</p>
+            <p className="text-gray-500 text-sm">
+              {selectedDate ? 'You did not show up this day' : 'No tasks found'}
+            </p>
           </div>
         </div>
       </Card>
@@ -75,7 +93,7 @@ export const TopTasks: React.FC = () => {
           `}
         </style>
         
-        {sortedTasks.map((task, index) => {
+        {displayTasks.map((task, index) => {
           const project = projects.find(p => p.id === task.projectId);
           if (!project) return null;
           

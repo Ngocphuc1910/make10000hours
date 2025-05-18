@@ -4,6 +4,7 @@ export interface Task {
   description?: string;
   projectId: string;
   completed: boolean;
+  status: 'pomodoro' | 'todo' | 'completed';
   timeSpent: number; // in minutes
   timeEstimated: number; // in minutes
   order: number;

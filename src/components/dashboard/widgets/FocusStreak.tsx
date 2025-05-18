@@ -5,7 +5,7 @@ import { useFocusStore } from '../../../store/useFocusStore';
 export const FocusStreak: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendarDays, setCalendarDays] = useState<Array<{ date: Date, hasFocused: boolean } | null>>([]);
-  const { focusStreak } = useFocusStore();
+  const { focusStreak, setSelectedDate, selectedDate } = useFocusStore();
 
   // Navigate to previous month
   const prevMonth = () => {
@@ -21,6 +21,13 @@ export const FocusStreak: React.FC = () => {
     setCurrentMonth(newDate);
   };
 
+  // Helper function to handle date comparison
+  const compareDates = (date1: Date, date2: Date | string): boolean => {
+    const d1 = new Date(date1).toDateString();
+    const d2 = typeof date2 === 'string' ? new Date(date2).toDateString() : date2.toDateString();
+    return d1 === d2;
+  };
+  
   // Generate calendar data for current month view
   useEffect(() => {
     const year = currentMonth.getFullYear();
@@ -44,7 +51,16 @@ export const FocusStreak: React.FC = () => {
       
       // Check if this date is in our streak data
       const streakDay = focusStreak.streakDates.find(
-        sd => sd.date.toDateString() === date.toDateString()
+        sd => {
+          try {
+            // Handle both Date objects and string dates
+            const sdDate = sd.date instanceof Date ? sd.date : new Date(sd.date);
+            return compareDates(date, sdDate);
+          } catch (error) {
+            console.error('Error comparing dates:', error);
+            return false;
+          }
+        }
       );
       
       days.push({
@@ -61,6 +77,26 @@ export const FocusStreak: React.FC = () => {
     month: 'long', 
     year: 'numeric' 
   });
+  
+  // Handler for day selection
+  const handleDayClick = (day: { date: Date, hasFocused: boolean }) => {
+    setSelectedDate(day.date);
+  };
+  
+  // Check if a date is today
+  const isToday = (date: Date): boolean => {
+    const today = new Date();
+    return date.getDate() === today.getDate() && 
+           date.getMonth() === today.getMonth() && 
+           date.getFullYear() === today.getFullYear();
+  };
+  
+  // Check if a date is in the past (before today)
+  const isPastDay = (date: Date): boolean => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date < today;
+  };
 
   return (
     <Card title="Focus Streak">
@@ -109,15 +145,20 @@ export const FocusStreak: React.FC = () => {
             {day ? (
               <div 
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-xs cursor-pointer
-                  ${day.hasFocused 
-                    ? 'bg-primary text-white hover:bg-opacity-90' 
-                    : 'bg-white border border-gray-200 text-gray-400 hover:bg-gray-50'
+                  ${isToday(day.date)
+                    ? 'bg-white border-2 border-primary border-dashed text-gray-600'
+                    : day.hasFocused && isPastDay(day.date)
+                      ? 'bg-primary text-white hover:bg-opacity-90'
+                      : isPastDay(day.date)
+                        ? 'bg-white border border-gray-200 text-gray-400 hover:bg-gray-50'
+                        : 'bg-white border border-gray-200 text-gray-300'
                   }
-                  ${day.date.toDateString() === new Date().toDateString() 
-                    ? 'border-2 border-primary border-dashed' 
+                  ${selectedDate && compareDates(day.date, selectedDate)
+                    ? 'ring-2 ring-primary ring-offset-2' 
                     : ''
                   }
                 `}
+                onClick={() => isPastDay(day.date) && handleDayClick(day)}
               >
                 {day.date.getDate()}
               </div>

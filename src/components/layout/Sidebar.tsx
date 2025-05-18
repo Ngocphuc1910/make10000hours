@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
 
@@ -19,9 +19,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   
   const navItems: NavItem[] = [
     { 
-      icon: 'dashboard-line', 
-      label: 'Dashboard', 
-      path: '/dashboard'
+      icon: 'timer-line', 
+      label: 'Pomodoro Timer', 
+      path: '/pomodoro'
     },
     { 
       icon: 'task-line', 
@@ -29,19 +29,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
       path: '/projects'
     },
     { 
-      icon: 'timer-line', 
-      label: 'Pomodoro Timer', 
-      path: '/pomodoro'
+      icon: 'dashboard-line', 
+      label: 'Dashboard', 
+      path: '/dashboard'
     },
     { 
       icon: 'calendar-line', 
       label: 'Calendar', 
-      path: '/calendar'
+      path: '/dashboard/calendar'
     },
     { 
       icon: 'settings-line', 
       label: 'Settings', 
-      path: '/settings'
+      path: '/dashboard/settings'
     }
   ];
   
@@ -54,18 +54,41 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
     }
   };
   
+  // Function to check if a route is active, including partial matches for nested routes
+  const isRouteActive = (path: string): boolean => {
+    if (path === '/dashboard' && location.pathname === '/dashboard') {
+      return true;
+    }
+    if (path === '/pomodoro' && location.pathname === '/pomodoro') {
+      return true;
+    }
+    if (path === '/projects' && location.pathname === '/projects') {
+      return true;
+    }
+    if (path.startsWith('/dashboard/') && location.pathname.startsWith(path)) {
+      return true;
+    }
+    return false;
+  };
+  
+  // Function to handle sidebar toggle - simplified
+  const handleToggleSidebar = () => {
+    toggleLeftSidebar();
+  };
+  
   return (
     <>
       <aside 
         id="sidebar" 
         className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-300
         ${isLeftSidebarOpen ? 'w-64' : 'w-0'} ${className}`}
+        style={{ zIndex: 40 }}
       >
         <div className="p-4 border-b border-gray-200 flex items-center justify-between">
           <h1 className="text-xl font-['Pacifico'] text-primary">Make10000hours</h1>
           <button 
             id="toggle-sidebar" 
-            onClick={toggleLeftSidebar}
+            onClick={handleToggleSidebar}
             className="p-1 hover:bg-gray-100 rounded-md"
           >
             <div className="w-5 h-5 flex items-center justify-center text-gray-500">
@@ -89,7 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
         <nav className="flex-1 overflow-y-auto p-4">
           <ul className="space-y-1">
             {navItems.map((item, index) => {
-              const isActive = location.pathname === item.path;
+              const isActive = isRouteActive(item.path);
               return (
                 <li key={index}>
                   <Link 
@@ -136,8 +159,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
       {!isLeftSidebarOpen && (
         <button 
           id="show-sidebar" 
-          onClick={toggleLeftSidebar}
-          className="p-2 rounded-lg bg-white shadow-md hover:bg-gray-100 fixed left-4 top-4 z-50"
+          onClick={handleToggleSidebar}
+          className="fixed left-4 top-4 z-50 p-2 rounded-lg bg-white shadow-md hover:bg-gray-100"
           aria-label="Show Sidebar"
         >
           <div className="w-5 h-5 flex items-center justify-center text-gray-700">
