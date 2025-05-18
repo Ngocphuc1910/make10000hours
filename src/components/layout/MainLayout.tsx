@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import { useUIStore } from '../../store/uiStore';
-import Toast from '../ui/Toast';
 import FocusMode from '../pomodoro/FocusMode';
 import { Outlet, useLocation } from 'react-router-dom';
 import TaskList from '../tasks/TaskList';
@@ -116,8 +115,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             id="timerSection" 
             style={{ 
               margin: '0 auto', 
-              width: isRightSidebarOpen ? undefined : '800px',
-              maxWidth: '800px'
+              width: isRightSidebarOpen ? '100%' : '800px',
+              maxWidth: isRightSidebarOpen ? '100%' : '800px'
             }}
           >
             {children || <Outlet />}
@@ -127,7 +126,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           <div 
             id="resizeDivider" 
             className={`w-[1px] bg-gray-200/20 cursor-col-resize hover:bg-primary/20 flex items-center justify-center
-            ${isRightSidebarOpen ? 'opacity-100' : 'opacity-0'}`}
+            ${isRightSidebarOpen ? 'opacity-100' : 'opacity-0 w-0'}`}
             onMouseDown={handleResizeStart}
           >
             <div className="w-4 h-full opacity-0"></div>
@@ -137,7 +136,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 onClick={() => useUIStore.getState().toggleRightSidebar()}
                 aria-label="Hide Tasks Panel"
               >
-                <i className="ri-arrow-right-s-line text-gray-500"></i>
+                <div className="flex items-center justify-center">
+                  <i className="ri-arrow-right-s-line text-gray-500"></i>
+                </div>
               </button>
             )}
           </div>
@@ -174,9 +175,6 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           )}
         </div>
       </div>
-      
-      {/* Toast Notification */}
-      <Toast />
       
       {/* Focus Mode */}
       <FocusMode />

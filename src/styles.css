@@ -85,11 +85,6 @@
   margin-top: 4px;
 }
 
-/* Icon styles */
-:where([class^="ri-"])::before { 
-  content: "\f3c2"; 
-}
-
 /* Custom styles for app components */
 /* Timer-related styles */
 .timer-circle {
@@ -114,11 +109,15 @@
 
 .timer-text {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  width: 100%;
 }
 
 /* Task-related styles */
@@ -173,12 +172,41 @@
 .task-complete-animation {
   position: absolute;
   pointer-events: none;
-  animation: celebrate 0.6s ease-out forwards;
+  animation: taskComplete 0.4s ease-out;
 }
 
-@keyframes celebrate {
-  0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
-  100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+@keyframes taskComplete {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
 }
 
 /* Fade-in animation */
@@ -201,4 +229,61 @@
 #sidebar {
   overflow: hidden;
   transition: width 0.3s ease;
+}
+
+/* Task status view styles */
+.status-section {
+  min-height: calc(100vh - 10rem);
+}
+
+.status-section-header {
+  position: sticky;
+  top: 0;
+  background-color: #fff;
+  z-index: 5;
+}
+
+.task-list-container {
+  height: calc(100vh - 12rem);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.task-list-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.task-list-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.task-list-container::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 3px;
+}
+
+.task-list-container::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
+.task-card.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+}
+
+@keyframes taskComplete {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.task-complete-animation {
+  animation: taskComplete 0.4s ease-out;
 } 

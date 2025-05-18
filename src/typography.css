@@ -1,0 +1,13 @@
+/* Typography styles for Make10000hours */
+
+/* Ensure Pacifico font is loaded and applied correctly */
+.font-pacifico {
+  font-family: 'Pacifico', cursive !important;
+}
+
+/* Special selector for Tailwind class */
+h1[class*="font-['Pacifico']"] {
+  font-family: 'Pacifico', cursive !important;
+  font-weight: 400; /* Pacifico only comes in regular weight */
+  letter-spacing: 0.01em;
+} 

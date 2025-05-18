@@ -16,8 +16,8 @@ export const Sidebar: React.FC = () => {
 
   const navItems: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: 'dashboard-line' },
-    { label: 'Projects & Tasks', path: '/dashboard/projects', icon: 'task-line' },
-    { label: 'Pomodoro Timer', path: '/dashboard/timer', icon: 'timer-line' },
+    { label: 'Projects & Tasks', path: '/projects', icon: 'task-line' },
+    { label: 'Pomodoro Timer', path: '/pomodoro', icon: 'timer-line' },
     { label: 'Calendar', path: '/dashboard/calendar', icon: 'calendar-line' },
     { label: 'Settings', path: '/dashboard/settings', icon: 'settings-line' },
   ];
@@ -64,7 +64,8 @@ export const Sidebar: React.FC = () => {
                 to={item.path}
                 className={clsx(
                   'flex items-center px-3 py-2 text-sm font-medium rounded-md',
-                  location.pathname === item.path
+                  (location.pathname === item.path || 
+                   (item.path === '/pomodoro' && location.pathname === '/pomodoro'))
                     ? 'text-primary bg-indigo-50'
                     : 'text-gray-600 hover:bg-gray-50'
                 )}

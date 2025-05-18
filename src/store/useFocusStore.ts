@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { 
   User, 
   FocusSession, 
@@ -21,6 +21,7 @@ interface FocusState {
   focusStreak: FocusStreak;
   dateRange: DateRange;
   timeUnit: TimeUnit;
+  selectedDate: Date | null;
   
   // Getters
   getTotalFocusTime: () => number;
@@ -29,10 +30,12 @@ interface FocusState {
   getTaskById: (id: string) => Task | undefined;
   getTasksByProjectId: (projectId: string) => Task[];
   getFocusSessionsByDateRange: (range: DateRange) => FocusSession[];
+  getTasksByDate: (date: Date) => Task[];
   
   // Actions
   setDateRange: (range: DateRange) => void;
   setTimeUnit: (unit: TimeUnit) => void;
+  setSelectedDate: (date: Date | null) => void;
   addFocusSession: (session: Omit<FocusSession, 'id'>) => void;
   updateFocusSession: (id: string, sessionData: Partial<FocusSession>) => void;
   deleteFocusSession: (id: string) => void;
@@ -49,6 +52,49 @@ interface FocusState {
 // Get initial mock data
 const initialData = generateMockData();
 
+// Helper function to revive dates in objects
+const reviveDates = (key: string, value: any): any => {
+  // Check if the value is an ISO date string (simplified check)
+  if (typeof value === 'string' && 
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
+    return new Date(value);
+  }
+  
+  // Handle date objects in the FocusStreak.streakDates array
+  if (key === 'streakDates' && Array.isArray(value)) {
+    return value.map(item => ({
+      ...item,
+      date: item.date ? new Date(item.date) : item.date,
+    }));
+  }
+  
+  // For all other cases, including dates already parsed
+  return value;
+};
+
+// Custom storage with date parsing
+const customStorage = {
+  getItem: (name: string): string | null => {
+    const str = localStorage.getItem(name);
+    if (!str) return str;
+    
+    try {
+      // Parse the JSON with a reviver function to convert date strings to Date objects
+      const parsed = JSON.parse(str, reviveDates);
+      return JSON.stringify(parsed);
+    } catch (e) {
+      console.error('Error parsing stored state:', e);
+      return str;
+    }
+  },
+  setItem: (name: string, value: string): void => {
+    localStorage.setItem(name, value);
+  },
+  removeItem: (name: string): void => {
+    localStorage.removeItem(name);
+  }
+};
+
 // Create store with persistence
 export const useFocusStore = create<FocusState>()(
   persist(
@@ -64,6 +110,7 @@ export const useFocusStore = create<FocusState>()(
         label: 'Last 7 Days'
       },
       timeUnit: 'daily' as TimeUnit,
+      selectedDate: null,
       
       // Getters
       getTotalFocusTime: () => {
@@ -103,10 +150,46 @@ export const useFocusStore = create<FocusState>()(
         });
       },
       
+      getTasksByDate: (date: Date) => {
+        if (!date) return [];
+        
+        // Find all sessions on this date
+        const dateStr = date.toDateString();
+        
+        // Find tasks used in sessions on this date
+        const sessionsOnDate = get().focusSessions.filter(
+          session => new Date(session.startTime).toDateString() === dateStr
+        );
+        
+        const taskIdsOnDate = new Set(
+          sessionsOnDate
+            .filter(session => session.taskId) // Filter out sessions without a task
+            .map(session => session.taskId) 
+        );
+        
+        // Get tasks used on this date, sorted by focus time
+        return get().tasks
+          .filter(task => taskIdsOnDate.has(task.id))
+          .sort((a, b) => {
+            // Calculate total focus time for just this date
+            const aTimeOnDate = sessionsOnDate
+              .filter(s => s.taskId === a.id)
+              .reduce((total, s) => total + s.duration, 0);
+              
+            const bTimeOnDate = sessionsOnDate
+              .filter(s => s.taskId === b.id)
+              .reduce((total, s) => total + s.duration, 0);
+              
+            return bTimeOnDate - aTimeOnDate;
+          });
+      },
+      
       // Actions
       setDateRange: (range) => set({ dateRange: range }),
       
       setTimeUnit: (unit) => set({ timeUnit: unit }),
+      
+      setSelectedDate: (date) => set({ selectedDate: date }),
       
       addFocusSession: (sessionData) => {
         const id = `session-${Date.now()}`;
@@ -243,6 +326,14 @@ export const useFocusStore = create<FocusState>()(
     }),
     {
       name: 'focus-time-storage',
+      storage: createJSONStorage(() => customStorage),
+      partialize: (state) => ({
+        user: state.user,
+        focusSessions: state.focusSessions,
+        projects: state.projects,
+        tasks: state.tasks,
+        focusStreak: state.focusStreak,
+      }),
     }
   )
 ); 
