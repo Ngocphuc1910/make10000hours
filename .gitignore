@@ -36,3 +36,5 @@ firebase-debug.*.log*
 mcp.json
 figma-postComment.js
 figma-update-design.js
+
+dist/
