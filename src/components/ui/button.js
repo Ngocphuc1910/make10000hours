@@ -1,40 +1,100 @@
 import React from 'react';
-import { cn } from '../../utils/cn';
 
-const Button = React.forwardRef(({
-  className,
-  variant = 'default',
-  size = 'default',
-  asChild = false,
-  ...props
-}, ref) => {
-  const Comp = asChild ? 'slot' : 'button';
-  
+const Button = ({ 
+  children, 
+  onClick, 
+  variant = 'primary', 
+  size = 'medium',
+  disabled = false,
+  fullWidth = false,
+  type = 'button'
+}) => {
+  const getVariantStyles = () => {
+    switch (variant) {
+      case 'primary':
+        return {
+          backgroundColor: '#3498db',
+          color: 'white',
+          border: '1px solid #2980b9'
+        };
+      case 'secondary':
+        return {
+          backgroundColor: '#f1f1f1',
+          color: '#333',
+          border: '1px solid #ddd'
+        };
+      case 'success':
+        return {
+          backgroundColor: '#2ecc71',
+          color: 'white',
+          border: '1px solid #27ae60'
+        };
+      case 'danger':
+        return {
+          backgroundColor: '#e74c3c',
+          color: 'white',
+          border: '1px solid #c0392b'
+        };
+      default:
+        return {
+          backgroundColor: '#3498db',
+          color: 'white',
+          border: '1px solid #2980b9'
+        };
+    }
+  };
+
+  const getSizeStyles = () => {
+    switch (size) {
+      case 'small':
+        return {
+          padding: '6px 12px',
+          fontSize: '14px'
+        };
+      case 'medium':
+        return {
+          padding: '8px 16px',
+          fontSize: '16px'
+        };
+      case 'large':
+        return {
+          padding: '12px 20px',
+          fontSize: '18px'
+        };
+      default:
+        return {
+          padding: '8px 16px',
+          fontSize: '16px'
+        };
+    }
+  };
+
+  const baseStyles = {
+    borderRadius: '4px',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    fontWeight: '500',
+    opacity: disabled ? 0.7 : 1,
+    transition: 'all 0.2s ease',
+    width: fullWidth ? '100%' : 'auto',
+    outline: 'none'
+  };
+
+  const buttonStyles = {
+    ...baseStyles,
+    ...getVariantStyles(),
+    ...getSizeStyles()
+  };
+
   return (
-    <Comp
-      className={cn(
-        "inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-        {
-          "bg-primary text-primary-foreground hover:bg-primary/90": variant === "default",
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90": variant === "destructive",
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground": variant === "outline",
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80": variant === "secondary",
-          "bg-transparent text-white hover:bg-white/20": variant === "ghost",
-          "bg-white/10 text-white hover:bg-white/30": variant === "timer",
-          "bg-white/20 text-white hover:bg-white/40": variant === "timer-active",
-          "h-10 px-4 py-2": size === "default",
-          "h-9 rounded-md px-3": size === "sm",
-          "h-11 rounded-md px-8": size === "lg",
-          "h-fit rounded-full px-4 py-1.5": size === "pill",
-        },
-        className
-      )}
-      ref={ref}
-      {...props}
-    />
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      style={buttonStyles}
+    >
+      {children}
+    </button>
   );
-});
+};
 
-Button.displayName = 'Button';
-
-export { Button }; 
+export default Button; 

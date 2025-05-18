@@ -1,166 +1,60 @@
-/* Hide security delay messages and prevent auto-click behaviors */
-[class*="security"], [id*="security"] {
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Pacifico&display=swap');
+@import url('https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.6.0/remixicon.min.css');
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f9fafb;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+:root {
+  --primary-color: #BB5F5A;
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 0 !important;
   display: none !important;
-} 
-
-/* Additional selectors to target common security message containers */
-[class*="delay"], [id*="delay"],
-[class*="timer"], [id*="timer"],
-div[style*="position: fixed"][style*="z-index: 9999"] {
-  display: none !important;
-  pointer-events: none !important;
 }
 
-/* Prevent auto-click scripts from accessing form elements */
-form button, 
-form input[type="submit"] {
-  pointer-events: auto !important;
+.custom-scrollbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  overflow: -moz-scrollbars-none !important;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* Stop auto-clicks by requiring user interaction */
-.auth-form button,
-.auth-modal button {
-  user-select: none;
-  touch-action: manipulation;
+/* Dashboard styles */
+.dashboard-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
 }
 
-/* Apply these classes to our auth modals */
-.login-modal,
-.signup-modal {
-  user-select: none;
+.dashboard-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-/* Ensure form submits only come from user */
-form button:not(:active):not(:focus) {
-  will-change: transform;
+.dashboard-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+  background-color: #f9fafb;
 }
-
-/* Fix for header buttons in production */
-header button {
-  display: inline-flex !important;
-  align-items: center !important;
-}
-
-header button svg {
-  display: inline-block !important;
-}
-
-/* Ensure icons are visible */
-svg {
-  display: inline-block !important;
-  vertical-align: middle !important;
-}
-
-/* Ensure text is visible next to icons */
-button span {
-  display: inline-block !important;
-}
-
-#sign-in-button {
-  display: flex !important;
-  align-items: center !important;
-  white-space: nowrap !important;
-}
-
-/* Fix for Lucide icons in production */
-[data-lucide], 
-.lucide,
-.lucide-icon {
-  display: inline-block !important;
-  vertical-align: middle !important;
-}
-
-/* Ensure the avatar component displays correctly in production */
-.w-8.h-8.rounded-full {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-
-/* Dark mode compatibility - using theme classes instead of media query */
-.dark .dark\:text-gray-300 {
-  color: #d1d5db !important;
-}
-
-.dark .dark\:bg-gray-800 {
-  background-color: #1f2937 !important;
-}
-
-/* Add to existing CSS to ensure checkboxes are visible in production */
-
-/* Task checkbox styling */
-input[type="checkbox"] {
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  -moz-appearance: none !important;
-  width: 18px !important;
-  height: 18px !important;
-  border: 2px solid #a0aec0 !important;
-  border-radius: 4px !important;
-  margin-right: 8px !important;
-  position: relative !important;
-  cursor: pointer !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  background-color: transparent !important;
-  transition: all 0.2s ease !important;
-}
-
-input[type="checkbox"]:checked {
-  background-color: #4a5568 !important;
-  border-color: #4a5568 !important;
-}
-
-input[type="checkbox"]:checked::after {
-  content: "" !important;
-  display: block !important;
-  width: 6px !important;
-  height: 10px !important;
-  border: solid white !important;
-  border-width: 0 2px 2px 0 !important;
-  transform: rotate(45deg) !important;
-  position: absolute !important;
-  top: 1px !important;
-}
-
-/* Ensure form elements are visible */
-.form-checkbox,
-.form-radio {
-  display: inline-flex !important;
-  align-items: center !important;
-}
-
-/* Dark mode support */
-.dark input[type="checkbox"] {
-  border-color: #718096 !important;
-}
-
-.dark input[type="checkbox"]:checked {
-  background-color: #667eea !important;
-  border-color: #667eea !important;
-}
-
-/* Task list specific styling */
-.tasks-container .task-checkbox {
-  display: inline-flex !important;
-  align-items: center !important;
-}
-
-/* Fix for auth buttons and sign-in visibility */
-button#sign-in-button,
-button[type="submit"] {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  white-space: nowrap !important;
-  font-weight: 500 !important;
-}
-
-/* Ensure absolute compatibility with all browsers */
-@supports (-webkit-appearance: none) or (-moz-appearance: none) {
-  input[type="checkbox"] {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-  }
-} 
