@@ -40,14 +40,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
         
+      - name: Debug Node and NPM versions
+        run: |
+          node -v
+          npm -v
+          ls -la
+          
       # Skip TypeScript check and directly use Vite build
       - name: Build
-        run: npx vite build
+        run: npx vite build --debug
         env:
           CI: false
           VITE_SUPABASE_URL: "https://ccxhdmyfmfwincvzqjhg.supabase.co"
           VITE_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNjeGhkbXlmbWZ3aW5jdnpxamhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIxNDAyMzIsImV4cCI6MjA1NzcxNjIzMn0.nf8fOFwXcFayteHi-HOhcxiHw4aLE7oOtWv8HeQAYjU"
           PUBLIC_URL: "https://ngocphuc1910.github.io/make10000hours"
+      
+      - name: Debug build output
+        run: |
+          ls -la dist || echo "No dist directory!"
           
       - name: Setup Pages
         uses: actions/configure-pages@v5
