@@ -1,39 +1,15 @@
-/// <reference types="react-scripts" />
+/// <reference types="vite/client" />
 
-declare module '*.css' {
-  const classes: { [key: string]: string };
-  export default classes;
+interface ImportMetaEnv {
+  readonly MODE: string;
+  readonly BASE_URL: string;
+  readonly DEV: boolean;
+  readonly PROD: boolean;
+  readonly SSR: boolean;
+  readonly VITE_FIREBASE_API_KEY: string;
+  readonly VITE_FIREBASE_APP_ID: string;
 }
 
-declare module '*.scss' {
-  const classes: { [key: string]: string };
-  export default classes;
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
 }
-
-declare module '*.sass' {
-  const classes: { [key: string]: string };
-  export default classes;
-}
-
-declare module '*.svg' {
-  import * as React from 'react';
-
-  export const ReactComponent: React.FC<React.SVGProps<SVGSVGElement>>;
-  const src: string;
-  export default src;
-}
-
-declare module '*.module.css' {
-  const classes: { readonly [key: string]: string };
-  export default classes;
-}
-
-declare module '*.module.scss' {
-  const classes: { readonly [key: string]: string };
-  export default classes;
-}
-
-declare module '*.module.sass' {
-  const classes: { readonly [key: string]: string };
-  export default classes;
-} 
