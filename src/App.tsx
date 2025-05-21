@@ -14,6 +14,7 @@ import { ProjectsPage } from './components/dashboard/ProjectsPage';
 import { Sidebar } from './components/layout/Sidebar';
 import ProjectsLayout from './components/dashboard/ProjectsLayout';
 import ToastContainer from './components/ui/ToastContainer';
+import { auth } from './api/firebase';
 
 // Placeholder components for routes that don't have pages yet
 const CalendarPage = () => (
@@ -52,6 +53,9 @@ const App = (): React.JSX.Element => {
   }, [tick, isRunning]);
 
   useEffect(() => {
+    // Check if the user is authenticated
+    const unsubscribe = auth.onAuthStateChanged((user) => {});
+
     // Try to read the localStorage to check for data corruption
     try {
       // Get the stored data
