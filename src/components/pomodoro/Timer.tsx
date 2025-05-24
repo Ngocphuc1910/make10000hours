@@ -3,6 +3,7 @@ import { useTimerStore } from '../../store/timerStore';
 import { useTaskStore } from '../../store/taskStore';
 import TimerCircle from '../ui/TimerCircle';
 import { formatTime } from '../../utils/timeUtils';
+import { Icon } from '../ui/Icon';
 
 interface TimerProps {
   className?: string;
@@ -113,7 +114,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
         >
           <div className="flex items-center">
             <div className="w-5 h-5 flex items-center justify-center">
-              <i className={`ri-${isRunning ? 'pause' : 'play'}-line`}></i>
+              <Icon name={`${isRunning ? 'pause' : 'play'}-line`} size={20} />
             </div>
             <span className="ml-2">{isRunning ? 'Pause' : 'Start'}</span>
           </div>
@@ -123,7 +124,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
           onClick={handleReset}
         >
           <div className="w-5 h-5 flex items-center justify-center">
-            <i className="ri-restart-line"></i>
+            <Icon name="restart-line" size={20} />
           </div>
         </button>
         <button 
@@ -131,7 +132,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
           onClick={handleSkip}
         >
           <div className="w-5 h-5 flex items-center justify-center">
-            <i className="ri-skip-forward-line"></i>
+            <Icon name="skip-forward-line" size={20} />
           </div>
         </button>
       </div>

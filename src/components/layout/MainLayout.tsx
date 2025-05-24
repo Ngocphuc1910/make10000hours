@@ -5,6 +5,7 @@ import { useUIStore } from '../../store/uiStore';
 import FocusMode from '../pomodoro/FocusMode';
 import { Outlet, useLocation } from 'react-router-dom';
 import TaskList from '../tasks/TaskList';
+import { Icon } from '../ui/Icon';
 
 interface MainLayoutProps {
   children?: React.ReactNode;
@@ -137,7 +138,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 aria-label="Hide Tasks Panel"
               >
                 <div className="flex items-center justify-center">
-                  <i className="ri-arrow-right-s-line text-gray-500"></i>
+                  <Icon name="arrow-right-s-line" size={16} className="text-gray-500" />
                 </div>
               </button>
             )}
@@ -169,7 +170,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
               aria-label="Show Tasks Panel"
             >
               <div className="w-5 h-5 flex items-center justify-center text-gray-700">
-                <i className="ri-layout-right-line"></i>
+                <Icon name="layout-right-line" size={20} />
               </div>
             </button>
           )}
