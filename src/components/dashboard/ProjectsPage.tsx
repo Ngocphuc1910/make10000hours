@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useFocusStore } from '../../store/useFocusStore';
 import { formatMinutes } from '../../utils/timeUtils';
 import { useTaskStore } from '../../store/taskStore';
@@ -15,6 +15,8 @@ export const ProjectsPage: React.FC = () => {
   
   const projects = useTaskStore(state => state.projects);
   const tasks = useTaskStore(state => state.tasks);
+
+  const { initializeStore } = useTaskStore();
   
   const toggleViewDropdown = () => {
     setIsViewDropdownOpen(!isViewDropdownOpen);
@@ -25,6 +27,11 @@ export const ProjectsPage: React.FC = () => {
       setIsViewDropdownOpen(false);
     }
   };
+
+  useEffect(() => {
+    // Initialize the task store when the component mounts
+    initializeStore();
+  }, [initializeStore]);
   
   return (
     <div className="p-1 bg-white" onClick={handleClickOutside}>
