@@ -1,295 +1,294 @@
 import { create } from 'zustand';
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, onSnapshot, query, orderBy, where } from 'firebase/firestore';
+import { db } from '../api/firebase';
+import { useUserStore } from './userStore';
 import type { Task, Project } from '../types/models';
-
-// Mock data for initial state
-const MOCK_PROJECTS: Project[] = [
-  { id: 'website', name: 'Website Redesign', color: '#4f46e5' },
-  { id: 'mobile', name: 'Mobile App Redesign', color: '#10b981' },
-  { id: 'marketing', name: 'Marketing Campaign', color: '#f59e0b' },
-  { id: 'personal', name: 'Personal Development', color: '#ef4444' }
-];
-
-const MOCK_TASKS: Task[] = [
-  {
-    id: '1',
-    title: 'Create wireframes for homepage',
-    description: 'Design and create detailed wireframes for the homepage layout, including responsive versions for desktop and mobile devices. Focus on user experience and clear content hierarchy.',
-    projectId: 'website',
-    completed: false,
-    status: 'pomodoro', // Task in Pomodoro
-    timeSpent: 30,
-    timeEstimated: 70,
-    order: 0,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  },
-  {
-    id: '2',
-    title: 'Design system components',
-    description: 'Create a comprehensive design system including color palette, typography, spacing guidelines, and reusable components. Ensure consistency across all UI elements and prepare documentation for the development team.',
-    projectId: 'mobile',
-    completed: false,
-    status: 'todo', // Task in Todo
-    timeSpent: 45,
-    timeEstimated: 90,
-    order: 1,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  },
-  {
-    id: '3',
-    title: 'User research interviews',
-    description: 'Conduct user interviews to gather feedback on the new dashboard interface. Prepare questions, schedule sessions, and document findings for the design team.',
-    projectId: 'mobile',
-    completed: false,
-    status: 'todo', // Task in Todo
-    timeSpent: 0,
-    timeEstimated: 120,
-    order: 2,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  },
-  {
-    id: '4',
-    title: 'Define app requirements and features',
-    description: 'Document detailed requirements and feature specifications for the mobile app, including user stories, functional requirements, and technical specifications.',
-    projectId: 'mobile',
-    completed: false,
-    status: 'todo', // Task in Todo
-    timeSpent: 45,
-    timeEstimated: 90,
-    order: 3,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  },
-  {
-    id: '5',
-    title: 'Research competitor apps',
-    description: 'Analyze competitor mobile applications to identify market trends, feature sets, and user experience patterns. Create a comprehensive report highlighting opportunities and potential differentiators.',
-    projectId: 'mobile',
-    completed: false,
-    status: 'pomodoro', // Task in Pomodoro
-    timeSpent: 20,
-    timeEstimated: 60,
-    order: 4,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  },
-  {
-    id: '6',
-    title: 'Initial project planning meeting',
-    description: 'Kickoff meeting with the development team to discuss project scope, timeline, resource allocation, and initial technical requirements.',
-    projectId: 'mobile',
-    completed: true,
-    status: 'completed', // Task completed
-    timeSpent: 60,
-    timeEstimated: 60,
-    order: 5,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  },
-  {
-    id: '7',
-    title: 'Define campaign goals and KPIs',
-    description: 'Established clear campaign objectives, success metrics, and key performance indicators. Created tracking framework and reporting templates.',
-    projectId: 'marketing',
-    completed: true,
-    status: 'completed', // Task completed
-    timeSpent: 90,
-    timeEstimated: 90,
-    order: 6,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  },
-  {
-    id: '8',
-    title: 'Design email newsletter templates',
-    description: 'Created responsive email newsletter templates that align with brand guidelines. Included multiple layouts for different content types.',
-    projectId: 'marketing',
-    completed: true,
-    status: 'completed', // Task completed
-    timeSpent: 75,
-    timeEstimated: 120,
-    order: 7,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  }
-];
 
 interface TaskState {
   tasks: Task[];
   projects: Project[];
   isAddingTask: boolean;
   editingTaskId: string | null;
+  isLoading: boolean;
+  unsubscribeTasks: (() => void) | null;
+  unsubscribeProjects: (() => void) | null;
   
   // Actions
-  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'order'>) => string;
-  updateTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt' | 'updatedAt'>>) => void;
-  deleteTask: (id: string) => void;
-  toggleTaskCompletion: (id: string) => void;
-  updateTaskStatus: (id: string, status: Task['status']) => void;
-  reorderTasks: (taskId: string, newOrder: number) => void;
+  initializeStore: () => void;
+  cleanupListeners: () => void;
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'order'>) => Promise<string>;
+  updateTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
+  toggleTaskCompletion: (id: string) => Promise<void>;
+  updateTaskStatus: (id: string, status: Task['status']) => Promise<void>;
+  reorderTasks: (taskId: string, newOrder: number) => Promise<void>;
   setIsAddingTask: (isAdding: boolean) => void;
   setEditingTaskId: (taskId: string | null) => void;
-  addProject: (project: Omit<Project, 'id'>) => string;
+  addProject: (project: Omit<Project, 'id'>) => Promise<string>;
 }
 
+const tasksCollection = collection(db, 'tasks');
+const projectsCollection = collection(db, 'projects');
+
 export const useTaskStore = create<TaskState>((set, get) => ({
-  tasks: MOCK_TASKS,
-  projects: MOCK_PROJECTS,
+  tasks: [],
+  projects: [],
   isAddingTask: false,
   editingTaskId: null,
-  
-  addProject: (projectData) => {
-    const newProjectId = `project-${Date.now()}`;
-    const newProject: Project = {
-      id: newProjectId,
-      ...projectData
-    };
+  isLoading: false,
+  unsubscribeTasks: null,
+  unsubscribeProjects: null,
+
+  initializeStore: () => {
+    const { user, isAuthenticated } = useUserStore.getState();
     
-    set(state => ({
-      projects: [...state.projects, newProject]
-    }));
+    if (!isAuthenticated || !user) {
+      set({ tasks: [], projects: [], isLoading: false });
+      return;
+    }
+
+    set({ isLoading: true });
     
-    return newProjectId;
+    // Clean up existing listeners
+    get().cleanupListeners();
+    
+    // Listen to user's tasks collection
+    const tasksQuery = query(
+      tasksCollection, 
+      where('userId', '==', user.uid),
+      orderBy('order', 'asc')
+    );
+    
+    const unsubTasks = onSnapshot(tasksQuery, (snapshot) => {
+      const tasks = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date(),
+        updatedAt: doc.data().updatedAt?.toDate() || new Date()
+      })) as Task[];
+      
+      set({ tasks, isLoading: false });
+    });
+
+    // Listen to user's projects collection
+    const projectsQuery = query(
+      projectsCollection,
+      where('userId', '==', user.uid)
+    );
+    
+    const unsubProjects = onSnapshot(projectsQuery, (snapshot) => {
+      const projects = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Project[];
+      
+      set({ projects });
+    });
+    
+    set({ 
+      unsubscribeTasks: unsubTasks,
+      unsubscribeProjects: unsubProjects 
+    });
   },
-  
-  addTask: (taskData) => {
-    const { tasks } = get();
-    const newTaskId = Date.now().toString();
+
+  cleanupListeners: () => {
+    const { unsubscribeTasks, unsubscribeProjects } = get();
     
-    // Find the highest order among all tasks to place new task at the end
-    const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order)) : -1;
-    
-    const newTask: Task = {
-      id: newTaskId,
-      ...taskData,
-      order: maxOrder + 1,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    
-    set(state => ({
-      tasks: [...state.tasks, newTask],
-      isAddingTask: false
-    }));
-    
-    return newTaskId;
-  },
-  
-  updateTask: (id, updates) => {
-    set(state => ({
-      tasks: state.tasks.map(task => 
-        task.id === id 
-          ? { ...task, ...updates, updatedAt: new Date() } 
-          : task
-      ),
-      editingTaskId: null
-    }));
-  },
-  
-  deleteTask: (id) => {
-    set(state => ({
-      tasks: state.tasks.filter(task => task.id !== id)
-    }));
-  },
-  
-  toggleTaskCompletion: (id) => {
-    const { tasks } = get();
-    const taskIndex = tasks.findIndex(task => task.id === id);
-    
-    if (taskIndex === -1) return;
-    
-    const task = tasks[taskIndex];
-    const completed = !task.completed;
-    // Update status to 'completed' when task is marked as complete
-    // or to 'todo' when unmarked
-    const status = completed ? 'completed' : 'todo';
-    
-    // Calculate new order if the task is being marked as incomplete (from completed)
-    let newOrder = task.order;
-    if (task.status === 'completed' && !completed) {
-      // Find the highest order number among todo tasks
-      const todoTasks = tasks.filter(t => t.status === 'todo');
-      newOrder = todoTasks.length > 0 
-        ? Math.max(...todoTasks.map(t => t.order)) + 1 
-        : 0;
+    if (unsubscribeTasks) {
+      unsubscribeTasks();
+      set({ unsubscribeTasks: null });
     }
     
-    set(state => ({
-      tasks: state.tasks.map(t => {
-        if (t.id !== id) return t;
-        
-        return { 
-          ...t, 
-          completed, 
-          status,
-          order: newOrder,
-          updatedAt: new Date() 
-        };
-      })
-    }));
-  },
-  
-  updateTaskStatus: (id, status) => {
-    const { tasks } = get();
-    const taskIndex = tasks.findIndex(task => task.id === id);
-    
-    if (taskIndex === -1) return;
-    
-    const task = tasks[taskIndex];
-    
-    // If status is completed, also mark completed flag as true
-    // If moving from completed, mark as not completed
-    const completed = status === 'completed' ? true : 
-                     (task.status === 'completed' ? false : task.completed);
-    
-    // Calculate new order if the task is being moved from completed to todo
-    let newOrder = task.order;
-    if (task.status === 'completed' && status === 'todo') {
-      // Find the highest order number among todo tasks
-      const todoTasks = tasks.filter(t => t.status === 'todo');
-      newOrder = todoTasks.length > 0 
-        ? Math.max(...todoTasks.map(t => t.order)) + 1 
-        : 0;
+    if (unsubscribeProjects) {
+      unsubscribeProjects();
+      set({ unsubscribeProjects: null });
     }
-    
-    set(state => ({
-      tasks: state.tasks.map(t => {
-        if (t.id !== id) return t;
-        
-        return { 
-          ...t, 
-          status,
-          completed,
-          order: newOrder,
-          updatedAt: new Date() 
-        };
-      })
-    }));
   },
   
-  reorderTasks: (taskId, newOrder) => {
-    const { tasks } = get();
-    const taskIndex = tasks.findIndex(t => t.id === taskId);
-    
-    if (taskIndex === -1) return;
-    
-    const updatedTasks = [...tasks];
-    const [movedTask] = updatedTasks.splice(taskIndex, 1);
-    updatedTasks.splice(newOrder, 0, movedTask);
-    
-    // Update order property for all tasks
-    const tasksWithUpdatedOrder = updatedTasks.map((task, index) => ({
-      ...task,
-      order: index,
-      updatedAt: task.id === taskId ? new Date() : task.updatedAt
-    }));
-    
-    set({ tasks: tasksWithUpdatedOrder });
+  addProject: async (projectData) => {
+    try {
+      const { user } = useUserStore.getState();
+      
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      
+      const newProject = {
+        ...projectData,
+        userId: user.uid
+      };
+      
+      const docRef = await addDoc(projectsCollection, newProject);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding project:', error);
+      throw error;
+    }
+  },
+  
+  addTask: async (taskData) => {
+    try {
+      const { user } = useUserStore.getState();
+      const { tasks } = get();
+      
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      
+      const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order)) : -1;
+      
+      const newTask = {
+        ...taskData,
+        userId: user.uid,
+        order: maxOrder + 1,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      const docRef = await addDoc(tasksCollection, newTask);
+      
+      set(state => ({ isAddingTask: false }));
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding task:', error);
+      throw error;
+    }
+  },
+  
+  updateTask: async (id, updates) => {
+    try {
+      const taskRef = doc(db, 'tasks', id);
+      await updateDoc(taskRef, {
+        ...updates,
+        updatedAt: new Date()
+      });
+      
+      set(state => ({ editingTaskId: null }));
+    } catch (error) {
+      console.error('Error updating task:', error);
+      throw error;
+    }
+  },
+  
+  deleteTask: async (id) => {
+    try {
+      const taskRef = doc(db, 'tasks', id);
+      await deleteDoc(taskRef);
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      throw error;
+    }
+  },
+  
+  toggleTaskCompletion: async (id) => {
+    try {
+      const { tasks } = get();
+      const task = tasks.find(t => t.id === id);
+      
+      if (!task) return;
+      
+      const completed = !task.completed;
+      const status = completed ? 'completed' : 'todo';
+      
+      let newOrder = task.order;
+      if (task.status === 'completed' && !completed) {
+        const todoTasks = tasks.filter(t => t.status === 'todo');
+        newOrder = todoTasks.length > 0 
+          ? Math.max(...todoTasks.map(t => t.order)) + 1 
+          : 0;
+      }
+      
+      const taskRef = doc(db, 'tasks', id);
+      await updateDoc(taskRef, {
+        completed,
+        status,
+        order: newOrder,
+        updatedAt: new Date()
+      });
+    } catch (error) {
+      console.error('Error toggling task completion:', error);
+      throw error;
+    }
+  },
+  
+  updateTaskStatus: async (id, status) => {
+    try {
+      const { tasks } = get();
+      const task = tasks.find(t => t.id === id);
+      
+      if (!task) return;
+      
+      const completed = status === 'completed' ? true : 
+                       (task.status === 'completed' ? false : task.completed);
+      
+      let newOrder = task.order;
+      if (task.status === 'completed' && status === 'todo') {
+        const todoTasks = tasks.filter(t => t.status === 'todo');
+        newOrder = todoTasks.length > 0 
+          ? Math.max(...todoTasks.map(t => t.order)) + 1 
+          : 0;
+      }
+      
+      const taskRef = doc(db, 'tasks', id);
+      await updateDoc(taskRef, {
+        status,
+        completed,
+        order: newOrder,
+        updatedAt: new Date()
+      });
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      throw error;
+    }
+  },
+  
+  reorderTasks: async (taskId, newOrder) => {
+    try {
+      const { tasks } = get();
+      const taskIndex = tasks.findIndex(t => t.id === taskId);
+      
+      if (taskIndex === -1) return;
+      
+      const updatedTasks = [...tasks];
+      const [movedTask] = updatedTasks.splice(taskIndex, 1);
+      updatedTasks.splice(newOrder, 0, movedTask);
+      
+      // Update order property for all tasks in Firestore
+      const updatePromises = updatedTasks.map(async (task, index) => {
+        const taskRef = doc(db, 'tasks', task.id);
+        return updateDoc(taskRef, {
+          order: index,
+          updatedAt: task.id === taskId ? new Date() : task.updatedAt
+        });
+      });
+      
+      await Promise.all(updatePromises);
+    } catch (error) {
+      console.error('Error reordering tasks:', error);
+      throw error;
+    }
   },
   
   setIsAddingTask: (isAdding) => set({ isAddingTask: isAdding }),
   
   setEditingTaskId: (taskId) => set({ editingTaskId: taskId })
-})); 
+}));
+
+// Subscribe to user authentication changes
+useUserStore.subscribe((state) => {
+  const taskStore = useTaskStore.getState();
+  
+  if (state.isAuthenticated && state.user) {
+    // User logged in, initialize task store
+    taskStore.initializeStore();
+  } else {
+    // User logged out, cleanup and reset
+    taskStore.cleanupListeners();
+    useTaskStore.setState({ 
+      tasks: [], 
+      projects: [], 
+      isLoading: false 
+    });
+  }
+});
