@@ -3,6 +3,7 @@ export interface Task {
   title: string;
   description?: string;
   projectId: string;
+  userId: string;
   completed: boolean;
   status: 'pomodoro' | 'todo' | 'completed';
   timeSpent: number; // in minutes
@@ -15,6 +16,7 @@ export interface Task {
 export interface Project {
   id: string;
   name: string;
+  userId: string;
   color?: string;
 }
 
@@ -41,4 +43,4 @@ export interface AppSettings {
   timer: TimerSettings;
   darkMode: boolean;
   compactTaskView: boolean;
-} 
+}
