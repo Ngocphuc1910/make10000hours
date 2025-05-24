@@ -1,28 +1,96 @@
 import React from 'react';
+import {
+  Timer,
+  CheckSquare,
+  BarChart3,
+  Calendar,
+  Settings,
+  HelpCircle,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  PanelRightOpen,
+  PanelRightClose,
+  Check,
+  X,
+  Plus,
+  Edit,
+  Trash2,
+  Pause,
+  RotateCcw,
+  SkipForward,
+  Play,
+  Bell,
+  Maximize,
+  Minimize,
+  Clock,
+  CalendarDays,
+  ChevronDown,
+  Flame,
+  Focus,
+  ListChecks,
+  Grid3X3,
+  CheckCheck
+} from 'lucide-react';
 
 interface IconProps {
   name: string;
   className?: string;
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  size?: number;
 }
 
-const sizeClasses = {
-  xs: 'text-xs',
-  sm: 'text-sm',
-  md: 'text-base',
-  lg: 'text-lg',
-  xl: 'text-xl'
+const iconMap = {
+  'timer-line': Timer,
+  'task-line': CheckSquare,
+  'dashboard-line': BarChart3,
+  'calendar-line': Calendar,
+  'settings-line': Settings,
+  'question-line': HelpCircle,
+  'arrow-left-s-line': ChevronLeft,
+  'arrow-right-s-line': ChevronRight,
+  'menu-line': Menu,
+  'layout-right-line': PanelRightOpen,
+  'layout-right-2-line': PanelRightClose,
+  'check-line': Check,
+  'close-line': X,
+  'add-line': Plus,
+  'edit-line': Edit,
+  'delete-bin-line': Trash2,
+  'pause-line': Pause,
+  'restart-line': RotateCcw,
+  'skip-forward-line': SkipForward,
+  'play-line': Play,
+  'notification-line': Bell,
+  'fullscreen-line': Maximize,
+  'fullscreen-exit-line': Minimize,
+  'time-line': Clock,
+  'calendar-event-line': CalendarDays,
+  'arrow-down-s-line': ChevronDown,
+  'fire-line': Flame,
+  'focus-3-line': Focus,
+  'list-check': ListChecks,
+  'layout-grid-line': Grid3X3,
+  'checkbox-multiple-line': CheckCheck
 };
 
 export const Icon: React.FC<IconProps> = ({ 
   name, 
   className = '', 
-  size = 'md' 
+  size = 20 
 }) => {
-  const sizeClass = sizeClasses[size] || 'text-base';
+  const IconComponent = iconMap[name as keyof typeof iconMap];
+  
+  if (!IconComponent) {
+    console.warn(`Icon "${name}" not found in iconMap`);
+    return <div className={`w-5 h-5 ${className}`} />;
+  }
   
   return (
-    <i className={`ri-${name} ${sizeClass} ${className}`} aria-hidden="true"></i>
+    <IconComponent 
+      size={size} 
+      className={className}
+      aria-hidden="true"
+    />
   );
 };
 
