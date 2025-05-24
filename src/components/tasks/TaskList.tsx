@@ -20,7 +20,8 @@ export const TaskList: React.FC<TaskListProps> = ({
     editingTaskId, 
     setIsAddingTask, 
     setEditingTaskId,
-    reorderTasks
+    reorderTasks,
+    toggleTaskCompletion
   } = useTaskStore();
   
   // For drag and drop
@@ -60,18 +61,26 @@ export const TaskList: React.FC<TaskListProps> = ({
     e.currentTarget.classList.remove('bg-gray-50');
   };
   
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, dropTargetId: string) => {
     e.preventDefault();
     e.currentTarget.classList.remove('bg-gray-50');
     
     // If no task was dragged or dropping on itself, do nothing
-    if (!draggedTaskId || draggedTaskId === taskId) return;
+    if (!draggedTaskId || draggedTaskId === dropTargetId) return;
     
-    // Find the drop target index
-    const dropIndex = tasks.findIndex(t => t.id === taskId);
+    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    const dropTarget = tasks.find(t => t.id === dropTargetId);
     
-    // Reorder tasks
-    reorderTasks(draggedTaskId, dropIndex);
+    if (!draggedTask || !dropTarget) return;
+    
+    // If dragging between different completion states, toggle completion
+    if (draggedTask.completed !== dropTarget.completed) {
+      toggleTaskCompletion(draggedTaskId);
+    } else {
+      // Same completion state, just reorder
+      const dropIndex = tasks.findIndex(t => t.id === dropTargetId);
+      reorderTasks(draggedTaskId, dropIndex);
+    }
   };
   
   const handleAddTask = () => {
@@ -133,7 +142,7 @@ export const TaskList: React.FC<TaskListProps> = ({
               return (
                 <div
                   key={task.id}
-                  draggable={!task.completed}
+                  draggable={true}
                   onDragStart={(e) => handleDragStart(e, task.id)}
                   onDragEnd={handleDragEnd}
                   onDragOver={handleDragOver}

@@ -75,7 +75,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   
   return (
     <div 
-      className={`task-card flex items-center p-3 bg-white border 
+      className={`task-card flex items-start p-3 bg-white border 
       ${isSelected ? 'border-primary' : 'border-gray-200'} 
       ${task.completed ? 'opacity-70 text-gray-500' : ''}
       rounded-md hover:shadow-sm cursor-pointer ${className}`}
@@ -84,39 +84,42 @@ export const TaskItem: React.FC<TaskItemProps> = ({
       data-task-id={task.id}
       data-status={task.status}
     >
-      <div className="mr-3">
+      <div className="mr-3 mt-0.5">
         <CustomCheckbox 
           checked={task.completed} 
           onChange={handleCheckboxChange}
         />
       </div>
       <div className="flex-1 min-w-0 text-left">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center flex-1 min-w-0 mr-2">
-            <div className="flex-1 min-w-0">
-              <h4 
-                className={`text-sm font-medium truncate text-left
-                ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}
-              >
-                {task.title}
-              </h4>
-              <div className="flex items-center mt-0.5 text-xs text-left">
-                <div className="flex items-center">
-                  {getStatusIndicator()}
-                  <span className={`${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
-                    {project.name}
-                  </span>
-                </div>
-                <span className="mx-2 text-gray-300">•</span>
-                <span className={`flex items-center ${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
-                  <i className="ri-time-line mr-1"></i>
-                  {task.timeSpent}/{task.timeEstimated}m
+        <div className="flex items-start justify-between">
+          <div className="flex-1 min-w-0 mr-2">
+            <h4 
+              className={`text-sm font-medium truncate text-left
+              ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}
+            >
+              {task.title}
+            </h4>
+            <div className="flex items-center mt-0.5 text-xs text-left">
+              <div className="flex items-center">
+                {getStatusIndicator()}
+                <span className={`${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
+                  {project.name}
                 </span>
               </div>
+              <span className="mx-2 text-gray-300">•</span>
+              <span className={`flex items-center ${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
+                <i className="ri-time-line mr-1"></i>
+                {task.timeSpent}/{task.timeEstimated}m
+              </span>
             </div>
+            {isExpanded && task.description && (
+              <div className="task-description mt-2">
+                <p className="text-sm text-gray-600 mb-2">{task.description}</p>
+              </div>
+            )}
           </div>
           <button 
-            className="expand-button p-1 rounded-full hover:bg-gray-100"
+            className="expand-button p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
             onClick={handleExpandClick}
           >
             <div className="w-5 h-5 flex items-center justify-center text-gray-400">
@@ -124,15 +127,10 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             </div>
           </button>
         </div>
-        {isExpanded && task.description && (
-          <div className="task-description mt-2">
-            <p className="text-sm text-gray-600 mb-2">{task.description}</p>
-          </div>
-        )}
       </div>
-      <div className="task-menu ml-4 flex items-center">
+      <div className="task-menu ml-4 flex items-start">
         <button 
-          className="edit-task-btn p-1 rounded-full hover:bg-gray-100"
+          className="edit-task-btn p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
           onClick={handleEditClick}
         >
           <div className="w-5 h-5 flex items-center justify-center text-gray-400">
