@@ -16,7 +16,7 @@ interface TaskState {
   // Actions
   initializeStore: () => void;
   cleanupListeners: () => void;
-  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'order'>) => Promise<string>;
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'userId'>) => Promise<string>;
   updateTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   toggleTaskCompletion: (id: string) => Promise<void>;
@@ -24,7 +24,7 @@ interface TaskState {
   reorderTasks: (taskId: string, newOrder: number) => Promise<void>;
   setIsAddingTask: (isAdding: boolean) => void;
   setEditingTaskId: (taskId: string | null) => void;
-  addProject: (project: Omit<Project, 'id'>) => Promise<string>;
+  addProject: (project: Omit<Project, 'id' | 'userId'>) => Promise<string>;
 }
 
 const tasksCollection = collection(db, 'tasks');
