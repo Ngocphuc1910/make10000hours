@@ -114,11 +114,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             ref={timerSectionRef}
             className="flex-1 flex flex-col items-center justify-center p-6 bg-white relative min-w-[300px]" 
             id="timerSection" 
-            style={{ 
-              margin: '0 auto', 
-              width: '100%',
-              maxWidth: '100%'
-            }}
+            style={
+              // When both sidebars are hidden, remove width constraints for perfect centering
+              (!isLeftSidebarOpen && !isRightSidebarOpen) ? {} : {
+                margin: '0 auto', 
+                width: isRightSidebarOpen ? '100%' : '800px',
+                maxWidth: isRightSidebarOpen ? '100%' : '800px'
+              }
+            }
           >
             {children || <Outlet />}
           </div>
