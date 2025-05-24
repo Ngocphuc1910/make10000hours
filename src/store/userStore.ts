@@ -36,6 +36,7 @@ export const useUserStore = create<UserState>((set, get) => ({
     const unsubscribe = onAuthStateChanged(
       auth,
       (user) => {
+        console.log('Auth state changed from userStore:', user);
         if (user) {
           set({ 
             user, 
