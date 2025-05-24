@@ -20,6 +20,11 @@ const UserSection: React.FC<UserSectionProps> = () => {
                 <img
                   src={user.photoURL || ''}
                   alt="User Avatar"
+                  crossOrigin="anonymous"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    console.error('Error loading user avatar:', e);
+                  }}
                   className="w-10 h-10 rounded-full"
                 />
                 <div className="ml-3 text-left flex-1">
