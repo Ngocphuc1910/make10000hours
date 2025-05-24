@@ -17,7 +17,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   className = '',
   rightSidebarContent
 }) => {
-  const { isRightSidebarOpen } = useUIStore();
+  const { isRightSidebarOpen, isLeftSidebarOpen } = useUIStore();
   const [isResizing, setIsResizing] = useState(false);
   const timerSectionRef = useRef<HTMLDivElement>(null);
   const rightSidebarRef = useRef<HTMLDivElement>(null);
@@ -113,11 +113,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             ref={timerSectionRef}
             className="flex-1 flex flex-col items-center justify-center p-6 bg-white relative min-w-[300px]" 
             id="timerSection" 
-            style={{ 
-              margin: '0 auto', 
-              width: isRightSidebarOpen ? '100%' : '800px',
-              maxWidth: isRightSidebarOpen ? '100%' : '800px'
-            }}
+            style={
+              // When both sidebars are hidden, remove width constraints for perfect centering
+              (!isLeftSidebarOpen && !isRightSidebarOpen) ? {} : {
+                margin: '0 auto', 
+                width: isRightSidebarOpen ? '100%' : '800px',
+                maxWidth: isRightSidebarOpen ? '100%' : '800px'
+              }
+            }
           >
             {children || <Outlet />}
           </div>
