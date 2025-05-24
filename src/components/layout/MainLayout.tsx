@@ -116,8 +116,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             id="timerSection" 
             style={{ 
               margin: '0 auto', 
-              width: '100%',
-              maxWidth: '100%'
+              width: isRightSidebarOpen ? '100%' : '800px',
+              maxWidth: isRightSidebarOpen ? '100%' : '800px'
             }}
           >
             {children || <Outlet />}
