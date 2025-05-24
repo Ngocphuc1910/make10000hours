@@ -14,6 +14,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import ProjectsLayout from './components/dashboard/ProjectsLayout';
 import ToastContainer from './components/ui/ToastContainer';
 import { auth } from './api/firebase';
+import { useUserStore } from './store/userStore';
 
 // Placeholder components for routes that don't have pages yet
 const CalendarPage = () => (
@@ -40,6 +41,7 @@ const SupportPage = () => (
 const App = (): React.JSX.Element => {
   // Initialize timer tick
   const { tick, isRunning } = useTimerStore();
+  const { initialize } = useUserStore();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -52,8 +54,7 @@ const App = (): React.JSX.Element => {
   }, [tick, isRunning]);
 
   useEffect(() => {
-    // Check if the user is authenticated
-    const unsubscribe = auth.onAuthStateChanged((user) => {});
+    initialize();
 
     // Try to read the localStorage to check for data corruption
     try {
