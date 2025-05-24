@@ -18,7 +18,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   className = '',
   rightSidebarContent
 }) => {
-  const { isRightSidebarOpen } = useUIStore();
+  const { isRightSidebarOpen, isLeftSidebarOpen } = useUIStore();
   const [isResizing, setIsResizing] = useState(false);
   const timerSectionRef = useRef<HTMLDivElement>(null);
   const rightSidebarRef = useRef<HTMLDivElement>(null);
@@ -116,22 +116,21 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             id="timerSection" 
             style={{ 
               margin: '0 auto', 
-              width: isRightSidebarOpen ? '100%' : '800px',
-              maxWidth: isRightSidebarOpen ? '100%' : '800px'
+              width: '100%',
+              maxWidth: '100%'
             }}
           >
             {children || <Outlet />}
           </div>
           
-          {/* Resizable Divider */}
-          <div 
-            id="resizeDivider" 
-            className={`w-[1px] bg-gray-200/20 cursor-col-resize hover:bg-primary/20 flex items-center justify-center
-            ${isRightSidebarOpen ? 'opacity-100' : 'opacity-0 w-0'}`}
-            onMouseDown={handleResizeStart}
-          >
-            <div className="w-4 h-full opacity-0"></div>
-            {isRightSidebarOpen && (
+          {/* Resizable Divider - Only render when right sidebar is open */}
+          {isRightSidebarOpen && (
+            <div 
+              id="resizeDivider" 
+              className="w-[1px] bg-gray-200/20 cursor-col-resize hover:bg-primary/20 flex items-center justify-center"
+              onMouseDown={handleResizeStart}
+            >
+              <div className="w-4 h-full opacity-0"></div>
               <button 
                 className="absolute w-6 h-16 bg-white border border-gray-200 rounded-l-md flex items-center justify-center shadow-sm -right-0 top-1/2 transform -translate-y-1/2"
                 onClick={() => useUIStore.getState().toggleRightSidebar()}
@@ -141,26 +140,25 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                   <Icon name="arrow-right-s-line" size={16} className="text-gray-500" />
                 </div>
               </button>
-            )}
-          </div>
+            </div>
+          )}
           
-          {/* Right Sidebar - Task Management */}
-          <div 
-            ref={rightSidebarRef}
-            id="rightSidebar" 
-            className={`border-l border-gray-200 flex flex-col bg-white min-w-[280px] transform transition-transform duration-300
-            ${isRightSidebarOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 w-0'}`}
-            style={{ 
-              width: isRightSidebarOpen ? '480px' : '0',
-              flexShrink: 0
-            }}
-          >
-            {isRightSidebarOpen && (
+          {/* Right Sidebar - Task Management - Only render when open */}
+          {isRightSidebarOpen && (
+            <div 
+              ref={rightSidebarRef}
+              id="rightSidebar" 
+              className="border-l border-gray-200 flex flex-col bg-white min-w-[280px]"
+              style={{ 
+                width: '480px',
+                flexShrink: 0
+              }}
+            >
               <div className="flex-1 overflow-y-auto">
                 {actualSidebarContent}
               </div>
-            )}
-          </div>
+            </div>
+          )}
           
           {/* Right sidebar show button - displayed when sidebar is hidden */}
           {!isRightSidebarOpen && (
