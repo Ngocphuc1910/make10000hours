@@ -37,6 +37,13 @@ export const Button: React.FC<ButtonProps> = ({
     lg: 'text-base px-5 py-2.5',
   };
   
+  // Map button size to icon size (number)
+  const iconSize = {
+    sm: 14,
+    md: 16,
+    lg: 18,
+  }[size];
+
   return (
     <button
       className={clsx(
@@ -48,11 +55,11 @@ export const Button: React.FC<ButtonProps> = ({
       )}
       {...props}
     >
-      {iconLeft && <Icon name={iconLeft} size="sm" className="mr-2" />}
+      {iconLeft && <Icon name={iconLeft} size={iconSize} className="mr-2" />}
       {children}
-      {iconRight && <Icon name={iconRight} size="sm" className="ml-2" />}
+      {iconRight && <Icon name={iconRight} size={iconSize} className="ml-2" />}
     </button>
   );
 };
 
-export default Button; 
+export default Button;

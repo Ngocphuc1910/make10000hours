@@ -157,10 +157,14 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   addTask: (taskData) => {
     const { tasks } = get();
     const newTaskId = Date.now().toString();
+    
+    // Find the highest order among all tasks to place new task at the end
+    const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order)) : -1;
+    
     const newTask: Task = {
       id: newTaskId,
       ...taskData,
-      order: tasks.length,
+      order: maxOrder + 1,
       createdAt: new Date(),
       updatedAt: new Date()
     };
