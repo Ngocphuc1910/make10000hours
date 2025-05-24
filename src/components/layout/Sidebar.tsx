@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
+import { Icon } from '../ui/Icon';
 
 interface SidebarProps {
   className?: string;
@@ -86,15 +87,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
       >
         <div className="p-4 border-b border-gray-200 flex items-center justify-between">
           <h1 className="text-xl font-['Pacifico'] text-primary">Make10000hours</h1>
-          <button 
-            id="toggle-sidebar" 
-            onClick={handleToggleSidebar}
-            className="p-1 hover:bg-gray-100 rounded-md"
-          >
-            <div className="w-5 h-5 flex items-center justify-center text-gray-500">
-              <i className="ri-arrow-left-s-line"></i>
-            </div>
-          </button>
+                  <button 
+          id="toggle-sidebar" 
+          onClick={handleToggleSidebar}
+          className="p-1 hover:bg-gray-100 rounded-md"
+        >
+          <div className="w-5 h-5 flex items-center justify-center text-gray-500">
+            <Icon name="arrow-left-s-line" size={20} />
+          </div>
+        </button>
         </div>
         
         <div className="p-4 border-b border-gray-200">
@@ -128,7 +129,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
                     }`}
                   >
                     <div className="w-5 h-5 flex items-center justify-center mr-3">
-                      <i className={`ri-${item.icon}`}></i>
+                      <Icon name={item.icon} size={20} />
                     </div>
                     {item.label}
                   </Link>
@@ -148,7 +149,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
             className="flex items-center px-3 py-2 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-50"
           >
             <div className="w-5 h-5 flex items-center justify-center mr-3">
-              <i className="ri-question-line"></i>
+              <Icon name="question-line" size={20} />
             </div>
             Help & Support
           </Link>
@@ -164,7 +165,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
           aria-label="Show Sidebar"
         >
           <div className="w-5 h-5 flex items-center justify-center text-gray-700">
-            <i className="ri-menu-line"></i>
+            <Icon name="menu-line" size={20} />
           </div>
         </button>
       )}
