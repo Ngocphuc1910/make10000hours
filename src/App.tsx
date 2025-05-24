@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import './App.css';
-import './remixicon.css';
 import './typography.css';
 import './styles.css';
 import { Routes, Route, Navigate, Link, HashRouter as Router } from 'react-router-dom';
