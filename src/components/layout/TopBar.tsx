@@ -1,6 +1,7 @@
 import React from 'react';
 import { useUIStore } from '../../store/uiStore';
 import { getCurrentFormattedDate } from '../../utils/timeUtils';
+import { Icon } from '../ui/Icon';
 
 interface TopBarProps {
   className?: string;
@@ -24,7 +25,7 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
           aria-label={isRightSidebarOpen ? "Hide Tasks Panel" : "Show Tasks Panel"}
         >
           <span className="w-5 h-5 flex items-center justify-center">
-            <i className={`ri-${isRightSidebarOpen ? 'layout-right-2-line' : 'layout-right-line'}`}></i>
+            <Icon name={isRightSidebarOpen ? 'layout-right-2-line' : 'layout-right-line'} size={20} />
           </span>
         </button>
         
@@ -33,7 +34,7 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
           aria-label="Notifications"
         >
           <span className="w-5 h-5 flex items-center justify-center">
-            <i className="ri-notification-line"></i>
+            <Icon name="notification-line" size={20} />
           </span>
         </button>
         
@@ -44,7 +45,7 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
           aria-label="Toggle Focus Mode"
         >
           <span className="w-5 h-5 flex items-center justify-center">
-            <i className="ri-fullscreen-line" id="focusModeIcon"></i>
+            <Icon name="fullscreen-line" size={20} />
           </span>
         </button>
       </div>
