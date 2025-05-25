@@ -20,12 +20,10 @@ export interface Project {
   color?: string;
 }
 
-export interface User {
-  id: string;
-  name: string;
-  initials: string;
-  title?: string;
-  avatar?: string;
+// separate collection for user data
+export interface UserData {
+  uid: string;
+  settings: AppSettings;
 }
 
 export type TimerMode = 'pomodoro' | 'shortBreak' | 'longBreak';
@@ -44,3 +42,16 @@ export interface AppSettings {
   darkMode: boolean;
   compactTaskView: boolean;
 }
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  timer: {
+    pomodoro: 25,
+    shortBreak: 5,
+    longBreak: 15,
+    autoStartBreaks: false,
+    autoStartPomodoros: false,
+    longBreakInterval: 4
+  },
+  darkMode: false,
+  compactTaskView: false,
+};
