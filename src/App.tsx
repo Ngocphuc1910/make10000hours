@@ -15,18 +15,12 @@ import ProjectsLayout from './components/dashboard/ProjectsLayout';
 import ToastContainer from './components/ui/ToastContainer';
 import { auth } from './api/firebase';
 import { useUserStore } from './store/userStore';
+import SettingsPage from './components/pages/SettingsPage';
 
 // Placeholder components for routes that don't have pages yet
 const CalendarPage = () => (
   <div className="w-full max-w-7xl mx-auto">
     <h1 className="text-2xl font-bold mb-4">Calendar Page</h1>
-    <p>This page is under construction</p>
-  </div>
-);
-
-const SettingsPage = () => (
-  <div className="w-full max-w-7xl mx-auto">
-    <h1 className="text-2xl font-bold mb-4">Settings Page</h1>
     <p>This page is under construction</p>
   </div>
 );
@@ -40,20 +34,10 @@ const SupportPage = () => (
 
 const App = (): React.JSX.Element => {
   // Initialize timer tick
-  const { tick, isRunning } = useTimerStore();
   const { initialize } = useUserStore();
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (isRunning) {
-        tick();
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [tick, isRunning]);
-
-  useEffect(() => {
+    // TODO: fix the problem that this runs twice on initial load. Check for React.StrictMode
     initialize();
 
     // Try to read the localStorage to check for data corruption

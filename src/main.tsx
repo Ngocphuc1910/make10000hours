@@ -6,6 +6,7 @@ import './index.css'
 import reportWebVitals from './reportWebVitals';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
+  // StrictMode is useful for catching potential problems in the app, bit it can cause double rendering in development mode.
   <React.StrictMode>
     <ThemeProvider>
       <App />
