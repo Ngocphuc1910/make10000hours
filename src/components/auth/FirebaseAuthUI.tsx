@@ -3,13 +3,11 @@ import * as FirebaseUI from 'firebaseui';
 import 'firebaseui/dist/firebaseui.css';
 import { auth } from '../../api/firebase';
 import { GoogleAuthProvider, User } from 'firebase/auth';
-import { useUserStore } from '../../store/userStore';
 
 interface FirebaseAuthUIProps {}
 
 const FirebaseAuthUI: React.FC<FirebaseAuthUIProps> = () => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { setUser } = useUserStore();
   
   useEffect(() => {
     // Initialize the FirebaseUI Widget using Firebase
@@ -23,10 +21,6 @@ const FirebaseAuthUI: React.FC<FirebaseAuthUIProps> = () => {
       ],
       callbacks: {
         signInSuccessWithAuthResult: (authResult) => {
-          
-          const user = authResult.user as User;
-          setUser(user);
-
           return false; // Don't redirect after sign-in
         },
       },

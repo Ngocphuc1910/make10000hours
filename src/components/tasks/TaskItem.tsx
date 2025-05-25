@@ -85,7 +85,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({
       data-status={task.status}
     >
       <div className="mr-3 mt-0.5">
-        <CustomCheckbox 
+        <CustomCheckbox
+          id={`task-checkbox-${task.id}`} 
           checked={task.completed} 
           onChange={handleCheckboxChange}
         />
