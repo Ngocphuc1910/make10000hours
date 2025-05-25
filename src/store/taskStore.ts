@@ -25,6 +25,7 @@ interface TaskState {
   setIsAddingTask: (isAdding: boolean) => void;
   setEditingTaskId: (taskId: string | null) => void;
   addProject: (project: Omit<Project, 'id' | 'userId'>) => Promise<string>;
+  timeSpentIncrement: (id: string, increment: number) => Promise<void>;
 }
 
 const tasksCollection = collection(db, 'tasks');
@@ -266,6 +267,34 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       await Promise.all(updatePromises);
     } catch (error) {
       console.error('Error reordering tasks:', error);
+      throw error;
+    }
+  },
+
+  timeSpentIncrement: async (id, increment = 1) => {
+    if (increment <= 0) {
+      console.warn('Increment must be a positive number');
+      return;
+    }
+    const { tasks } = get();
+    const task = tasks.find(t => t.id === id);
+    if (!task) {
+      console.error('Task not found:', id);
+      throw new Error('Task not found');
+    }
+    const newTimeSpent = task.timeSpent + increment;
+    if (newTimeSpent < 0) {
+      console.error('Time spent cannot be negative');
+      throw new Error('Time spent cannot be negative');
+    }
+    try {
+      const taskRef = doc(db, 'tasks', id);
+      await updateDoc(taskRef, {
+        timeSpent: newTimeSpent,
+        updatedAt: new Date()
+      });
+    } catch (error) {
+      console.error('Error incrementing time spent:', error);
       throw error;
     }
   },

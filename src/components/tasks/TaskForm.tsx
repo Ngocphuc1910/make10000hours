@@ -55,7 +55,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
     
     const taskData = {
       title: title.trim(),
-      description: description.trim() || undefined,
+      description: description.trim(),
       projectId,
       completed: task?.completed || false,
       status: task?.status || status || 'todo',
@@ -83,6 +83,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <input
+              autoFocus
               ref={titleInputRef}
               type="text"
               className="w-full text-sm font-medium text-gray-900 px-3 py-2 bg-gray-50 rounded-md border-none focus:ring-[1.5px] focus:ring-primary focus:bg-white transition-all duration-200"
