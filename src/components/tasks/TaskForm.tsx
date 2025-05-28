@@ -19,6 +19,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
   const [timeSpent, setTimeSpent] = useState(task?.timeSpent?.toString() || '0');
   const [timeEstimated, setTimeEstimated] = useState(task?.timeEstimated?.toString() || '0');
   const [description, setDescription] = useState(task?.description || '');
+  const [titleError, setTitleError] = useState(false);
+  const [projectError, setProjectError] = useState(false);
   
   const titleInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
@@ -40,16 +42,21 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
   }, [description]);
   
   const handleSave = () => {
+    // Reset errors
+    setTitleError(false);
+    setProjectError(false);
+    
     // Validate required fields
     if (!title.trim()) {
+      setTitleError(true);
       if (titleInputRef.current) {
-        titleInputRef.current.classList.add('ring-2', 'ring-red-500');
         titleInputRef.current.focus();
       }
       return;
     }
     
     if (!projectId) {
+      setProjectError(true);
       return;
     }
     
@@ -74,6 +81,9 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
     onCancel();
   };
   
+  const inputClasses = "w-full text-sm font-medium text-gray-900 px-3 py-2 bg-gray-50 rounded-md border-none outline-none focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white transition-all duration-200";
+  const timeInputClasses = "w-10 text-sm font-medium text-gray-600 bg-transparent border-none text-right outline-none focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-200";
+  
   return (
     <div 
       ref={formRef}
@@ -86,23 +96,24 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
               autoFocus
               ref={titleInputRef}
               type="text"
-              className="w-full text-sm font-medium text-gray-900 px-3 py-2 bg-gray-50 rounded-md border-none focus:ring-[1.5px] focus:ring-primary focus:bg-white transition-all duration-200"
+              className={`${inputClasses} ${titleError ? 'ring-2 ring-primary' : ''}`}
               placeholder="What needs to be done?"
               value={title}
               onChange={(e) => {
                 setTitle(e.target.value);
-                if (e.target.classList.contains('ring-red-500')) {
-                  e.target.classList.remove('ring-2', 'ring-red-500');
-                }
+                setTitleError(false);
               }}
             />
             
             <div className="flex gap-3 items-center">
               <div className="relative flex-1">
                 <select
-                  className="w-full text-sm font-medium text-gray-900 px-3 py-2 bg-gray-50 rounded-md border-none focus:ring-[1.5px] focus:ring-primary focus:bg-white transition-all duration-200 appearance-none pr-8"
+                  className={`${inputClasses} appearance-none pr-8 ${projectError ? 'ring-2 ring-primary' : ''}`}
                   value={projectId}
-                  onChange={(e) => setProjectId(e.target.value)}
+                  onChange={(e) => {
+                    setProjectId(e.target.value);
+                    setProjectError(false);
+                  }}
                 >
                   <option value="" disabled>Select a project</option>
                   {projects.map(project => (
@@ -120,7 +131,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
                 <Icon name="time-line" className="text-gray-400 mr-1.5" />
                 <input
                   type="number"
-                  className="w-10 text-sm font-medium text-gray-600 bg-transparent border-none text-right focus:ring-[1.5px] focus:ring-primary"
+                  className={timeInputClasses}
                   placeholder="0"
                   min="0"
                   value={timeSpent}
@@ -129,7 +140,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
                 <span className="text-sm font-medium text-gray-400">/</span>
                 <input
                   type="number"
-                  className="w-10 text-sm font-medium text-gray-600 bg-transparent border-none text-right focus:ring-[1.5px] focus:ring-primary"
+                  className={timeInputClasses}
                   placeholder="0"
                   min="0"
                   value={timeEstimated}
@@ -142,7 +153,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
           
           <textarea
             ref={textareaRef}
-            className="w-full text-sm text-gray-600 px-3 py-2 bg-gray-50 rounded-md border-none focus:ring-[1.5px] focus:ring-primary focus:bg-white transition-all duration-200 min-h-[3rem] mb-3"
+            className={`${inputClasses} min-h-[3rem] mb-3`}
             rows={1}
             placeholder="Add description (optional)"
             value={description}
