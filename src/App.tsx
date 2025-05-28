@@ -74,6 +74,19 @@ const App = (): React.JSX.Element => {
   // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Debug logging for Alt key combinations
+      if (event.altKey) {
+        console.log('Alt key pressed with:', {
+          key: event.key,
+          code: event.code,
+          keyCode: event.keyCode,
+          altKey: event.altKey,
+          shiftKey: event.shiftKey,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey
+        });
+      }
+      
       // Check for Shift + N to create new task
       if (event.shiftKey && event.key === 'N') {
         event.preventDefault();
