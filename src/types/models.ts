@@ -9,6 +9,7 @@ export interface Task {
   timeSpent: number; // in minutes
   timeEstimated: number; // in minutes
   order: number;
+  hideFromPomodoro?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
