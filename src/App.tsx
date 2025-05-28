@@ -15,6 +15,8 @@ import ProjectsLayout from './components/dashboard/ProjectsLayout';
 import ToastContainer from './components/ui/ToastContainer';
 import { auth } from './api/firebase';
 import { useUserStore } from './store/userStore';
+import { useTaskStore } from './store/taskStore';
+import { useUIStore } from './store/uiStore';
 import SettingsPage from './components/pages/SettingsPage';
 
 // Placeholder components for routes that don't have pages yet
@@ -35,6 +37,8 @@ const SupportPage = () => (
 const App = (): React.JSX.Element => {
   // Initialize timer tick
   const { initialize } = useUserStore();
+  const { setIsAddingTask } = useTaskStore();
+  const { isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar } = useUIStore();
 
   useEffect(() => {
     // TODO: fix the problem that this runs twice on initial load. Check for React.StrictMode
@@ -66,6 +70,44 @@ const App = (): React.JSX.Element => {
       window.location.reload();
     }
   }, []);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check for Shift + N to create new task
+      if (event.shiftKey && event.key === 'N') {
+        event.preventDefault();
+        
+        // Ensure the right sidebar is open to show tasks
+        if (!isRightSidebarOpen) {
+          toggleRightSidebar();
+        }
+        
+        // Trigger new task creation
+        setIsAddingTask(true);
+      }
+      
+      // Check for Shift + \ to toggle right sidebar
+      if (event.shiftKey && (event.key === '\\' || event.key === '|')) {
+        event.preventDefault();
+        toggleRightSidebar();
+      }
+      
+      // Check for Alt/Option + \ to toggle left sidebar
+      if (event.altKey && (event.key === '\\' || event.key === '|' || event.code === 'Backslash')) {
+        event.preventDefault();
+        toggleLeftSidebar();
+      }
+    };
+
+    // Add event listener
+    document.addEventListener('keydown', handleKeyDown);
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar, setIsAddingTask]);
 
   // Wrap PomodoroPage with MainLayout
   const PomodoroPageWithLayout = () => (
