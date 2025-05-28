@@ -22,7 +22,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
   const [titleError, setTitleError] = useState(false);
   const [projectError, setProjectError] = useState(false);
   
-  const titleInputRef = useRef<HTMLInputElement>(null);
+  const titleInputRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
   
   // Focus on title input when form opens
@@ -32,12 +32,23 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
     }
   }, []);
   
-  // Adjust textarea height
+  // Adjust textarea heights
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  const adjustTextareaHeight = (textarea: HTMLTextAreaElement) => {
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  };
+  
+  useEffect(() => {
+    if (titleInputRef.current) {
+      adjustTextareaHeight(titleInputRef.current);
+    }
+  }, [title]);
+  
   useEffect(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      adjustTextareaHeight(textareaRef.current);
     }
   }, [description]);
   
@@ -81,8 +92,9 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
     onCancel();
   };
   
-  const inputClasses = "w-full text-sm font-medium text-gray-900 px-3 py-2 bg-gray-50 rounded-md border-none outline-none focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white transition-all duration-200";
-  const timeInputClasses = "w-10 text-sm font-medium text-gray-600 bg-transparent border-none text-right outline-none focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-200";
+  const inputClasses = "text-sm font-medium text-gray-900 px-3 py-2 bg-gray-50 rounded-md border-none outline-none focus:outline-none focus:ring-2 focus:ring-gray-500 focus:bg-white transition-all duration-200";
+  const timeInputClasses = "w-14 text-sm font-medium text-gray-600 bg-transparent border-none text-right outline-none focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all duration-200";
+  const descriptionClasses = "text-sm text-gray-500 px-3 py-2 bg-gray-50 rounded-md border-none outline-none focus:outline-none focus:ring-2 focus:ring-gray-500 focus:bg-white transition-all duration-200";
   
   return (
     <div 
@@ -92,23 +104,30 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
       <div className="flex-1 min-w-0">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <input
+            <textarea
               autoFocus
               ref={titleInputRef}
-              type="text"
-              className={`${inputClasses} ${titleError ? 'ring-2 ring-primary' : ''}`}
+              className={`${inputClasses} w-full resize-none overflow-hidden min-h-[2.5rem] ${titleError ? 'ring-2 ring-red-200' : ''}`}
               placeholder="What needs to be done?"
               value={title}
+              rows={1}
               onChange={(e) => {
                 setTitle(e.target.value);
                 setTitleError(false);
+                adjustTextareaHeight(e.target);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSave();
+                }
               }}
             />
             
-            <div className="flex gap-3 items-center">
-              <div className="relative flex-1">
+            <div className="flex gap-3 items-stretch">
+              <div className="relative flex-[6] min-w-0">
                 <select
-                  className={`${inputClasses} appearance-none pr-8 ${projectError ? 'ring-2 ring-primary' : ''}`}
+                  className={`${inputClasses} w-full appearance-none pr-8 h-full ${projectError ? 'ring-2 ring-red-200' : ''}`}
                   value={projectId}
                   onChange={(e) => {
                     setProjectId(e.target.value);
@@ -127,46 +146,60 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
                 </div>
               </div>
               
-              <div className="flex items-center bg-gray-50 rounded-md px-2 py-1.5 whitespace-nowrap">
-                <Icon name="time-line" className="text-gray-400 mr-1.5" />
-                <input
-                  type="number"
-                  className={timeInputClasses}
-                  placeholder="0"
-                  min="0"
-                  value={timeSpent}
-                  onChange={(e) => setTimeSpent(e.target.value)}
-                />
-                <span className="text-sm font-medium text-gray-400">/</span>
-                <input
-                  type="number"
-                  className={timeInputClasses}
-                  placeholder="0"
-                  min="0"
-                  value={timeEstimated}
-                  onChange={(e) => setTimeEstimated(e.target.value)}
-                />
-                <span className="text-sm font-medium text-gray-500 ml-0.5">m</span>
+              <div className="flex-[4] flex items-center bg-gray-50 rounded-md px-2 py-1.5">
+                <div className="flex items-center gap-1">
+                  <Icon name="time-line" className="text-gray-400 flex-shrink-0" />
+                  {!task && (
+                    <span className="text-sm font-medium text-gray-600">Est.</span>
+                  )}
+                </div>
+                
+                <div className="flex items-center ml-auto">
+                  {task && (
+                    <>
+                      <input
+                        type="number"
+                        className={timeInputClasses}
+                        placeholder="0"
+                        min="0"
+                        value={timeSpent}
+                        onChange={(e) => setTimeSpent(e.target.value)}
+                      />
+                      <span className="text-sm font-medium text-gray-400 mx-1">/</span>
+                    </>
+                  )}
+                  <input
+                    type="number"
+                    className={timeInputClasses}
+                    placeholder="0"
+                    min="0"
+                    value={timeEstimated}
+                    onChange={(e) => setTimeEstimated(e.target.value)}
+                  />
+                  <span className="text-sm font-medium text-gray-500 ml-1">m</span>
+                </div>
               </div>
             </div>
           </div>
           
           <textarea
             ref={textareaRef}
-            className={`${inputClasses} min-h-[3rem] mb-3`}
+            className={`${descriptionClasses} min-h-[3rem] mb-3 resize-none w-full`}
             rows={1}
             placeholder="Add description (optional)"
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            style={{ height: 'auto', resize: 'none' }}
+            onChange={(e) => {
+              setDescription(e.target.value);
+              adjustTextareaHeight(e.target);
+            }}
           />
           
           <div className="flex justify-end space-x-2">
             <button
-              className="p-1.5 rounded-md bg-primary/10 hover:bg-primary/20 transition-colors duration-200 cursor-pointer"
+              className="p-1.5 rounded-md bg-green-500/10 hover:bg-green-500/20 transition-colors duration-200 cursor-pointer"
               onClick={handleSave}
             >
-              <Icon name="check-line" className="w-5 h-5 text-primary" />
+              <Icon name="check-line" className="w-5 h-5 text-green-500" />
             </button>
             <button
               className="p-1.5 rounded-md hover:bg-gray-100 transition-colors duration-200"
