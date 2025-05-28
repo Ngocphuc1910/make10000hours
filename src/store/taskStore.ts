@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, onSnapshot, query, orderBy, where } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, onSnapshot, query, orderBy, where, writeBatch } from 'firebase/firestore';
 import { db } from '../api/firebase';
 import { useUserStore } from './userStore';
 import type { Task, Project } from '../types/models';
@@ -9,6 +9,7 @@ interface TaskState {
   projects: Project[];
   isAddingTask: boolean;
   editingTaskId: string | null;
+  showDetailsMenu: boolean;
   isLoading: boolean;
   unsubscribeTasks: (() => void) | null;
   unsubscribeProjects: (() => void) | null;
@@ -16,16 +17,19 @@ interface TaskState {
   // Actions
   initializeStore: () => void;
   cleanupListeners: () => void;
-  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'userId'>) => Promise<string>;
-  updateTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
+  addTask: (taskData: Omit<Task, 'id' | 'order' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateTask: (taskId: string, taskData: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
-  toggleTaskCompletion: (id: string) => Promise<void>;
-  updateTaskStatus: (id: string, status: Task['status']) => Promise<void>;
-  reorderTasks: (taskId: string, newOrder: number) => Promise<void>;
+  toggleTaskCompletion: (taskId: string) => Promise<void>;
+  updateTaskStatus: (taskId: string, status: Task['status']) => Promise<void>;
+  reorderTasks: (taskId: string, newIndex: number) => Promise<void>;
   setIsAddingTask: (isAdding: boolean) => void;
   setEditingTaskId: (taskId: string | null) => void;
+  setShowDetailsMenu: (show: boolean) => void;
   addProject: (project: Omit<Project, 'id' | 'userId'>) => Promise<string>;
   timeSpentIncrement: (id: string, increment: number) => Promise<void>;
+  handleMoveCompletedDown: () => Promise<void>;
+  handleArchiveCompleted: () => Promise<void>;
 }
 
 const tasksCollection = collection(db, 'tasks');
@@ -36,6 +40,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   projects: [],
   isAddingTask: false,
   editingTaskId: null,
+  showDetailsMenu: false,
   isLoading: false,
   unsubscribeTasks: null,
   unsubscribeProjects: null,
@@ -130,27 +135,21 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   addTask: async (taskData) => {
     try {
       const { user } = useUserStore.getState();
+      if (!user) throw new Error('No user found');
+      
+      const tasksRef = collection(db, 'tasks');
       const { tasks } = get();
       
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-      
-      const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order)) : -1;
-      
+      // Add task with next order number
       const newTask = {
         ...taskData,
         userId: user.uid,
-        order: maxOrder + 1,
+        order: tasks.length,
         createdAt: new Date(),
         updatedAt: new Date()
       };
       
-      const docRef = await addDoc(tasksCollection, newTask);
-      
-      set(state => ({ isAddingTask: false }));
-      
-      return docRef.id;
+      await addDoc(tasksRef, newTask);
     } catch (error) {
       console.error('Error adding task:', error);
       throw error;
@@ -192,19 +191,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       const completed = !task.completed;
       const status = completed ? 'completed' : 'todo';
       
-      let newOrder = task.order;
-      if (task.status === 'completed' && !completed) {
-        const todoTasks = tasks.filter(t => t.status === 'todo');
-        newOrder = todoTasks.length > 0 
-          ? Math.max(...todoTasks.map(t => t.order)) + 1 
-          : 0;
-      }
-      
+      // Keep the original order when unchecking
       const taskRef = doc(db, 'tasks', id);
       await updateDoc(taskRef, {
         completed,
         status,
-        order: newOrder,
         updatedAt: new Date()
       });
     } catch (error) {
@@ -223,19 +214,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       const completed = status === 'completed' ? true : 
                        (task.status === 'completed' ? false : task.completed);
       
-      let newOrder = task.order;
-      if (task.status === 'completed' && status === 'todo') {
-        const todoTasks = tasks.filter(t => t.status === 'todo');
-        newOrder = todoTasks.length > 0 
-          ? Math.max(...todoTasks.map(t => t.order)) + 1 
-          : 0;
-      }
-      
+      // Keep the original order when moving between statuses
       const taskRef = doc(db, 'tasks', id);
       await updateDoc(taskRef, {
         status,
         completed,
-        order: newOrder,
         updatedAt: new Date()
       });
     } catch (error) {
@@ -244,7 +227,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
   },
   
-  reorderTasks: async (taskId, newOrder) => {
+  reorderTasks: async (taskId, newIndex) => {
     try {
       const { tasks } = get();
       const taskIndex = tasks.findIndex(t => t.id === taskId);
@@ -253,7 +236,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       
       const updatedTasks = [...tasks];
       const [movedTask] = updatedTasks.splice(taskIndex, 1);
-      updatedTasks.splice(newOrder, 0, movedTask);
+      updatedTasks.splice(newIndex, 0, movedTask);
       
       // Update order property for all tasks in Firestore
       const updatePromises = updatedTasks.map(async (task, index) => {
@@ -301,7 +284,56 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   
   setIsAddingTask: (isAdding) => set({ isAddingTask: isAdding }),
   
-  setEditingTaskId: (taskId) => set({ editingTaskId: taskId })
+  setEditingTaskId: (taskId) => set({ editingTaskId: taskId }),
+  
+  setShowDetailsMenu: (show) => set({ showDetailsMenu: show }),
+  
+  handleMoveCompletedDown: async () => {
+    try {
+      const { tasks } = get();
+      const completedTasks = tasks.filter(t => t.completed);
+      const incompleteTasks = tasks.filter(t => !t.completed);
+      
+      // Update order of tasks
+      const updatedTasks = [...incompleteTasks, ...completedTasks];
+      const batch = writeBatch(db);
+      
+      // Update order for each task
+      updatedTasks.forEach((task, index) => {
+        const taskRef = doc(db, 'tasks', task.id);
+        batch.update(taskRef, { order: index });
+      });
+      
+      await batch.commit();
+      set({ showDetailsMenu: false });
+    } catch (error) {
+      console.error('Error moving completed tasks:', error);
+      throw error;
+    }
+  },
+  
+  handleArchiveCompleted: async () => {
+    try {
+      const { tasks } = get();
+      const completedTasks = tasks.filter(t => t.completed);
+      const batch = writeBatch(db);
+      
+      // Update completed tasks to be hidden from Pomodoro page
+      completedTasks.forEach(task => {
+        const taskRef = doc(db, 'tasks', task.id);
+        batch.update(taskRef, { 
+          hideFromPomodoro: true,
+          updatedAt: new Date()
+        });
+      });
+      
+      await batch.commit();
+      set({ showDetailsMenu: false });
+    } catch (error) {
+      console.error('Error archiving completed tasks:', error);
+      throw error;
+    }
+  },
 }));
 
 // Subscribe to user authentication changes

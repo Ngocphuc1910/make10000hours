@@ -95,7 +95,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0 mr-2">
             <h4 
-              className={`text-sm font-medium truncate text-left
+              className={`text-sm font-medium text-left whitespace-pre-wrap break-words
               ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}
             >
               {task.title}
@@ -115,7 +115,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             </div>
             {isExpanded && task.description && (
               <div className="task-description mt-2">
-                <p className="text-sm text-gray-600 mb-2">{task.description}</p>
+                <p className="text-sm text-gray-600 mb-2 whitespace-pre-wrap break-words">{task.description}</p>
               </div>
             )}
           </div>
