@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, onSnapshot, query, orderBy, where, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, onSnapshot, query, orderBy, where, writeBatch, setDoc } from 'firebase/firestore';
 import { db } from '../api/firebase';
 import { useUserStore } from './userStore';
 import type { Task, Project } from '../types/models';
@@ -123,6 +123,13 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         ...projectData,
         userId: user.uid
       };
+      
+      // If this is the "No Project" project, use a fixed ID
+      if (projectData.name === 'No Project') {
+        const docRef = doc(db, 'projects', 'no-project');
+        await setDoc(docRef, newProject);
+        return 'no-project';
+      }
       
       const docRef = await addDoc(projectsCollection, newProject);
       return docRef.id;
