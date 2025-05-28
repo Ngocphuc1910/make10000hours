@@ -120,10 +120,6 @@ export const TaskList: React.FC<TaskListProps> = ({
       <div className={`flex-1 overflow-y-auto ${compactView ? 'compact-view' : ''}`}>
         <div className="p-4">
           <div className="space-y-3" id="taskList">
-            {isAddingTask && (
-              <TaskForm onCancel={handleCancelForm} />
-            )}
-            
             {sortedTasks.map((task: Task) => {
               const project = projects.find(p => p.id === task.projectId);
               
@@ -158,6 +154,23 @@ export const TaskList: React.FC<TaskListProps> = ({
                 </div>
               );
             })}
+            
+            {/* Task Creation Form */}
+            {isAddingTask && (
+              <TaskForm onCancel={handleCancelForm} />
+            )}
+            
+            {/* Add New Task Button */}
+            {!isAddingTask && (
+              <button
+                id="addNewTaskBtn"
+                onClick={handleAddTask}
+                className="w-full py-3 px-4 border border-dashed border-gray-300 rounded-md text-gray-500 hover:text-primary hover:border-primary hover:bg-primary/5 transition-colors duration-200 flex items-center justify-center gap-2 mt-4"
+              >
+                <i className="ri-add-line"></i>
+                <span>Add New Task</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
