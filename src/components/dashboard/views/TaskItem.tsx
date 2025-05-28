@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import type { Task } from '../../../types/models';
 import { useTaskStore } from '../../../store/taskStore';
 import { Icon } from '../../ui/Icon';
+import { useUserStore } from '../../../store/userStore';
 
 interface TaskItemProps {
   task?: Task;
@@ -22,6 +23,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
   const updateTask = useTaskStore(state => state.updateTask);
   const toggleTaskCompletion = useTaskStore(state => state.toggleTaskCompletion);
   const updateTaskStatus = useTaskStore(state => state.updateTaskStatus);
+  const user = useUserStore(state => state.user);
   
   const [taskTitle, setTaskTitle] = useState(task?.title || '');
   const [taskDescription, setTaskDescription] = useState(task?.description || '');
@@ -37,16 +39,23 @@ const TaskItem: React.FC<TaskItemProps> = ({
     if (!taskTitle.trim()) return;
     
     if (isNewTask && projectId) {
-      // Add a new task
-      addTask({
+      if (!user) {
+        console.error('No user found');
+        return;
+      }
+
+      const taskData = {
         title: taskTitle.trim(),
         description: taskDescription,
         projectId,
+        userId: user.uid,
         completed: false,
-        status: 'todo',
+        status: 'todo' as const,
         timeSpent: parseInt(spentTime) || 0,
         timeEstimated: parseInt(estimatedTime) || 0,
-      });
+      };
+      
+      addTask(taskData);
       
       if (onCancel) onCancel();
     } else if (task) {
