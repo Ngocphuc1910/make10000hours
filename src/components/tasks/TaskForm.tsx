@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { Task } from '../../types/models';
 import { useTaskStore } from '../../store/taskStore';
 import { Icon } from '../ui/Icon';
+import { useUserStore } from '../../store/userStore';
 
 interface TaskFormProps {
   task?: Task;
@@ -13,6 +14,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
   const addTask = useTaskStore(state => state.addTask);
   const updateTask = useTaskStore(state => state.updateTask);
   const projects = useTaskStore(state => state.projects);
+  const user = useUserStore(state => state.user);
   
   const [title, setTitle] = useState(task?.title || '');
   const [projectId, setProjectId] = useState(task?.projectId || '');
@@ -70,11 +72,17 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
       setProjectError(true);
       return;
     }
+
+    if (!user) {
+      console.error('No user found');
+      return;
+    }
     
     const taskData = {
       title: title.trim(),
       description: description.trim(),
       projectId,
+      userId: user.uid,
       completed: task?.completed || false,
       status: task?.status || status || 'todo',
       timeSpent: parseInt(timeSpent) || 0,
