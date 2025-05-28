@@ -48,12 +48,12 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
   // Create "No Project" project if it doesn't exist
   useEffect(() => {
     if (!noProject && user) {
-      addProject({
+      useTaskStore.getState().addProject({
         name: 'No Project',
         color: '#6B7280' // gray-500
       });
     }
-  }, [noProject, user, addProject]);
+  }, [noProject, user]);
   
   // Focus on title input when form opens
   useEffect(() => {
