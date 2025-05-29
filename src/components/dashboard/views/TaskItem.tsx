@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import type { Task } from '../../../types/models';
 import { useTaskStore } from '../../../store/taskStore';
 import { Icon } from '../../ui/Icon';
+import CustomCheckbox from '../../ui/CustomCheckbox';
+import TaskForm from '../../tasks/TaskForm';
 import { useUserStore } from '../../../store/userStore';
 
 interface TaskItemProps {
@@ -19,55 +21,30 @@ const TaskItem: React.FC<TaskItemProps> = ({
   isNewTask = false,
   onCancel
 }) => {
-  const addTask = useTaskStore(state => state.addTask);
   const updateTask = useTaskStore(state => state.updateTask);
   const toggleTaskCompletion = useTaskStore(state => state.toggleTaskCompletion);
-  const updateTaskStatus = useTaskStore(state => state.updateTaskStatus);
-  const user = useUserStore(state => state.user);
+  const projects = useTaskStore(state => state.projects);
   
-  const [taskTitle, setTaskTitle] = useState(task?.title || '');
-  const [taskDescription, setTaskDescription] = useState(task?.description || '');
-  const [spentTime, setSpentTime] = useState(task?.timeSpent?.toString() || '0');
-  const [estimatedTime, setEstimatedTime] = useState(task?.timeEstimated?.toString() || '0');
-  const [isDescriptionVisible, setIsDescriptionVisible] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(isNewTask);
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  
-  // Handle saving a task (for new or edited tasks)
-  const handleSaveTask = () => {
-    if (!taskTitle.trim()) return;
-    
-    if (isNewTask && projectId) {
-      if (!user) {
-        console.error('No user found');
-        return;
-      }
 
-      const taskData = {
-        title: taskTitle.trim(),
-        description: taskDescription,
-        projectId,
-        userId: user.uid,
-        completed: false,
-        status: 'todo' as const,
-        timeSpent: parseInt(spentTime) || 0,
-        timeEstimated: parseInt(estimatedTime) || 0,
-      };
-      
-      addTask(taskData);
-      
-      if (onCancel) onCancel();
-    } else if (task) {
-      // Update existing task
-      updateTask(task.id, {
-        title: taskTitle.trim(),
-        description: taskDescription,
-        timeSpent: parseInt(spentTime) || 0,
-        timeEstimated: parseInt(estimatedTime) || 0,
-      });
-      
-      setIsEditing(false);
+  // Get project info
+  const project = task ? projects.find(p => p.id === task.projectId) : null;
+
+  // Status indicator styles
+  const getStatusIndicator = () => {
+    if (!task) return null;
+    switch (task.status) {
+      case 'pomodoro':
+        return <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-1.5"></span>;
+      case 'todo':
+        return <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1.5"></span>;
+      case 'completed':
+        return <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1.5"></span>;
+      default:
+        return null;
     }
   };
   
@@ -77,33 +54,30 @@ const TaskItem: React.FC<TaskItemProps> = ({
     toggleTaskCompletion(task.id);
   };
   
-  // Toggle task description visibility
-  const toggleDescription = () => {
-    setIsDescriptionVisible(!isDescriptionVisible);
+  // Handle entering edit mode
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsEditing(true);
   };
-  
-  // Cancel editing or creating a task
-  const handleCancel = () => {
-    if (isNewTask) {
-      if (onCancel) onCancel();
-    } else {
-      setTaskTitle(task?.title || '');
-      setTaskDescription(task?.description || '');
-      setSpentTime(task?.timeSpent?.toString() || '0');
-      setEstimatedTime(task?.timeEstimated?.toString() || '0');
-      setIsEditing(false);
+
+  // Handle expand click
+  const handleExpandClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsExpanded(!isExpanded);
+  };
+
+  // Handle form cancel
+  const handleFormCancel = () => {
+    setIsEditing(false);
+    if (isNewTask && onCancel) {
+      onCancel();
     }
   };
   
-  // Handle entering edit mode
-  const handleEdit = () => {
-    setIsEditing(true);
-  };
-  
   // Drag and drop handlers
-const handleDragStart = (e: React.DragEvent) => {
-  if (!task) return; // Allow completed tasks to be draggable
-  setIsDragging(true);
+  const handleDragStart = (e: React.DragEvent) => {
+    if (!task) return;
+    setIsDragging(true);
     
     // Set task data in the drag event
     e.dataTransfer.setData('application/json', JSON.stringify({
@@ -129,10 +103,10 @@ const handleDragStart = (e: React.DragEvent) => {
   };
   
   const handleDragOver = (e: React.DragEvent) => {
-  e.preventDefault();
-  e.stopPropagation();
-  e.dataTransfer.dropEffect = 'move';
-};
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+  };
   
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -168,72 +142,15 @@ const handleDragStart = (e: React.DragEvent) => {
     }
   };
 
-  // If we're in edit mode or creating a new task, show the edit form
+  // If we're in edit mode or creating a new task, show the TaskForm
   if (isEditing || isNewTask) {
     return (
-      <div className="task-card p-4 bg-white border border-gray-200 rounded-md shadow-sm hover:shadow-md transition-shadow duration-200 animate-fade-in">
-        <div className="flex items-center">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-3">
-              <input 
-                type="text" 
-                className="flex-1 text-sm font-medium text-gray-900 px-3 py-2 bg-gray-50 rounded-md border-none focus:ring-1 focus:ring-primary focus:bg-white transition-colors duration-200" 
-                placeholder="What needs to be done?"
-                value={taskTitle}
-                onChange={(e) => setTaskTitle(e.target.value)}
-                autoFocus
-              />
-              <div className="flex items-center bg-gray-50 rounded-md px-3 py-1.5 whitespace-nowrap">
-                <Icon name="time-line" className="text-gray-400 mr-2" />
-                <input 
-                  type="number" 
-                  className="w-12 text-sm font-medium text-gray-600 bg-transparent border-none text-right focus:ring-2 focus:ring-primary" 
-                  placeholder="0" 
-                  min="0"
-                  value={spentTime}
-                  onChange={(e) => setSpentTime(e.target.value)}
-                />
-                <span className="text-sm font-medium text-gray-400 mx-1">/</span>
-                <input 
-                  type="number" 
-                  className="w-12 text-sm font-medium text-gray-600 bg-transparent border-none text-right focus:ring-2 focus:ring-primary" 
-                  placeholder="0" 
-                  min="0"
-                  value={estimatedTime}
-                  onChange={(e) => setEstimatedTime(e.target.value)}
-                />
-                <span className="text-sm font-medium text-gray-500 ml-1">min</span>
-              </div>
-            </div>
-            <textarea 
-              className="w-full text-sm text-gray-600 px-3 py-2 bg-gray-50 rounded-md border-none focus:ring-2 focus:ring-primary focus:bg-white transition-colors duration-200 min-h-[3rem] mb-3" 
-              rows={4} 
-              placeholder="Add description (optional)"
-              value={taskDescription}
-              onChange={(e) => setTaskDescription(e.target.value)}
-              style={{ resize: 'none' }}
-            ></textarea>
-            <div className="flex justify-end space-x-2">
-              <button 
-                onClick={handleSaveTask}
-                className="p-1.5 rounded-md bg-primary/10 hover:bg-primary/20 transition-colors duration-200 cursor-pointer"
-              >
-                <div className="w-5 h-5 flex items-center justify-center text-primary">
-                  <Icon name="check-line" />
-                </div>
-              </button>
-              <button 
-                onClick={handleCancel}
-                className="p-1.5 rounded-md hover:bg-gray-100 transition-colors duration-200"
-              >
-                <div className="w-5 h-5 flex items-center justify-center text-gray-400">
-                  <Icon name="close-line" />
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <TaskForm 
+        task={task}
+        status={task?.status || 'todo'}
+        initialProjectId={isNewTask ? projectId : undefined}
+        onCancel={handleFormCancel}
+      />
     );
   }
 
@@ -242,7 +159,9 @@ const handleDragStart = (e: React.DragEvent) => {
 
   return (
     <div 
-      className={`task-card flex items-center p-3 bg-white border border-gray-200 rounded-md hover:shadow-sm ${isDragging ? 'dragging' : ''} ${isDragOver ? 'drag-over' : ''}`}
+      className={`task-card flex items-start p-3 bg-white border border-gray-200 
+      ${task.completed ? 'opacity-70 text-gray-500' : ''}
+      rounded-md hover:shadow-sm cursor-pointer transition-all duration-200 ${isDragging ? 'dragging' : ''} ${isDragOver ? 'drag-over' : ''}`}
       draggable={true}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
@@ -250,56 +169,65 @@ const handleDragStart = (e: React.DragEvent) => {
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      data-task-id={task.id}
+      data-status={task.status}
     >
-      <div className="mr-3">
-        <input 
-          type="checkbox" 
-          className="appearance-none w-[18px] h-[18px] border-2 border-gray-300 rounded-[4px] relative cursor-pointer transition-all duration-200 checked:bg-primary checked:border-primary"
+      <div className="mr-3 mt-0.5">
+        <CustomCheckbox
+          id={`task-checkbox-${task.id}`}
           checked={task.completed}
           onChange={handleCheckboxChange}
-          style={{
-            backgroundImage: task.completed 
-              ? `url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M5.707 7.293a1 1 0 0 0-1.414 1.414l2 2a1 1 0 0 0 1.414 0l4-4a1 1 0 0 0-1.414-1.414L7 8.586 5.707 7.293z'/%3e%3c/svg%3e")` 
-              : 'none',
-            backgroundSize: '80%',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat'
-          }}
         />
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center flex-1 min-w-0 mr-2">
-            <h4 className={`text-sm font-medium ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'} truncate`}>
+
+      <div className="flex-1 min-w-0 text-left">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 min-w-0 mr-2">
+            <h4 
+              className={`text-sm font-medium text-left whitespace-pre-wrap break-words
+              ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}
+            >
               {task.title}
             </h4>
-            <span className={`ml-2 flex items-center text-xs font-medium ${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
-              <Icon name="time-line" className="mr-1" />
-              {task.timeSpent}/{task.timeEstimated}m
-            </span>
-          </div>
-          <button 
-            className="expand-button p-1 rounded-full hover:bg-gray-100"
-            onClick={toggleDescription}
-          >
-            <div className="w-5 h-5 flex items-center justify-center text-gray-400">
-              <Icon name={isDescriptionVisible ? "arrow-up-s-line" : "arrow-down-s-line"} />
+            <div className="flex items-center mt-0.5 text-xs text-left">
+              <div className="flex items-center">
+                {getStatusIndicator()}
+                <span className={`${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
+                  {project?.name || 'Unknown project'}
+                </span>
+              </div>
+              <span className="mx-2 text-gray-300">•</span>
+              <span className={`flex items-center ${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
+                <i className="ri-time-line mr-1"></i>
+                {task.timeSpent}/{task.timeEstimated}m
+              </span>
             </div>
-          </button>
-        </div>
-        {isDescriptionVisible && task.description && (
-          <div className="description-container mt-1">
-            <p className="text-sm text-gray-600">{task.description}</p>
+            {isExpanded && task.description && task.description.trim() && (
+              <div className="task-description mt-2">
+                <p className="text-sm text-gray-600 mb-2 whitespace-pre-wrap break-words">{task.description}</p>
+              </div>
+            )}
           </div>
-        )}
+          {task.description && task.description.trim() && (
+            <button 
+              className="expand-button p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
+              onClick={handleExpandClick}
+            >
+              <div className="w-5 h-5 flex items-center justify-center text-gray-400">
+                <i className={`ri-arrow-${isExpanded ? 'up' : 'down'}-s-line`}></i>
+              </div>
+            </button>
+          )}
+        </div>
       </div>
-      <div className="task-menu ml-4 flex items-center">
+
+      <div className="task-menu ml-4 flex items-start">
         <button 
-          className="edit-task-btn p-1 rounded-full hover:bg-gray-100"
-          onClick={handleEdit}
+          className="edit-task-btn p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
+          onClick={handleEditClick}
         >
           <div className="w-5 h-5 flex items-center justify-center text-gray-400">
-            <Icon name="edit-line" />
+            <i className="ri-edit-line"></i>
           </div>
         </button>
       </div>

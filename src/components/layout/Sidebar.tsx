@@ -29,7 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
     },
     {
       icon: 'task-line',
-      label: 'Projects & Tasks',
+      label: 'Task Management',
       path: '/projects'
     },
     {
