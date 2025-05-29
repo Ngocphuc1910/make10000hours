@@ -38,8 +38,8 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
     if (!task.completed) {
       onStatusChange(task.id, 'completed');
     } else {
-      // If un-completing a task from 'completed', move to 'todo'
-      onStatusChange(task.id, 'todo');
+      // If un-completing a task from 'completed', move to 'pomodoro'
+      onStatusChange(task.id, 'pomodoro');
     }
   };
 
