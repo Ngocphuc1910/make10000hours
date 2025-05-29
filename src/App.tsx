@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import './App.css';
 import './typography.css';
 import './styles.css';
@@ -18,6 +18,42 @@ import { useUserStore } from './store/userStore';
 import { useTaskStore } from './store/taskStore';
 import { useUIStore } from './store/uiStore';
 import SettingsPage from './components/pages/SettingsPage';
+import { formatTime } from './utils/timeUtils';
+
+// Global tab title component - isolated to prevent parent re-renders
+const GlobalTabTitleUpdater: React.FC = () => {
+  const isRunning = useTimerStore(state => state.isRunning);
+  const currentTime = useTimerStore(state => state.currentTime);
+  const currentTaskId = useTimerStore(state => state.currentTaskId);
+  const { tasks } = useTaskStore();
+  const originalTitleRef = useRef<string>('');
+
+  // Store original title on mount
+  useEffect(() => {
+    originalTitleRef.current = document.title;
+  }, []);
+
+  // Update browser tab title when timer is running
+  useEffect(() => {
+    if (isRunning) {
+      const timeDisplay = formatTime(currentTime);
+      const currentTask = currentTaskId 
+        ? tasks.find(task => task.id === currentTaskId) 
+        : null;
+      const taskName = currentTask ? currentTask.title : 'Focus Session';
+      document.title = `${timeDisplay} - ${taskName}`;
+    } else {
+      document.title = originalTitleRef.current;
+    }
+    
+    // Cleanup: restore original title when component unmounts
+    return () => {
+      document.title = originalTitleRef.current;
+    };
+  }, [isRunning, currentTime, currentTaskId, tasks]);
+
+  return null; // This component renders nothing
+};
 
 // Placeholder components for routes that don't have pages yet
 const CalendarPage = () => (
@@ -184,6 +220,7 @@ const App = (): React.JSX.Element => {
 
   return (
     <Router>
+      <GlobalTabTitleUpdater />
       <Routes>
         <Route path="/" element={<PomodoroPageWithLayout />} />
         <Route path="pomodoro" element={<PomodoroPageWithLayout />} />
