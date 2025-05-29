@@ -25,9 +25,12 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
   const [description, setDescription] = useState(task?.description || '');
   const [titleError, setTitleError] = useState(false);
   const [projectError, setProjectError] = useState(false);
+  const [isCreatingNewProject, setIsCreatingNewProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
   
   const titleInputRef = useRef<HTMLTextAreaElement>(null);
   const projectSelectRef = useRef<HTMLSelectElement>(null);
+  const newProjectInputRef = useRef<HTMLInputElement>(null);
   const timeEstimatedRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
@@ -62,8 +65,15 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
       titleInputRef.current.focus();
     }
   }, []);
+
+  // Focus on new project input when creating new project
+  useEffect(() => {
+    if (isCreatingNewProject && newProjectInputRef.current) {
+      newProjectInputRef.current.focus();
+    }
+  }, [isCreatingNewProject]);
   
-  // Auto-open project dropdown when focused
+  // Auto-open project dropdown when focused via keyboard
   const handleProjectFocus = () => {
     if (projectSelectRef.current) {
       // Use showPicker if available (modern browsers)
@@ -75,6 +85,25 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
         }
       }
     }
+  };
+
+  const handleProjectChange = (value: string) => {
+    if (value === 'create-new') {
+      setIsCreatingNewProject(true);
+      setProjectId('');
+      setNewProjectName('');
+    } else {
+      setIsCreatingNewProject(false);
+      setProjectId(value);
+      setNewProjectName('');
+      setProjectError(false);
+    }
+  };
+
+  const handleCancelNewProject = () => {
+    setIsCreatingNewProject(false);
+    setNewProjectName('');
+    setProjectId(getLastUsedProjectId());
   };
   
   const adjustTextareaHeight = (textarea: HTMLTextAreaElement) => {
@@ -94,7 +123,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
     }
   }, [description]);
   
-  const handleSave = () => {
+  const handleSave = async () => {
     // Reset errors
     setTitleError(false);
     setProjectError(false);
@@ -107,21 +136,47 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
       }
       return;
     }
+
+    // Validate new project name if creating new project
+    if (isCreatingNewProject && !newProjectName.trim()) {
+      setProjectError(true);
+      if (newProjectInputRef.current) {
+        newProjectInputRef.current.focus();
+      }
+      return;
+    }
     
     if (!user) {
       console.error('No user found');
       return;
     }
 
-    // Save the selected project as last used
-    if (projectId && projectId !== 'no-project') {
-      localStorage.setItem('lastUsedProjectId', projectId);
+    let finalProjectId = projectId;
+
+    // Create new project if needed
+    if (isCreatingNewProject && newProjectName.trim()) {
+      try {
+        const newProjectId = await addProject({
+          name: newProjectName.trim(),
+          color: '#BB5F5A' // Use primary color from design system
+        });
+        finalProjectId = newProjectId;
+        
+        // Save as last used project
+        localStorage.setItem('lastUsedProjectId', newProjectId);
+      } catch (error) {
+        console.error('Error creating project:', error);
+        return;
+      }
+    } else if (finalProjectId && finalProjectId !== 'no-project') {
+      // Save the selected project as last used
+      localStorage.setItem('lastUsedProjectId', finalProjectId);
     }
     
     const taskData = {
       title: title.trim(),
       description: description.trim(),
-      projectId: projectId || 'no-project',
+      projectId: finalProjectId || 'no-project',
       userId: user.uid,
       completed: task?.completed || false,
       status: task?.status || status || 'todo',
@@ -203,29 +258,53 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
             
             <div className="flex gap-3 items-stretch">
               <div className="relative flex-[6] min-w-0">
-                <select
-                  ref={projectSelectRef}
-                  className={`${inputClasses} w-full appearance-none pr-8 h-full ${projectError ? 'ring-2 ring-red-200' : ''}`}
-                  value={projectId}
-                  onChange={(e) => {
-                    setProjectId(e.target.value);
-                    setProjectError(false);
-                  }}
-                  onKeyDown={(e) => handleKeyDown(e, timeEstimatedRef)}
-                  onFocus={handleProjectFocus}
-                >
-                  <option value="no-project">No Project</option>
-                  {projects
-                    .filter(p => p.id !== 'no-project')
-                    .map(project => (
-                      <option key={project.id} value={project.id}>
-                        {project.name}
-                      </option>
-                    ))}
-                </select>
-                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                  <Icon name="arrow-down-s-line" className="w-4 h-4 text-gray-500" />
-                </div>
+                {isCreatingNewProject ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={newProjectInputRef}
+                      type="text"
+                      className={`${inputClasses} flex-1 ${projectError ? 'ring-2 ring-red-200' : ''}`}
+                      placeholder="Enter project name"
+                      value={newProjectName}
+                      onChange={(e) => {
+                        setNewProjectName(e.target.value);
+                        setProjectError(false);
+                      }}
+                      onKeyDown={(e) => handleKeyDown(e, timeEstimatedRef)}
+                    />
+                    <button
+                      className="p-1.5 rounded-md hover:bg-gray-100 transition-colors duration-200"
+                      onClick={handleCancelNewProject}
+                      type="button"
+                    >
+                      <Icon name="close-line" className="w-4 h-4 text-gray-400" />
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    ref={projectSelectRef}
+                    className={`${inputClasses} w-full appearance-none pr-8 h-full ${projectError ? 'ring-2 ring-red-200' : ''}`}
+                    value={projectId}
+                    onChange={(e) => handleProjectChange(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, timeEstimatedRef)}
+                  >
+                    <option value="no-project">No Project</option>
+                    <option value="create-new">Create new project</option>
+                    {projects
+                      .filter(p => p.id !== 'no-project')
+                      .map(project => (
+                        <option key={project.id} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                  </select>
+                )}
+                
+                {!isCreatingNewProject && (
+                  <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                    <Icon name="arrow-down-s-line" className="w-4 h-4 text-gray-500" />
+                  </div>
+                )}
               </div>
               
               <div className="flex-[5] flex items-center bg-gray-50 rounded-md px-3 py-2 focus-within:ring-2 focus-within:ring-gray-500 focus-within:bg-white transition-all duration-200">
