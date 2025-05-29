@@ -13,6 +13,7 @@ interface TaskFormProps {
 const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
   const addTask = useTaskStore(state => state.addTask);
   const updateTask = useTaskStore(state => state.updateTask);
+  const deleteTask = useTaskStore(state => state.deleteTask);
   const projects = useTaskStore(state => state.projects);
   const addProject = useTaskStore(state => state.addProject);
   const user = useUserStore(state => state.user);
@@ -137,6 +138,13 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
     }
     
     onCancel();
+  };
+
+  const handleDelete = () => {
+    if (task && window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
+      deleteTask(task.id);
+      onCancel();
+    }
   };
   
   const inputClasses = "text-sm font-medium text-gray-900 px-3 py-2 bg-gray-50 rounded-md border-none outline-none focus:outline-none focus:ring-2 focus:ring-gray-500 focus:bg-white transition-all duration-200";
@@ -271,19 +279,32 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
             onKeyDown={handleDescriptionKeyDown}
           />
           
-          <div className="flex justify-end space-x-2">
-            <button
-              className="p-1.5 rounded-md bg-green-500/10 hover:bg-green-500/20 transition-colors duration-200 cursor-pointer"
-              onClick={handleSave}
-            >
-              <Icon name="check-line" className="w-5 h-5 text-green-500" />
-            </button>
-            <button
-              className="p-1.5 rounded-md hover:bg-gray-100 transition-colors duration-200"
-              onClick={onCancel}
-            >
-              <Icon name="close-line" className="w-5 h-5 text-gray-400" />
-            </button>
+          <div className="flex justify-between items-center">
+            <div className="flex-1">
+              {task && (
+                <button
+                  className="text-sm font-medium text-red-500 hover:text-red-600 transition-colors duration-200"
+                  onClick={handleDelete}
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+            
+            <div className="flex space-x-2">
+              <button
+                className="p-1.5 rounded-md bg-green-500/10 hover:bg-green-500/20 transition-colors duration-200 cursor-pointer"
+                onClick={handleSave}
+              >
+                <Icon name="check-line" className="w-5 h-5 text-green-500" />
+              </button>
+              <button
+                className="p-1.5 rounded-md hover:bg-gray-100 transition-colors duration-200"
+                onClick={onCancel}
+              >
+                <Icon name="close-line" className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
