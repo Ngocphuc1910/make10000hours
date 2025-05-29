@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTimerStore } from '../../store/timerStore';
 import { useTaskStore } from '../../store/taskStore';
 import TimerCircle from '../ui/TimerCircle';
@@ -25,6 +25,12 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
   } = useTimerStore();
   
   const { tasks } = useTaskStore();
+  const originalTitleRef = useRef<string>('');
+  
+  // Store original title on mount
+  useEffect(() => {
+    originalTitleRef.current = document.title;
+  }, []);
   
   // Find current task
   const currentTask = currentTaskId 
@@ -47,6 +53,22 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
       if (interval) clearInterval(interval);
     };
   }, [isRunning, tick]);
+  
+  // Update browser tab title when timer is running
+  useEffect(() => {
+    if (isRunning) {
+      const timeDisplay = formatTime(currentTime);
+      const taskName = currentTask ? currentTask.title : 'Focus Session';
+      document.title = `${timeDisplay} - ${taskName}`;
+    } else {
+      document.title = originalTitleRef.current;
+    }
+    
+    // Cleanup: restore original title when component unmounts
+    return () => {
+      document.title = originalTitleRef.current;
+    };
+  }, [isRunning, currentTime, currentTask?.title]);
   
   // Button handlers
   const handleStartPause = () => {
