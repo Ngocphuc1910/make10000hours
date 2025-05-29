@@ -141,9 +141,22 @@ export const TaskList: React.FC<TaskListProps> = ({
     setEditingTaskId(null);
   };
   
-  // Sort tasks by order and filter out hidden tasks if on Pomodoro page
+  // Sort tasks by order and filter to show only Pomodoro tasks
+  // Keep completed tasks visible until manually archived
   const sortedTasks = [...tasks]
-    .filter(task => !task.hideFromPomodoro)
+    .filter(task => {
+      // Don't show archived tasks
+      if (task.hideFromPomodoro) return false;
+      
+      // Show active pomodoro tasks
+      if (task.status === 'pomodoro') return true;
+      
+      // Show completed tasks (regardless of current status, as long as they're marked completed)
+      // These should stay visible until manually archived
+      if (task.completed) return true;
+      
+      return false;
+    })
     .sort((a, b) => a.order - b.order);
 
   // Calculate total time statistics
@@ -155,7 +168,7 @@ export const TaskList: React.FC<TaskListProps> = ({
     <div className={`h-full flex flex-col ${className}`}>
       <div className="p-4 border-b border-gray-200">
         <div className="flex justify-between items-center">
-          <h2 className="font-semibold text-gray-800 text-left">Tasks & Projects</h2>
+          <h2 className="font-semibold text-gray-800 text-left">Tasks In Pomodoro</h2>
           <div className="relative details-menu">
             <button 
               onClick={(e) => {
