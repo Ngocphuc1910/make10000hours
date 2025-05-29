@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 interface UIState {
   // Sidebar states
@@ -31,45 +32,57 @@ interface UIState {
   hideToast: () => void;
 }
 
-export const useUIStore = create<UIState>((set) => ({
-  // Initial state
-  isLeftSidebarOpen: false,
-  isRightSidebarOpen: true,
-  rightSidebarWidth: 480,
-  isHelpModalOpen: false,
-  isSettingsModalOpen: false,
-  isFocusMode: false,
-  activeHelpTab: 'pomodoro',
-  toastMessage: null,
-  
-  // Actions
-  toggleLeftSidebar: () => set(state => ({ isLeftSidebarOpen: !state.isLeftSidebarOpen })),
-  
-  toggleRightSidebar: () => set(state => ({ isRightSidebarOpen: !state.isRightSidebarOpen })),
-  
-  setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
-  
-  toggleHelpModal: () => set(state => ({ isHelpModalOpen: !state.isHelpModalOpen })),
-  
-  toggleSettingsModal: () => set(state => ({ isSettingsModalOpen: !state.isSettingsModalOpen })),
-  
-  toggleFocusMode: () => set(state => ({ isFocusMode: !state.isFocusMode })),
-  
-  setActiveHelpTab: (tab) => set({ activeHelpTab: tab }),
-  
-  showToast: (message) => {
-    set({ toastMessage: message });
-    // Auto-hide toast after 3 seconds
-    setTimeout(() => {
-      set(state => {
-        // Only hide if this is still the current message
-        if (state.toastMessage === message) {
-          return { toastMessage: null };
-        }
-        return {};
-      });
-    }, 3000);
-  },
-  
-  hideToast: () => set({ toastMessage: null })
-})); 
+export const useUIStore = create<UIState>()(
+  persist(
+    (set) => ({
+      // Initial state
+      isLeftSidebarOpen: false,
+      isRightSidebarOpen: true,
+      rightSidebarWidth: 480,
+      isHelpModalOpen: false,
+      isSettingsModalOpen: false,
+      isFocusMode: false,
+      activeHelpTab: 'pomodoro',
+      toastMessage: null,
+      
+      // Actions
+      toggleLeftSidebar: () => set(state => ({ isLeftSidebarOpen: !state.isLeftSidebarOpen })),
+      
+      toggleRightSidebar: () => set(state => ({ isRightSidebarOpen: !state.isRightSidebarOpen })),
+      
+      setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
+      
+      toggleHelpModal: () => set(state => ({ isHelpModalOpen: !state.isHelpModalOpen })),
+      
+      toggleSettingsModal: () => set(state => ({ isSettingsModalOpen: !state.isSettingsModalOpen })),
+      
+      toggleFocusMode: () => set(state => ({ isFocusMode: !state.isFocusMode })),
+      
+      setActiveHelpTab: (tab) => set({ activeHelpTab: tab }),
+      
+      showToast: (message) => {
+        set({ toastMessage: message });
+        // Auto-hide toast after 3 seconds
+        setTimeout(() => {
+          set(state => {
+            // Only hide if this is still the current message
+            if (state.toastMessage === message) {
+              return { toastMessage: null };
+            }
+            return {};
+          });
+        }, 3000);
+      },
+      
+      hideToast: () => set({ toastMessage: null })
+    }),
+    {
+      name: 'ui-store', // unique name for localStorage key
+      partialize: (state) => ({ 
+        rightSidebarWidth: state.rightSidebarWidth,
+        isLeftSidebarOpen: state.isLeftSidebarOpen,
+        isRightSidebarOpen: state.isRightSidebarOpen
+      }), // only persist specific UI preferences
+    }
+  )
+); 
