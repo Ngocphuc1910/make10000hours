@@ -193,7 +193,7 @@ export const TaskList: React.FC<TaskListProps> = ({
         <div className="text-sm text-gray-500">
           <span>Total time spent: </span>
           <span className="font-medium text-gray-700">
-            {totalTimeSpent}/{totalTimeEstimated}m
+            {formatMinutesToHoursAndMinutes(totalTimeSpent)}
           </span>
           {totalTimeEstimated > 0 && (
             <span>
