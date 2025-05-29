@@ -221,13 +221,21 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       const completed = status === 'completed' ? true : 
                        (task.status === 'completed' ? false : task.completed);
       
-      // Keep the original order when moving between statuses
-      const taskRef = doc(db, 'tasks', id);
-      await updateDoc(taskRef, {
+      // Prepare the update object
+      const updateData: any = {
         status,
         completed,
         updatedAt: new Date()
-      });
+      };
+      
+      // If moving to 'pomodoro' status, ensure it's not hidden from Pomodoro page
+      if (status === 'pomodoro') {
+        updateData.hideFromPomodoro = false;
+      }
+      
+      // Keep the original order when moving between statuses
+      const taskRef = doc(db, 'tasks', id);
+      await updateDoc(taskRef, updateData);
     } catch (error) {
       console.error('Error updating task status:', error);
       throw error;
