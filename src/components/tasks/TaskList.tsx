@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTaskStore } from '../../store/taskStore';
 import TaskItem from './TaskItem';
 import TaskForm from './TaskForm';
@@ -14,6 +15,7 @@ export const TaskList: React.FC<TaskListProps> = ({
   className = '',
   compactView = false
 }) => {
+  const navigate = useNavigate();
   const { 
     tasks, 
     projects, 
@@ -141,6 +143,11 @@ export const TaskList: React.FC<TaskListProps> = ({
     setEditingTaskId(null);
   };
   
+  const handleTaskManagement = () => {
+    navigate('/projects');
+    setShowDetailsMenu(false);
+  };
+  
   // Sort tasks by order and filter to show only Pomodoro tasks
   // Keep completed tasks visible until manually archived
   const sortedTasks = [...tasks]
@@ -195,6 +202,13 @@ export const TaskList: React.FC<TaskListProps> = ({
                   >
                     <i className="ri-archive-line w-5 h-5 mr-2 flex-shrink-0"></i>
                     Archive completed tasks
+                  </button>
+                  <button 
+                    onClick={handleTaskManagement}
+                    className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left flex items-center whitespace-nowrap"
+                  >
+                    <i className="ri-task-line w-5 h-5 mr-2 flex-shrink-0"></i>
+                    Task management
                   </button>
                 </div>
               </div>
