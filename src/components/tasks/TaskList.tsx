@@ -3,6 +3,7 @@ import { useTaskStore } from '../../store/taskStore';
 import TaskItem from './TaskItem';
 import TaskForm from './TaskForm';
 import type { Task } from '../../types/models';
+import { formatMinutesToHoursAndMinutes } from '../../utils/timeUtils';
 
 interface TaskListProps {
   className?: string;
@@ -144,40 +145,60 @@ export const TaskList: React.FC<TaskListProps> = ({
   const sortedTasks = [...tasks]
     .filter(task => !task.hideFromPomodoro)
     .sort((a, b) => a.order - b.order);
+
+  // Calculate total time statistics
+  const totalTimeSpent = sortedTasks.reduce((sum, task) => sum + (task.timeSpent || 0), 0);
+  const totalTimeEstimated = sortedTasks.reduce((sum, task) => sum + (task.timeEstimated || 0), 0);
+  const timeRemaining = Math.max(0, totalTimeEstimated - totalTimeSpent);
   
   return (
     <div className={`h-full flex flex-col ${className}`}>
-      <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-        <h2 className="font-semibold text-gray-800 text-left">Tasks & Projects</h2>
-        <div className="relative details-menu">
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowDetailsMenu(!showDetailsMenu);
-            }}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-md"
-          >
-            <i className="ri-more-2-fill w-5 h-5"></i>
-          </button>
-          {showDetailsMenu && (
-            <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-              <div className="py-1">
-                <button 
-                  onClick={handleMoveCompletedDown}
-                  className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left flex items-center whitespace-nowrap"
-                >
-                  <i className="ri-arrow-down-line w-5 h-5 mr-2 flex-shrink-0"></i>
-                  Move down completed tasks
-                </button>
-                <button 
-                  onClick={handleArchiveCompleted}
-                  className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left flex items-center whitespace-nowrap"
-                >
-                  <i className="ri-archive-line w-5 h-5 mr-2 flex-shrink-0"></i>
-                  Archive completed tasks
-                </button>
+      <div className="p-4 border-b border-gray-200">
+        <div className="flex justify-between items-center">
+          <h2 className="font-semibold text-gray-800 text-left">Tasks & Projects</h2>
+          <div className="relative details-menu">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDetailsMenu(!showDetailsMenu);
+              }}
+              className="p-2 text-gray-600 hover:bg-gray-100 rounded-md"
+            >
+              <i className="ri-more-2-fill w-5 h-5"></i>
+            </button>
+            {showDetailsMenu && (
+              <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                <div className="py-1">
+                  <button 
+                    onClick={handleMoveCompletedDown}
+                    className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left flex items-center whitespace-nowrap"
+                  >
+                    <i className="ri-arrow-down-line w-5 h-5 mr-2 flex-shrink-0"></i>
+                    Move down completed tasks
+                  </button>
+                  <button 
+                    onClick={handleArchiveCompleted}
+                    className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left flex items-center whitespace-nowrap"
+                  >
+                    <i className="ri-archive-line w-5 h-5 mr-2 flex-shrink-0"></i>
+                    Archive completed tasks
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Total Time Tracking Section */}
+        <div className="text-sm text-gray-500">
+          <span>Total time spent: </span>
+          <span className="font-medium text-gray-700">
+            {totalTimeSpent}/{totalTimeEstimated}m
+          </span>
+          {totalTimeEstimated > 0 && (
+            <span>
+              {' '}({formatMinutesToHoursAndMinutes(timeRemaining)} left)
+            </span>
           )}
         </div>
       </div>
@@ -228,14 +249,12 @@ export const TaskList: React.FC<TaskListProps> = ({
             )}
             
             {/* Add New Task Button */}
-            {!isAddingTask && (
+            {!isAddingTask && !editingTaskId && (
               <button
-                id="addNewTaskBtn"
                 onClick={handleAddTask}
-                className="w-full py-3 px-4 border border-dashed border-gray-300 rounded-md text-gray-500 hover:text-primary hover:border-primary hover:bg-primary/5 transition-colors duration-200 flex items-center justify-center gap-2 mt-4"
+                className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-600 transition-colors duration-200 text-left"
               >
-                <i className="ri-add-line"></i>
-                <span>Add New Task</span>
+                + Add new task
               </button>
             )}
           </div>
