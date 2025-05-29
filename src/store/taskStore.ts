@@ -196,7 +196,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       if (!task) return;
       
       const completed = !task.completed;
-      const status = completed ? 'completed' : 'todo';
+      const status = completed ? 'completed' : 'pomodoro';
       
       // Keep the original order when unchecking
       const taskRef = doc(db, 'tasks', id);

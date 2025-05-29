@@ -185,7 +185,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
       projectId: finalProjectId || 'no-project',
       userId: user.uid,
       completed: task?.completed || false,
-      status: task?.status || status || 'todo',
+      status: task?.status || status || 'pomodoro',
       timeSpent: parseInt(timeSpent) || 0,
       timeEstimated: parseInt(timeEstimated) || 0
     };
@@ -204,6 +204,17 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
   const handleDelete = () => {
     if (task && window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
       deleteTask(task.id);
+      onCancel();
+    }
+  };
+
+  const handleWorkLater = () => {
+    if (task) {
+      updateTask(task.id, {
+        ...task,
+        status: 'todo',
+        completed: false
+      });
       onCancel();
     }
   };
@@ -366,14 +377,22 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
           />
           
           <div className="flex justify-between items-center">
-            <div className="flex-1">
+            <div className="flex-1 flex gap-4">
               {task && (
-                <button
-                  className="text-sm font-medium text-red-500 hover:text-red-600 transition-colors duration-200"
-                  onClick={handleDelete}
-                >
-                  Delete
-                </button>
+                <>
+                  <button
+                    className="text-sm font-medium text-red-500 hover:text-red-600 transition-colors duration-200"
+                    onClick={handleDelete}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    className="text-sm font-medium text-blue-500 hover:text-blue-600 transition-colors duration-200"
+                    onClick={handleWorkLater}
+                  >
+                    Work later
+                  </button>
+                </>
               )}
             </div>
             
