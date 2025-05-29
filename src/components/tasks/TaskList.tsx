@@ -166,9 +166,10 @@ export const TaskList: React.FC<TaskListProps> = ({
     })
     .sort((a, b) => a.order - b.order);
 
-  // Calculate total time statistics
-  const totalTimeSpent = sortedTasks.reduce((sum, task) => sum + (task.timeSpent || 0), 0);
-  const totalTimeEstimated = sortedTasks.reduce((sum, task) => sum + (task.timeEstimated || 0), 0);
+  // Calculate total time statistics for ALL visible tasks in the list
+  const visibleTasks = tasks.filter(task => !task.hideFromPomodoro);
+  const totalTimeSpent = visibleTasks.reduce((sum, task) => sum + (task.timeSpent || 0), 0);
+  const totalTimeEstimated = visibleTasks.reduce((sum, task) => sum + (task.timeEstimated || 0), 0);
   const timeRemaining = Math.max(0, totalTimeEstimated - totalTimeSpent);
   
   return (
