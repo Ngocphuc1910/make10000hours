@@ -16,7 +16,7 @@ export const Sidebar: React.FC = () => {
 
   const navItems: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: 'dashboard-line' },
-    { label: 'Projects & Tasks', path: '/projects', icon: 'task-line' },
+    { label: 'Task Management', path: '/projects', icon: 'task-line' },
     { label: 'Pomodoro Timer', path: '/pomodoro', icon: 'timer-line' },
     { label: 'Calendar', path: '/dashboard/calendar', icon: 'calendar-line' },
     { label: 'Settings', path: '/dashboard/settings', icon: 'settings-line' },

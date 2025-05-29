@@ -116,20 +116,22 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                 {task.timeSpent}/{task.timeEstimated}m
               </span>
             </div>
-            {isExpanded && task.description && (
+            {isExpanded && task.description && task.description.trim() && (
               <div className="task-description mt-2">
                 <p className="text-sm text-gray-600 mb-2 whitespace-pre-wrap break-words">{task.description}</p>
               </div>
             )}
           </div>
-          <button 
-            className="expand-button p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
-            onClick={handleExpandClick}
-          >
-            <div className="w-5 h-5 flex items-center justify-center text-gray-400">
-              <i className={`ri-arrow-${isExpanded ? 'up' : 'down'}-s-line`}></i>
-            </div>
-          </button>
+          {task.description && task.description.trim() && (
+            <button 
+              className="expand-button p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
+              onClick={handleExpandClick}
+            >
+              <div className="w-5 h-5 flex items-center justify-center text-gray-400">
+                <i className={`ri-arrow-${isExpanded ? 'up' : 'down'}-s-line`}></i>
+              </div>
+            </button>
+          )}
         </div>
       </div>
       <div className="task-menu ml-4 flex items-start">

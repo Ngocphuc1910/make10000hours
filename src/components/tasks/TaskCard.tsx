@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import type { Task } from '../../types/models';
 import { useTaskStore } from '../../store/taskStore';
 import { Icon } from '../ui/Icon';
+import CustomCheckbox from '../ui/CustomCheckbox';
 import TaskForm from './TaskForm';
 
 interface TaskCardProps {
@@ -11,12 +12,26 @@ interface TaskCardProps {
 
 const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const toggleTaskCompletion = useTaskStore(state => state.toggleTaskCompletion);
   const projects = useTaskStore(state => state.projects);
 
   const project = projects.find(p => p.id === task.projectId);
+
+  // Status indicator styles
+  const getStatusIndicator = () => {
+    switch (task.status) {
+      case 'pomodoro':
+        return <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-1.5"></span>;
+      case 'todo':
+        return <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1.5"></span>;
+      case 'completed':
+        return <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1.5"></span>;
+      default:
+        return null;
+    }
+  };
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     e.dataTransfer.setData('text/plain', task.id);
@@ -43,6 +58,16 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
     }
   };
 
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsEditing(true);
+  };
+
+  const handleExpandClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsExpanded(!isExpanded);
+  };
+
   if (isEditing) {
     return <TaskForm task={task} onCancel={() => setIsEditing(false)} />;
   }
@@ -50,67 +75,73 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
   return (
     <div
       ref={cardRef}
-      className="task-card flex items-center p-3 bg-white border border-gray-200 rounded-md hover:shadow-sm transition-all duration-200"
+      className={`task-card flex items-start p-3 bg-white border border-gray-200 
+      ${task.completed ? 'opacity-70 text-gray-500' : ''}
+      rounded-md hover:shadow-sm cursor-pointer transition-all duration-200`}
       draggable
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      data-task-id={task.id}
+      data-status={task.status}
     >
-      <div className="mr-3">
-        <input
-          type="checkbox"
-          className="appearance-none w-[18px] h-[18px] border-2 border-gray-300 rounded-[4px] relative cursor-pointer transition-all duration-200 checked:bg-primary checked:border-primary"
+      <div className="mr-3 mt-0.5">
+        <CustomCheckbox
+          id={`task-checkbox-${task.id}`}
           checked={task.completed}
           onChange={handleCheckboxChange}
-          style={{
-            backgroundImage: task.completed ? `url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M5.707 7.293a1 1 0 0 0-1.414 1.414l2 2a1 1 0 0 0 1.414 0l4-4a1 1 0 0 0-1.414-1.414L7 8.586 5.707 7.293z'/%3e%3c/svg%3e")` : 'none',
-            backgroundSize: '80%',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat'
-          }}
         />
       </div>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex flex-col">
-          <h4 className={`text-sm font-medium ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'} truncate`}>
-            {task.title}
-          </h4>
-          <div className="flex items-center text-xs text-gray-500">
-            <span className="truncate">{project?.name || 'Unknown project'}</span>
-            <span className="mx-2">·</span>
-            <span className="flex items-center whitespace-nowrap">
-              <Icon name="time-line" className="mr-1" />
-              {task.timeSpent}/{task.timeEstimated}m
-            </span>
+      <div className="flex-1 min-w-0 text-left">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 min-w-0 mr-2">
+            <h4 
+              className={`text-sm font-medium text-left whitespace-pre-wrap break-words
+              ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}
+            >
+              {task.title}
+            </h4>
+            <div className="flex items-center mt-0.5 text-xs text-left">
+              <div className="flex items-center">
+                {getStatusIndicator()}
+                <span className={`${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
+                  {project?.name || 'Unknown project'}
+                </span>
+              </div>
+              <span className="mx-2 text-gray-300">•</span>
+              <span className={`flex items-center ${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
+                <i className="ri-time-line mr-1"></i>
+                {task.timeSpent}/{task.timeEstimated}m
+              </span>
+            </div>
+            {isExpanded && task.description && (
+              <div className="task-description mt-2">
+                <p className="text-sm text-gray-600 mb-2 whitespace-pre-wrap break-words">{task.description}</p>
+              </div>
+            )}
           </div>
+          {task.description && (
+            <button 
+              className="expand-button p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
+              onClick={handleExpandClick}
+            >
+              <div className="w-5 h-5 flex items-center justify-center text-gray-400">
+                <i className={`ri-arrow-${isExpanded ? 'up' : 'down'}-s-line`}></i>
+              </div>
+            </button>
+          )}
         </div>
-
-        {task.description && (
-          <div className={`description-container mt-2 ${isDescriptionExpanded ? '' : 'hidden'}`}>
-            <p className="text-sm text-gray-600">{task.description}</p>
-          </div>
-        )}
       </div>
 
-      <div className="task-menu ml-4 flex items-center">
-        <button
-          className="p-1 rounded-full hover:bg-gray-100"
-          onClick={() => setIsEditing(true)}
+      <div className="task-menu ml-4 flex items-start">
+        <button 
+          className="edit-task-btn p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
+          onClick={handleEditClick}
         >
-          <Icon name="edit-line" className="w-5 h-5 text-gray-400" />
+          <div className="w-5 h-5 flex items-center justify-center text-gray-400">
+            <i className="ri-edit-line"></i>
+          </div>
         </button>
-        
-        {task.description && (
-          <button
-            className="p-1 rounded-full hover:bg-gray-100"
-            onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-          >
-            <Icon 
-              name={isDescriptionExpanded ? "arrow-up-s-line" : "arrow-down-s-line"} 
-              className="w-5 h-5 text-gray-400" 
-            />
-          </button>
-        )}
       </div>
     </div>
   );
