@@ -18,8 +18,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   className = '',
   rightSidebarContent
 }) => {
-  const { isRightSidebarOpen, isLeftSidebarOpen } = useUIStore();
+  const { isRightSidebarOpen, isLeftSidebarOpen, rightSidebarWidth, setRightSidebarWidth } = useUIStore();
   const [isResizing, setIsResizing] = useState(false);
+  const [currentWidth, setCurrentWidth] = useState(rightSidebarWidth);
   const timerSectionRef = useRef<HTMLDivElement>(null);
   const rightSidebarRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
@@ -48,6 +49,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     
     const minTimerWidth = 300;
     const minSidebarWidth = 280;
+    const maxSidebarWidth = Math.floor(containerRect.width * 0.5); // 50% of screen width
     const maxTimerWidth = containerRect.width - minSidebarWidth;
     
     let newTimerWidth = e.clientX - containerRect.left;
@@ -56,13 +58,24 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     if (newTimerWidth < minTimerWidth) newTimerWidth = minTimerWidth;
     if (newTimerWidth > maxTimerWidth) newTimerWidth = maxTimerWidth;
     
-    // Update widths
+    // Calculate sidebar width and apply 50% constraint
+    let newSidebarWidth = containerRect.width - newTimerWidth - 1; // -1 for the divider
+    
+    // Ensure sidebar doesn't exceed 50% of screen width
+    if (newSidebarWidth > maxSidebarWidth) {
+      newSidebarWidth = maxSidebarWidth;
+      newTimerWidth = containerRect.width - newSidebarWidth - 1;
+    }
+    
+    // Update widths immediately for smooth visual feedback
     timerSectionRef.current.style.width = `${newTimerWidth}px`;
     timerSectionRef.current.style.flex = 'none';
     
-    // Update sidebar width
-    const newSidebarWidth = containerRect.width - newTimerWidth - 1; // -1 for the divider
+    // Calculate and update sidebar width
     rightSidebarRef.current.style.width = `${newSidebarWidth}px`;
+    
+    // Update local state for immediate visual feedback
+    setCurrentWidth(newSidebarWidth);
     
     // Add compact view class if sidebar gets too narrow
     if (newSidebarWidth < 400) {
@@ -76,6 +89,11 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     setIsResizing(false);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
+    
+    // Only update the store when resizing is finished
+    if (currentWidth !== rightSidebarWidth) {
+      setRightSidebarWidth(currentWidth);
+    }
   };
   
   React.useEffect(() => {
@@ -92,7 +110,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
       window.removeEventListener('mouseup', handleResizeEnd);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isResizing]);
+  }, [isResizing, currentWidth]);
+  
+  // Sync local state with store state when store changes (but not during resize)
+  React.useEffect(() => {
+    if (!isResizing) {
+      setCurrentWidth(rightSidebarWidth);
+    }
+  }, [rightSidebarWidth, isResizing]);
   
   // Get the right sidebar content
   const actualSidebarContent = rightSidebarContent || getSidebarContent();
@@ -153,7 +178,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
               id="rightSidebar" 
               className="border-l border-gray-200 flex flex-col bg-white min-w-[280px]"
               style={{ 
-                width: '480px',
+                width: `${currentWidth}px`,
                 flexShrink: 0
               }}
             >
