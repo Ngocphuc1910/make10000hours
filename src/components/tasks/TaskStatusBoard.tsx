@@ -67,21 +67,21 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '' }) => 
 
   return (
     <div className={`grid grid-cols-1 md:grid-cols-3 gap-6 min-h-[calc(100vh-8.5rem)] ${className}`}>
-      {/* In Pomodoro Column */}
-      <TaskColumn
-        title="In Pomodoro"
-        tasks={pomodoroTasks}
-        status="pomodoro"
-        badgeColor="bg-red-500"
-        onStatusChange={handleTaskStatusChange}
-      />
-
       {/* To Do List Column */}
       <TaskColumn
         title="To Do List"
         tasks={todoTasks}
         status="todo"
         badgeColor="bg-blue-500"
+        onStatusChange={handleTaskStatusChange}
+      />
+
+      {/* In Pomodoro Column */}
+      <TaskColumn
+        title="In Pomodoro"
+        tasks={pomodoroTasks}
+        status="pomodoro"
+        badgeColor="bg-red-500"
         onStatusChange={handleTaskStatusChange}
       />
 
