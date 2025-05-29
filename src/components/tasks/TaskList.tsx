@@ -169,7 +169,12 @@ export const TaskList: React.FC<TaskListProps> = ({
   // Calculate total time statistics
   const totalTimeSpent = sortedTasks.reduce((sum, task) => sum + (task.timeSpent || 0), 0);
   const totalTimeEstimated = sortedTasks.reduce((sum, task) => sum + (task.timeEstimated || 0), 0);
-  const timeRemaining = Math.max(0, totalTimeEstimated - totalTimeSpent);
+  
+  // Calculate time remaining only for tasks with "pomodoro" status (active tasks in Pomodoro workflow)
+  const pomodoroTasks = sortedTasks.filter(task => task.status === 'pomodoro');
+  const pomodoroTimeEstimated = pomodoroTasks.reduce((sum, task) => sum + (task.timeEstimated || 0), 0);
+  const pomodoroTimeSpent = pomodoroTasks.reduce((sum, task) => sum + (task.timeSpent || 0), 0);
+  const timeRemaining = Math.max(0, pomodoroTimeEstimated - pomodoroTimeSpent);
   
   return (
     <div className={`h-full flex flex-col ${className}`}>

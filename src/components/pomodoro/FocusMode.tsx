@@ -10,7 +10,11 @@ interface FocusModeProps {
 
 export const FocusMode: React.FC<FocusModeProps> = ({ className = '' }) => {
   const { isFocusMode, toggleFocusMode } = useUIStore();
-  const { currentTime, currentTaskId } = useTimerStore();
+  
+  // Use selectors to only subscribe to the specific values we need
+  const currentTime = useTimerStore(state => state.currentTime);
+  const currentTaskId = useTimerStore(state => state.currentTaskId);
+  
   const { tasks, projects } = useTaskStore();
   
   // Find current task
