@@ -16,6 +16,11 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
     isRunning, 
     mode, 
     sessionsCompleted,
+    isLoading,
+    isSyncing,
+    isActiveDevice,
+    syncError,
+    lastSyncTime,
     start, 
     pause, 
     reset, 
@@ -41,7 +46,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     
-    if (isRunning) {
+    if (isRunning && isActiveDevice) {
       interval = setInterval(() => {
         tick();
       }, 1000);
@@ -52,7 +57,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isRunning, tick]);
+  }, [isRunning, isActiveDevice, tick]);
   
   // Update browser tab title when timer is running
   useEffect(() => {
@@ -90,6 +95,21 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
   // Format time display (MM:SS)
   const timeDisplay = formatTime(currentTime);
   
+  // Render sync status indicator - only show critical errors
+  const renderSyncStatus = () => {
+    // Only show persistent connection errors that prevent functionality
+    if (syncError && !isLoading && !isSyncing) {
+      return (
+        <div className="flex items-center text-sm text-red-500 mb-2">
+          <Icon name="error-warning-line" className="mr-1" size={16} />
+          Connection error
+        </div>
+      );
+    }
+    
+    return null;
+  };
+  
   return (
     <div className={`flex flex-col items-center max-w-full w-full ${className}`}>
       <div className="mb-8 text-center w-full">
@@ -98,6 +118,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
             className={`px-4 sm:px-6 py-2 rounded-full font-medium transition-all !rounded-button whitespace-nowrap text-sm sm:text-base
             ${mode === 'pomodoro' ? 'bg-primary text-white' : 'text-gray-600 hover:text-gray-800'}`}
             onClick={() => useTimerStore.getState().setMode('pomodoro')}
+            disabled={isLoading}
           >
             Pomodoro
           </button>
@@ -105,6 +126,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
             className={`px-4 sm:px-6 py-2 rounded-full font-medium transition-all !rounded-button whitespace-nowrap text-sm sm:text-base
             ${mode === 'shortBreak' ? 'bg-primary text-white' : 'text-gray-600 hover:text-gray-800'}`}
             onClick={() => useTimerStore.getState().setMode('shortBreak')}
+            disabled={isLoading}
           >
             Short Break
           </button>
@@ -112,11 +134,13 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
             className={`px-4 sm:px-6 py-2 rounded-full font-medium transition-all !rounded-button whitespace-nowrap text-sm sm:text-base
             ${mode === 'longBreak' ? 'bg-primary text-white' : 'text-gray-600 hover:text-gray-800'}`}
             onClick={() => useTimerStore.getState().setMode('longBreak')}
+            disabled={isLoading}
           >
             Long Break
           </button>
         </div>
         <p className="text-sm text-gray-500">Session {sessionsCompleted + 1} of {useTimerStore.getState().settings.longBreakInterval}</p>
+        {renderSyncStatus()}
       </div>
       
       <TimerCircle 
@@ -131,27 +155,32 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
       
       <div className="flex items-center space-x-4 mb-8 flex-wrap justify-center">
         <button 
-          className="px-5 sm:px-6 py-3 rounded-full bg-primary text-white font-medium hover:bg-opacity-90 !rounded-button whitespace-nowrap m-1"
+          className="px-5 sm:px-6 py-3 rounded-full font-medium bg-primary text-white hover:bg-opacity-90 !rounded-button whitespace-nowrap m-1"
           onClick={handleStartPause}
+          disabled={isLoading}
         >
           <div className="flex items-center">
             <div className="w-5 h-5 flex items-center justify-center">
               <Icon name={`${isRunning ? 'pause' : 'play'}-line`} size={20} />
             </div>
-            <span className="ml-2">{isRunning ? 'Pause' : 'Start'}</span>
+            <span className="ml-2">
+              {isRunning ? 'Pause' : 'Start'}
+            </span>
           </div>
         </button>
         <button 
-          className="p-3 rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50 !rounded-button whitespace-nowrap m-1"
+          className="p-3 rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50 !rounded-button whitespace-nowrap m-1 disabled:opacity-50"
           onClick={handleReset}
+          disabled={isLoading}
         >
           <div className="w-5 h-5 flex items-center justify-center">
             <Icon name="restart-line" size={20} />
           </div>
         </button>
         <button 
-          className="p-3 rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50 !rounded-button whitespace-nowrap m-1"
+          className="p-3 rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50 !rounded-button whitespace-nowrap m-1 disabled:opacity-50"
           onClick={handleSkip}
+          disabled={isLoading}
         >
           <div className="w-5 h-5 flex items-center justify-center">
             <Icon name="skip-forward-line" size={20} />

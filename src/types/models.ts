@@ -38,6 +38,20 @@ export interface TimerSettings {
   longBreakInterval: number;
 }
 
+// Timer state for persistence across sessions and devices
+export interface TimerState {
+  userId: string;
+  currentTime: number; // seconds remaining
+  totalTime: number; // total seconds for current session
+  mode: TimerMode; // 'pomodoro' | 'shortBreak' | 'longBreak'
+  sessionsCompleted: number;
+  isRunning: boolean;
+  currentTaskId: string | null;
+  lastUpdated: Date; // for conflict resolution and sync
+  sessionStartTime?: Date; // when timer was started (for calculating elapsed time)
+  deviceId?: string; // to track which device is running the timer
+}
+
 export interface AppSettings {
   timer: TimerSettings;
   darkMode: boolean;
