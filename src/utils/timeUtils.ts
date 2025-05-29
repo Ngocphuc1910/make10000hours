@@ -141,4 +141,31 @@ export const formatMinutesToHoursAndMinutes = (totalMinutes: number): string => 
 export const calculatePercentage = (current: number, total: number): number => {
   if (total === 0) return 0;
   return Math.min(100, Math.round((current / total) * 100));
+};
+
+export const generateDeviceId = (): string => {
+  // Generate a unique device ID based on browser and timestamp
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substr(2, 9);
+  return `${timestamp}-${random}`;
+};
+
+export const getStoredDeviceId = (): string => {
+  const stored = localStorage.getItem('timer-device-id');
+  if (stored) {
+    return stored;
+  }
+  
+  const newDeviceId = generateDeviceId();
+  localStorage.setItem('timer-device-id', newDeviceId);
+  return newDeviceId;
+};
+
+export const calculateElapsedTime = (sessionStartTime: Date, lastUpdated: Date): number => {
+  // Calculate how much time has passed since the timer was started
+  const now = new Date();
+  const elapsedSinceStart = Math.floor((now.getTime() - sessionStartTime.getTime()) / 1000);
+  const elapsedSinceUpdate = Math.floor((now.getTime() - lastUpdated.getTime()) / 1000);
+  
+  return Math.min(elapsedSinceStart, elapsedSinceUpdate);
 }; 
