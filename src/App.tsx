@@ -75,11 +75,12 @@ const App = (): React.JSX.Element => {
   const { setIsAddingTask } = useTaskStore();
   const { isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar } = useUIStore();
   
-  // Global timer state for running timer across all pages
-  const { isRunning, isActiveDevice, tick, currentTime, currentTaskId } = useTimerStore();
-  const { tasks } = useTaskStore();
+  // Use selectors for timer state - only subscribe to what we need for the global timer
+  const isRunning = useTimerStore(state => state.isRunning);
+  const isActiveDevice = useTimerStore(state => state.isActiveDevice);
+  const tick = useTimerStore(state => state.tick);
 
-  // Global timer tick - runs on all pages
+  // Global timer interval - runs regardless of current page
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     
@@ -90,30 +91,9 @@ const App = (): React.JSX.Element => {
     }
     
     return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
+      if (interval) clearInterval(interval);
     };
   }, [isRunning, isActiveDevice, tick]);
-
-  // Global browser tab title update - works on all pages
-  useEffect(() => {
-    if (isRunning) {
-      const formatTime = (seconds: number) => {
-        const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = seconds % 60;
-        return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-      };
-      
-      const timeDisplay = formatTime(currentTime);
-      const currentTask = currentTaskId ? tasks.find(task => task.id === currentTaskId) : null;
-      const taskName = currentTask ? currentTask.title : 'Focus Session';
-      document.title = `${timeDisplay} - ${taskName}`;
-    } else {
-      // Only reset to default when timer is actually stopped
-      document.title = '10,000 Hours - Pomodoro Timer';
-    }
-  }, [isRunning, currentTime, currentTaskId, tasks]);
 
   useEffect(() => {
     // TODO: fix the problem that this runs twice on initial load. Check for React.StrictMode
