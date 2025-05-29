@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { useTimerStore } from '../../store/timerStore';
 import { useTaskStore } from '../../store/taskStore';
 import TimerCircle from '../ui/TimerCircle';
@@ -10,24 +10,22 @@ interface TimerProps {
 }
 
 export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
-  const { 
-    currentTime, 
-    totalTime, 
-    isRunning, 
-    mode, 
-    sessionsCompleted,
-    isLoading,
-    isSyncing,
-    isActiveDevice,
-    syncError,
-    lastSyncTime,
-    start, 
-    pause, 
-    reset, 
-    skip, 
-    tick,
-    currentTaskId
-  } = useTimerStore();
+  // Use selectors for the values that change frequently and need reactivity
+  const currentTime = useTimerStore(state => state.currentTime);
+  const totalTime = useTimerStore(state => state.totalTime);
+  const isRunning = useTimerStore(state => state.isRunning);
+  const mode = useTimerStore(state => state.mode);
+  const sessionsCompleted = useTimerStore(state => state.sessionsCompleted);
+  const currentTaskId = useTimerStore(state => state.currentTaskId);
+  
+  // Use selectors for less frequently changing values
+  const isLoading = useTimerStore(state => state.isLoading);
+  const isSyncing = useTimerStore(state => state.isSyncing);
+  const isActiveDevice = useTimerStore(state => state.isActiveDevice);
+  const syncError = useTimerStore(state => state.syncError);
+  
+  // Get action functions (these don't change, so we can destructure them)
+  const { start, pause, reset, skip, setMode } = useTimerStore();
   
   const { tasks } = useTaskStore();
   
@@ -78,7 +76,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
           <button 
             className={`px-4 sm:px-6 py-2 rounded-full font-medium transition-all !rounded-button whitespace-nowrap text-sm sm:text-base
             ${mode === 'pomodoro' ? 'bg-primary text-white' : 'text-gray-600 hover:text-gray-800'}`}
-            onClick={() => useTimerStore.getState().setMode('pomodoro')}
+            onClick={() => setMode('pomodoro')}
             disabled={isLoading}
           >
             Pomodoro
@@ -86,7 +84,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
           <button 
             className={`px-4 sm:px-6 py-2 rounded-full font-medium transition-all !rounded-button whitespace-nowrap text-sm sm:text-base
             ${mode === 'shortBreak' ? 'bg-primary text-white' : 'text-gray-600 hover:text-gray-800'}`}
-            onClick={() => useTimerStore.getState().setMode('shortBreak')}
+            onClick={() => setMode('shortBreak')}
             disabled={isLoading}
           >
             Short Break
@@ -94,7 +92,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
           <button 
             className={`px-4 sm:px-6 py-2 rounded-full font-medium transition-all !rounded-button whitespace-nowrap text-sm sm:text-base
             ${mode === 'longBreak' ? 'bg-primary text-white' : 'text-gray-600 hover:text-gray-800'}`}
-            onClick={() => useTimerStore.getState().setMode('longBreak')}
+            onClick={() => setMode('longBreak')}
             disabled={isLoading}
           >
             Long Break
