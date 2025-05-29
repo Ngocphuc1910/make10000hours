@@ -28,7 +28,17 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   // Determine the right sidebar content based on the current route
   const getSidebarContent = () => {
     if (location.pathname === '/pomodoro') {
-      return <TaskList />;
+      return (
+        <div className="p-4 space-y-4">
+          {/* Task List */}
+          <div className="bg-white rounded-lg border border-gray-200">
+            <div className="p-4">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Tasks</h3>
+              <TaskList />
+            </div>
+          </div>
+        </div>
+      );
     }
     return null;
   };

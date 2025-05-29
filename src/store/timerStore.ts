@@ -1,7 +1,9 @@
 import { create } from 'zustand';
-import { DEFAULT_SETTINGS, type TimerMode, type TimerSettings } from '../types/models';
+import { DEFAULT_SETTINGS, type TimerMode, type TimerSettings, type TimerState as TimerStateModel } from '../types/models';
 import { useTaskStore } from './taskStore';
 import { useUserStore } from './userStore';
+import { timerService } from '../api/timerService';
+import { calculateElapsedTime } from '../utils/timeUtils';
 
 interface TimerState {
   // Timer status
@@ -17,6 +19,13 @@ interface TimerState {
   // Settings
   settings: TimerSettings;
   
+  // Persistence and sync
+  isLoading: boolean;
+  isSyncing: boolean;
+  lastSyncTime: Date | null;
+  isActiveDevice: boolean;
+  syncError: string | null;
+  
   // Actions
   start: () => void;
   pause: () => void;
@@ -26,9 +35,32 @@ interface TimerState {
   setMode: (mode: TimerMode) => void;
   setCurrentTaskId: (taskId: string | null) => void;
   setSettings: (settings: TimerSettings) => void;
+  
+  // Persistence actions
+  initializePersistence: (userId: string) => Promise<void>;
+  saveToDatabase: () => Promise<void>;
+  loadFromDatabase: (userId: string) => Promise<void>;
+  handleRemoteStateChange: (remoteState: TimerStateModel) => void;
+  cleanupPersistence: () => void;
+  resetTimerState: () => void;
 }
 
 export const useTimerStore = create<TimerState>((set, get) => {
+  let saveTimeoutId: NodeJS.Timeout | null = null;
+  let sessionStartTime: Date | null = null; // Track when the current session started
+  
+  // Debounced save function to avoid too frequent database writes
+  const debouncedSave = () => {
+    if (saveTimeoutId) {
+      clearTimeout(saveTimeoutId);
+    }
+    
+    saveTimeoutId = setTimeout(async () => {
+      const { saveToDatabase } = get();
+      await saveToDatabase();
+    }, 2000); // Save after 2 seconds of inactivity
+  };
+
   return {
     // Initial state
     isRunning: false,
@@ -39,20 +71,57 @@ export const useTimerStore = create<TimerState>((set, get) => {
     currentTaskId: null,
     settings: DEFAULT_SETTINGS.timer,
     
-    // Actions
-    start: () => set({ isRunning: true }),
+    // Persistence state
+    isLoading: false,
+    isSyncing: false,
+    lastSyncTime: null,
+    isActiveDevice: true,
+    syncError: null,
     
-    pause: () => set({ isRunning: false }),
+    // Actions
+    start: () => {
+      const state = get();
+      if (!state.isActiveDevice) {
+        // If not active device, take control
+        set({ isActiveDevice: true });
+      }
+      
+      // Set session start time if not already running
+      if (!state.isRunning) {
+        sessionStartTime = new Date();
+      }
+      
+      set({ 
+        isRunning: true,
+        syncError: null 
+      });
+      
+      // Save immediately when starting
+      get().saveToDatabase();
+    },
+    
+    pause: () => {
+      const currentState = get();
+      sessionStartTime = null; // Clear session start time when paused
+      
+      set({ isRunning: false });
+      
+      // Save immediately when pausing to capture exact time
+      const updatedState = get();
+      updatedState.saveToDatabase();
+    },
     
     reset: () => {
       const { mode, settings } = get();
       const totalSeconds = settings[mode] * 60;
+      sessionStartTime = null; // Clear session start time when reset
       set({ 
         currentTime: totalSeconds,
         totalTime: totalSeconds,
         isRunning: false,
         settings
       });
+      get().saveToDatabase();
     },
     
     skip: () => {
@@ -85,10 +154,16 @@ export const useTimerStore = create<TimerState>((set, get) => {
         sessionsCompleted: nextSessionsCompleted,
         settings
       });
+      
+      get().saveToDatabase();
     },
     
     tick: () => {
-      const { currentTime, totalTime } = get();
+      const { currentTime, totalTime, isActiveDevice } = get();
+      
+      // Only tick if this is the active device
+      if (!isActiveDevice) return;
+      
       const { timeSpentIncrement } = useTaskStore.getState();
 
       if (currentTime !== totalTime && currentTime % 60 === 0) {
@@ -101,6 +176,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
 
       if (currentTime > 0) {
         set({ currentTime: currentTime - 1 });
+        debouncedSave(); // Debounced save while ticking
       } else if (currentTime === 0) {
         // Timer finished, move to next mode
         get().skip();
@@ -117,31 +193,246 @@ export const useTimerStore = create<TimerState>((set, get) => {
         isRunning: false,
         settings
       });
+      get().saveToDatabase();
     },
     
-    setCurrentTaskId: (taskId: string | null) => set({ currentTaskId: taskId }),
+    setCurrentTaskId: (taskId: string | null) => {
+      set({ currentTaskId: taskId });
+      debouncedSave();
+    },
 
     setSettings: (settings: TimerSettings) => {
-      const { mode } = get();
-      // Reset timer with new settings
-      const totalSeconds = settings[mode] * 60;
+      const currentState = get();
+      
+      // Only reset timer if it's at default state (not actively used)
+      const isAtDefaultState = currentState.currentTime === currentState.totalTime && 
+                               !currentState.isRunning && 
+                               currentState.sessionsCompleted === 0;
+      
+      if (isAtDefaultState) {
+        // Reset timer with new settings only if at default state
+        const { mode } = currentState;
+        const totalSeconds = settings[mode] * 60;
+        set({
+          settings: settings,
+          currentTime: totalSeconds,
+          totalTime: totalSeconds,
+          isRunning: false
+        });
+        get().saveToDatabase();
+      } else {
+        // Just update settings without resetting timer state
+        set({ settings: settings });
+      }
+    },
+    
+    // Persistence methods
+    initializePersistence: async (userId: string) => {
+      try {
+        set({ isLoading: true, syncError: null });
+        
+        // Load initial state from database
+        const remoteState = await timerService.loadTimerState(userId);
+        
+        if (remoteState) {
+          get().handleRemoteStateChange(remoteState);
+        } else {
+          // No existing state, save current default state
+          await get().saveToDatabase();
+        }
+        
+        // Subscribe to real-time updates
+        timerService.subscribeToTimerState(userId, (remoteState) => {
+          if (remoteState) {
+            get().handleRemoteStateChange(remoteState);
+          }
+        });
+        
+        set({ isLoading: false });
+      } catch (error) {
+        set({ 
+          isLoading: false, 
+          syncError: 'Failed to sync timer state' 
+        });
+      }
+    },
+    
+    saveToDatabase: async () => {
+      const userStore = useUserStore.getState();
+      if (!userStore.user || !userStore.isAuthenticated) {
+        return;
+      }
+      
+      const state = get();
+      if (!state.isActiveDevice) {
+        return; // Only active device should save
+      }
+      
+      try {
+        set({ isSyncing: true, syncError: null });
+        
+        // Build timer data object, only including sessionStartTime if it exists
+        const timerData: any = {
+          currentTime: state.currentTime,
+          totalTime: state.totalTime,
+          mode: state.mode,
+          sessionsCompleted: state.sessionsCompleted,
+          isRunning: state.isRunning,
+          currentTaskId: state.currentTaskId,
+        };
+        
+        // Only add sessionStartTime if timer is running and sessionStartTime exists
+        if (state.isRunning && sessionStartTime) {
+          timerData.sessionStartTime = sessionStartTime;
+        }
+        
+        await timerService.saveTimerState(userStore.user.uid, timerData);
+        
+        set({ 
+          isSyncing: false, 
+          lastSyncTime: new Date() 
+        });
+      } catch (error) {
+        set({ 
+          isSyncing: false, 
+          syncError: 'Failed to save timer state' 
+        });
+      }
+    },
+    
+    loadFromDatabase: async (userId: string) => {
+      try {
+        const remoteState = await timerService.loadTimerState(userId);
+        
+        if (remoteState) {
+          get().handleRemoteStateChange(remoteState);
+        }
+      } catch (error) {
+        throw error;
+      }
+    },
+    
+    handleRemoteStateChange: (remoteState: TimerStateModel) => {
+      const currentState = get();
+      const isFromThisDevice = timerService.isActiveDevice(remoteState);
+      
+      // Skip if we're getting our own state back and it's not more recent
+      if (isFromThisDevice && currentState.lastSyncTime && remoteState.lastUpdated) {
+        const localTime = currentState.lastSyncTime.getTime();
+        const remoteTime = remoteState.lastUpdated.getTime();
+        
+        // Skip if our local state is more recent (within 1 second tolerance)
+        if (localTime > remoteTime - 1000) {
+          return;
+        }
+      }
+      
+      // Calculate the actual current time based on running state
+      let adjustedCurrentTime = remoteState.currentTime;
+      let shouldBeRunning = remoteState.isRunning;
+      
+      if (remoteState.isRunning && remoteState.sessionStartTime && remoteState.lastUpdated) {
+        // Timer is running - calculate elapsed time and adjust
+        const elapsedTime = calculateElapsedTime(remoteState.sessionStartTime, remoteState.lastUpdated);
+        adjustedCurrentTime = Math.max(0, remoteState.currentTime - elapsedTime);
+        
+        // If timer has run out, it should be stopped
+        if (adjustedCurrentTime <= 0) {
+          shouldBeRunning = false;
+        }
+        
+        // Restore session start time if this device is taking control of a running timer
+        if (isFromThisDevice && shouldBeRunning) {
+          sessionStartTime = remoteState.sessionStartTime;
+        }
+      } else {
+        // Timer is paused or stopped - use exact saved time without adjustment
+        adjustedCurrentTime = remoteState.currentTime;
+        shouldBeRunning = false; // Ensure paused timers stay paused
+        // Clear session start time since timer is not running
+        sessionStartTime = null;
+      }
+      
+      // Update local state with remote state
       set({
-        settings: settings,
-        currentTime: totalSeconds,
-        totalTime: totalSeconds,
-        isRunning: false
+        currentTime: adjustedCurrentTime,
+        totalTime: remoteState.totalTime,
+        mode: remoteState.mode,
+        sessionsCompleted: remoteState.sessionsCompleted,
+        isRunning: shouldBeRunning, // Use calculated running state
+        currentTaskId: remoteState.currentTaskId,
+        isActiveDevice: isFromThisDevice,
+        lastSyncTime: new Date(),
+        syncError: null
       });
     },
+    
+    cleanupPersistence: () => {
+      timerService.unsubscribeFromTimerState();
+      if (saveTimeoutId) {
+        clearTimeout(saveTimeoutId);
+        saveTimeoutId = null;
+      }
+      set({
+        isLoading: false,
+        isSyncing: false,
+        lastSyncTime: null,
+        isActiveDevice: true,
+        syncError: null
+      });
+    },
+    
+    resetTimerState: () => {
+      const { settings } = get();
+      set({
+        isRunning: false,
+        currentTime: settings.pomodoro * 60,
+        totalTime: settings.pomodoro * 60,
+        mode: 'pomodoro',
+        sessionsCompleted: 0,
+        currentTaskId: null,
+        isActiveDevice: true,
+        syncError: null
+      });
+    }
   };
 });
 
 // Subscribe to user authentication changes
-useUserStore.subscribe((state) => {
-  console.log('User authentication state changed for timerStore:', state);
+useUserStore.subscribe(async (state) => {
   const timerStore = useTimerStore.getState();
   
-  if (state.isAuthenticated && state.user) {
-    // User logged in, initialize timer store
-    timerStore.setSettings(state.user.settings.timer);
+  if (state.isAuthenticated && state.user && !state.isLoading) {
+    // User logged in, initialize timer store with persistence
+    try {
+      // Initialize persistence FIRST to load existing timer state
+      await timerStore.initializePersistence(state.user.uid);
+      
+      // THEN set settings after loading existing state
+      timerStore.setSettings(state.user.settings.timer);
+    } catch (error) {
+      console.error('Failed to initialize timer persistence:', error);
+    }
+  } else {
+    // User logged out, cleanup and reset
+    timerStore.cleanupPersistence();
+    timerStore.resetTimerState();
   }
 });
+
+// Also check if user is already authenticated on store creation
+const userState = useUserStore.getState();
+if (userState.isAuthenticated && userState.user && !userState.isLoading) {
+  const timerStore = useTimerStore.getState();
+  const user = userState.user; // Store user reference to avoid null check issues
+  
+  // Initialize persistence asynchronously FIRST
+  timerStore.initializePersistence(user.uid)
+    .then(() => {
+      // THEN set settings after loading existing state
+      timerStore.setSettings(user.settings.timer);
+    })
+    .catch((error) => {
+      console.error('Failed to initialize timer persistence on store creation:', error);
+    });
+}
