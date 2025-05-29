@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { Task } from '../../types/models';
 import { useTaskStore } from '../../store/taskStore';
 import { Icon } from '../ui/Icon';
@@ -46,20 +46,22 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
 
   // Set initial project selection
   useEffect(() => {
-    setProjectId(getLastUsedProjectId());
-  }, []);
+    if (!task?.projectId) { // Only set if not editing existing task
+      setProjectId(getLastUsedProjectId());
+    }
+  }, []); // Remove dependencies to prevent re-runs
 
-  // Create "No Project" project if it doesn't exist
+  // Create "No Project" project if it doesn't exist - only run once
   useEffect(() => {
-    if (!noProject && user) {
+    if (!noProject && user && !task) { // Only for new tasks
       useTaskStore.getState().addProject({
         name: 'No Project',
         color: '#6B7280' // gray-500
       });
     }
-  }, [noProject, user]);
+  }, []); // Remove dependencies to prevent re-runs
   
-  // Focus on title input when form opens
+  // Focus on title input when form opens - only run once
   useEffect(() => {
     if (titleInputRef.current) {
       titleInputRef.current.focus();
@@ -106,22 +108,26 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
     setProjectId(getLastUsedProjectId());
   };
   
-  const adjustTextareaHeight = (textarea: HTMLTextAreaElement) => {
-    textarea.style.height = 'auto';
-    textarea.style.height = `${textarea.scrollHeight}px`;
-  };
+  // Optimize textarea height adjustment with useCallback
+  const adjustTextareaHeight = useCallback((textarea: HTMLTextAreaElement) => {
+    requestAnimationFrame(() => {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    });
+  }, []);
   
+  // Debounced height adjustment for better performance during fast typing
   useEffect(() => {
     if (titleInputRef.current) {
       adjustTextareaHeight(titleInputRef.current);
     }
-  }, [title]);
+  }, [title, adjustTextareaHeight]);
   
   useEffect(() => {
     if (descriptionRef.current) {
       adjustTextareaHeight(descriptionRef.current);
     }
-  }, [description]);
+  }, [description, adjustTextareaHeight]);
   
   const handleSave = async () => {
     // Reset errors
@@ -235,6 +241,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
   
   return (
     <div 
+      key={task?.id || 'new-task'}
       ref={formRef}
       className="task-card p-4 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 animate-fade-in"
     >
