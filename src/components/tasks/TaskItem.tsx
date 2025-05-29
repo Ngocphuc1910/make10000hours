@@ -19,7 +19,10 @@ export const TaskItem: React.FC<TaskItemProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const { toggleTaskCompletion } = useTaskStore();
-  const { currentTaskId, setCurrentTaskId } = useTimerStore();
+  
+  // Use selectors to only subscribe to the specific values we need
+  const currentTaskId = useTimerStore(state => state.currentTaskId);
+  const setCurrentTaskId = useTimerStore(state => state.setCurrentTaskId);
   
   const isSelected = currentTaskId === task.id;
   
