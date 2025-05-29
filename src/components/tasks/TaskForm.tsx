@@ -7,10 +7,11 @@ import { useUserStore } from '../../store/userStore';
 interface TaskFormProps {
   task?: Task;
   status?: Task['status'];
+  initialProjectId?: string;
   onCancel: () => void;
 }
 
-const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
+const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onCancel }) => {
   const addTask = useTaskStore(state => state.addTask);
   const updateTask = useTaskStore(state => state.updateTask);
   const deleteTask = useTaskStore(state => state.deleteTask);
@@ -41,6 +42,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, onCancel }) => {
   // Get last used project from localStorage
   const getLastUsedProjectId = () => {
     if (task?.projectId) return task.projectId;
+    if (initialProjectId) return initialProjectId;
     return localStorage.getItem('lastUsedProjectId') || 'no-project';
   };
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useFocusStore } from '../../store/useFocusStore';
 import { formatMinutes } from '../../utils/timeUtils';
 import { useTaskStore } from '../../store/taskStore';
@@ -10,37 +10,64 @@ import ProjectView from './views/ProjectView';
 type ViewType = 'project' | 'status';
 
 export const ProjectsPage: React.FC = () => {
-  const [viewType, setViewType] = useState<ViewType>('status');
-  const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
+  // Get initial view type from localStorage or default to 'status'
+  const [viewType, setViewType] = useState<ViewType>(() => {
+    const saved = localStorage.getItem('taskManagementViewType');
+    return (saved as ViewType) || 'status';
+  });
+  const [isDragInProgress, setIsDragInProgress] = useState(false);
   
   const projects = useTaskStore(state => state.projects);
   const tasks = useTaskStore(state => state.tasks);
 
-  const toggleViewDropdown = () => {
-    setIsViewDropdownOpen(!isViewDropdownOpen);
-  };
-  
-  const handleClickOutside = () => {
-    if (isViewDropdownOpen) {
-      setIsViewDropdownOpen(false);
+  // Save view type to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('taskManagementViewType', viewType);
+  }, [viewType]);
+
+  // Debug logging to track component lifecycle and viewType changes
+  useEffect(() => {
+    console.log('ProjectsPage mounted/updated, viewType:', viewType);
+    return () => {
+      console.log('ProjectsPage unmounting');
+    };
+  }, []);
+
+  useEffect(() => {
+    console.log('ViewType changed to:', viewType);
+  }, [viewType]);
+
+  const handleClickOutside = (e: React.MouseEvent) => {
+    // Don't interfere if drag is in progress or if clicking on task elements
+    if (isDragInProgress) return;
+    
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-task-id]')) {
+      return;
     }
   };
 
+  // Handle drag events at the page level to track drag state
+  const handleDragStart = () => {
+    setIsDragInProgress(true);
+  };
+
+  const handleDragEnd = () => {
+    setIsDragInProgress(false);
+  };
+
   return (
-    <div className="p-1 bg-white" onClick={handleClickOutside}>
+    <div 
+      className="p-1 bg-white" 
+      onClick={handleClickOutside}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
       {/* Header */}
       <div className="border-b border-gray-200 bg-white sticky top-0 z-10 mb-6">
         <div className="px-6 py-4 flex items-center justify-between">
           <div className="flex items-center">
-            {/* Optional back button */}
-            <Link 
-              to="/dashboard" 
-              className="mr-4 inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
-            >
-              <Icon name="arrow-left-line" className="mr-1" />
-              <span>Back to Original Page</span>
-            </Link>
-            <h1 className="text-xl font-semibold text-gray-900">Projects & Tasks</h1>
+            <h1 className="text-xl font-semibold text-gray-900">Task Management</h1>
             <span className="ml-4 text-sm text-gray-500">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
           </div>
           
@@ -62,68 +89,39 @@ export const ProjectsPage: React.FC = () => {
             <input 
               type="search" 
               className="block w-full pl-10 pr-3 py-2 border-none rounded-md bg-gray-100 focus:bg-white focus:ring-2 focus:ring-primary focus:outline-none text-sm" 
-              placeholder="Search projects and tasks..." 
+              placeholder="Search tasks and projects..." 
             />
           </div>
           
           <div className="flex items-center space-x-3">
-            <div className="relative">
-              <div className="relative">
-                <button 
-                  className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 whitespace-nowrap"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleViewDropdown();
-                  }}
-                >
-                  <div className="w-4 h-4 flex items-center justify-center mr-1.5">
-                    <Icon name={viewType === 'status' ? 'checkbox-multiple-line' : 'layout-grid-line'} />
-                  </div>
-                  {viewType === 'status' ? 'By Status' : 'By Project'}
-                </button>
-                
-                {isViewDropdownOpen && (
-                  <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50">
-                    <div className="py-1">
-                      <button 
-                        className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        onClick={() => {
-                          setViewType('project');
-                          setIsViewDropdownOpen(false);
-                        }}
-                      >
-                        <div className="w-4 h-4 flex items-center justify-center mr-2">
-                          <Icon name="layout-grid-line" />
-                        </div>
-                        By Project
-                        {viewType === 'project' && (
-                          <div className="w-4 h-4 flex items-center justify-center ml-auto text-primary">
-                            <Icon name="check-line" />
-                          </div>
-                        )}
-                      </button>
-                      
-                      <button 
-                        className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        onClick={() => {
-                          setViewType('status');
-                          setIsViewDropdownOpen(false);
-                        }}
-                      >
-                        <div className="w-4 h-4 flex items-center justify-center mr-2">
-                          <Icon name="checkbox-multiple-line" />
-                        </div>
-                        By Status
-                        {viewType === 'status' && (
-                          <div className="w-4 h-4 flex items-center justify-center ml-auto text-primary">
-                            <Icon name="check-line" />
-                          </div>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+            {/* View Type Switch */}
+            <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 min-w-fit">
+              <button 
+                className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 whitespace-nowrap min-w-[140px] justify-center focus:outline-none focus:ring-0 ${
+                  viewType === 'status'
+                    ? 'bg-white text-gray-900 shadow-sm border border-red-500'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                onClick={() => setViewType('status')}
+              >
+                <div className="w-4 h-4 flex items-center justify-center mr-1.5">
+                  <Icon name="checkbox-multiple-line" />
+                </div>
+                By Status
+              </button>
+              <button 
+                className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 whitespace-nowrap min-w-[140px] justify-center focus:outline-none focus:ring-0 ${
+                  viewType === 'project'
+                    ? 'bg-white text-gray-900 shadow-sm border border-red-500'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                onClick={() => setViewType('project')}
+              >
+                <div className="w-4 h-4 flex items-center justify-center mr-1.5">
+                  <Icon name="layout-grid-line" />
+                </div>
+                By Project
+              </button>
             </div>
           </div>
         </div>
