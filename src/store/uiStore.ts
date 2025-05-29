@@ -33,7 +33,7 @@ interface UIState {
 
 export const useUIStore = create<UIState>((set) => ({
   // Initial state
-  isLeftSidebarOpen: true,
+  isLeftSidebarOpen: false,
   isRightSidebarOpen: true,
   rightSidebarWidth: 480,
   isHelpModalOpen: false,
