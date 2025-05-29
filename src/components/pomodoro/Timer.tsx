@@ -30,50 +30,11 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
   } = useTimerStore();
   
   const { tasks } = useTaskStore();
-  const originalTitleRef = useRef<string>('');
-  
-  // Store original title on mount
-  useEffect(() => {
-    originalTitleRef.current = document.title;
-  }, []);
   
   // Find current task
   const currentTask = currentTaskId 
     ? tasks.find(task => task.id === currentTaskId) 
     : null;
-  
-  // Setup timer tick
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    
-    if (isRunning && isActiveDevice) {
-      interval = setInterval(() => {
-        tick();
-      }, 1000);
-    } else if (interval) {
-      clearInterval(interval);
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRunning, isActiveDevice, tick]);
-  
-  // Update browser tab title when timer is running
-  useEffect(() => {
-    if (isRunning) {
-      const timeDisplay = formatTime(currentTime);
-      const taskName = currentTask ? currentTask.title : 'Focus Session';
-      document.title = `${timeDisplay} - ${taskName}`;
-    } else {
-      document.title = originalTitleRef.current;
-    }
-    
-    // Cleanup: restore original title when component unmounts
-    return () => {
-      document.title = originalTitleRef.current;
-    };
-  }, [isRunning, currentTime, currentTask?.title]);
   
   // Button handlers
   const handleStartPause = () => {
