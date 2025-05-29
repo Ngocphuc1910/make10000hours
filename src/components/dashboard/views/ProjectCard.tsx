@@ -19,10 +19,24 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const addProject = useTaskStore(state => state.addProject);
   const updateTask = useTaskStore(state => state.updateTask);
   const [projectName, setProjectName] = useState(project?.name || '');
-  const [activeFilter, setActiveFilter] = useState<'pomodoro' | 'todo' | 'completed'>('todo');
+  
+  // Persist activeFilter state in localStorage per project to prevent automatic tab switching
+  const [activeFilter, setActiveFilter] = useState<'pomodoro' | 'todo' | 'completed'>(() => {
+    if (!project) return 'todo';
+    const saved = localStorage.getItem(`projectFilter_${project.id}`);
+    return (saved as 'pomodoro' | 'todo' | 'completed') || 'todo';
+  });
+  
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [draggedOverFilter, setDraggedOverFilter] = useState<string | null>(null);
+  
+  // Save activeFilter to localStorage whenever it changes
+  React.useEffect(() => {
+    if (project) {
+      localStorage.setItem(`projectFilter_${project.id}`, activeFilter);
+    }
+  }, [activeFilter, project]);
   
   // Filter tasks for this project
   const projectTasks = project ? tasks.filter(task => task.projectId === project.id) : [];
@@ -260,23 +274,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         <div className="project-tasks px-4 py-2">
           <div className="flex items-center justify-between py-2 border-b border-gray-100">
             <div className="flex items-center space-x-3 task-filters">
-              <button 
-                className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full whitespace-nowrap ${
-                  activeFilter === 'pomodoro'
-                    ? 'bg-primary/10 text-primary hover:bg-primary/20'
-                    : 'text-gray-600 hover:bg-gray-100'
-                } ${draggedOverFilter === 'pomodoro' ? 'drag-over' : ''}`}
-                onClick={() => setActiveFilter('pomodoro')}
-                onDragOver={(e) => handleFilterDragOver(e, 'pomodoro')}
-                onDragLeave={handleFilterDragLeave}
-                onDrop={(e) => handleFilterDrop(e, 'pomodoro')}
-                style={{ position: 'relative', padding: draggedOverFilter === 'pomodoro' ? '4px 12px' : '' }}
-              >
-                <div className="w-4 h-4 flex items-center justify-center mr-1">
-                  <Icon name="timer-line" />
-                </div>
-                In Pomodoro ({pomodoroCount})
-              </button>
+              {/* Reordered tabs: To do list > In Pomodoro > Completed */}
               <button 
                 className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full whitespace-nowrap ${
                   activeFilter === 'todo'
@@ -296,6 +294,23 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               </button>
               <button 
                 className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full whitespace-nowrap ${
+                  activeFilter === 'pomodoro'
+                    ? 'bg-primary/10 text-primary hover:bg-primary/20'
+                    : 'text-gray-600 hover:bg-gray-100'
+                } ${draggedOverFilter === 'pomodoro' ? 'drag-over' : ''}`}
+                onClick={() => setActiveFilter('pomodoro')}
+                onDragOver={(e) => handleFilterDragOver(e, 'pomodoro')}
+                onDragLeave={handleFilterDragLeave}
+                onDrop={(e) => handleFilterDrop(e, 'pomodoro')}
+                style={{ position: 'relative', padding: draggedOverFilter === 'pomodoro' ? '4px 12px' : '' }}
+              >
+                <div className="w-4 h-4 flex items-center justify-center mr-1">
+                  <Icon name="timer-line" />
+                </div>
+                In Pomodoro ({pomodoroCount})
+              </button>
+              <button 
+                className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full whitespace-nowrap ${
                   activeFilter === 'completed'
                     ? 'bg-primary/10 text-primary hover:bg-primary/20'
                     : 'text-gray-600 hover:bg-gray-100'
@@ -307,7 +322,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                 style={{ position: 'relative', padding: draggedOverFilter === 'completed' ? '4px 12px' : '' }}
               >
                 <div className="w-4 h-4 flex items-center justify-center mr-1">
-                  <Icon name="checkbox-circle-line" />
+                  <Icon name="check-line" />
                 </div>
                 Completed ({completedCount})
               </button>
