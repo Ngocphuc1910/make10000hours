@@ -30,12 +30,12 @@ export const TopTasks: React.FC = () => {
       const tasksForDate = getTasksWorkedOnDate(today, workSessions, tasks);
       setDisplayTasks(tasksForDate);
     } else {
-      // Show top tasks by total focus time from work sessions in the current date range
-      const topTasks = tasks
+      // Show all tasks by total focus time from work sessions in the current date range
+      const sortedTasks = tasks
         .map(task => taskToDashboardTask(task, workSessions))
-        .sort((a, b) => b.totalFocusTime - a.totalFocusTime)
-        .slice(0, 7);
-      setDisplayTasks(topTasks);
+        .filter(task => task.totalFocusTime > 0) // Only show tasks with time spent
+        .sort((a, b) => b.totalFocusTime - a.totalFocusTime);
+      setDisplayTasks(sortedTasks);
     }
   }, [showingToday, tasks, workSessions]);
   
