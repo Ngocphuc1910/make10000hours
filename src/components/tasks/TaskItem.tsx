@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTaskStore } from '../../store/taskStore';
 import { useTimerStore } from '../../store/timerStore';
+import { useTaskTimeSpent } from '../../hooks/useTaskTimeSpent';
 import type { Task, Project } from '../../types/models';
 import CustomCheckbox from '../ui/CustomCheckbox';
 
@@ -19,12 +20,16 @@ export const TaskItem: React.FC<TaskItemProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const { toggleTaskCompletion } = useTaskStore();
+  const { getTimeSpentForTask } = useTaskTimeSpent();
   
   // Use selectors to only subscribe to the specific values we need
   const currentTaskId = useTimerStore(state => state.currentTaskId);
   const setCurrentTaskId = useTimerStore(state => state.setCurrentTaskId);
   
   const isSelected = currentTaskId === task.id;
+  
+  // Get calculated time spent from WorkSession data
+  const calculatedTimeSpent = getTimeSpentForTask(task.id);
   
   // Status indicator styles
   const getStatusIndicator = () => {
@@ -113,7 +118,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
               <span className="mx-2 text-gray-300">•</span>
               <span className={`flex items-center ${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
                 <i className="ri-time-line mr-1"></i>
-                {task.timeSpent}/{task.timeEstimated}m
+                {calculatedTimeSpent}/{task.timeEstimated}m
               </span>
             </div>
             {isExpanded && task.description && task.description.trim() && (
