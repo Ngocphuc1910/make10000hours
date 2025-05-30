@@ -103,38 +103,10 @@ export const useTimerStore = create<TimerState>((set, get) => {
     
     pause: () => {
       const currentState = get();
-      const { user } = useUserStore.getState();
-      const { createWorkSession } = useWorkSessionStore.getState();
-      const { tasks } = useTaskStore.getState();
       
-      // Create work session if pausing during a pomodoro with a current task and meaningful time spent
-      if (currentState.mode === 'pomodoro' && currentState.currentTaskId && sessionStartTime && user) {
-        const timeSpentInSession = currentState.totalTime - currentState.currentTime; // in seconds
-        const durationInMinutes = Math.round(timeSpentInSession / 60);
-        
-        // Only create session if meaningful time spent (at least 1 minute)
-        if (durationInMinutes >= 1) {
-          const task = tasks.find(t => t.id === currentState.currentTaskId);
-          if (task) {
-            const endTime = new Date();
-            
-            createWorkSession({
-              userId: user.uid,
-              taskId: currentState.currentTaskId,
-              projectId: task.projectId,
-              startTime: sessionStartTime,
-              endTime: endTime,
-              duration: durationInMinutes,
-              sessionType: 'pomodoro',
-              notes: `Pomodoro session paused`
-            }).catch(error => {
-              console.error('Failed to create work session:', error);
-            });
-          }
-        }
-      }
-      
-      sessionStartTime = null; // Clear session start time when paused
+      // Clear session start time when paused - no need to create WorkSession
+      // since timeSpent increments during countdown provide the time tracking
+      sessionStartTime = null;
       
       set({ isRunning: false });
       
@@ -158,37 +130,8 @@ export const useTimerStore = create<TimerState>((set, get) => {
     
     skip: () => {
       const { mode, sessionsCompleted, settings, currentTaskId, totalTime, currentTime } = get();
-      const { user } = useUserStore.getState();
-      const { createWorkSession } = useWorkSessionStore.getState();
-      const { tasks } = useTaskStore.getState();
       
-      // Create work session if completing a pomodoro and we have a current task
-      if (mode === 'pomodoro' && currentTaskId && sessionStartTime && user) {
-        const task = tasks.find(t => t.id === currentTaskId);
-        
-        if (task) {
-          const endTime = new Date();
-          // Use actual countdown time instead of wall clock time
-          const timeSpentInSession = totalTime - currentTime; // in seconds
-          const duration = Math.round(timeSpentInSession / 60); // duration in minutes
-          
-          // Only create session if meaningful time spent (at least 1 minute)
-          if (duration >= 1) {
-            createWorkSession({
-              userId: user.uid,
-              taskId: currentTaskId,
-              projectId: task.projectId,
-              startTime: sessionStartTime,
-              endTime: endTime,
-              duration: duration,
-              sessionType: 'pomodoro',
-              notes: `Pomodoro session completed`
-            }).catch(error => {
-              console.error('Failed to create work session:', error);
-            });
-          }
-        }
-      }
+      // No need to create WorkSession - timeSpent increments during countdown provide the time tracking
       
       let nextMode: TimerMode = mode;
       let nextSessionsCompleted = sessionsCompleted;
@@ -231,17 +174,15 @@ export const useTimerStore = create<TimerState>((set, get) => {
     },
     
     tick: () => {
-      const { currentTime, totalTime, isActiveDevice } = get();
+      const { currentTime, totalTime, isActiveDevice, isRunning } = get();
       
-      // Only tick if this is the active device
-      if (!isActiveDevice) return;
+      // Only tick if this is the active device and timer is running
+      if (!isActiveDevice || !isRunning) return;
 
       const { timeSpentIncrement } = useTaskStore.getState();
 
-      // Continue to increment task.timeSpent for backward compatibility
-      // while also creating WorkSession records for date-aware tracking
+      // Increment time spent for the current task every minute while timer is actively running
       if (currentTime !== totalTime && currentTime % 60 === 0) {
-        // Increment time spent for the current task every minute
         const { currentTaskId } = get();
         if (currentTaskId) {
           timeSpentIncrement(currentTaskId, 1); // increment by 1 minute
