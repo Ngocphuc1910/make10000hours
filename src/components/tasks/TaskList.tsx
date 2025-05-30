@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTaskStore } from '../../store/taskStore';
-import { useTaskTimeSpent } from '../../hooks/useTaskTimeSpent';
 import TaskItem from './TaskItem';
 import TaskForm from './TaskForm';
 import type { Task, Project } from '../../types/models';
@@ -35,9 +34,6 @@ export const TaskList: React.FC<TaskListProps> = ({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  
-  // Store state
-  const { getTimeSpentForTask } = useTaskTimeSpent();
   
   // For drag and drop
   const draggedTaskId = useRef<string | null>(null);
@@ -175,10 +171,9 @@ export const TaskList: React.FC<TaskListProps> = ({
     })
     .sort((a, b) => a.order - b.order);
 
-  // Calculate total time statistics using WorkSession data
+  // Calculate total time statistics using stored task.timeSpent for consistency with TaskItem display
   const totalTimeSpent = sortedTasks.reduce((sum, task) => {
-    const calculatedTime = getTimeSpentForTask(task.id);
-    return sum + calculatedTime;
+    return sum + (task.timeSpent || 0);
   }, 0);
   const totalTimeEstimated = sortedTasks.reduce((sum, task) => sum + (task.timeEstimated || 0), 0);
   
@@ -186,8 +181,7 @@ export const TaskList: React.FC<TaskListProps> = ({
   const pomodoroTasks = sortedTasks.filter(task => task.status === 'pomodoro');
   const pomodoroTimeEstimated = pomodoroTasks.reduce((sum, task) => sum + (task.timeEstimated || 0), 0);
   const pomodoroTimeSpent = pomodoroTasks.reduce((sum, task) => {
-    const calculatedTime = getTimeSpentForTask(task.id);
-    return sum + calculatedTime;
+    return sum + (task.timeSpent || 0);
   }, 0);
   const timeRemaining = Math.max(0, pomodoroTimeEstimated - pomodoroTimeSpent);
   
