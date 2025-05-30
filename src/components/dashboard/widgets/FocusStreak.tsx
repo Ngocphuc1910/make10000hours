@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import Card from '../../ui/Card';
-import { useFocusStore } from '../../../store/useFocusStore';
+import { useWorkSessionStore } from '../../../store/useWorkSessionStore';
+import { calculateFocusStreak } from '../../../utils/dashboardAdapter';
 
 export const FocusStreak: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendarDays, setCalendarDays] = useState<Array<{ date: Date, hasFocused: boolean } | null>>([]);
-  const { focusStreak, setSelectedDate, selectedDate } = useFocusStore();
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const { workSessions } = useWorkSessionStore();
+  
+  // Calculate real focus streak from WorkSession data
+  const focusStreak = calculateFocusStreak(workSessions);
 
   // Navigate to previous month
   const prevMonth = () => {
@@ -22,55 +27,53 @@ export const FocusStreak: React.FC = () => {
   };
 
   // Helper function to handle date comparison
-  const compareDates = (date1: Date, date2: Date | string): boolean => {
+  const compareDates = (date1: Date, date2: Date | string | null): boolean => {
+    if (!date2) return false;
     const d1 = new Date(date1).toDateString();
     const d2 = typeof date2 === 'string' ? new Date(date2).toDateString() : date2.toDateString();
     return d1 === d2;
   };
   
-  // Generate calendar data for current month view
+  // Check if a date has focus sessions
+  const hasFocusOnDate = (date: Date): boolean => {
+    const dateString = date.toDateString();
+    return workSessions.some(session => 
+      session.startTime.toDateString() === dateString
+    );
+  };
+
   useEffect(() => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
     
-    const startingDayOfWeek = firstDay.getDay(); // 0 for Sunday, 1 for Monday, etc.
-    const daysInMonth = lastDay.getDate();
+    // Get first day of the month
+    const firstDay = new Date(year, month, 1);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay()); // Go to start of week
     
     const days: Array<{ date: Date, hasFocused: boolean } | null> = [];
     
-    // Add empty spots for days before the first of the month
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null);
-    }
-    
-    // Add days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day);
+    // Generate 6 weeks of days (42 days total)
+    for (let i = 0; i < 42; i++) {
+      const currentDate = new Date(startDate);
+      currentDate.setDate(startDate.getDate() + i);
       
-      // Check if this date is in our streak data
-      const streakDay = focusStreak.streakDates.find(
-        sd => {
-          try {
-            // Handle both Date objects and string dates
-            const sdDate = sd.date instanceof Date ? sd.date : new Date(sd.date);
-            return compareDates(date, sdDate);
-          } catch (error) {
-            console.error('Error comparing dates:', error);
-            return false;
-          }
-        }
-      );
-      
-      days.push({
-        date,
-        hasFocused: streakDay ? streakDay.hasFocused : false
-      });
+      // Only show days if they're in the current month or adjacent months
+      if (currentDate.getMonth() === month || 
+          Math.abs(currentDate.getMonth() - month) === 1 ||
+          (month === 0 && currentDate.getMonth() === 11) ||
+          (month === 11 && currentDate.getMonth() === 0)) {
+        days.push({
+          date: currentDate,
+          hasFocused: hasFocusOnDate(currentDate)
+        });
+      } else {
+        days.push(null);
+      }
     }
     
     setCalendarDays(days);
-  }, [currentMonth, focusStreak.streakDates]);
+  }, [currentMonth, workSessions]);
 
   // Format month name
   const monthName = currentMonth.toLocaleDateString('en-US', { 
