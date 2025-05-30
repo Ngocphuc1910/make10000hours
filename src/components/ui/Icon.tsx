@@ -30,7 +30,8 @@ import {
   Focus,
   ListChecks,
   Grid3X3,
-  CheckCheck
+  CheckCheck,
+  MoreVertical
 } from 'lucide-react';
 
 interface IconProps {
@@ -70,7 +71,8 @@ const iconMap = {
   'focus-3-line': Focus,
   'list-check': ListChecks,
   'layout-grid-line': Grid3X3,
-  'checkbox-multiple-line': CheckCheck
+  'checkbox-multiple-line': CheckCheck,
+  'more-2-fill': MoreVertical
 };
 
 export const Icon: React.FC<IconProps> = ({ 

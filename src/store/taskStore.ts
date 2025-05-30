@@ -27,6 +27,7 @@ interface TaskState {
   setEditingTaskId: (taskId: string | null) => void;
   setShowDetailsMenu: (show: boolean) => void;
   addProject: (project: Omit<Project, 'id' | 'userId'>) => Promise<string>;
+  deleteProject: (projectId: string) => Promise<void>;
   timeSpentIncrement: (id: string, increment: number) => Promise<void>;
   handleMoveCompletedDown: () => Promise<void>;
   handleArchiveCompleted: () => Promise<void>;
@@ -135,6 +136,40 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       return docRef.id;
     } catch (error) {
       console.error('Error adding project:', error);
+      throw error;
+    }
+  },
+  
+  deleteProject: async (projectId) => {
+    try {
+      const { user } = useUserStore.getState();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Delete all tasks associated with the project first
+      const tasksQuery = query(
+        tasksCollection,
+        where('userId', '==', user.uid),
+        where('projectId', '==', projectId)
+      );
+
+      const tasksSnapshot = await getDocs(tasksQuery);
+      const batch = writeBatch(db);
+
+      // Add all task deletions to the batch
+      tasksSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      // Add project deletion to the batch
+      const projectRef = doc(db, 'projects', projectId);
+      batch.delete(projectRef);
+
+      // Execute all deletions
+      await batch.commit();
+    } catch (error) {
+      console.error('Error deleting project:', error);
       throw error;
     }
   },
