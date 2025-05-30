@@ -70,3 +70,17 @@ export const DEFAULT_SETTINGS: AppSettings = {
   darkMode: false,
   compactTaskView: false,
 };
+
+// Work session tracking for dashboard analytics
+export interface WorkSession {
+  id: string;
+  userId: string;
+  taskId: string;
+  projectId: string;
+  startTime: Date;
+  endTime: Date;
+  duration: number; // in minutes
+  sessionType: 'pomodoro' | 'manual' | 'continuous'; // how the session was created
+  notes?: string;
+  createdAt: Date;
+}

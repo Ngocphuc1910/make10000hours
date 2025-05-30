@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Card from '../../ui/Card';
-import { useFocusStore } from '../../../store/useFocusStore';
+import { useWorkSessionStore } from '../../../store/useWorkSessionStore';
+import { useDashboardStore } from '../../../store/useDashboardStore';
 import type { TimeUnit } from '../../../types';
 import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
 
@@ -12,11 +13,24 @@ type ChartDataPoint = {
 export const FocusTimeTrend: React.FC = () => {
   const chartRef = useRef<HTMLDivElement>(null);
   const [chartInstance, setChartInstance] = useState<any>(null);
-  const { focusSessions, dateRange, timeUnit, setTimeUnit } = useFocusStore();
+  const { workSessions } = useWorkSessionStore();
+  const { focusTimeView, setFocusTimeView } = useDashboardStore();
   
-  // Generate chart data based on focus sessions and time unit
+  // Create date range for last 30 days
+  const dateRange = {
+    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    endDate: new Date()
+  };
+  
+  // Generate chart data based on work sessions and time unit
   const generateChartData = (): ChartDataPoint[] => {
-    if (focusSessions.length === 0) return [];
+    if (workSessions.length === 0) return [];
+    
+    // Filter sessions within date range
+    const filteredSessions = workSessions.filter(session => {
+      const sessionDate = new Date(session.startTime);
+      return sessionDate >= dateRange.startDate && sessionDate <= dateRange.endDate;
+    });
     
     // Create a Map to aggregate focus time by date
     const timeByDate = new Map<string, number>();
@@ -25,7 +39,7 @@ export const FocusTimeTrend: React.FC = () => {
     let dateFormatter: (date: Date) => string;
     let groupingFunction: (date: Date) => string;
     
-    switch (timeUnit) {
+    switch (focusTimeView) {
       case 'weekly':
         dateFormatter = (date: Date) => {
           const weekStart = new Date(date);
@@ -60,19 +74,21 @@ export const FocusTimeTrend: React.FC = () => {
           return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         };
         groupingFunction = (date: Date) => {
-          return date.toISOString().split('T')[0];
+          // Use local date string to avoid timezone issues
+          const year = date.getFullYear();
+          const month = (date.getMonth() + 1).toString().padStart(2, '0');
+          const day = date.getDate().toString().padStart(2, '0');
+          return `${year}-${month}-${day}`;
         };
     }
     
     // Aggregate focus time by date unit
-    focusSessions.forEach(session => {
+    filteredSessions.forEach((session: any) => {
       const sessionDate = new Date(session.startTime);
       
-      if (sessionDate >= dateRange.startDate && sessionDate <= dateRange.endDate) {
-        const dateKey = groupingFunction(sessionDate);
-        const currentValue = timeByDate.get(dateKey) || 0;
-        timeByDate.set(dateKey, currentValue + session.duration);
-      }
+      const dateKey = groupingFunction(sessionDate);
+      const currentValue = timeByDate.get(dateKey) || 0;
+      timeByDate.set(dateKey, currentValue + session.duration);
     });
     
     // Convert the Map to an array of ChartDataPoint
@@ -83,10 +99,10 @@ export const FocusTimeTrend: React.FC = () => {
     const current = new Date(dateRange.startDate);
     
     // Ensure we start on the right boundary for weekly/monthly views
-    if (timeUnit === 'weekly') {
+    if (focusTimeView === 'weekly') {
       // Move to start of week (Sunday)
       current.setDate(current.getDate() - current.getDay());
-    } else if (timeUnit === 'monthly') {
+    } else if (focusTimeView === 'monthly') {
       // Move to start of month
       current.setDate(1);
     }
@@ -97,11 +113,11 @@ export const FocusTimeTrend: React.FC = () => {
     while (current <= dateRange.endDate) {
       allDates.push(new Date(current));
       
-      if (timeUnit === 'daily') {
+      if (focusTimeView === 'daily') {
         current.setDate(current.getDate() + 1);
-      } else if (timeUnit === 'weekly') {
+      } else if (focusTimeView === 'weekly') {
         current.setDate(current.getDate() + 7);
-      } else if (timeUnit === 'monthly') {
+      } else if (focusTimeView === 'monthly') {
         current.setMonth(current.getMonth() + 1);
       }
     }
@@ -116,7 +132,7 @@ export const FocusTimeTrend: React.FC = () => {
         value // Always use the aggregated value, don't round
       });
     });
-    
+
     return chartData;
   };
   
@@ -276,11 +292,11 @@ export const FocusTimeTrend: React.FC = () => {
     };
     
     loadECharts();
-  }, [chartRef, timeUnit, dateRange, focusSessions]);
+  }, [chartRef, focusTimeView, dateRange, workSessions]);
   
   // Change the time unit
   const handleTimeUnitChange = (unit: TimeUnit) => {
-    setTimeUnit(unit);
+    setFocusTimeView(unit);
   };
   
   return (
@@ -292,7 +308,7 @@ export const FocusTimeTrend: React.FC = () => {
             <button 
               type="button" 
               className={`px-4 py-1.5 text-sm font-medium rounded-full ${
-                timeUnit === 'daily' 
+                focusTimeView === 'daily' 
                   ? 'bg-white text-gray-900 shadow-sm' 
                   : 'text-gray-600 hover:text-gray-900'
               }`}
@@ -303,7 +319,7 @@ export const FocusTimeTrend: React.FC = () => {
             <button 
               type="button" 
               className={`px-4 py-1.5 text-sm font-medium rounded-full ${
-                timeUnit === 'weekly' 
+                focusTimeView === 'weekly' 
                   ? 'bg-white text-gray-900 shadow-sm' 
                   : 'text-gray-600 hover:text-gray-900'
               }`}
@@ -314,7 +330,7 @@ export const FocusTimeTrend: React.FC = () => {
             <button 
               type="button" 
               className={`px-4 py-1.5 text-sm font-medium rounded-full ${
-                timeUnit === 'monthly' 
+                focusTimeView === 'monthly' 
                   ? 'bg-white text-gray-900 shadow-sm' 
                   : 'text-gray-600 hover:text-gray-900'
               }`}

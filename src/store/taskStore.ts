@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, onSnapshot, query, orderBy, where, writeBatch, setDoc } from 'firebase/firestore';
 import { db } from '../api/firebase';
 import { useUserStore } from './userStore';
+import { workSessionService } from '../api/workSessionService';
 import type { Task, Project } from '../types/models';
 
 interface TaskState {
@@ -31,10 +32,24 @@ interface TaskState {
   timeSpentIncrement: (id: string, increment: number) => Promise<void>;
   handleMoveCompletedDown: () => Promise<void>;
   handleArchiveCompleted: () => Promise<void>;
+  
+  // New function to get tasks with calculated timeSpent from WorkSessions
+  getTasksWithCalculatedTime: () => Promise<Task[]>;
 }
 
 const tasksCollection = collection(db, 'tasks');
 const projectsCollection = collection(db, 'projects');
+
+// Helper function to calculate timeSpent from WorkSession data
+const calculateTimeSpentFromSessions = async (taskId: string, userId: string): Promise<number> => {
+  try {
+    const sessions = await workSessionService.getWorkSessionsByTask(userId, taskId);
+    return sessions.reduce((total, session) => total + session.duration, 0);
+  } catch (error) {
+    console.error('Error calculating time spent from sessions:', error);
+    return 0; // Return 0 if we can't calculate from sessions
+  }
+};
 
 export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
@@ -383,6 +398,18 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       console.error('Error archiving completed tasks:', error);
       throw error;
     }
+  },
+
+  getTasksWithCalculatedTime: async () => {
+    const { tasks } = get();
+    const calculatedTimeTasks = await Promise.all(tasks.map(async task => {
+      const calculatedTime = await calculateTimeSpentFromSessions(task.id, task.userId);
+      return {
+        ...task,
+        calculatedTime
+      };
+    }));
+    return calculatedTimeTasks;
   },
 }));
 

@@ -1,39 +1,43 @@
 import React, { useState, useEffect } from 'react';
 import Card from '../../ui/Card';
-import { useFocusStore } from '../../../store/useFocusStore';
+import { useWorkSessionStore } from '../../../store/useWorkSessionStore';
+import { useTaskStore } from '../../../store/taskStore';
+import { useDashboardStore } from '../../../store/useDashboardStore';
 import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
+import { getTasksWorkedOnDate, taskToDashboardTask } from '../../../utils/dashboardAdapter';
+import type { Task as DashboardTask } from '../../../types';
 
 export const TopTasks: React.FC = () => {
-  const { tasks, projects, selectedDate, getTasksByDate } = useFocusStore();
-  const [displayTasks, setDisplayTasks] = useState<typeof tasks>([]);
+  const { workSessions, dateRange, setDateRange } = useWorkSessionStore();
+  const { tasks, projects } = useTaskStore();
+  const [displayTasks, setDisplayTasks] = useState<DashboardTask[]>([]);
+  const [showingToday, setShowingToday] = useState(false);
   
   // Format the selected date
-  const formattedDate = selectedDate 
-    ? selectedDate.toLocaleDateString('en-US', {
+  const formattedDate = showingToday 
+    ? new Date().toLocaleDateString('en-US', {
         month: 'long',
         day: 'numeric',
         year: 'numeric'
       })
-    : new Date().toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric'
-      });
+    : 'Last 30 days';
   
   // Update tasks when selected date changes
   useEffect(() => {
-    if (selectedDate) {
-      // Get tasks for the selected date
-      const tasksForDate = getTasksByDate(selectedDate);
+    if (showingToday) {
+      // Get tasks for today only
+      const today = new Date();
+      const tasksForDate = getTasksWorkedOnDate(today, workSessions, tasks);
       setDisplayTasks(tasksForDate);
     } else {
-      // Default to top tasks by focus time
-      const topTasks = [...tasks]
+      // Show top tasks by total focus time from work sessions in the current date range
+      const topTasks = tasks
+        .map(task => taskToDashboardTask(task, workSessions))
         .sort((a, b) => b.totalFocusTime - a.totalFocusTime)
         .slice(0, 7);
       setDisplayTasks(topTasks);
     }
-  }, [selectedDate, tasks, getTasksByDate]);
+  }, [showingToday, tasks, workSessions]);
   
   // Show empty state if no tasks
   if (displayTasks.length === 0) {
@@ -41,8 +45,35 @@ export const TopTasks: React.FC = () => {
       <Card 
         title="Top Tasks" 
         action={
-          <button className="flex items-center text-sm text-gray-600 hover:text-gray-800">
-            <span>{formattedDate}</span>
+          <button 
+            className="flex items-center text-sm text-gray-600 hover:text-gray-800"
+            onClick={() => {
+              const today = new Date();
+              const currentSelected = dateRange.startDate?.toDateString();
+              const todayString = today.toDateString();
+              
+              // Toggle between today and all time (30 days ago to today)
+              if (currentSelected === todayString) {
+                // Reset to default range (30 days)
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                thirtyDaysAgo.setHours(0, 0, 0, 0);
+                const endOfToday = new Date();
+                endOfToday.setHours(23, 59, 59, 999);
+                setDateRange(thirtyDaysAgo, endOfToday);
+                setShowingToday(false);
+              } else {
+                // Set to today only
+                const startOfToday = new Date();
+                startOfToday.setHours(0, 0, 0, 0);
+                const endOfToday = new Date();
+                endOfToday.setHours(23, 59, 59, 999);
+                setDateRange(startOfToday, endOfToday);
+                setShowingToday(true);
+              }
+            }}
+          >
+            <span>{showingToday ? formattedDate : 'Last 30 days'}</span>
             <div className="w-4 h-4 flex items-center justify-center ml-1">
               <i className="ri-calendar-line"></i>
             </div>
@@ -55,7 +86,7 @@ export const TopTasks: React.FC = () => {
               <i className="ri-calendar-event-line ri-2x"></i>
             </div>
             <p className="text-gray-500 text-sm">
-              {selectedDate ? 'You did not show up this day' : 'No tasks found'}
+              {showingToday ? 'No work sessions found for today' : 'No tasks with focus time found'}
             </p>
           </div>
         </div>
@@ -67,8 +98,35 @@ export const TopTasks: React.FC = () => {
     <Card 
       title="Top Tasks" 
       action={
-        <button className="flex items-center text-sm text-gray-600 hover:text-gray-800">
-          <span>{formattedDate}</span>
+        <button 
+          className="flex items-center text-sm text-gray-600 hover:text-gray-800"
+          onClick={() => {
+            const today = new Date();
+            const currentSelected = dateRange.startDate?.toDateString();
+            const todayString = today.toDateString();
+            
+            // Toggle between today and all time (30 days ago to today)
+            if (currentSelected === todayString) {
+              // Reset to default range (30 days)
+              const thirtyDaysAgo = new Date();
+              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+              thirtyDaysAgo.setHours(0, 0, 0, 0);
+              const endOfToday = new Date();
+              endOfToday.setHours(23, 59, 59, 999);
+              setDateRange(thirtyDaysAgo, endOfToday);
+              setShowingToday(false);
+            } else {
+              // Set to today only
+              const startOfToday = new Date();
+              startOfToday.setHours(0, 0, 0, 0);
+              const endOfToday = new Date();
+              endOfToday.setHours(23, 59, 59, 999);
+              setDateRange(startOfToday, endOfToday);
+              setShowingToday(true);
+            }
+          }}
+        >
+          <span>{showingToday ? formattedDate : 'Last 30 days'}</span>
           <div className="w-4 h-4 flex items-center justify-center ml-1">
             <i className="ri-calendar-line"></i>
           </div>
