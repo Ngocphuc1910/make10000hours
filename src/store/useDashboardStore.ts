@@ -1,16 +1,16 @@
 import { create } from 'zustand';
 
 interface DashboardState {
-  selectedDate: Date;
+  selectedDate: Date | null;
   focusTimeView: 'daily' | 'weekly' | 'monthly';
   
   // Actions
-  setSelectedDate: (date: Date) => void;
+  setSelectedDate: (date: Date | null) => void;
   setFocusTimeView: (view: 'daily' | 'weekly' | 'monthly') => void;
 }
 
 export const useDashboardStore = create<DashboardState>((set) => ({
-  selectedDate: new Date(2025, 4, 16), // May 16, 2025 as default
+  selectedDate: null, // null means show all-time stats
   focusTimeView: 'daily',
   
   // Actions

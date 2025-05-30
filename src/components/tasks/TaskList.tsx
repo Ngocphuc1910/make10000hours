@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTaskStore } from '../../store/taskStore';
+import { useTaskTimeSpent } from '../../hooks/useTaskTimeSpent';
 import TaskItem from './TaskItem';
 import TaskForm from './TaskForm';
-import type { Task } from '../../types/models';
+import type { Task, Project } from '../../types/models';
 import { formatMinutesToHoursAndMinutes } from '../../utils/timeUtils';
 
 interface TaskListProps {
@@ -30,8 +31,16 @@ export const TaskList: React.FC<TaskListProps> = ({
     handleArchiveCompleted
   } = useTaskStore();
   
+  // UI state
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  
+  // Store state
+  const { getTimeSpentForTask } = useTaskTimeSpent();
+  
   // For drag and drop
-  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const draggedTaskId = useRef<string | null>(null);
   const draggedTaskIndex = useRef<number>(-1);
   const taskListRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -80,7 +89,7 @@ export const TaskList: React.FC<TaskListProps> = ({
   
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     // Store the dragged task ID
-    setDraggedTaskId(taskId);
+    draggedTaskId.current = taskId;
     
     // Find the task index
     const taskIndex = tasks.findIndex(t => t.id === taskId);
@@ -94,7 +103,7 @@ export const TaskList: React.FC<TaskListProps> = ({
     e.currentTarget.classList.remove('opacity-70', 'border-dashed');
     
     // Reset the dragged task ID
-    setDraggedTaskId(null);
+    draggedTaskId.current = null;
     draggedTaskIndex.current = -1;
   };
   
@@ -116,16 +125,16 @@ export const TaskList: React.FC<TaskListProps> = ({
     e.currentTarget.classList.remove('bg-gray-50');
     
     // If no task was dragged or dropping on itself, do nothing
-    if (!draggedTaskId || draggedTaskId === dropTargetId) return;
+    if (!draggedTaskId.current || draggedTaskId.current === dropTargetId) return;
     
-    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    const draggedTask = tasks.find(t => t.id === draggedTaskId.current);
     const dropTarget = tasks.find(t => t.id === dropTargetId);
     
     if (!draggedTask || !dropTarget) return;
     
     // Just reorder the tasks, don't change completion status
     const dropIndex = tasks.findIndex(t => t.id === dropTargetId);
-    reorderTasks(draggedTaskId, dropIndex);
+    reorderTasks(draggedTaskId.current, dropIndex);
   };
   
   const handleAddTask = () => {
@@ -166,14 +175,20 @@ export const TaskList: React.FC<TaskListProps> = ({
     })
     .sort((a, b) => a.order - b.order);
 
-  // Calculate total time statistics
-  const totalTimeSpent = sortedTasks.reduce((sum, task) => sum + (task.timeSpent || 0), 0);
+  // Calculate total time statistics using WorkSession data
+  const totalTimeSpent = sortedTasks.reduce((sum, task) => {
+    const calculatedTime = getTimeSpentForTask(task.id);
+    return sum + calculatedTime;
+  }, 0);
   const totalTimeEstimated = sortedTasks.reduce((sum, task) => sum + (task.timeEstimated || 0), 0);
   
   // Calculate time remaining only for tasks with "pomodoro" status (active tasks in Pomodoro workflow)
   const pomodoroTasks = sortedTasks.filter(task => task.status === 'pomodoro');
   const pomodoroTimeEstimated = pomodoroTasks.reduce((sum, task) => sum + (task.timeEstimated || 0), 0);
-  const pomodoroTimeSpent = pomodoroTasks.reduce((sum, task) => sum + (task.timeSpent || 0), 0);
+  const pomodoroTimeSpent = pomodoroTasks.reduce((sum, task) => {
+    const calculatedTime = getTimeSpentForTask(task.id);
+    return sum + calculatedTime;
+  }, 0);
   const timeRemaining = Math.max(0, pomodoroTimeEstimated - pomodoroTimeSpent);
   
   return (
