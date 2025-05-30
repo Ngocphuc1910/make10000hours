@@ -29,8 +29,11 @@ export const taskToDashboardTask = (
     .filter(session => session.taskId === task.id)
     .reduce((total, session) => total + session.duration, 0);
   
-  // Use WorkSession time if available, otherwise fall back to stored timeSpent
-  const totalFocusTime = workSessionTime > 0 ? workSessionTime : (task.timeSpent || 0);
+  // Use WorkSession time if any WorkSessions exist, otherwise fall back to stored timeSpent
+  // This ensures manual adjustments (including reductions) are reflected in dashboard
+  // But prevent negative time display by ensuring minimum of 0
+  const hasWorkSessions = workSessions.some(session => session.taskId === task.id);
+  const totalFocusTime = hasWorkSessions ? Math.max(0, workSessionTime) : (task.timeSpent || 0);
 
   return {
     id: task.id,
