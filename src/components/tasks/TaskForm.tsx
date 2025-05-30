@@ -3,6 +3,8 @@ import type { Task } from '../../types/models';
 import { useTaskStore } from '../../store/taskStore';
 import { Icon } from '../ui/Icon';
 import { useUserStore } from '../../store/userStore';
+import { useWorkSessionStore } from '../../store/useWorkSessionStore';
+import { formatMinutesToHoursAndMinutes } from '../../utils/timeUtils';
 
 interface TaskFormProps {
   task?: Task;
@@ -12,12 +14,9 @@ interface TaskFormProps {
 }
 
 const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onCancel }) => {
-  const addTask = useTaskStore(state => state.addTask);
-  const updateTask = useTaskStore(state => state.updateTask);
-  const deleteTask = useTaskStore(state => state.deleteTask);
-  const projects = useTaskStore(state => state.projects);
-  const addProject = useTaskStore(state => state.addProject);
-  const user = useUserStore(state => state.user);
+  const { tasks, addTask, updateTask, deleteTask, projects, addProject } = useTaskStore();
+  const { user } = useUserStore();
+  const { createWorkSession } = useWorkSessionStore();
   
   const [title, setTitle] = useState(task?.title || '');
   const [projectId, setProjectId] = useState(task?.projectId || '');
@@ -192,9 +191,36 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
       timeEstimated: parseInt(timeEstimated) || 0
     };
     
+    // Check if timeSpent was manually changed (only for existing tasks)
+    const originalTimeSpent = task?.timeSpent || 0;
+    const newTimeSpent = parseInt(timeSpent) || 0;
+    const timeSpentChanged = task && newTimeSpent !== originalTimeSpent;
+    const timeDifference = newTimeSpent - originalTimeSpent;
+    
     if (task) {
       // Update existing task
       updateTask(task.id, taskData);
+      
+      // Create WorkSession record for manual time changes (both additions and reductions)
+      if (timeSpentChanged && timeDifference !== 0) {
+        const now = new Date();
+        try {
+          await createWorkSession({
+            userId: user.uid,
+            taskId: task.id,
+            projectId: finalProjectId || 'no-project',
+            startTime: now,
+            endTime: now,
+            duration: timeDifference, // Can be positive (addition) or negative (reduction)
+            sessionType: 'manual',
+            notes: timeDifference > 0 
+              ? `Manual time added: +${timeDifference}m`
+              : `Manual time reduced: ${timeDifference}m`
+          });
+        } catch (error) {
+          console.error('Failed to create work session for manual edit:', error);
+        }
+      }
     } else {
       // Add new task
       addTask(taskData);
