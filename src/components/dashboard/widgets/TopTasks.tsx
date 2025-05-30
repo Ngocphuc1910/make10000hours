@@ -2,16 +2,18 @@ import React, { useState, useEffect } from 'react';
 import Card from '../../ui/Card';
 import { useWorkSessionStore } from '../../../store/useWorkSessionStore';
 import { useTaskStore } from '../../../store/taskStore';
-import { useDashboardStore } from '../../../store/useDashboardStore';
+import { useUserStore } from '../../../store/userStore';
 import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
 import { getTasksWorkedOnDate, taskToDashboardTask } from '../../../utils/dashboardAdapter';
 import type { Task as DashboardTask } from '../../../types';
 
 export const TopTasks: React.FC = () => {
-  const { workSessions, dateRange, setDateRange } = useWorkSessionStore();
+  const { dateRange, setDateRange } = useWorkSessionStore();
   const { tasks, projects } = useTaskStore();
+  const { user } = useUserStore();
   const [displayTasks, setDisplayTasks] = useState<DashboardTask[]>([]);
   const [showingToday, setShowingToday] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
   // Format the selected date
   const formattedDate = showingToday 
@@ -24,22 +26,55 @@ export const TopTasks: React.FC = () => {
   
   // Update tasks when selected date changes
   useEffect(() => {
-    if (showingToday) {
-      // Get tasks for today only
-      const today = new Date();
-      const tasksForDate = getTasksWorkedOnDate(today, workSessions, tasks);
-      setDisplayTasks(tasksForDate);
-    } else {
-      // Show all tasks by total focus time from work sessions in the current date range
-      const sortedTasks = tasks
-        .map(task => taskToDashboardTask(task, workSessions))
-        .filter(task => task.totalFocusTime > 0) // Only show tasks with time spent
-        .sort((a, b) => b.totalFocusTime - a.totalFocusTime);
-      setDisplayTasks(sortedTasks);
-    }
-  }, [showingToday, tasks, workSessions]);
+    const updateTasks = async () => {
+      if (!user) return;
+      
+      setIsLoading(true);
+      try {
+        if (showingToday) {
+          // Get tasks for today only using daily time tracking
+          const today = new Date();
+          const tasksForDate = await getTasksWorkedOnDate(today, tasks, user.uid);
+          setDisplayTasks(tasksForDate);
+        } else {
+          // Show all tasks by total focus time from timeSpent field
+          const sortedTasks = tasks
+            .map(task => taskToDashboardTask(task))
+            .filter(task => task.totalFocusTime > 0) // Only show tasks with time spent
+            .sort((a, b) => b.totalFocusTime - a.totalFocusTime);
+          setDisplayTasks(sortedTasks);
+        }
+      } catch (error) {
+        console.error('Error updating tasks:', error);
+        setDisplayTasks([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    updateTasks();
+  }, [showingToday, tasks, user]);
   
   // Show empty state if no tasks
+  if (isLoading) {
+    return (
+      <Card 
+        title="Top Tasks" 
+        action={
+          <button className="flex items-center text-sm text-gray-600">
+            <span>Loading...</span>
+          </button>
+        }
+      >
+        <div className="flex items-center justify-center h-[360px]">
+          <div className="text-center">
+            <p className="text-gray-500 text-sm">Loading tasks...</p>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
   if (displayTasks.length === 0) {
     return (
       <Card 

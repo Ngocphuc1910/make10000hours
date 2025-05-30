@@ -336,11 +336,24 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       throw new Error('Time spent cannot be negative');
     }
     try {
+      // Update the main task timeSpent field
       const taskRef = doc(db, 'tasks', id);
       await updateDoc(taskRef, {
         timeSpent: newTimeSpent,
         updatedAt: new Date()
       });
+
+      // Also track daily time spent for dashboard date filtering
+      const { user } = useUserStore.getState();
+      if (user) {
+        const { dailyTimeSpentService } = await import('../api/dailyTimeSpentService');
+        await dailyTimeSpentService.incrementTimeSpent(
+          user.uid,
+          task.id,
+          task.projectId,
+          increment
+        );
+      }
     } catch (error) {
       console.error('Error incrementing time spent:', error);
       throw error;

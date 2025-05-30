@@ -1,18 +1,16 @@
 import React from 'react';
 import Card from '../../ui/Card';
-import { useWorkSessionStore } from '../../../store/useWorkSessionStore';
 import { useTaskStore } from '../../../store/taskStore';
 import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
 import { projectToDashboardProject } from '../../../utils/dashboardAdapter';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 export const TopProjects: React.FC = () => {
-  const { workSessions } = useWorkSessionStore();
-  const { projects } = useTaskStore();
+  const { tasks, projects } = useTaskStore();
   
-  // Convert projects to dashboard format with real WorkSession data
+  // Convert projects to dashboard format with task timeSpent data
   const dashboardProjects = projects
-    .map(project => projectToDashboardProject(project, workSessions))
+    .map(project => projectToDashboardProject(project, tasks))
     .sort((a, b) => b.totalFocusTime - a.totalFocusTime);
 
   // Get top 9 projects and sum up the rest as "Others"
