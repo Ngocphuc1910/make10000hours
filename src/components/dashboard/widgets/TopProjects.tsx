@@ -83,48 +83,20 @@ export const TopProjects: React.FC = () => {
 
   // Custom Legend component
   const CustomLegend = () => {
-    // Determine number of columns based on total items
-    const getGridCols = (totalItems: number) => {
-      if (totalItems <= 5) return totalItems;
-      return 5; // Default to 5 columns for more than 5 items
-    };
-
-    // Calculate rows based on number of columns
-    const numCols = getGridCols(chartData.length);
-    const rows = chartData.reduce((acc: any[][], item, index) => {
-      const rowIndex = Math.floor(index / numCols);
-      if (!acc[rowIndex]) {
-        acc[rowIndex] = [];
-      }
-      acc[rowIndex].push(item);
-      return acc;
-    }, []);
-
-    // Dynamic grid columns class
-    const gridColsClass = `grid-cols-${numCols}`;
-
     return (
-      <div className="flex flex-col gap-2 mt-4 px-4">
-        {rows.map((row, rowIndex) => (
-          <div key={rowIndex} className={`grid ${gridColsClass} gap-8`}>
-            {row.map((entry, index) => (
-              <div key={index} className="flex items-center w-full">
-                <div 
-                  className="w-3 h-3 rounded-sm mr-2 flex-shrink-0"
-                  style={{ backgroundColor: entry.color }}
-                />
-                <span 
-                  className="text-xs text-gray-600 overflow-hidden text-ellipsis whitespace-nowrap flex-1"
-                  title={entry.fullName}
-                >
-                  {entry.fullName}
-                </span>
-              </div>
-            ))}
-            {/* Add empty columns to maintain grid alignment if row is not complete */}
-            {Array.from({ length: numCols - row.length }, (_, i) => (
-              <div key={`empty-${i}`} />
-            ))}
+      <div className="flex flex-wrap gap-x-8 gap-y-2 mt-4 px-4">
+        {chartData.map((entry, index) => (
+          <div key={index} className="flex items-center min-w-0 max-w-[200px]">
+            <div 
+              className="w-3 h-3 rounded-sm mr-2 flex-shrink-0"
+              style={{ backgroundColor: entry.color }}
+            />
+            <span 
+              className="text-xs text-gray-600 overflow-hidden text-ellipsis whitespace-nowrap flex-1"
+              title={entry.fullName}
+            >
+              {entry.fullName}
+            </span>
           </div>
         ))}
       </div>
