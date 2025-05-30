@@ -18,22 +18,14 @@ export const workSessionToFocusSession = (workSession: WorkSession): FocusSessio
 };
 
 /**
- * Convert Task to dashboard Task format with hybrid time calculation
+ * Convert Task to dashboard Task format using timeSpent as single source of truth
  */
 export const taskToDashboardTask = (
   task: Task, 
-  workSessions: WorkSession[]
+  workSessions?: WorkSession[] // Optional for backward compatibility
 ): DashboardTask => {
-  // Calculate total focus time from work sessions for this task
-  const workSessionTime = workSessions
-    .filter(session => session.taskId === task.id)
-    .reduce((total, session) => total + session.duration, 0);
-  
-  // Use WorkSession time if any WorkSessions exist, otherwise fall back to stored timeSpent
-  // This ensures manual adjustments (including reductions) are reflected in dashboard
-  // But prevent negative time display by ensuring minimum of 0
-  const hasWorkSessions = workSessions.some(session => session.taskId === task.id);
-  const totalFocusTime = hasWorkSessions ? Math.max(0, workSessionTime) : (task.timeSpent || 0);
+  // Use task.timeSpent as the single source of truth for total focus time
+  const totalFocusTime = task.timeSpent || 0;
 
   return {
     id: task.id,
@@ -48,16 +40,16 @@ export const taskToDashboardTask = (
 };
 
 /**
- * Convert Project to dashboard Project format
+ * Convert Project to dashboard Project format using task timeSpent as source
  */
 export const projectToDashboardProject = (
   project: Project,
-  workSessions: WorkSession[]
+  tasks: Task[]
 ): DashboardProject => {
-  // Calculate total focus time from work sessions for this project
-  const totalFocusTime = workSessions
-    .filter(session => session.projectId === project.id)
-    .reduce((total, session) => total + session.duration, 0);
+  // Calculate total focus time from tasks in this project using timeSpent
+  const totalFocusTime = tasks
+    .filter(task => task.projectId === project.id)
+    .reduce((total, task) => total + (task.timeSpent || 0), 0);
 
   return {
     id: project.id,
@@ -174,46 +166,48 @@ export const calculateFocusStreak = (workSessions: WorkSession[]): FocusStreak =
 };
 
 /**
- * Get tasks that were worked on for a specific date from work sessions
+ * Get tasks that were worked on for a specific date using daily time tracking
  */
-export const getTasksWorkedOnDate = (
+export const getTasksWorkedOnDate = async (
   date: Date,
-  workSessions: WorkSession[],
-  tasks: Task[]
-): DashboardTask[] => {
-  const dateString = date.toDateString();
-  
-  // Find sessions on this date
-  const sessionsOnDate = workSessions.filter(
-    session => session.startTime.toDateString() === dateString
-  );
-  
-  // Get unique task IDs from sessions
-  const taskIdsWorkedOn = new Set(
-    sessionsOnDate
-      .filter(session => session.taskId)
-      .map(session => session.taskId)
-  );
-  
-  // Convert to dashboard tasks and sort by time spent on this date
-  return tasks
-    .filter(task => taskIdsWorkedOn.has(task.id))
-    .map(task => {
-      // Calculate time spent on this specific date
-      const timeOnDate = sessionsOnDate
-        .filter(session => session.taskId === task.id)
-        .reduce((total, session) => total + session.duration, 0);
-      
-      return {
-        id: task.id,
-        userId: task.userId,
-        projectId: task.projectId,
-        name: task.title, // Map title to name
-        description: task.description || '',
-        isCompleted: task.completed,
-        totalFocusTime: timeOnDate, // Use time spent on this date specifically
-        createdAt: task.createdAt
-      };
-    })
-    .sort((a, b) => b.totalFocusTime - a.totalFocusTime);
+  tasks: Task[],
+  userId: string
+): Promise<DashboardTask[]> => {
+  try {
+    const { dailyTimeSpentService } = await import('../api/dailyTimeSpentService');
+    
+    // Get all daily time spent records for this date
+    const dailyRecords = await dailyTimeSpentService.getDailyTimeSpent(userId, date, date);
+    
+    if (dailyRecords.length === 0) {
+      return [];
+    }
+    
+    // Get unique task IDs that have time spent on this date
+    const taskIdsWorkedOn = new Set(dailyRecords.map(record => record.taskId));
+    
+    // Convert to dashboard tasks and set time spent to the daily amount
+    return tasks
+      .filter(task => taskIdsWorkedOn.has(task.id))
+      .map(task => {
+        // Find the daily record for this task
+        const dailyRecord = dailyRecords.find(record => record.taskId === task.id);
+        const timeOnDate = dailyRecord?.timeSpent || 0;
+        
+        return {
+          id: task.id,
+          userId: task.userId,
+          projectId: task.projectId,
+          name: task.title,
+          description: task.description || '',
+          isCompleted: task.completed,
+          totalFocusTime: timeOnDate, // Use time spent on this specific date
+          createdAt: task.createdAt
+        };
+      })
+      .sort((a, b) => b.totalFocusTime - a.totalFocusTime);
+  } catch (error) {
+    console.error('Error getting tasks worked on date:', error);
+    return [];
+  }
 }; 
