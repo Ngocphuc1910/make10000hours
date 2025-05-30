@@ -17,6 +17,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
 }) => {
   const tasks = useTaskStore(state => state.tasks);
   const addProject = useTaskStore(state => state.addProject);
+  const deleteProject = useTaskStore(state => state.deleteProject);
   const updateTask = useTaskStore(state => state.updateTask);
   const [projectName, setProjectName] = useState(project?.name || '');
   
@@ -29,6 +30,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
   const [draggedOverFilter, setDraggedOverFilter] = useState<string | null>(null);
   
   // Save activeFilter to localStorage whenever it changes
@@ -98,6 +100,43 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const toggleCollapsed = () => {
     setIsCollapsed(!isCollapsed);
   };
+  
+  // Handle project deletion
+  const handleDeleteProject = async () => {
+    if (!project) return;
+    
+    const projectTasks = tasks.filter(task => task.projectId === project.id);
+    const taskCount = projectTasks.length;
+    
+    let confirmMessage = `Are you sure you want to delete the project "${project.name}"?`;
+    if (taskCount > 0) {
+      confirmMessage += `\n\nThis will also permanently delete ${taskCount} task${taskCount === 1 ? '' : 's'} in this project.`;
+    }
+    confirmMessage += '\n\nThis action cannot be undone.';
+    
+    if (window.confirm(confirmMessage)) {
+      try {
+        await deleteProject(project.id);
+        setShowDropdown(false);
+      } catch (error) {
+        console.error('Failed to delete project:', error);
+        alert('Failed to delete project. Please try again.');
+      }
+    }
+  };
+
+  // Close dropdown when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.project-dropdown') && showDropdown) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showDropdown]);
   
   // Drag and drop handlers for filter tabs
   const handleFilterDragOver = (e: React.DragEvent, filterType: 'pomodoro' | 'todo' | 'completed') => {
@@ -258,15 +297,32 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             </div>
             <div className="ml-2 text-xs font-medium text-gray-700">{progressPercentage}%</div>
           </div>
-          <div className="project-menu relative">
+          <div className="project-menu relative project-dropdown">
             <button 
               className="p-1 rounded-full hover:bg-gray-200"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDropdown(!showDropdown);
+              }}
             >
               <div className="w-5 h-5 flex items-center justify-center text-gray-500">
                 <Icon name="more-2-fill" />
               </div>
             </button>
+            
+            {showDropdown && (
+              <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10 overflow-hidden">
+                <div className="py-1 px-2">
+                  <button 
+                    onClick={handleDeleteProject}
+                    className="w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left flex items-center transition-colors duration-200 rounded-md"
+                  >
+                    <Icon name="delete-bin-line" size={16} className="mr-2" />
+                    Delete project
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
