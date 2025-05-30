@@ -1,28 +1,80 @@
 import React from 'react';
 import Card from '../../ui/Card';
+import { useWorkSessionStore } from '../../../store/useWorkSessionStore';
+import { useUserStore } from '../../../store/userStore';
 
 export const AverageFocusTime: React.FC = () => {
-  // Mock data for focus time statistics
-  const stats = {
-    dailyAverage: {
-      hours: 3,
-      minutes: 24
-    },
-    totalFocus: {
-      hours: 23,
-      minutes: 48
-    },
-    weeklyGoal: {
-      current: 17.2, // Hours
-      target: 25, // Hours
-      progress: 68 // Percentage (17.2 / 25 * 100)
-    },
-    journey: {
-      current: 1248, // Hours
-      target: 10000, // Hours
-      progress: 12.48 // Percentage (1248 / 10000 * 100)
+  const { workSessions } = useWorkSessionStore();
+  const { user } = useUserStore();
+  
+  // Calculate real statistics from work sessions
+  const calculateStats = () => {
+    if (workSessions.length === 0) {
+      return {
+        dailyAverage: { hours: 0, minutes: 0 },
+        totalFocus: { hours: 0, minutes: 0 },
+        weeklyGoal: { current: 0, target: 25, progress: 0 },
+        journey: { current: 0, target: 10000, progress: 0 }
+      };
     }
+
+    // Total focus time
+    const totalMinutes = workSessions.reduce((total, session) => total + session.duration, 0);
+    const totalHours = Math.floor(totalMinutes / 60);
+    const totalRemainingMinutes = totalMinutes % 60;
+
+    // Group sessions by date for daily average
+    const sessionsByDate = new Map<string, number>();
+    workSessions.forEach(session => {
+      const dateKey = session.startTime.toDateString();
+      sessionsByDate.set(dateKey, (sessionsByDate.get(dateKey) || 0) + session.duration);
+    });
+
+    // Daily average
+    const totalDays = sessionsByDate.size;
+    const dailyAverageMinutes = totalDays > 0 ? totalMinutes / totalDays : 0;
+    const dailyAverageHours = Math.floor(dailyAverageMinutes / 60);
+    const dailyAverageRemainingMinutes = Math.floor(dailyAverageMinutes % 60);
+
+    // Weekly goal (last 7 days)
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    
+    const thisWeekSessions = workSessions.filter(session => 
+      session.startTime >= weekAgo
+    );
+    const thisWeekMinutes = thisWeekSessions.reduce((total, session) => total + session.duration, 0);
+    const thisWeekHours = thisWeekMinutes / 60;
+    const weeklyGoalTarget = 25; // Default weekly goal
+    const weeklyProgress = (thisWeekHours / weeklyGoalTarget) * 100;
+
+    // 10000 hours journey
+    const journeyTarget = 10000; // Default journey goal
+    const journeyProgress = (totalHours / journeyTarget) * 100;
+
+    return {
+      dailyAverage: {
+        hours: dailyAverageHours,
+        minutes: dailyAverageRemainingMinutes
+      },
+      totalFocus: {
+        hours: totalHours,
+        minutes: totalRemainingMinutes
+      },
+      weeklyGoal: {
+        current: parseFloat(thisWeekHours.toFixed(1)),
+        target: weeklyGoalTarget,
+        progress: Math.min(weeklyProgress, 100)
+      },
+      journey: {
+        current: totalHours,
+        target: journeyTarget,
+        progress: parseFloat(journeyProgress.toFixed(2))
+      }
+    };
   };
+
+  const stats = calculateStats();
 
   return (
     <Card title="Average Focus Time">

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { DEFAULT_SETTINGS, type TimerMode, type TimerSettings, type TimerState as TimerStateModel } from '../types/models';
 import { useTaskStore } from './taskStore';
 import { useUserStore } from './userStore';
+import { useWorkSessionStore } from './useWorkSessionStore';
 import { timerService } from '../api/timerService';
 import { calculateElapsedTime } from '../utils/timeUtils';
 
@@ -102,6 +103,68 @@ export const useTimerStore = create<TimerState>((set, get) => {
     
     pause: () => {
       const currentState = get();
+      const { user } = useUserStore.getState();
+      const { createWorkSession } = useWorkSessionStore.getState();
+      const { tasks } = useTaskStore.getState();
+      
+      console.log('⏸️ Timer pause called:', {
+        mode: currentState.mode,
+        currentTaskId: currentState.currentTaskId,
+        sessionStartTime,
+        user: user?.uid,
+        timeSpentInSession: currentState.totalTime - currentState.currentTime
+      });
+      
+      // Create work session if pausing during a pomodoro with a current task and meaningful time spent
+      if (currentState.mode === 'pomodoro' && currentState.currentTaskId && sessionStartTime && user) {
+        const timeSpentInSession = currentState.totalTime - currentState.currentTime; // in seconds
+        const durationInMinutes = Math.round(timeSpentInSession / 60);
+        
+        console.log('📊 Pause - checking duration:', {
+          timeSpentInSession,
+          durationInMinutes,
+          threshold: 1
+        });
+        
+        // Only create session if meaningful time spent (at least 1 minute)
+        if (durationInMinutes >= 1) {
+          const task = tasks.find(t => t.id === currentState.currentTaskId);
+          if (task) {
+            const endTime = new Date();
+            
+            console.log('📊 Creating WorkSession from pause:', {
+              taskId: currentState.currentTaskId,
+              task: task.title,
+              duration: durationInMinutes
+            });
+            
+            createWorkSession({
+              userId: user.uid,
+              taskId: currentState.currentTaskId,
+              projectId: task.projectId,
+              startTime: sessionStartTime,
+              endTime: endTime,
+              duration: durationInMinutes,
+              sessionType: 'pomodoro',
+              notes: `Pomodoro session paused`
+            }).then(() => {
+              console.log('✅ WorkSession created from pause');
+            }).catch(error => {
+              console.error('❌ Failed to create work session from pause:', error);
+            });
+          }
+        } else {
+          console.log('⚠️ Not creating WorkSession - duration too short:', durationInMinutes, 'minutes');
+        }
+      } else {
+        console.log('⚠️ WorkSession NOT created from pause. Conditions not met:', {
+          isPomodoroMode: currentState.mode === 'pomodoro',
+          hasCurrentTask: !!currentState.currentTaskId,
+          hasSessionStartTime: !!sessionStartTime,
+          hasUser: !!user
+        });
+      }
+      
       sessionStartTime = null; // Clear session start time when paused
       
       set({ isRunning: false });
@@ -125,7 +188,58 @@ export const useTimerStore = create<TimerState>((set, get) => {
     },
     
     skip: () => {
-      const { mode, sessionsCompleted, settings } = get();
+      const { mode, sessionsCompleted, settings, currentTaskId } = get();
+      const { user } = useUserStore.getState();
+      const { createWorkSession } = useWorkSessionStore.getState();
+      const { tasks } = useTaskStore.getState();
+      
+      console.log('🔍 Timer skip called:', {
+        mode,
+        currentTaskId,
+        sessionStartTime,
+        user: user?.uid,
+        hasCreateWorkSession: !!createWorkSession
+      });
+      
+      // Create work session if completing a pomodoro and we have a current task
+      if (mode === 'pomodoro' && currentTaskId && sessionStartTime && user) {
+        const task = tasks.find(t => t.id === currentTaskId);
+        console.log('📊 Creating WorkSession:', {
+          taskId: currentTaskId,
+          task: task?.title,
+          startTime: sessionStartTime,
+          duration: Math.round((new Date().getTime() - sessionStartTime.getTime()) / (1000 * 60))
+        });
+        
+        if (task) {
+          const endTime = new Date();
+          const duration = Math.round((endTime.getTime() - sessionStartTime.getTime()) / (1000 * 60)); // duration in minutes
+          
+          // Create work session
+          createWorkSession({
+            userId: user.uid,
+            taskId: currentTaskId,
+            projectId: task.projectId,
+            startTime: sessionStartTime,
+            endTime: endTime,
+            duration: duration,
+            sessionType: 'pomodoro',
+            notes: `Pomodoro session completed`
+          }).then(() => {
+            console.log('✅ WorkSession created successfully');
+          }).catch(error => {
+            console.error('❌ Failed to create work session:', error);
+          });
+        }
+      } else {
+        console.log('⚠️ WorkSession NOT created. Conditions not met:', {
+          isPomodoroMode: mode === 'pomodoro',
+          hasCurrentTask: !!currentTaskId,
+          hasSessionStartTime: !!sessionStartTime,
+          hasUser: !!user
+        });
+      }
+      
       let nextMode: TimerMode = mode;
       let nextSessionsCompleted = sessionsCompleted;
       
@@ -141,6 +255,9 @@ export const useTimerStore = create<TimerState>((set, get) => {
         nextMode = 'pomodoro';
       }
       
+      // Reset session start time when switching modes
+      sessionStartTime = null;
+      
       // Set the new mode and reset timer
       const totalSeconds = settings[nextMode] * 60;
       const autoStartPomodoro = settings.autoStartPomodoros && nextMode === 'pomodoro';
@@ -155,6 +272,11 @@ export const useTimerStore = create<TimerState>((set, get) => {
         settings
       });
       
+      // If auto-starting next session, set new session start time
+      if (autoStartPomodoro || autoStartBreak) {
+        sessionStartTime = new Date();
+      }
+      
       get().saveToDatabase();
     },
     
@@ -163,9 +285,11 @@ export const useTimerStore = create<TimerState>((set, get) => {
       
       // Only tick if this is the active device
       if (!isActiveDevice) return;
-      
+
       const { timeSpentIncrement } = useTaskStore.getState();
 
+      // Continue to increment task.timeSpent for backward compatibility
+      // while also creating WorkSession records for date-aware tracking
       if (currentTime !== totalTime && currentTime % 60 === 0) {
         // Increment time spent for the current task every minute
         const { currentTaskId } = get();

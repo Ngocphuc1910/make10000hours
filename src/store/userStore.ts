@@ -7,6 +7,9 @@ import {
 import { auth, db } from '../api/firebase';
 import { AppSettings, DEFAULT_SETTINGS, type UserData } from '../types/models';
 import { collection, doc, getDoc, setDoc } from 'firebase/firestore';
+import { useTaskStore } from './taskStore';
+import { useWorkSessionStore } from './useWorkSessionStore';
+import { useTimerStore } from './timerStore';
 
 export type User = UserProfile & UserData;
 
@@ -61,6 +64,11 @@ export const useUserStore = create<UserState>((set, get) => {
               isLoading: false,
               error: null
             });
+
+            // Initialize work session store
+            useWorkSessionStore.getState().initializeStore(user.uid);
+            useTimerStore.getState().initializePersistence(user.uid);
+            useTaskStore.getState().initializeStore();
           } else {
             set({ 
               user: null, 
