@@ -21,16 +21,17 @@ export const useTaskTimeSpent = () => {
     });
 
     return (taskId: string): number => {
-      // First try to get time from WorkSession data
+      // Get time from WorkSession data
       const workSessionTime = workSessionTimeMap.get(taskId) || 0;
       
-      // If no WorkSession data exists, fall back to stored task.timeSpent
-      if (workSessionTime === 0) {
-        const task = tasks.find(t => t.id === taskId);
-        return task?.timeSpent || 0;
-      }
+      // Get stored time from task
+      const task = tasks.find(t => t.id === taskId);
+      const storedTime = task?.timeSpent || 0;
       
-      return workSessionTime;
+      // Return the sum of both - this handles the hybrid scenario where:
+      // - storedTime contains legacy time data
+      // - workSessionTime contains new timer-tracked time
+      return storedTime + workSessionTime;
     };
   }, [workSessions, tasks]);
 

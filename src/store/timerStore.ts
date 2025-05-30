@@ -107,36 +107,16 @@ export const useTimerStore = create<TimerState>((set, get) => {
       const { createWorkSession } = useWorkSessionStore.getState();
       const { tasks } = useTaskStore.getState();
       
-      console.log('⏸️ Timer pause called:', {
-        mode: currentState.mode,
-        currentTaskId: currentState.currentTaskId,
-        sessionStartTime,
-        user: user?.uid,
-        timeSpentInSession: currentState.totalTime - currentState.currentTime
-      });
-      
       // Create work session if pausing during a pomodoro with a current task and meaningful time spent
       if (currentState.mode === 'pomodoro' && currentState.currentTaskId && sessionStartTime && user) {
         const timeSpentInSession = currentState.totalTime - currentState.currentTime; // in seconds
         const durationInMinutes = Math.round(timeSpentInSession / 60);
-        
-        console.log('📊 Pause - checking duration:', {
-          timeSpentInSession,
-          durationInMinutes,
-          threshold: 1
-        });
         
         // Only create session if meaningful time spent (at least 1 minute)
         if (durationInMinutes >= 1) {
           const task = tasks.find(t => t.id === currentState.currentTaskId);
           if (task) {
             const endTime = new Date();
-            
-            console.log('📊 Creating WorkSession from pause:', {
-              taskId: currentState.currentTaskId,
-              task: task.title,
-              duration: durationInMinutes
-            });
             
             createWorkSession({
               userId: user.uid,
@@ -147,22 +127,11 @@ export const useTimerStore = create<TimerState>((set, get) => {
               duration: durationInMinutes,
               sessionType: 'pomodoro',
               notes: `Pomodoro session paused`
-            }).then(() => {
-              console.log('✅ WorkSession created from pause');
             }).catch(error => {
-              console.error('❌ Failed to create work session from pause:', error);
+              console.error('Failed to create work session:', error);
             });
           }
-        } else {
-          console.log('⚠️ Not creating WorkSession - duration too short:', durationInMinutes, 'minutes');
         }
-      } else {
-        console.log('⚠️ WorkSession NOT created from pause. Conditions not met:', {
-          isPomodoroMode: currentState.mode === 'pomodoro',
-          hasCurrentTask: !!currentState.currentTaskId,
-          hasSessionStartTime: !!sessionStartTime,
-          hasUser: !!user
-        });
       }
       
       sessionStartTime = null; // Clear session start time when paused
@@ -188,56 +157,37 @@ export const useTimerStore = create<TimerState>((set, get) => {
     },
     
     skip: () => {
-      const { mode, sessionsCompleted, settings, currentTaskId } = get();
+      const { mode, sessionsCompleted, settings, currentTaskId, totalTime, currentTime } = get();
       const { user } = useUserStore.getState();
       const { createWorkSession } = useWorkSessionStore.getState();
       const { tasks } = useTaskStore.getState();
       
-      console.log('🔍 Timer skip called:', {
-        mode,
-        currentTaskId,
-        sessionStartTime,
-        user: user?.uid,
-        hasCreateWorkSession: !!createWorkSession
-      });
-      
       // Create work session if completing a pomodoro and we have a current task
       if (mode === 'pomodoro' && currentTaskId && sessionStartTime && user) {
         const task = tasks.find(t => t.id === currentTaskId);
-        console.log('📊 Creating WorkSession:', {
-          taskId: currentTaskId,
-          task: task?.title,
-          startTime: sessionStartTime,
-          duration: Math.round((new Date().getTime() - sessionStartTime.getTime()) / (1000 * 60))
-        });
         
         if (task) {
           const endTime = new Date();
-          const duration = Math.round((endTime.getTime() - sessionStartTime.getTime()) / (1000 * 60)); // duration in minutes
+          // Use actual countdown time instead of wall clock time
+          const timeSpentInSession = totalTime - currentTime; // in seconds
+          const duration = Math.round(timeSpentInSession / 60); // duration in minutes
           
-          // Create work session
-          createWorkSession({
-            userId: user.uid,
-            taskId: currentTaskId,
-            projectId: task.projectId,
-            startTime: sessionStartTime,
-            endTime: endTime,
-            duration: duration,
-            sessionType: 'pomodoro',
-            notes: `Pomodoro session completed`
-          }).then(() => {
-            console.log('✅ WorkSession created successfully');
-          }).catch(error => {
-            console.error('❌ Failed to create work session:', error);
-          });
+          // Only create session if meaningful time spent (at least 1 minute)
+          if (duration >= 1) {
+            createWorkSession({
+              userId: user.uid,
+              taskId: currentTaskId,
+              projectId: task.projectId,
+              startTime: sessionStartTime,
+              endTime: endTime,
+              duration: duration,
+              sessionType: 'pomodoro',
+              notes: `Pomodoro session completed`
+            }).catch(error => {
+              console.error('Failed to create work session:', error);
+            });
+          }
         }
-      } else {
-        console.log('⚠️ WorkSession NOT created. Conditions not met:', {
-          isPomodoroMode: mode === 'pomodoro',
-          hasCurrentTask: !!currentTaskId,
-          hasSessionStartTime: !!sessionStartTime,
-          hasUser: !!user
-        });
       }
       
       let nextMode: TimerMode = mode;
