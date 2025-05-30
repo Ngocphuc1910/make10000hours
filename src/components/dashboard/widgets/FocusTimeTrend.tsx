@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Card from '../../ui/Card';
-import { useWorkSessionStore } from '../../../store/useWorkSessionStore';
 import { useDashboardStore } from '../../../store/useDashboardStore';
+import { useUserStore } from '../../../store/userStore';
 import type { TimeUnit } from '../../../types';
 import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
 
@@ -13,31 +13,92 @@ type ChartDataPoint = {
 export const FocusTimeTrend: React.FC = () => {
   const chartRef = useRef<HTMLDivElement>(null);
   const [chartInstance, setChartInstance] = useState<any>(null);
-  const { workSessions } = useWorkSessionStore();
+  const [dailyTimeData, setDailyTimeData] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { focusTimeView, setFocusTimeView } = useDashboardStore();
+  const { user } = useUserStore();
   
-  // Create date range for last 30 days
-  const dateRange = {
+  // Create stable date range for last 30 days using useMemo
+  const dateRange = useMemo(() => ({
     startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
     endDate: new Date()
-  };
+  }), []); // Empty dependency array means this only calculates once
   
-  // Generate chart data based on work sessions and time unit
+  // Load daily time data from DailyTimeSpent service
+  useEffect(() => {
+    const loadDailyTimeData = async () => {
+      if (!user) {
+        setDailyTimeData([]);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const { dailyTimeSpentService } = await import('../../../api/dailyTimeSpentService');
+        const { useTaskStore } = await import('../../../store/taskStore');
+        
+        // Get daily time spent records for the last 30 days
+        const dailyRecords = await dailyTimeSpentService.getDailyTimeSpent(
+          user.uid, 
+          dateRange.startDate, 
+          dateRange.endDate
+        );
+        
+        console.log('📊 Focus Time Trend - Daily records found:', dailyRecords.length);
+        console.log('📊 Date range:', dateRange.startDate.toISOString().split('T')[0], 'to', dateRange.endDate.toISOString().split('T')[0]);
+        
+        // If no daily records exist, create a fallback entry for today using task.timeSpent data
+        if (dailyRecords.length === 0) {
+          const { tasks } = useTaskStore.getState();
+          const totalTimeSpent = tasks.reduce((total, task) => total + (task.timeSpent || 0), 0);
+          
+          console.log('📊 No daily records found, checking task.timeSpent. Total:', totalTimeSpent, 'from', tasks.length, 'tasks');
+          
+          if (totalTimeSpent > 0) {
+            // Create a fallback record for today
+            const today = new Date();
+            const todayString = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+            
+            const fallbackRecord = {
+              id: `fallback_${todayString}`,
+              taskId: 'all_tasks',
+              projectId: 'all_projects', 
+              userId: user.uid,
+              date: todayString,
+              timeSpent: totalTimeSpent,
+              createdAt: today,
+              updatedAt: today
+            };
+            
+            setDailyTimeData([fallbackRecord]);
+          } else {
+            setDailyTimeData([]);
+          }
+        } else {
+          setDailyTimeData(dailyRecords);
+        }
+      } catch (error) {
+        console.error('Error loading daily time data:', error);
+        setDailyTimeData([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadDailyTimeData();
+  }, [user, dateRange]); // Now dateRange is stable
+
+  // Generate chart data based on daily time records and time unit
   const generateChartData = (): ChartDataPoint[] => {
-    if (workSessions.length === 0) return [];
+    if (dailyTimeData.length === 0) return [];
     
-    // Filter sessions within date range
-    const filteredSessions = workSessions.filter(session => {
-      const sessionDate = new Date(session.startTime);
-      return sessionDate >= dateRange.startDate && sessionDate <= dateRange.endDate;
-    });
-    
-    // Create a Map to aggregate focus time by date
-    const timeByDate = new Map<string, number>();
+    // Create a Map to aggregate focus time by date/week/month
+    const timeByPeriod = new Map<string, number>();
     
     // Create date formatter based on time unit
     let dateFormatter: (date: Date) => string;
-    let groupingFunction: (date: Date) => string;
+    let groupingFunction: (dateString: string) => string;
     
     switch (focusTimeView) {
       case 'weekly':
@@ -50,12 +111,11 @@ export const FocusTimeTrend: React.FC = () => {
           
           return `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
         };
-        groupingFunction = (date: Date) => {
+        groupingFunction = (dateString: string) => {
+          const date = new Date(dateString);
           const weekStart = new Date(date);
           // Set to start of week (Sunday)
           weekStart.setDate(date.getDate() - date.getDay());
-          // Set to start of day
-          weekStart.setHours(0, 0, 0, 0);
           return weekStart.toISOString().split('T')[0];
         };
         break;
@@ -63,7 +123,8 @@ export const FocusTimeTrend: React.FC = () => {
         dateFormatter = (date: Date) => {
           return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
         };
-        groupingFunction = (date: Date) => {
+        groupingFunction = (dateString: string) => {
+          const date = new Date(dateString);
           // Use yyyy-MM format for month grouping
           return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
         };
@@ -73,29 +134,23 @@ export const FocusTimeTrend: React.FC = () => {
         dateFormatter = (date: Date) => {
           return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         };
-        groupingFunction = (date: Date) => {
-          // Use local date string to avoid timezone issues
-          const year = date.getFullYear();
-          const month = (date.getMonth() + 1).toString().padStart(2, '0');
-          const day = date.getDate().toString().padStart(2, '0');
-          return `${year}-${month}-${day}`;
+        groupingFunction = (dateString: string) => {
+          return dateString; // Daily records already use YYYY-MM-DD format
         };
     }
     
-    // Aggregate focus time by date unit
-    filteredSessions.forEach((session: any) => {
-      const sessionDate = new Date(session.startTime);
-      
-      const dateKey = groupingFunction(sessionDate);
-      const currentValue = timeByDate.get(dateKey) || 0;
-      timeByDate.set(dateKey, currentValue + session.duration);
+    // Aggregate time by the selected time period
+    dailyTimeData.forEach((record: any) => {
+      const periodKey = groupingFunction(record.date);
+      const currentValue = timeByPeriod.get(periodKey) || 0;
+      timeByPeriod.set(periodKey, currentValue + record.timeSpent);
     });
     
     // Convert the Map to an array of ChartDataPoint
     const chartData: ChartDataPoint[] = [];
     
-    // Create an array of all date keys in the range
-    const allDates: Date[] = [];
+    // Create an array of all periods in the range
+    const allPeriods: Date[] = [];
     const current = new Date(dateRange.startDate);
     
     // Ensure we start on the right boundary for weekly/monthly views
@@ -111,7 +166,7 @@ export const FocusTimeTrend: React.FC = () => {
     current.setHours(0, 0, 0, 0);
     
     while (current <= dateRange.endDate) {
-      allDates.push(new Date(current));
+      allPeriods.push(new Date(current));
       
       if (focusTimeView === 'daily') {
         current.setDate(current.getDate() + 1);
@@ -122,14 +177,16 @@ export const FocusTimeTrend: React.FC = () => {
       }
     }
     
-    // Use all dates to create chart data
-    allDates.forEach(date => {
-      const dateKey = groupingFunction(date);
-      const value = timeByDate.get(dateKey) || 0;
+    // Use all periods to create chart data
+    allPeriods.forEach(date => {
+      const periodKey = focusTimeView === 'daily' 
+        ? date.toISOString().split('T')[0] 
+        : groupingFunction(date.toISOString().split('T')[0]);
+      const value = timeByPeriod.get(periodKey) || 0;
       
       chartData.push({
         date: dateFormatter(date),
-        value // Always use the aggregated value, don't round
+        value: value
       });
     });
 
@@ -138,7 +195,7 @@ export const FocusTimeTrend: React.FC = () => {
   
   // Initialize and update chart
   useEffect(() => {
-    if (!chartRef.current) return;
+    if (!chartRef.current || isLoading) return;
     
     // Import ECharts dynamically
     const loadECharts = async () => {
@@ -258,6 +315,7 @@ export const FocusTimeTrend: React.FC = () => {
                 fontSize: 12,
                 color: '#6b7280',
                 formatter: function(params: { value: number }) {
+                  if (params.value === 0) return '';
                   const hours = Math.floor(params.value / 60);
                   const minutes = params.value % 60;
                   if (minutes === 0) {
@@ -292,7 +350,7 @@ export const FocusTimeTrend: React.FC = () => {
     };
     
     loadECharts();
-  }, [chartRef, focusTimeView, dateRange, workSessions]);
+  }, [chartRef, focusTimeView, dailyTimeData, isLoading]);
   
   // Change the time unit
   const handleTimeUnitChange = (unit: TimeUnit) => {
@@ -341,7 +399,13 @@ export const FocusTimeTrend: React.FC = () => {
           </div>
         </div>
       </div>
-      <div ref={chartRef} className="w-full h-80"></div>
+      {isLoading ? (
+        <div className="flex items-center justify-center h-80">
+          <div className="text-gray-500">Loading focus time data...</div>
+        </div>
+      ) : (
+        <div ref={chartRef} className="w-full h-80"></div>
+      )}
     </Card>
   );
 }; 
