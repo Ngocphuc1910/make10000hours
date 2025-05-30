@@ -1,16 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import Card from '../../ui/Card';
 import { useWorkSessionStore } from '../../../store/useWorkSessionStore';
 import { useTaskStore } from '../../../store/taskStore';
 import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
 import { projectToDashboardProject } from '../../../utils/dashboardAdapter';
-import * as echarts from 'echarts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 export const TopProjects: React.FC = () => {
   const { workSessions } = useWorkSessionStore();
   const { projects } = useTaskStore();
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
   
   // Convert projects to dashboard format with real WorkSession data
   const dashboardProjects = projects
@@ -24,195 +22,128 @@ export const TopProjects: React.FC = () => {
 
   // Prepare data for the chart
   const chartData = [
-    ...topProjects.map(project => ({
-      name: project.name,
-      value: project.totalFocusTime,
-      color: project.color
-    }))
+    ...topProjects
+      .filter(project => project.totalFocusTime > 0) // Filter out 0 minute projects
+      .map((project) => ({
+        name: '', // Empty name to remove x-axis labels
+        fullName: project.name,
+        value: project.totalFocusTime,
+        color: project.color
+      }))
   ];
 
-  // Add "Others" category if there are more projects
-  if (otherProjects.length > 0) {
+  if (otherProjects.length > 0 && othersTotalTime > 0) { // Only add Others if it has time
     chartData.push({
-      name: 'Others',
+      name: '',
+      fullName: 'Others',
       value: othersTotalTime,
       color: '#969696'
     });
   }
 
-  // Initialize chart
-  useEffect(() => {
-    // Only initialize if we have data and the DOM element
-    if (!chartRef.current || chartData.length === 0) return;
+  // Get the maximum value for dynamic tick calculation
+  const maxValue = Math.max(...chartData.map(item => item.value));
+  
+  // Calculate the interval based on max value
+  const getTickInterval = (maxMinutes: number) => {
+    if (maxMinutes <= 300) return 60; // Under 5h: 1h intervals
+    if (maxMinutes <= 600) return 120; // Under 10h: 2h intervals
+    if (maxMinutes <= 1200) return 240; // Under 20h: 4h intervals
+    return Math.ceil(maxMinutes / 6 / 60) * 60; // Otherwise divide into ~6 intervals
+  };
 
-    const initChart = () => {
-      // Dispose of existing chart instance if it exists
-      if (chartInstance.current) {
-        chartInstance.current.dispose();
+  const interval = getTickInterval(maxValue);
+  const maxTick = Math.ceil(maxValue / interval) * interval;
+  const ticks = Array.from(
+    { length: Math.floor(maxTick / interval) + 1 },
+    (_, i) => i * interval
+  );
+
+  // Custom tooltip component
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-sm">
+          <p className="font-medium text-gray-900 mb-1">{data.fullName}</p>
+          <div className="flex items-center">
+            <div 
+              className="w-2 h-2 rounded-full mr-2"
+              style={{ backgroundColor: data.color }}
+            />
+            <span className="text-gray-600 text-sm">
+              {formatMinutesToHoursAndMinutes(data.value)}
+            </span>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Custom Legend component
+  const CustomLegend = () => {
+    // Split data into rows of 5 items
+    const rows = chartData.reduce((acc: any[][], item, index) => {
+      const rowIndex = Math.floor(index / 5);
+      if (!acc[rowIndex]) {
+        acc[rowIndex] = [];
       }
+      acc[rowIndex].push(item);
+      return acc;
+    }, []);
 
-      // Create new chart instance
-      chartInstance.current = echarts.init(chartRef.current);
+    return (
+      <div className="flex flex-col gap-2 mt-4 px-4">
+        {rows.map((row, rowIndex) => (
+          <div key={rowIndex} className="grid grid-cols-5 gap-4">
+            {row.map((entry, index) => (
+              <div key={index} className="flex items-center min-w-0">
+                <div 
+                  className="w-3 h-3 rounded-sm mr-2 flex-shrink-0"
+                  style={{ backgroundColor: entry.color }}
+                />
+                <span className="text-xs text-gray-600 truncate" title={entry.fullName}>
+                  {entry.fullName}
+                </span>
+              </div>
+            ))}
+            {/* Add empty columns to maintain grid alignment if row is not complete */}
+            {Array.from({ length: 5 - row.length }, (_, i) => (
+              <div key={`empty-${i}`} className="flex items-center min-w-0" />
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  };
 
-      // Calculate max value for better y-axis scaling
-      const maxValue = Math.max(...chartData.map(item => item.value));
-      const yAxisMax = Math.ceil(maxValue * 1.1); // Add 10% padding
+  // Custom label component for the bars
+  const CustomBarLabel = (props: any) => {
+    const { x, y, value, width } = props;
+    let timeLabel = '';
+    if (value < 60) {
+      timeLabel = `${value}m`;
+    } else {
+      const hours = Math.floor(value / 60);
+      const minutes = value % 60;
+      timeLabel = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+    }
 
-      const option = {
-        animation: true,
-        tooltip: {
-          trigger: 'axis',
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          borderColor: '#e5e7eb',
-          borderWidth: 1,
-          padding: [8, 12],
-          position: function (point: number[], params: any, dom: any, rect: any, size: { contentSize: number[] }) {
-            // Ensure tooltip doesn't go outside chart area
-            let [tooltipX, tooltipY] = point;
-            const { contentSize } = size;
-            const gap = 20;
-            
-            if (tooltipX + contentSize[0] > rect.width) {
-              tooltipX = Math.max(tooltipX - contentSize[0] - gap, 0);
-            }
-            
-            return [tooltipX + gap, Math.max(tooltipY - contentSize[1] - gap, 0)];
-          },
-          textStyle: {
-            color: '#1f2937',
-            fontSize: 13,
-            fontWeight: 500
-          },
-          formatter: function(params: any) {
-            const data = params[0];
-            const minutes = data.value;
-            const formattedTime = formatMinutesToHoursAndMinutes(minutes);
-            return `<div style="font-weight: 600">${data.name}</div>
-                    <div style="display: flex; align-items: center; margin-top: 4px">
-                      <span style="display:inline-block;margin-right:8px;border-radius:10px;width:8px;height:8px;background-color:${data.color};"></span>
-                      <span style="color: #4B5563">${formattedTime}</span>
-                    </div>`;
-          }
-        },
-        grid: {
-          left: 60,      // Fixed left margin in pixels
-          right: 20,     // Fixed right margin in pixels
-          top: 40,       // Increased top margin for better spacing
-          bottom: 40,   // Bottom margin for full labels
-          containLabel: true
-        },
-        xAxis: {
-          type: 'category',
-          data: chartData.map(item => item.name),
-          axisLabel: {
-            interval: 0,
-            rotate: 45,    // Increased rotation for better fit
-            color: '#6b7280',
-            fontSize: 11,
-            fontWeight: 500,
-            overflow: 'break', // Changed to break to show full text
-            width: 120,     // Increased width for labels
-            lineHeight: 12,
-            formatter: function (value: string) {
-              return value;  // Return full name without truncation
-            }
-          },
-          axisTick: {
-            alignWithLabel: true,
-            length: 4,
-            lineStyle: {
-              color: '#e5e7eb'
-            }
-          },
-          axisLine: {
-            lineStyle: {
-              color: '#e5e7eb',
-              width: 1
-            }
-          }
-        },
-        yAxis: {
-          type: 'value',
-          name: 'Time Spent',
-          nameTextStyle: {
-            color: '#6b7280',
-            fontSize: 12,
-            fontWeight: 500,
-            padding: [0, 0, 8, 0]
-          },
-          max: yAxisMax,
-          minInterval: 30, // Minimum interval of 30 minutes
-          axisLabel: {
-            color: '#6b7280',
-            fontSize: 11,
-            fontWeight: 500,
-            formatter: function(value: number) {
-              return formatMinutesToHoursAndMinutes(value);
-            }
-          },
-          splitLine: {
-            lineStyle: {
-              color: '#f3f4f6',
-              type: 'dashed',
-              width: 1
-            }
-          }
-        },
-        series: [{
-          type: 'bar',
-          data: chartData.map(item => ({
-            value: item.value,
-            itemStyle: {
-              color: item.color,
-              borderRadius: [4, 4, 0, 0]
-            }
-          })),
-          barWidth: '35%',  // Slightly reduced bar width for more space between bars
-          barGap: '20%',
-          emphasis: {
-            itemStyle: {
-              brightness: 0.9
-            }
-          },
-          label: {
-            show: true,
-            position: 'top',
-            fontSize: 11,
-            fontWeight: 500,
-            color: '#6b7280',
-            distance: 4,
-            formatter: function(params: any) {
-              return formatMinutesToHoursAndMinutes(params.value);
-            }
-          }
-        }]
-      };
-
-      // Set chart options
-      chartInstance.current.setOption(option);
-    };
-
-    // Initialize the chart
-    initChart();
-
-    // Handle window resize
-    const handleResize = () => {
-      if (chartInstance.current && chartRef.current) {
-        chartInstance.current.resize();
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-
-    // Cleanup function
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (chartInstance.current) {
-        chartInstance.current.dispose();
-        chartInstance.current = null;
-      }
-    };
-  }, [chartData, projects, workSessions]);
+    return (
+      <text
+        x={x + width / 2}
+        y={y - 8}
+        fill="#6b7280"
+        textAnchor="middle"
+        fontSize="11"
+        fontWeight="500"
+        style={{ whiteSpace: 'nowrap' }}
+      >
+        {timeLabel}
+      </text>
+    );
+  };
 
   // Show loading or empty state if no data
   if (chartData.length === 0) {
@@ -236,7 +167,7 @@ export const TopProjects: React.FC = () => {
       </Card>
     );
   }
-
+  
   return (
     <Card 
       title="Top Projects"
@@ -246,8 +177,107 @@ export const TopProjects: React.FC = () => {
         </button>
       }
     >
-      <div className="flex flex-col">
-        <div ref={chartRef} className="w-full h-[360px] -mx-2" />
+      <div className="flex flex-col w-full h-[360px]">
+        <div className="flex-1">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartData}
+              margin={{
+                top: 50,
+                right: 30,
+                left: 25,
+                bottom: 20
+              }}
+              barSize={35}
+            >
+              <text
+                x="50%"
+                y={20}
+                textAnchor="middle"
+                dominantBaseline="hanging"
+                className="fill-gray-700 text-sm font-medium"
+                style={{
+                  transform: 'translateY(-5px)'
+                }}
+              >
+                Time Spent
+              </text>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                vertical={false}
+                stroke="#f3f4f6"
+                strokeWidth={1}
+              />
+              <XAxis
+                dataKey="name"
+                interval={0}
+                tick={false} // Hide the x-axis ticks completely
+                tickLine={false}
+                axisLine={{
+                  stroke: '#e5e7eb',
+                  strokeWidth: 1
+                }}
+                dy={8}
+              />
+              <YAxis
+                tickFormatter={(value) => {
+                  if (value < 60) {
+                    return `${value}m`;
+                  }
+                  const hours = Math.floor(value / 60);
+                  const minutes = value % 60;
+                  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+                }}
+                tick={{
+                  fill: '#6b7280',
+                  fontSize: 11,
+                  fontWeight: 500
+                }}
+                tickLine={false}
+                axisLine={{
+                  stroke: '#e5e7eb',
+                  strokeWidth: 1
+                }}
+                width={45}
+                dx={-5}
+                ticks={ticks}
+                domain={[0, maxTick]}
+                allowDataOverflow={false}
+              />
+              <Tooltip
+                content={<CustomTooltip />}
+                cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }}
+                wrapperStyle={{ outline: 'none' }}
+              />
+              <Bar
+                dataKey="value"
+                radius={[4, 4, 0, 0]}
+                label={<CustomBarLabel />}
+              >
+                {chartData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={entry.color}
+                    style={{ filter: 'brightness(1)', transition: 'filter 0.2s' }}
+                    onMouseEnter={(e: React.MouseEvent<SVGElement>) => {
+                      const cell = document.querySelector(`[name="Bar-${index}"]`);
+                      if (cell) {
+                        (cell as HTMLElement).style.filter = 'brightness(0.9)';
+                      }
+                    }}
+                    onMouseLeave={(e: React.MouseEvent<SVGElement>) => {
+                      const cell = document.querySelector(`[name="Bar-${index}"]`);
+                      if (cell) {
+                        (cell as HTMLElement).style.filter = 'brightness(1)';
+                      }
+                    }}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <CustomLegend />
       </div>
     </Card>
   );
