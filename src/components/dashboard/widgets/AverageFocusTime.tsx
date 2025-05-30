@@ -7,13 +7,21 @@ export const AverageFocusTime: React.FC = () => {
   const { tasks } = useTaskStore();
   const { user } = useUserStore();
   const [dailyAverageMinutes, setDailyAverageMinutes] = useState(0);
+  const [totalFocusMinutes, setTotalFocusMinutes] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   
-  // Calculate daily average using daily time tracking
+  // Calculate daily average and total focus time using DailyTimeSpent data
   useEffect(() => {
-    const calculateDailyAverage = async () => {
-      if (!user) return;
+    const calculateFocusStats = async () => {
+      if (!user) {
+        setDailyAverageMinutes(0);
+        setTotalFocusMinutes(0);
+        setIsLoading(false);
+        return;
+      }
       
       try {
+        setIsLoading(true);
         const { dailyTimeSpentService } = await import('../../../api/dailyTimeSpentService');
         
         // Get data for the last 30 days to calculate average
@@ -24,50 +32,60 @@ export const AverageFocusTime: React.FC = () => {
         const dailyRecords = await dailyTimeSpentService.getDailyTimeSpent(user.uid, startDate, endDate);
         
         if (dailyRecords.length > 0) {
-          // Use daily tracking data if available
+          // Use daily tracking data
           const dailyTotals = new Map<string, number>();
+          let totalMinutes = 0;
+          
           dailyRecords.forEach(record => {
             const existing = dailyTotals.get(record.date) || 0;
-            dailyTotals.set(record.date, existing + record.timeSpent);
+            const newTotal = existing + record.timeSpent;
+            dailyTotals.set(record.date, newTotal);
+            totalMinutes += record.timeSpent;
           });
           
           // Calculate average (only counting days with work)
           const workDays = dailyTotals.size;
-          const totalMinutes = Array.from(dailyTotals.values()).reduce((sum, minutes) => sum + minutes, 0);
           const average = workDays > 0 ? totalMinutes / workDays : 0;
           
           setDailyAverageMinutes(average);
+          
+          // For total focus time, also include legacy task.timeSpent data
+          const legacyTotalMinutes = tasks.reduce((total, task) => total + (task.timeSpent || 0), 0);
+          setTotalFocusMinutes(totalMinutes + legacyTotalMinutes);
         } else {
-          // No daily records exist yet - this means it's likely the first day or existing data
+          // No daily records exist yet - fall back to task.timeSpent data
           const totalMinutes = tasks.reduce((total, task) => total + (task.timeSpent || 0), 0);
           
           if (totalMinutes > 0) {
             // Since no daily records exist, assume all time is from today (first working day)
-            // Daily average = total time (because it's all from one day)
             setDailyAverageMinutes(totalMinutes);
+            setTotalFocusMinutes(totalMinutes);
           } else {
             setDailyAverageMinutes(0);
+            setTotalFocusMinutes(0);
           }
         }
       } catch (error) {
-        console.error('Error calculating daily average:', error);
-        // Fallback: assume it's first day, so daily average = total time
+        console.error('Error calculating focus stats:', error);
+        // Fallback: use task.timeSpent data
         const totalMinutes = tasks.reduce((total, task) => total + (task.timeSpent || 0), 0);
         setDailyAverageMinutes(totalMinutes);
+        setTotalFocusMinutes(totalMinutes);
+      } finally {
+        setIsLoading(false);
       }
     };
     
-    calculateDailyAverage();
-  }, [user, tasks]); // Re-calculate when tasks change (time increments)
+    calculateFocusStats();
+  }, [user, tasks]);
   
-  // Calculate real statistics from task timeSpent
+  // Calculate statistics for display
   const calculateStats = () => {
-    // Total focus time from all tasks
-    const totalMinutes = tasks.reduce((total, task) => total + (task.timeSpent || 0), 0);
-    const totalHours = Math.floor(totalMinutes / 60);
-    const totalRemainingMinutes = totalMinutes % 60;
+    // Total focus time
+    const totalHours = Math.floor(totalFocusMinutes / 60);
+    const totalRemainingMinutes = totalFocusMinutes % 60;
 
-    // Daily average from our calculated value
+    // Daily average
     const dailyAverageHours = Math.floor(dailyAverageMinutes / 60);
     const dailyAverageRemainingMinutes = Math.floor(dailyAverageMinutes % 60);
 
@@ -103,6 +121,16 @@ export const AverageFocusTime: React.FC = () => {
   };
 
   const stats = calculateStats();
+
+  if (isLoading) {
+    return (
+      <Card title="Average Focus Time">
+        <div className="flex items-center justify-center h-40">
+          <div className="text-gray-500">Loading focus statistics...</div>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card title="Average Focus Time">
