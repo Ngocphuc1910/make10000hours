@@ -21,7 +21,7 @@ export interface UserState {
   
   // Actions
   initialize: () => void;
-  createUserDataIfNotExists: (uid: string) => Promise<UserData>;
+  createUserDataIfNotExists: (uid: string, userProfile?: any) => Promise<UserData>;
   updateUserData: (userData: UserData) => Promise<void>;
   signOut: () => Promise<void>;
   setUser: (user: User | null) => void;
@@ -49,7 +49,7 @@ export const useUserStore = create<UserState>((set, get) => {
           console.log('Auth state changed from userStore:', userProfile);
           if (userProfile) {
             set({ isLoading: true });
-            const userData = await get().createUserDataIfNotExists(userProfile.uid);
+            const userData = await get().createUserDataIfNotExists(userProfile.uid, userProfile);
             const user: User = {
               ...userProfile,
               ...userData
@@ -83,11 +83,26 @@ export const useUserStore = create<UserState>((set, get) => {
       return unsubscribe;
     },
 
-    createUserDataIfNotExists: async (uid: string) => {
+    createUserDataIfNotExists: async (uid: string, userProfile?: any) => {
       
       try {
+        // Generate userName from Firebase Auth data or default
+        const generateUserName = () => {
+          if (userProfile?.displayName) {
+            // Use display name from Google/Firebase auth
+            return userProfile.displayName;
+          } else if (userProfile?.email) {
+            // Fallback: use email prefix as username
+            return userProfile.email.split('@')[0];
+          } else {
+            // Final fallback: generate a generic username
+            return `user_${uid.substring(0, 8)}`;
+          }
+        };
+
         const userData: UserData = {
           uid,
+          userName: generateUserName(),
           settings: DEFAULT_SETTINGS
         };
         
@@ -99,6 +114,17 @@ export const useUserStore = create<UserState>((set, get) => {
           await setDoc(userDocRef, userData);
         } else {
           const existingData = userDoc.data() as UserData;
+          
+          // Handle existing users who might not have userName yet (migration)
+          if (!existingData.userName) {
+            const updatedData = {
+              ...existingData,
+              userName: generateUserName()
+            };
+            await setDoc(userDocRef, updatedData, { merge: true });
+            return updatedData;
+          }
+          
           return existingData;
         }
         

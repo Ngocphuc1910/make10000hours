@@ -24,6 +24,7 @@ export interface Project {
 // separate collection for user data
 export interface UserData {
   uid: string;
+  userName: string;
   settings: AppSettings;
 }
 
