@@ -1,5 +1,5 @@
 import React from 'react';
-import { useFocusStore } from '../../../store/useFocusStore';
+import { useDashboardStore } from '../../../store/useDashboardStore';
 import { formatMinutes } from '../../../utils/timeUtils';
 import { WeeklyBreakdown as WeeklyBreakdownType } from '../../../types';
 

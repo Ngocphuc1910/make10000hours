@@ -135,16 +135,16 @@ export const FocusStreak: React.FC = () => {
       
       {/* Day labels */}
       <div className="grid grid-cols-7 gap-2 mb-4">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-          <div key={day} className="flex flex-col items-center">
-            <div className="text-xs text-gray-500 mb-2">{day}</div>
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day: string) => (
+          <div key={day} className="text-center text-xs font-medium text-gray-500 py-1">
+            {day}
           </div>
         ))}
       </div>
       
       {/* Calendar grid */}
       <div className="grid grid-cols-7 gap-2">
-        {calendarDays.map((day, i) => (
+        {calendarDays.map((day: { date: Date, hasFocused: boolean } | null, i: number) => (
           <div key={i} className="flex items-center justify-center">
             {day ? (
               <div 

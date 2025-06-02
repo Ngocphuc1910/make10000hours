@@ -24,16 +24,12 @@ export const migrateTaskTimeToWorkSessions = async (
         const endTime = new Date(migrationDate);
         endTime.setMinutes(endTime.getMinutes() + task.timeSpent);
         
-        await workSessionService.createWorkSession({
+        await workSessionService.upsertWorkSession({
           userId,
           taskId: task.id,
           projectId: task.projectId,
-          startTime: startTime,
-          endTime: endTime,
-          duration: task.timeSpent,
-          sessionType: 'manual',
-          notes: `Migrated from existing timeSpent data (${task.timeSpent}m)`
-        });
+          date: migrationDate.toISOString().split('T')[0], // YYYY-MM-DD format
+        }, task.timeSpent);
         
         migratedTasks.push(task.title);
         console.log(`✅ Migrated ${task.title}: ${task.timeSpent}m`);
