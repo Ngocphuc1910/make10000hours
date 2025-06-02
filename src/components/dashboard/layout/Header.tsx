@@ -115,6 +115,7 @@ export const Header: React.FC = () => {
   // Handle date range selection
   const handleDateRangeSelect = (range: string) => {
     const end = new Date();
+    end.setHours(23, 59, 59, 999); // Set to end of today
     const start = new Date();
     let type: RangeType = 'today';
     
@@ -153,10 +154,16 @@ export const Header: React.FC = () => {
   // Apply the custom date range
   const applyCustomDateRange = () => {
     if (startDate && endDate) {
-      const formattedRange = `${formatDate(startDate)} - ${formatDate(endDate)}`;
+      // Ensure start date is at beginning of day and end date is at end of day
+      const adjustedStartDate = new Date(startDate);
+      adjustedStartDate.setHours(0, 0, 0, 0);
+      
+      const adjustedEndDate = new Date(endDate);
+      adjustedEndDate.setHours(23, 59, 59, 999);
+      
       setSelectedRange({ 
-        startDate, 
-        endDate, 
+        startDate: adjustedStartDate, 
+        endDate: adjustedEndDate, 
         rangeType: 'custom'
       });
       setShowDatePicker(false);
