@@ -3,15 +3,31 @@ import Card from '../../ui/Card';
 import { useDashboardStore } from '../../../store/useDashboardStore';
 import { calculateFocusStreak } from '../../../utils/dashboardAdapter';
 import { getDateISOString } from '../../../utils/timeUtils';
+import { useUserStore } from '../../../store/userStore';
+import { createTestWorkSessions } from '../../../utils/testWorkSessions';
 
 export const FocusStreak: React.FC = () => {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  // Initialize to current month
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
   const [calendarDays, setCalendarDays] = useState<Array<{ date: Date, hasFocused: boolean } | null>>([]);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const { workSessions } = useDashboardStore();
+  const { user } = useUserStore();
   
   // Calculate real focus streak from WorkSession data
   const focusStreak = calculateFocusStreak(workSessions);
+
+  // Auto-navigate to current month when work sessions are loaded
+  useEffect(() => {
+    if (workSessions.length > 0) {
+      const now = new Date();
+      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      setCurrentMonth(currentMonthStart);
+    }
+  }, [workSessions.length]);
 
   // Navigate to previous month
   const prevMonth = () => {
@@ -35,12 +51,20 @@ export const FocusStreak: React.FC = () => {
     return d1 === d2;
   };
   
-  // Check if a date has focus sessions
+  // Check if a date has focus sessions - improved logic
   const hasFocusOnDate = (date: Date): boolean => {
     const dateString = getDateISOString(date);
-    return workSessions.some(session => 
-      session.date === dateString
-    );
+    const hasSession = workSessions.some(session => session.date === dateString);
+    
+    // Temporary debug for critical dates
+    if (dateString === getDateISOString(new Date())) {
+      console.log(`Today (${dateString}): has session = ${hasSession}`);
+    }
+    if (hasSession) {
+      console.log(`Date ${dateString} has work session`);
+    }
+    
+    return hasSession;
   };
 
   useEffect(() => {
@@ -64,9 +88,12 @@ export const FocusStreak: React.FC = () => {
           Math.abs(currentDate.getMonth() - month) === 1 ||
           (month === 0 && currentDate.getMonth() === 11) ||
           (month === 11 && currentDate.getMonth() === 0)) {
+        const hasFocused = hasFocusOnDate(currentDate);
+        const dateString = getDateISOString(currentDate);
+        
         days.push({
           date: currentDate,
-          hasFocused: hasFocusOnDate(currentDate)
+          hasFocused: hasFocused
         });
       } else {
         days.push(null);
@@ -99,7 +126,41 @@ export const FocusStreak: React.FC = () => {
   const isPastDay = (date: Date): boolean => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return date < today;
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    return checkDate < today;
+  };
+
+  // Get day styling classes - improved logic
+  const getDayClasses = (day: { date: Date, hasFocused: boolean }) => {
+    const baseClasses = 'w-8 h-8 rounded-full flex items-center justify-center text-xs cursor-pointer transition-all duration-200';
+    
+    if (isToday(day.date)) {
+      // Current day: red stroke (border)
+      return `${baseClasses} bg-white border-2 border-primary border-dashed text-gray-700 font-medium`;
+    } else if (isPastDay(day.date)) {
+      if (day.hasFocused) {
+        // Past day with work: red background
+        return `${baseClasses} bg-primary text-white hover:bg-opacity-90 font-medium`;
+      } else {
+        // Past day without work: gray
+        return `${baseClasses} bg-white border border-gray-200 text-gray-400 hover:bg-gray-50`;
+      }
+    } else {
+      // Future day: light gray
+      return `${baseClasses} bg-white border border-gray-200 text-gray-300`;
+    }
+  };
+
+  // Test function to create work sessions
+  const handleCreateTestSessions = async () => {
+    if (user?.uid) {
+      await createTestWorkSessions(
+        user.uid,
+        'test-task-id',
+        'test-project-id'
+      );
+    }
   };
 
   return (
@@ -113,6 +174,16 @@ export const FocusStreak: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-2">
+          {/* Temporary test button */}
+          {workSessions.length === 0 && (
+            <button
+              onClick={handleCreateTestSessions}
+              className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Add Test Data
+            </button>
+          )}
+          
           <button 
             onClick={prevMonth}
             className="p-1.5 rounded-full hover:bg-gray-100"
@@ -148,21 +219,13 @@ export const FocusStreak: React.FC = () => {
           <div key={i} className="flex items-center justify-center">
             {day ? (
               <div 
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs cursor-pointer
-                  ${isToday(day.date)
-                    ? 'bg-white border-2 border-primary border-dashed text-gray-600'
-                    : day.hasFocused && isPastDay(day.date)
-                      ? 'bg-primary text-white hover:bg-opacity-90'
-                      : isPastDay(day.date)
-                        ? 'bg-white border border-gray-200 text-gray-400 hover:bg-gray-50'
-                        : 'bg-white border border-gray-200 text-gray-300'
-                  }
+                className={`${getDayClasses(day)}
                   ${selectedDate && compareDates(day.date, selectedDate)
                     ? 'ring-2 ring-primary ring-offset-2' 
                     : ''
                   }
                 `}
-                onClick={() => isPastDay(day.date) && handleDayClick(day)}
+                onClick={() => handleDayClick(day)}
               >
                 {day.date.getDate()}
               </div>

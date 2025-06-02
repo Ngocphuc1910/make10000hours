@@ -3,6 +3,7 @@ import * as FirebaseUI from 'firebaseui';
 import 'firebaseui/dist/firebaseui.css';
 import { auth } from '../../api/firebase';
 import { GoogleAuthProvider, User } from 'firebase/auth';
+import { trackUserLogin, trackUserSignup } from '../../utils/analytics';
 
 interface FirebaseAuthUIProps {}
 
@@ -21,6 +22,12 @@ const FirebaseAuthUI: React.FC<FirebaseAuthUIProps> = () => {
       ],
       callbacks: {
         signInSuccessWithAuthResult: (authResult) => {
+          // Track analytics for login/signup
+          if (authResult.additionalUserInfo?.isNewUser) {
+            trackUserSignup('google');
+          } else {
+            trackUserLogin('google');
+          }
           return false; // Don't redirect after sign-in
         },
       },
