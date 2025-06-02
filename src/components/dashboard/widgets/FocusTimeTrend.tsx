@@ -51,13 +51,48 @@ export const FocusTimeTrend: React.FC = () => {
       return workSessions;
     }
     
-    const startDateStr = selectedRange.startDate.toISOString().split('T')[0];
-    const endDateStr = selectedRange.endDate.toISOString().split('T')[0];
+    const startDate = new Date(selectedRange.startDate);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(selectedRange.endDate);
+    endDate.setHours(23, 59, 59, 999);
     
     return workSessions.filter(session => {
-      return session.date >= startDateStr && session.date <= endDateStr;
+      const sessionDate = new Date(session.date);
+      return sessionDate >= startDate && sessionDate <= endDate;
     });
   }, [workSessions, selectedRange]);
+  
+  // Helper function to normalize date strings to YYYY-MM-DD format
+  const normalizeDateString = (dateInput: string | Date): string => {
+    let date: Date;
+    
+    if (typeof dateInput === 'string') {
+      // Handle various date string formats
+      if (dateInput.includes('T')) {
+        // ISO format: extract just the date part
+        return dateInput.split('T')[0];
+      } else if (dateInput.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        // Already in YYYY-MM-DD format
+        return dateInput;
+      } else {
+        // Try to parse other formats
+        date = new Date(dateInput);
+      }
+    } else {
+      date = new Date(dateInput);
+    }
+    
+    // Convert to YYYY-MM-DD format
+    if (date && !isNaN(date.getTime())) {
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    
+    // Fallback: return original if can't parse
+    return typeof dateInput === 'string' ? dateInput : dateInput.toISOString().split('T')[0];
+  };
   
   // Comprehensive data processing that handles all view types
   const chartData = useMemo(() => {
@@ -74,20 +109,28 @@ export const FocusTimeTrend: React.FC = () => {
     }
     
     try {
-      // First, aggregate all sessions by date
+      // First, aggregate all sessions by normalized date
       const timeByDate: Record<string, number> = {};
       
-      filteredWorkSessions.forEach(session => {
-        const date = session.date;
-        const duration = session.duration || 0;
-        
-        if (!timeByDate[date]) {
-          timeByDate[date] = 0;
-        }
-        timeByDate[date] += duration;
+      console.log('Aggregating sessions for chart data:', {
+        totalFilteredSessions: filteredWorkSessions.length,
+        sessions: filteredWorkSessions.map(s => ({ date: s.date, duration: s.duration }))
       });
       
-      console.log('Time by date:', timeByDate);
+      filteredWorkSessions.forEach(session => {
+        // Normalize the date to ensure consistent format
+        const normalizedDate = normalizeDateString(session.date);
+        const duration = session.duration || 0;
+        
+        if (!timeByDate[normalizedDate]) {
+          timeByDate[normalizedDate] = 0;
+        }
+        timeByDate[normalizedDate] += duration;
+        
+        console.log(`Added ${duration} minutes to ${normalizedDate}`);
+      });
+      
+      console.log('Time by date aggregated:', timeByDate);
       
       const days: ChartDataPoint[] = [];
       
@@ -95,55 +138,61 @@ export const FocusTimeTrend: React.FC = () => {
         // Daily view - use selected date range or reasonable defaults
         let startDate: Date, endDate: Date;
         
+        console.log('Daily view processing selectedRange:', {
+          rangeType: selectedRange.rangeType,
+          startDate: selectedRange.startDate?.toISOString(),
+          endDate: selectedRange.endDate?.toISOString()
+        });
+        
         if (selectedRange.rangeType === 'all time') {
-          // For 'all time', show all available data - calculate range from work sessions
+          // For 'all time', always include the most recent data
+          endDate = new Date();
+          endDate.setHours(23, 59, 59, 999); // End of today
+          
           if (filteredWorkSessions.length > 0) {
             const allDates = filteredWorkSessions.map(session => new Date(session.date));
-            startDate = new Date(Math.min(...allDates.map(d => d.getTime())));
-            endDate = new Date(Math.max(...allDates.map(d => d.getTime())));
+            const earliestSessionDate = new Date(Math.min(...allDates.map(d => d.getTime())));
             
-            console.log('All time daily view - original range:', {
-              startDate: startDate.toISOString(),
-              endDate: endDate.toISOString(),
-              allDatesCount: allDates.length
-            });
+            // Start from earliest session date or 90 days ago, whichever is more recent
+            const ninetyDaysAgo = new Date();
+            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 89);
+            ninetyDaysAgo.setHours(0, 0, 0, 0);
             
-            // Limit to reasonable range for daily view (max 90 days)
-            const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-            if (daysDiff > 90) {
-              startDate = new Date(endDate);
-              startDate.setDate(endDate.getDate() - 89); // Last 90 days
-            }
-            
-            console.log('All time daily view - final range:', {
-              startDate: startDate.toISOString(),
-              endDate: endDate.toISOString(),
-              daysDiff: daysDiff
-            });
+            startDate = earliestSessionDate < ninetyDaysAgo ? ninetyDaysAgo : earliestSessionDate;
+            startDate.setHours(0, 0, 0, 0);
           } else {
-            // Fallback if no data
-            endDate = new Date();
+            // Fallback: show last 7 days if no data
             startDate = new Date();
-            startDate.setDate(endDate.getDate() - 6); // Last 7 days
-            console.log('All time daily view - no data fallback');
+            startDate.setDate(endDate.getDate() - 6);
+            startDate.setHours(0, 0, 0, 0);
           }
         } else if (selectedRange.startDate && selectedRange.endDate) {
-          // Use the user's selected range - respect their choice completely
+          // Use the selected range from store
           startDate = new Date(selectedRange.startDate);
+          startDate.setHours(0, 0, 0, 0);
           endDate = new Date(selectedRange.endDate);
-          
-          // Only apply limits for extremely large ranges to prevent performance issues
-          const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-          if (daysDiff > 365) {
-            // For very large ranges (>1 year), suggest using weekly or monthly view instead
-            // But still show the data if user insists on daily view
-            console.warn('Large date range selected for daily view. Consider using weekly or monthly view for better performance.');
-          }
+          endDate.setHours(23, 59, 59, 999);
         } else {
-          // Default to last 7 days for daily view for better visibility
+          // Default based on rangeType
           endDate = new Date();
-          startDate = new Date();
-          startDate.setDate(endDate.getDate() - 6); // Last 7 days
+          endDate.setHours(23, 59, 59, 999);
+          
+          if (selectedRange.rangeType === 'last 30 days') {
+            startDate = new Date();
+            startDate.setDate(endDate.getDate() - 29);
+          } else if (selectedRange.rangeType === 'last 7 days') {
+            startDate = new Date();
+            startDate.setDate(endDate.getDate() - 6);
+          } else if (selectedRange.rangeType === 'today') {
+            startDate = new Date();
+            startDate.setHours(0, 0, 0, 0);
+            endDate.setHours(23, 59, 59, 999);
+          } else {
+            // Default fallback: last 7 days
+            startDate = new Date();
+            startDate.setDate(endDate.getDate() - 6);
+          }
+          startDate.setHours(0, 0, 0, 0);
         }
         
         // Generate all days in the range
@@ -151,9 +200,12 @@ export const FocusTimeTrend: React.FC = () => {
         console.log('Daily view - generating days from:', startDate.toISOString(), 'to:', endDate.toISOString());
         
         while (current <= endDate) {
-          const dateStr = current.toISOString().split('T')[0];
+          // Use the same date normalization for lookup
+          const dateStr = normalizeDateString(current);
           const displayDate = current.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
           const value = timeByDate[dateStr] || 0;
+          
+          console.log(`Daily lookup: ${dateStr} = ${value} minutes`);
           
           days.push({
             date: displayDate,
