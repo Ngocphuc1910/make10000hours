@@ -46,28 +46,7 @@ export const FocusTimeTrend: React.FC = () => {
       return workSessions;
     }
     
-    // For daily view, only use defaults when absolutely no range is set or it's literally just "today"
-    if (focusTimeView === 'daily') {
-      // Only override with defaults if no date range is set at all, or if it's "today" with no meaningful range
-      if ((!selectedRange.startDate || !selectedRange.endDate) || 
-          (selectedRange.rangeType === 'today' && 
-           selectedRange.startDate && selectedRange.endDate &&
-           selectedRange.startDate.toDateString() === selectedRange.endDate.toDateString())) {
-        // Use last 30 days as fallback to ensure data visibility
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(endDate.getDate() - 30);
-        
-        const startDateStr = startDate.toISOString().split('T')[0];
-        const endDateStr = endDate.toISOString().split('T')[0];
-        
-        return workSessions.filter(session => {
-          return session.date >= startDateStr && session.date <= endDateStr;
-        });
-      }
-    }
-    
-    // For all other cases (weekly/monthly views or when user has selected a specific range), use the selected range
+    // For all other cases, use the selected range if available
     if (!selectedRange.startDate || !selectedRange.endDate) {
       return workSessions;
     }
@@ -78,7 +57,7 @@ export const FocusTimeTrend: React.FC = () => {
     return workSessions.filter(session => {
       return session.date >= startDateStr && session.date <= endDateStr;
     });
-  }, [workSessions, selectedRange, focusTimeView]);
+  }, [workSessions, selectedRange]);
   
   // Comprehensive data processing that handles all view types
   const chartData = useMemo(() => {
@@ -149,11 +128,18 @@ export const FocusTimeTrend: React.FC = () => {
             console.log('All time daily view - no data fallback');
           }
         } else if (selectedRange.startDate && selectedRange.endDate) {
-          // Use the user's selected range
+          // Use the user's selected range, but limit to reasonable number of days for visibility
           startDate = new Date(selectedRange.startDate);
           endDate = new Date(selectedRange.endDate);
+          
+          // For daily view, limit to max 14 days to keep bars visible
+          const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+          if (daysDiff > 14) {
+            startDate = new Date(endDate);
+            startDate.setDate(endDate.getDate() - 13); // Last 14 days
+          }
         } else {
-          // Only default to last 7 days when no range is selected at all
+          // Default to last 7 days for daily view for better visibility
           endDate = new Date();
           startDate = new Date();
           startDate.setDate(endDate.getDate() - 6); // Last 7 days
