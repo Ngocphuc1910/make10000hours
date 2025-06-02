@@ -1,14 +1,31 @@
 import React from 'react';
-import { useFocusStore } from '../../../store/useFocusStore';
+import { useTaskStore } from '../../../store/taskStore';
+import { useDashboardStore } from '../../../store/useDashboardStore';
 import { formatMinutes } from '../../../utils/timeUtils';
 import { Link } from 'react-router-dom';
 
 export const ProjectsWidget: React.FC = () => {
-  const projects = useFocusStore(state => state.projects);
-  const totalFocusTime = useFocusStore(state => state.getTotalFocusTime());
+  const { projects, tasks } = useTaskStore();
+  const { workSessions } = useDashboardStore();
+  
+  // Calculate focus time per project from work sessions
+  const getProjectFocusTime = (projectId: string) => {
+    return workSessions
+      .filter(session => session.projectId === projectId)
+      .reduce((total, session) => total + (session.duration || 0), 0);
+  };
+  
+  // Get total focus time across all projects
+  const totalFocusTime = workSessions.reduce((total, session) => total + (session.duration || 0), 0);
+  
+  // Create projects with focus time data
+  const projectsWithFocusTime = projects.map(project => ({
+    ...project,
+    totalFocusTime: getProjectFocusTime(project.id)
+  }));
   
   // Sort projects by total focus time (descending)
-  const sortedProjects = [...projects]
+  const sortedProjects = [...projectsWithFocusTime]
     .sort((a, b) => b.totalFocusTime - a.totalFocusTime)
     .slice(0, 4); // Show top 4 projects
   
@@ -27,48 +44,55 @@ export const ProjectsWidget: React.FC = () => {
       </div>
       
       <div className="space-y-4">
-        {sortedProjects.map(project => {
-          // Calculate percentage of total time
-          const percentage = totalFocusTime > 0 
-            ? (project.totalFocusTime / totalFocusTime) * 100 
-            : 0;
-          
-          return (
-            <div 
-              key={project.id}
-              className="p-4 rounded-lg border border-gray-100 hover:border-gray-200 transition-all hover:shadow-sm cursor-pointer"
-            >
-              <div className="flex items-center">
-                <div 
-                  className="w-3 h-3 rounded-full mr-3"
-                  style={{ backgroundColor: project.color }}
-                ></div>
-                <h4 className="text-sm font-medium text-gray-800 flex-1">
-                  {project.name}
-                </h4>
-                <div className="text-sm font-medium text-gray-600">
-                  {formatMinutes(project.totalFocusTime)}
-                </div>
-              </div>
-              
-              <div className="mt-3">
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="text-gray-500">{project.description || 'No description'}</span>
-                  <span className="text-gray-500">{percentage.toFixed(1)}%</span>
-                </div>
-                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full"
-                    style={{ 
-                      width: `${percentage}%`,
-                      backgroundColor: project.color
-                    }}
+        {sortedProjects.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <p>No projects with focus time yet</p>
+            <p className="text-sm mt-1">Start a pomodoro session to see data here</p>
+          </div>
+        ) : (
+          sortedProjects.map(project => {
+            // Calculate percentage of total time
+            const percentage = totalFocusTime > 0 
+              ? (project.totalFocusTime / totalFocusTime) * 100 
+              : 0;
+            
+            return (
+              <div 
+                key={project.id}
+                className="p-4 rounded-lg border border-gray-100 hover:border-gray-200 transition-all hover:shadow-sm cursor-pointer"
+              >
+                <div className="flex items-center">
+                  <div 
+                    className="w-3 h-3 rounded-full mr-3"
+                    style={{ backgroundColor: project.color }}
                   ></div>
+                  <h4 className="text-sm font-medium text-gray-800 flex-1">
+                    {project.name}
+                  </h4>
+                  <div className="text-sm font-medium text-gray-600">
+                    {formatMinutes(project.totalFocusTime)}
+                  </div>
+                </div>
+                
+                <div className="mt-3">
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-gray-500">{project.name}</span>
+                    <span className="text-gray-500">{percentage.toFixed(1)}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ 
+                        width: `${percentage}%`,
+                        backgroundColor: project.color
+                      }}
+                    ></div>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
     </div>
   );

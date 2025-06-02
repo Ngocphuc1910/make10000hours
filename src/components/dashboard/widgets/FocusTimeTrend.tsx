@@ -1,366 +1,308 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import Card from '../../ui/Card';
 import { useDashboardStore } from '../../../store/useDashboardStore';
-import { useUserStore } from '../../../store/userStore';
 import type { TimeUnit } from '../../../types';
 import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 type ChartDataPoint = {
   date: string;
   value: number;
+  displayValue: string;
+};
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const value = payload[0].value;
+    return (
+      <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+        <p className="font-medium text-gray-900">{label}</p>
+        <p className="text-sm text-gray-600">
+          <span className="inline-block w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
+          Focus Time: {formatMinutesToHoursAndMinutes(value)}
+        </p>
+      </div>
+    );
+  }
+  return null;
 };
 
 export const FocusTimeTrend: React.FC = () => {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const [chartInstance, setChartInstance] = useState<any>(null);
-  const [dailyTimeData, setDailyTimeData] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const { focusTimeView, setFocusTimeView } = useDashboardStore();
-  const { user } = useUserStore();
+  const { workSessions, focusTimeView, setFocusTimeView, selectedRange } = useDashboardStore();
   
-  // Create stable date range for last 30 days using useMemo
-  const dateRange = useMemo(() => ({
-    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-    endDate: new Date()
-  }), []); // Empty dependency array means this only calculates once
+  console.log('FocusTimeTrend render - workSessions:', workSessions.length, 'view:', focusTimeView, 'selectedRange:', selectedRange);
   
-  // Load daily time data from DailyTimeSpent service
-  useEffect(() => {
-    const loadDailyTimeData = async () => {
-      if (!user) {
-        setDailyTimeData([]);
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        setIsLoading(true);
-        const { dailyTimeSpentService } = await import('../../../api/dailyTimeSpentService');
-        const { useTaskStore } = await import('../../../store/taskStore');
-        
-        // Get daily time spent records for the last 30 days
-        const dailyRecords = await dailyTimeSpentService.getDailyTimeSpent(
-          user.uid, 
-          dateRange.startDate, 
-          dateRange.endDate
-        );
-        
-        console.log('📊 Focus Time Trend - Daily records found:', dailyRecords.length);
-        console.log('📊 Date range:', dateRange.startDate.toISOString().split('T')[0], 'to', dateRange.endDate.toISOString().split('T')[0]);
-        
-        // If no daily records exist, create a fallback entry for today using task.timeSpent data
-        if (dailyRecords.length === 0) {
-          const { tasks } = useTaskStore.getState();
-          const totalTimeSpent = tasks.reduce((total, task) => total + (task.timeSpent || 0), 0);
-          
-          console.log('📊 No daily records found, checking task.timeSpent. Total:', totalTimeSpent, 'from', tasks.length, 'tasks');
-          
-          if (totalTimeSpent > 0) {
-            // Create a fallback record for today
-            const today = new Date();
-            const todayString = today.toISOString().split('T')[0]; // YYYY-MM-DD format
-            
-            const fallbackRecord = {
-              id: `fallback_${todayString}`,
-              taskId: 'all_tasks',
-              projectId: 'all_projects', 
-              userId: user.uid,
-              date: todayString,
-              timeSpent: totalTimeSpent,
-              createdAt: today,
-              updatedAt: today
-            };
-            
-            setDailyTimeData([fallbackRecord]);
-          } else {
-            setDailyTimeData([]);
-          }
-        } else {
-          setDailyTimeData(dailyRecords);
-        }
-      } catch (error) {
-        console.error('Error loading daily time data:', error);
-        setDailyTimeData([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadDailyTimeData();
-  }, [user, dateRange]); // Now dateRange is stable
-
-  // Generate chart data based on daily time records and time unit
-  const generateChartData = (): ChartDataPoint[] => {
-    if (dailyTimeData.length === 0) return [];
-    
-    // Create a Map to aggregate focus time by date/week/month
-    const timeByPeriod = new Map<string, number>();
-    
-    // Create date formatter based on time unit
-    let dateFormatter: (date: Date) => string;
-    let groupingFunction: (dateString: string) => string;
-    
-    switch (focusTimeView) {
-      case 'weekly':
-        dateFormatter = (date: Date) => {
-          const weekStart = new Date(date);
-          // Set to start of week (Sunday)
-          weekStart.setDate(date.getDate() - date.getDay());
-          const weekEnd = new Date(weekStart);
-          weekEnd.setDate(weekStart.getDate() + 6);
-          
-          return `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-        };
-        groupingFunction = (dateString: string) => {
-          const date = new Date(dateString);
-          const weekStart = new Date(date);
-          // Set to start of week (Sunday)
-          weekStart.setDate(date.getDate() - date.getDay());
-          return weekStart.toISOString().split('T')[0];
-        };
-        break;
-      case 'monthly':
-        dateFormatter = (date: Date) => {
-          return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        };
-        groupingFunction = (dateString: string) => {
-          const date = new Date(dateString);
-          // Use yyyy-MM format for month grouping
-          return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-        };
-        break;
-      case 'daily':
-      default:
-        dateFormatter = (date: Date) => {
-          return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        };
-        groupingFunction = (dateString: string) => {
-          return dateString; // Daily records already use YYYY-MM-DD format
-        };
+  // Filter work sessions based on selected date range
+  const filteredWorkSessions = useMemo(() => {
+    if (!selectedRange.startDate || !selectedRange.endDate) {
+      return workSessions;
     }
     
-    // Aggregate time by the selected time period
-    dailyTimeData.forEach((record: any) => {
-      const periodKey = groupingFunction(record.date);
-      const currentValue = timeByPeriod.get(periodKey) || 0;
-      timeByPeriod.set(periodKey, currentValue + record.timeSpent);
+    const startDateStr = selectedRange.startDate.toISOString().split('T')[0];
+    const endDateStr = selectedRange.endDate.toISOString().split('T')[0];
+    
+    return workSessions.filter(session => {
+      return session.date >= startDateStr && session.date <= endDateStr;
     });
+  }, [workSessions, selectedRange]);
+  
+  // Comprehensive data processing that handles all view types
+  const chartData = useMemo(() => {
+    console.log('Processing chart data, filteredSessions:', filteredWorkSessions.length, 'focusTimeView:', focusTimeView);
     
-    // Convert the Map to an array of ChartDataPoint
-    const chartData: ChartDataPoint[] = [];
-    
-    // Create an array of all periods in the range
-    const allPeriods: Date[] = [];
-    const current = new Date(dateRange.startDate);
-    
-    // Ensure we start on the right boundary for weekly/monthly views
-    if (focusTimeView === 'weekly') {
-      // Move to start of week (Sunday)
-      current.setDate(current.getDate() - current.getDay());
-    } else if (focusTimeView === 'monthly') {
-      // Move to start of month
-      current.setDate(1);
+    if (!filteredWorkSessions.length) {
+      console.log('No filtered work sessions available');
+      return [];
     }
     
-    // Set to start of day
-    current.setHours(0, 0, 0, 0);
-    
-    while (current <= dateRange.endDate) {
-      allPeriods.push(new Date(current));
+    try {
+      // First, aggregate all sessions by date
+      const timeByDate: Record<string, number> = {};
+      
+      filteredWorkSessions.forEach(session => {
+        const date = session.date;
+        const duration = session.duration || 0;
+        
+        if (!timeByDate[date]) {
+          timeByDate[date] = 0;
+        }
+        timeByDate[date] += duration;
+      });
+      
+      console.log('Time by date:', timeByDate);
+      
+      const days: ChartDataPoint[] = [];
       
       if (focusTimeView === 'daily') {
-        current.setDate(current.getDate() + 1);
-      } else if (focusTimeView === 'weekly') {
-        current.setDate(current.getDate() + 7);
-      } else if (focusTimeView === 'monthly') {
-        current.setMonth(current.getMonth() + 1);
-      }
-    }
-    
-    // Use all periods to create chart data
-    allPeriods.forEach(date => {
-      const periodKey = focusTimeView === 'daily' 
-        ? date.toISOString().split('T')[0] 
-        : groupingFunction(date.toISOString().split('T')[0]);
-      const value = timeByPeriod.get(periodKey) || 0;
-      
-      chartData.push({
-        date: dateFormatter(date),
-        value: value
-      });
-    });
-
-    return chartData;
-  };
-  
-  // Initialize and update chart
-  useEffect(() => {
-    if (!chartRef.current || isLoading) return;
-    
-    // Import ECharts dynamically
-    const loadECharts = async () => {
-      try {
-        const echarts = await import('echarts');
+        // Daily view - use date range or default to last 7 days
+        let startDate: Date, endDate: Date;
         
-        // Clear existing chart if it exists
-        if (chartInstance) {
-          chartInstance.dispose();
+        if (selectedRange.startDate && selectedRange.endDate) {
+          startDate = new Date(selectedRange.startDate);
+          endDate = new Date(selectedRange.endDate);
+        } else {
+          endDate = new Date();
+          startDate = new Date();
+          startDate.setDate(endDate.getDate() - 6); // Last 7 days
         }
         
-        // Initialize chart
-        const myChart = echarts.init(chartRef.current);
-        setChartInstance(myChart);
+        // Generate all days in the range
+        const current = new Date(startDate);
+        while (current <= endDate) {
+          const dateStr = current.toISOString().split('T')[0];
+          const displayDate = current.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          const value = timeByDate[dateStr] || 0;
+          
+          days.push({
+            date: displayDate,
+            value: value,
+            displayValue: value > 0 ? formatMinutesToHoursAndMinutes(value) : '0m'
+          });
+          
+          current.setDate(current.getDate() + 1);
+        }
+      } else if (focusTimeView === 'weekly') {
+        // Weekly view - group by weeks
+        const weeklyData: Record<string, number> = {};
         
-        // Generate chart data
-        const data = generateChartData();
-        
-        // Create chart options
-        const option = {
-          animation: false,
-          tooltip: {
-            trigger: 'axis',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            borderColor: '#e5e7eb',
-            borderWidth: 1,
-            padding: [8, 12],
-            textStyle: {
-              color: '#1f2937',
-              fontSize: 13
-            },
-            formatter: (params: any) => {
-              const value = params[0].value;
-              return `<div style="font-weight: 500">${params[0].name}</div>
-                <div style="display: flex; align-items: center; margin-top: 4px">
-                  <span style="display: inline-block; margin-right: 4px; border-radius: 10px; width: 10px; height: 10px; background-color: #57B5E7;"></span>
-                  <span>Focus Time: ${formatMinutesToHoursAndMinutes(value)}</span>
-                </div>`;
+        // Group daily data into weeks (Monday to Sunday)
+        Object.entries(timeByDate).forEach(([dateStr, minutes]) => {
+          try {
+            const date = new Date(dateStr + 'T00:00:00'); // Ensure proper date parsing
+            if (isNaN(date.getTime())) {
+              console.warn('Invalid date:', dateStr);
+              return;
             }
-          },
-          grid: {
-            left: '8%',
-            right: '8%',
-            bottom: '12%',
-            top: '12%',
-            containLabel: true
-          },
-          xAxis: {
-            type: 'category',
-            boundaryGap: true,
-            data: data.map(item => item.date),
-            axisLine: {
-              lineStyle: {
-                color: '#e5e7eb',
-                width: 2
-              }
-            },
-            axisLabel: {
-              color: '#6b7280',
-              fontSize: 12,
-              margin: 16,
-              formatter: function(value: string) {
-                const parts = value.split(' ');
-                return parts.length > 1 ? `${parts[0]}\n${parts[1]}` : value;
-              }
+            
+            const weekStart = new Date(date);
+            // Calculate Monday as week start (Monday = 1, Sunday = 0)
+            const dayOfWeek = date.getDay();
+            const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday becomes 6, others -1
+            weekStart.setDate(date.getDate() - daysFromMonday);
+            weekStart.setHours(0, 0, 0, 0);
+            const weekKey = weekStart.toISOString().split('T')[0];
+            
+            if (!weeklyData[weekKey]) {
+              weeklyData[weekKey] = 0;
             }
-          },
-          yAxis: {
-            type: 'value',
-            name: 'Minutes Focused',
-            nameLocation: 'middle',
-            nameGap: 50,
-            nameTextStyle: {
-              color: '#6b7280',
-              fontSize: 13,
-              fontWeight: 500
-            },
-            axisLine: {
-              show: false
-            },
-            axisTick: {
-              show: false
-            },
-            splitLine: {
-              lineStyle: {
-                color: '#f3f4f6',
-                type: 'dashed'
-              }
-            },
-            axisLabel: {
-              color: '#6b7280',
-              fontSize: 12,
-              margin: 16,
-              formatter: function(value: number) {
-                // Minutes to hours conversion for display
-                return `${Math.floor(value / 60)}h`;
-              }
-            },
-            max: function(value: { max: number }) {
-              // Ensure the max value is a nice round number of hours
-              const hourValue = value.max / 60;
-              return Math.ceil(hourValue) * 60;
-            }
-          },
-          series: [
-            {
-              name: 'Focus Time',
-              type: 'bar',
-              barWidth: '40%',
-              itemStyle: {
-                color: '#57B5E7',
-                borderRadius: [6, 6, 0, 0]
-              },
-              label: {
-                show: true,
-                position: 'top',
-                fontSize: 12,
-                color: '#6b7280',
-                formatter: function(params: { value: number }) {
-                  if (params.value === 0) return '';
-                  const hours = Math.floor(params.value / 60);
-                  const minutes = params.value % 60;
-                  if (minutes === 0) {
-                    return `${hours}h`;
-                  } else {
-                    return `${hours}h ${minutes}m`;
-                  }
-                }
-              },
-              data: data.map(item => item.value)
-            }
-          ]
-        };
+            weeklyData[weekKey] += minutes;
+          } catch (error) {
+            console.error('Error processing date for weekly view:', dateStr, error);
+          }
+        });
         
-        // Set chart options
-        myChart.setOption(option);
+        console.log('Weekly data aggregated:', weeklyData);
         
-        // Handle window resize
-        const handleResize = () => {
-          myChart.resize();
-        };
+        // Determine week range based on selected range or default
+        let weeksToShow = 8;
+        let endWeek = new Date();
         
-        window.addEventListener('resize', handleResize);
+        if (selectedRange.startDate && selectedRange.endDate) {
+          // Calculate weeks needed for the selected range
+          const daysDiff = Math.ceil((selectedRange.endDate.getTime() - selectedRange.startDate.getTime()) / (1000 * 60 * 60 * 24));
+          weeksToShow = Math.min(Math.max(Math.ceil(daysDiff / 7), 4), 12); // Between 4-12 weeks
+          endWeek = new Date(selectedRange.endDate);
+        }
         
-        return () => {
-          window.removeEventListener('resize', handleResize);
-          myChart.dispose();
-        };
-      } catch (error) {
-        console.error('Error loading ECharts:', error);
+        // Generate weeks
+        for (let i = weeksToShow - 1; i >= 0; i--) {
+          const today = new Date(endWeek);
+          const currentWeekStart = new Date(today);
+          // Calculate Monday of current week
+          const dayOfWeek = today.getDay();
+          const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+          currentWeekStart.setDate(today.getDate() - daysFromMonday);
+          
+          // Calculate week start by subtracting weeks properly
+          const weekStart = new Date(currentWeekStart);
+          weekStart.setDate(currentWeekStart.getDate() - (i * 7));
+          weekStart.setHours(0, 0, 0, 0);
+          
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 6); // Monday to Sunday
+          
+          const weekKey = weekStart.toISOString().split('T')[0];
+          const value = weeklyData[weekKey] || 0;
+          
+          // Safe date formatting with error handling
+          let displayDate: string;
+          try {
+            const startFormat = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const endFormat = weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            displayDate = `${startFormat} - ${endFormat}`;
+          } catch (error) {
+            console.error('Date formatting error:', error);
+            displayDate = `Week ${weeksToShow - i}`;
+          }
+          
+          days.push({
+            date: displayDate,
+            value: value,
+            displayValue: value > 0 ? formatMinutesToHoursAndMinutes(value) : '0m'
+          });
+        }
+      } else if (focusTimeView === 'monthly') {
+        // Monthly view - group by months
+        const monthlyData: Record<string, number> = {};
+        
+        // Group daily data into months
+        Object.entries(timeByDate).forEach(([dateStr, minutes]) => {
+          const date = new Date(dateStr + 'T00:00:00');
+          if (isNaN(date.getTime())) {
+            console.warn('Invalid date:', dateStr);
+            return;
+          }
+          
+          const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+          
+          if (!monthlyData[monthKey]) {
+            monthlyData[monthKey] = 0;
+          }
+          monthlyData[monthKey] += minutes;
+        });
+        
+        // Determine month range based on selected range or default
+        let monthsToShow = 6;
+        let endMonth = new Date();
+        
+        if (selectedRange.startDate && selectedRange.endDate) {
+          const monthsDiff = Math.ceil(
+            (selectedRange.endDate.getFullYear() - selectedRange.startDate.getFullYear()) * 12 +
+            (selectedRange.endDate.getMonth() - selectedRange.startDate.getMonth())
+          );
+          monthsToShow = Math.min(Math.max(monthsDiff + 1, 3), 12); // Between 3-12 months
+          endMonth = new Date(selectedRange.endDate);
+        }
+        
+        // Generate months
+        for (let i = monthsToShow - 1; i >= 0; i--) {
+          const today = new Date(endMonth);
+          const month = new Date(today.getFullYear(), today.getMonth() - i, 1);
+          month.setHours(0, 0, 0, 0);
+          
+          const monthKey = `${month.getFullYear()}-${(month.getMonth() + 1).toString().padStart(2, '0')}`;
+          const value = monthlyData[monthKey] || 0;
+          
+          // Safe date formatting with error handling
+          let displayDate: string;
+          try {
+            displayDate = month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+          } catch (error) {
+            console.error('Date formatting error:', error);
+            displayDate = `Month ${monthsToShow - i}`;
+          }
+          
+          days.push({
+            date: displayDate,
+            value: value,
+            displayValue: value > 0 ? formatMinutesToHoursAndMinutes(value) : '0m'
+          });
+        }
       }
-    };
-    
-    loadECharts();
-  }, [chartRef, focusTimeView, dailyTimeData, isLoading]);
-  
-  // Change the time unit
+      
+      console.log('Generated chart data for', focusTimeView, ':', days);
+      return days;
+    } catch (error) {
+      console.error('Error processing chart data:', error);
+      return [];
+    }
+  }, [filteredWorkSessions, focusTimeView, selectedRange]);
+
+  // Handle time unit change
   const handleTimeUnitChange = (unit: TimeUnit) => {
+    console.log('Changing focus time view to:', unit);
     setFocusTimeView(unit);
+  };
+
+  // Get description based on current view and date range
+  const getViewDescription = () => {
+    const sessionCount = filteredWorkSessions.length;
+    
+    if (selectedRange.rangeType === 'custom' && selectedRange.startDate && selectedRange.endDate) {
+      const start = selectedRange.startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const end = selectedRange.endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `${start} - ${end} • ${sessionCount} sessions`;
+    }
+    
+    switch (focusTimeView) {
+      case 'daily':
+        return selectedRange.rangeType === 'today' 
+          ? `Today • ${sessionCount} sessions`
+          : `Showing daily view • ${sessionCount} sessions`;
+      case 'weekly':
+        return `Showing weekly view • ${sessionCount} sessions`;
+      case 'monthly':
+        return `Showing monthly view • ${sessionCount} sessions`;
+      default:
+        return `${sessionCount} sessions`;
+    }
+  };
+
+  // Calculate dynamic bar width based on number of data points
+  const getBarWidth = () => {
+    const dataLength = chartData.length;
+    if (dataLength <= 5) return '25%';
+    if (dataLength <= 8) return '35%';
+    if (dataLength <= 10) return '50%';
+    return '65%';
+  };
+
+  // Custom label formatter for bars
+  const formatBarLabel = (value: number) => {
+    if (value === 0) return '';
+    const hours = Math.floor(value / 60);
+    const minutes = value % 60;
+    if (hours === 0) return `${minutes}m`;
+    if (minutes === 0) return `${hours}h`;
+    return `${hours}h${minutes}m`;
   };
   
   return (
     <Card title="Focus Time Trend">
       <div className="flex items-center justify-between mb-6">
-        <div></div>
+        <div className="text-sm text-gray-600">
+          {getViewDescription()}
+        </div>
         <div className="flex items-center space-x-2">
           <div className="inline-flex rounded-full bg-gray-100 p-1">
             <button 
@@ -399,13 +341,65 @@ export const FocusTimeTrend: React.FC = () => {
           </div>
         </div>
       </div>
-      {isLoading ? (
-        <div className="flex items-center justify-center h-80">
-          <div className="text-gray-500">Loading focus time data...</div>
-        </div>
-      ) : (
-        <div ref={chartRef} className="w-full h-80"></div>
-      )}
+      
+      <div className="h-80">
+        {chartData.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center text-gray-500">
+              <p className="text-lg font-medium mb-2">No focus time data available</p>
+              <p className="text-sm">Start a timer to see your trends!</p>
+            </div>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartData}
+              margin={{
+                top: 40,
+                right: 30,
+                left: 20,
+                bottom: focusTimeView === 'weekly' ? 60 : 40,
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+              <XAxis 
+                dataKey="date" 
+                axisLine={{ stroke: '#e5e7eb' }}
+                tickLine={{ stroke: '#e5e7eb' }}
+                tick={{ fill: '#6b7280', fontSize: 11 }}
+                interval={0}
+                angle={focusTimeView === 'weekly' ? -45 : 0}
+                textAnchor={focusTimeView === 'weekly' ? 'end' : 'middle'}
+                height={focusTimeView === 'weekly' ? 80 : 60}
+              />
+              <YAxis 
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#6b7280', fontSize: 12 }}
+                tickFormatter={(value) => {
+                  if (value < 60) return `${value}m`;
+                  return `${Math.floor(value / 60)}h`;
+                }}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar 
+                dataKey="value" 
+                fill="#57B5E7" 
+                radius={[6, 6, 0, 0]}
+                minPointSize={2}
+                barSize={getBarWidth()}
+                label={{
+                  position: 'top',
+                  fill: '#6b7280',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  formatter: formatBarLabel
+                }}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
     </Card>
   );
 }; 

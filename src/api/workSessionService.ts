@@ -18,6 +18,29 @@ import type { WorkSession } from '../types/models';
 
 const WORK_SESSIONS_COLLECTION = 'workSessions';
 
+// Helper function to safely convert Firebase Timestamp to Date
+const safeToDate = (timestamp: any): Date => {
+  if (!timestamp) {
+    return new Date(); // Return current date if undefined
+  }
+  
+  if (timestamp instanceof Date) {
+    return timestamp; // Already a Date object
+  }
+  
+  if (timestamp && typeof timestamp.toDate === 'function') {
+    return timestamp.toDate(); // Firebase Timestamp
+  }
+  
+  // If it's a string or number, try to parse it
+  if (typeof timestamp === 'string' || typeof timestamp === 'number') {
+    const parsed = new Date(timestamp);
+    return isNaN(parsed.getTime()) ? new Date() : parsed;
+  }
+  
+  return new Date(); // Fallback
+};
+
 export class WorkSessionService {
   private workSessionsCollection = collection(db, WORK_SESSIONS_COLLECTION);
 
@@ -77,12 +100,15 @@ export class WorkSessionService {
       );
 
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt.toDate(),
-        updatedAt: doc.data().updatedAt.toDate(),
-      })) as WorkSession[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: safeToDate(data.createdAt),
+          updatedAt: safeToDate(data.updatedAt),
+        };
+      }) as WorkSession[];
     } catch (error) {
       console.error('Error fetching work sessions:', error);
       throw error;
@@ -102,12 +128,15 @@ export class WorkSessionService {
       );
 
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt.toDate(),
-        updatedAt: doc.data().updatedAt.toDate(),
-      })) as WorkSession[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: safeToDate(data.createdAt),
+          updatedAt: safeToDate(data.updatedAt),
+        };
+      }) as WorkSession[];
     } catch (error) {
       console.error('Error fetching task work sessions:', error);
       throw error;
@@ -127,12 +156,15 @@ export class WorkSessionService {
       );
 
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt.toDate(),
-        updatedAt: doc.data().updatedAt.toDate(),
-      })) as WorkSession[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: safeToDate(data.createdAt),
+          updatedAt: safeToDate(data.updatedAt),
+        };
+      }) as WorkSession[];
     } catch (error) {
       console.error('Error fetching project work sessions:', error);
       throw error;
@@ -167,12 +199,15 @@ export class WorkSessionService {
     );
 
     return onSnapshot(q, (querySnapshot) => {
-      const sessions = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt.toDate(),
-        updatedAt: doc.data().updatedAt.toDate(),
-      })) as WorkSession[];
+      const sessions = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: safeToDate(data.createdAt),
+          updatedAt: safeToDate(data.updatedAt),
+        };
+      }) as WorkSession[];
 
       callback(sessions);
     });
@@ -191,12 +226,15 @@ export class WorkSessionService {
       );
 
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt.toDate(),
-        updatedAt: doc.data().updatedAt.toDate(),
-      })) as WorkSession[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: safeToDate(data.createdAt),
+          updatedAt: safeToDate(data.updatedAt),
+        };
+      }) as WorkSession[];
     } catch (error) {
       console.error('Error fetching recent work sessions:', error);
       throw error;
