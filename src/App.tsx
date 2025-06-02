@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import './App.css';
 import './typography.css';
 import './styles.css';
-import { Routes, Route, Navigate, Link, HashRouter as Router } from 'react-router-dom';
+import { Routes, Route, Navigate, Link, HashRouter as Router, useLocation } from 'react-router-dom';
 import PomodoroPage from './components/pages/PomodoroPage';
 import DashboardPage from './components/pages/DashboardPage';
 import MainLayout from './components/layout/MainLayout';
@@ -19,6 +19,8 @@ import { useTaskStore } from './store/taskStore';
 import { useUIStore } from './store/uiStore';
 import SettingsPage from './components/pages/SettingsPage';
 import { formatTime } from './utils/timeUtils';
+import { trackPageView, setAnalyticsUserId } from './utils/analytics';
+import { verifyAnalyticsSetup } from './utils/verifyAnalytics';
 
 // Global tab title component - isolated to prevent parent re-renders
 const GlobalTabTitleUpdater: React.FC = () => {
@@ -66,6 +68,27 @@ const SupportPage = () => (
   </div>
 );
 
+// Analytics wrapper component to track page views
+const AnalyticsWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const location = useLocation();
+  const { user } = useUserStore();
+
+  // Track page views
+  useEffect(() => {
+    const pageName = location.pathname === '/' ? 'home' : location.pathname.replace('/', '');
+    trackPageView(pageName);
+  }, [location]);
+
+  // Set user ID for analytics when user logs in
+  useEffect(() => {
+    if (user?.uid) {
+      setAnalyticsUserId(user.uid);
+    }
+  }, [user]);
+
+  return <>{children}</>;
+};
+
 const App = (): React.JSX.Element => {
   const { initialize } = useUserStore();
   const { setIsAddingTask } = useTaskStore();
@@ -94,6 +117,11 @@ const App = (): React.JSX.Element => {
   useEffect(() => {
     // TODO: fix the problem that this runs twice on initial load. Check for React.StrictMode
     initialize();
+
+    // Verify Analytics setup
+    setTimeout(() => {
+      verifyAnalyticsSetup();
+    }, 2000); // Wait 2 seconds for Firebase to initialize
 
     // Try to read the localStorage to check for data corruption
     try {
@@ -197,17 +225,19 @@ const App = (): React.JSX.Element => {
   return (
     <Router>
       <GlobalTabTitleUpdater />
-      <Routes>
-        <Route path="/" element={<PomodoroPageWithLayout />} />
-        <Route path="pomodoro" element={<PomodoroPageWithLayout />} />
-        <Route path="projects" element={<ProjectsPageWithLayout />} />
-        <Route path="dashboard/*" element={<DashboardLayout />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="calendar" element={<CalendarPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-        </Route>
-        <Route path="support" element={<SupportPageWithLayout />} />
-      </Routes>
+      <AnalyticsWrapper>
+        <Routes>
+          <Route path="/" element={<PomodoroPageWithLayout />} />
+          <Route path="pomodoro" element={<PomodoroPageWithLayout />} />
+          <Route path="projects" element={<ProjectsPageWithLayout />} />
+          <Route path="dashboard/*" element={<DashboardLayout />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="calendar" element={<CalendarPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
+          <Route path="support" element={<SupportPageWithLayout />} />
+        </Routes>
+      </AnalyticsWrapper>
       <ToastContainer />
     </Router>
   );
