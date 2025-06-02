@@ -1,8 +1,7 @@
 import { create } from 'zustand';
-import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, onSnapshot, query, orderBy, where, writeBatch, setDoc } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy, where, writeBatch, setDoc } from 'firebase/firestore';
 import { db } from '../api/firebase';
 import { useUserStore } from './userStore';
-import { workSessionService } from '../api/workSessionService';
 import type { Task, Project } from '../types/models';
 
 interface TaskState {
@@ -12,12 +11,9 @@ interface TaskState {
   editingTaskId: string | null;
   showDetailsMenu: boolean;
   isLoading: boolean;
-  unsubscribeTasks: (() => void) | null;
-  unsubscribeProjects: (() => void) | null;
   
   // Actions
-  initializeStore: () => void;
-  cleanupListeners: () => void;
+  initializeStore: () => Promise<void>;
   addTask: (taskData: Omit<Task, 'id' | 'order' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateTask: (taskId: string, taskData: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
@@ -32,24 +28,10 @@ interface TaskState {
   timeSpentIncrement: (id: string, increment: number) => Promise<void>;
   handleMoveCompletedDown: () => Promise<void>;
   handleArchiveCompleted: () => Promise<void>;
-  
-  // New function to get tasks with calculated timeSpent from WorkSessions
-  getTasksWithCalculatedTime: () => Promise<Task[]>;
 }
 
 const tasksCollection = collection(db, 'tasks');
 const projectsCollection = collection(db, 'projects');
-
-// Helper function to calculate timeSpent from WorkSession data
-const calculateTimeSpentFromSessions = async (taskId: string, userId: string): Promise<number> => {
-  try {
-    const sessions = await workSessionService.getWorkSessionsByTask(userId, taskId);
-    return sessions.reduce((total, session) => total + session.duration, 0);
-  } catch (error) {
-    console.error('Error calculating time spent from sessions:', error);
-    return 0; // Return 0 if we can't calculate from sessions
-  }
-};
 
 export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
@@ -58,10 +40,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   editingTaskId: null,
   showDetailsMenu: false,
   isLoading: false,
-  unsubscribeTasks: null,
-  unsubscribeProjects: null,
 
-  initializeStore: () => {
+  initializeStore: async () => {
     const { user, isAuthenticated } = useUserStore.getState();
     
     if (!isAuthenticated || !user) {
@@ -71,60 +51,34 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
     set({ isLoading: true });
     
-    // Clean up existing listeners
-    get().cleanupListeners();
-    
-    // Listen to user's tasks collection
+    // Get latest tasks and projects for the authenticated user
     const tasksQuery = query(
       tasksCollection, 
       where('userId', '==', user.uid),
       orderBy('order', 'asc')
     );
-    
-    const unsubTasks = onSnapshot(tasksQuery, (snapshot) => {
-      const tasks = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-        updatedAt: doc.data().updatedAt?.toDate() || new Date()
-      })) as Task[];
-      
-      set({ tasks, isLoading: false });
+
+    const fetchedTasks: Task[] = (await getDocs(tasksQuery)).docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Task[];
+    set({
+      tasks: fetchedTasks
     });
 
-    // Listen to user's projects collection
     const projectsQuery = query(
       projectsCollection,
       where('userId', '==', user.uid)
     );
     
-    const unsubProjects = onSnapshot(projectsQuery, (snapshot) => {
-      const projects = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Project[];
-      
-      set({ projects });
+    const fetchedProjects: Project[] = (await getDocs(projectsQuery)).docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Project[];
+    set({
+      projects: fetchedProjects,
+      isLoading: false
     });
-    
-    set({ 
-      unsubscribeTasks: unsubTasks,
-      unsubscribeProjects: unsubProjects 
-    });
-  },
-
-  cleanupListeners: () => {
-    const { unsubscribeTasks, unsubscribeProjects } = get();
-    
-    if (unsubscribeTasks) {
-      unsubscribeTasks();
-      set({ unsubscribeTasks: null });
-    }
-    
-    if (unsubscribeProjects) {
-      unsubscribeProjects();
-      set({ unsubscribeProjects: null });
-    }
   },
   
   addProject: async (projectData) => {
@@ -221,7 +175,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         updatedAt: new Date()
       });
       
-      set(state => ({ editingTaskId: null }));
+      set({ editingTaskId: null });
     } catch (error) {
       console.error('Error updating task:', error);
       throw error;
@@ -272,7 +226,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
                        (task.status === 'completed' ? false : task.completed);
       
       // Prepare the update object
-      const updateData: any = {
+      const updateData: Partial<Task> = {
         status,
         completed,
         updatedAt: new Date()
@@ -342,18 +296,6 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         timeSpent: newTimeSpent,
         updatedAt: new Date()
       });
-
-      // Also track daily time spent for dashboard date filtering
-      const { user } = useUserStore.getState();
-      if (user) {
-        const { dailyTimeSpentService } = await import('../api/dailyTimeSpentService');
-        await dailyTimeSpentService.incrementTimeSpent(
-          user.uid,
-          task.id,
-          task.projectId,
-          increment
-        );
-      }
     } catch (error) {
       console.error('Error incrementing time spent:', error);
       throw error;
@@ -412,18 +354,6 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       throw error;
     }
   },
-
-  getTasksWithCalculatedTime: async () => {
-    const { tasks } = get();
-    const calculatedTimeTasks = await Promise.all(tasks.map(async task => {
-      const calculatedTime = await calculateTimeSpentFromSessions(task.id, task.userId);
-      return {
-        ...task,
-        calculatedTime
-      };
-    }));
-    return calculatedTimeTasks;
-  },
 }));
 
 // Subscribe to user authentication changes
@@ -435,7 +365,6 @@ useUserStore.subscribe((state) => {
     taskStore.initializeStore();
   } else {
     // User logged out, cleanup and reset
-    taskStore.cleanupListeners();
     useTaskStore.setState({ 
       tasks: [], 
       projects: [], 

@@ -44,6 +44,7 @@ const SettingsPage = () => {
       });
       setMessage({ type: 'success', text: 'Settings saved successfully!' });
     } catch (error) {
+      console.error('Error saving settings:', error);
       setMessage({ type: 'error', text: 'Failed to save settings. Please try again.' });
     } finally {
       setIsLoading(false);

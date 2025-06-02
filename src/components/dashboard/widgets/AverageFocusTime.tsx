@@ -1,126 +1,85 @@
 import React, { useState, useEffect } from 'react';
 import Card from '../../ui/Card';
-import { useTaskStore } from '../../../store/taskStore';
-import { useUserStore } from '../../../store/userStore';
+import { useDashboardStore } from '../../../store/useDashboardStore';
 
 export const AverageFocusTime: React.FC = () => {
-  const { tasks } = useTaskStore();
-  const { user } = useUserStore();
-  const [dailyAverageMinutes, setDailyAverageMinutes] = useState(0);
-  const [totalFocusMinutes, setTotalFocusMinutes] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const { workSessions } = useDashboardStore();
+  const [ stats, setStats ] = useState({
+    dailyAverage: {
+        hours: 0,
+        minutes: 0
+      },
+      totalFocus: {
+        hours: 0,
+        minutes: 0
+      },
+      weeklyGoal: {
+        current: 0,
+        target: 25,
+        progress: 0
+      },
+      journey: {
+        current: 0,
+        target: 10000,
+        progress: 0
+      }
+  });
+  const [isLoading, setIsLoading] = useState(false);
   
-  // Calculate daily average and total focus time using DailyTimeSpent data
   useEffect(() => {
-    const calculateFocusStats = async () => {
-      if (!user) {
-        setDailyAverageMinutes(0);
-        setTotalFocusMinutes(0);
-        setIsLoading(false);
-        return;
-      }
+    const calculateFocusStats = () => {
       
-      try {
         setIsLoading(true);
-        const { dailyTimeSpentService } = await import('../../../api/dailyTimeSpentService');
         
-        // Get data for the last 30 days to calculate average
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 30);
-        
-        const dailyRecords = await dailyTimeSpentService.getDailyTimeSpent(user.uid, startDate, endDate);
-        
-        if (dailyRecords.length > 0) {
-          // Use daily tracking data
-          const dailyTotals = new Map<string, number>();
-          let totalMinutes = 0;
-          
-          dailyRecords.forEach(record => {
-            const existing = dailyTotals.get(record.date) || 0;
-            const newTotal = existing + record.timeSpent;
-            dailyTotals.set(record.date, newTotal);
-            totalMinutes += record.timeSpent;
-          });
-          
-          // Calculate average (only counting days with work)
-          const workDays = dailyTotals.size;
-          const average = workDays > 0 ? totalMinutes / workDays : 0;
-          
-          setDailyAverageMinutes(average);
-          
-          // For total focus time, also include legacy task.timeSpent data
-          const legacyTotalMinutes = tasks.reduce((total, task) => total + (task.timeSpent || 0), 0);
-          setTotalFocusMinutes(totalMinutes + legacyTotalMinutes);
-        } else {
-          // No daily records exist yet - fall back to task.timeSpent data
-          const totalMinutes = tasks.reduce((total, task) => total + (task.timeSpent || 0), 0);
-          
-          if (totalMinutes > 0) {
-            // Since no daily records exist, assume all time is from today (first working day)
-            setDailyAverageMinutes(totalMinutes);
-            setTotalFocusMinutes(totalMinutes);
+        const timeSpentByDate: Record<string, number> = {};
+        let currentWeekTimeSpent = 0;
+        const currentWeekStart = new Date();
+        const dayToMinus = currentWeekStart.getDay() === 0 ? 6 : currentWeekStart.getDay() - 1;
+        currentWeekStart.setDate(currentWeekStart.getDate() - dayToMinus); // Set to start of the week (Monday)
+        currentWeekStart.setHours(0, 0, 0, 0); // Normalize to start of the day
+
+        workSessions.forEach(session => {
+          const date = session.date;
+          const duration = session.duration; // duration in minutes
+          if (!timeSpentByDate[date]) {
+            timeSpentByDate[date] = duration;
           } else {
-            setDailyAverageMinutes(0);
-            setTotalFocusMinutes(0);
+            timeSpentByDate[date] += duration;
           }
-        }
-      } catch (error) {
-        console.error('Error calculating focus stats:', error);
-        // Fallback: use task.timeSpent data
-        const totalMinutes = tasks.reduce((total, task) => total + (task.timeSpent || 0), 0);
-        setDailyAverageMinutes(totalMinutes);
-        setTotalFocusMinutes(totalMinutes);
-      } finally {
+
+          // Calculate weekly time spent
+          const sessionDate = new Date(date);
+          if (sessionDate >= currentWeekStart) {
+            currentWeekTimeSpent += duration;
+          }
+        });
+        const totalFocusMinutes = Object.values(timeSpentByDate).reduce((sum, minutes) => sum + minutes, 0);
+        const dailyAverageMinutes = totalFocusMinutes / Object.keys(timeSpentByDate).length || 0;
+        setStats({
+          dailyAverage: {
+            hours: Math.floor(dailyAverageMinutes / 60),
+            minutes: Math.floor(dailyAverageMinutes % 60)
+          },
+          totalFocus: {
+            hours: Math.floor(totalFocusMinutes / 60),
+            minutes: totalFocusMinutes % 60
+          },
+          weeklyGoal: {
+            current: parseFloat(((currentWeekTimeSpent / 60).toFixed(1))),
+            target: 25, // Default weekly goal
+            progress: Math.min((currentWeekTimeSpent / 60 / 25) * 100, 100) // Calculate progress percentage
+          },
+          journey: {
+            current: Math.floor(totalFocusMinutes / 60),
+            target: 10000, // Default journey goal
+            progress: parseFloat(((totalFocusMinutes / 60 / 10000) * 100).toFixed(2)) // Calculate progress percentage
+          }
+        });
         setIsLoading(false);
-      }
     };
     
     calculateFocusStats();
-  }, [user, tasks]);
-  
-  // Calculate statistics for display
-  const calculateStats = () => {
-    // Total focus time
-    const totalHours = Math.floor(totalFocusMinutes / 60);
-    const totalRemainingMinutes = totalFocusMinutes % 60;
-
-    // Daily average
-    const dailyAverageHours = Math.floor(dailyAverageMinutes / 60);
-    const dailyAverageRemainingMinutes = Math.floor(dailyAverageMinutes % 60);
-
-    // Weekly goal calculation (estimate based on daily average)
-    const weeklyGoalTarget = 25; // Default weekly goal
-    const estimatedWeeklyHours = (dailyAverageMinutes / 60) * 7;
-    const weeklyProgress = (estimatedWeeklyHours / weeklyGoalTarget) * 100;
-
-    // 10000 hours journey
-    const journeyTarget = 10000; // Default journey goal
-    const journeyProgress = (totalHours / journeyTarget) * 100;
-
-    return {
-      dailyAverage: {
-        hours: dailyAverageHours,
-        minutes: dailyAverageRemainingMinutes
-      },
-      totalFocus: {
-        hours: totalHours,
-        minutes: totalRemainingMinutes
-      },
-      weeklyGoal: {
-        current: parseFloat(estimatedWeeklyHours.toFixed(1)),
-        target: weeklyGoalTarget,
-        progress: Math.min(weeklyProgress, 100)
-      },
-      journey: {
-        current: totalHours,
-        target: journeyTarget,
-        progress: parseFloat(journeyProgress.toFixed(2))
-      }
-    };
-  };
-
-  const stats = calculateStats();
+  }, [workSessions]);
 
   if (isLoading) {
     return (
