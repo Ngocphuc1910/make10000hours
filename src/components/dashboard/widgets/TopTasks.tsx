@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import Card from '../../ui/Card';
-import { useWorkSessionStore } from '../../../store/useWorkSessionStore';
+import { useDashboardStore } from '../../../store/useDashboardStore';
 import { useTaskStore } from '../../../store/taskStore';
 import { useUserStore } from '../../../store/userStore';
 import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
-import { getTasksWorkedOnDate, taskToDashboardTask } from '../../../utils/dashboardAdapter';
-import type { Task as DashboardTask } from '../../../types';
+import { taskToDashboardTask, type DashboardTask } from '../../../utils/dashboardAdapter';
 
 export const TopTasks: React.FC = () => {
-  const { dateRange, setDateRange } = useWorkSessionStore();
+  const { workSessions, selectedRange } = useDashboardStore();
   const { tasks, projects } = useTaskStore();
   const { user } = useUserStore();
   const [displayTasks, setDisplayTasks] = useState<DashboardTask[]>([]);
@@ -32,9 +31,34 @@ export const TopTasks: React.FC = () => {
       setIsLoading(true);
       try {
         if (showingToday) {
-          // Get tasks for today only using daily time tracking
+          // Get tasks for today only using work sessions
           const today = new Date();
-          const tasksForDate = await getTasksWorkedOnDate(today, tasks, user.uid);
+          const todayString = today.toISOString().split('T')[0];
+          
+          // Filter work sessions for today and aggregate by task
+          const todayWorkSessions = workSessions.filter(session => session.date === todayString);
+          const taskTimeMap = new Map<string, number>();
+          
+          todayWorkSessions.forEach(session => {
+            const current = taskTimeMap.get(session.taskId) || 0;
+            taskTimeMap.set(session.taskId, current + (session.duration || 0));
+          });
+          
+          // Convert to dashboard tasks with work session time
+          const tasksForDate = Array.from(taskTimeMap.entries())
+            .map(([taskId, totalTime]) => {
+              const task = tasks.find(t => t.id === taskId);
+              if (!task) return null;
+              
+              const dashboardTask = taskToDashboardTask(task);
+              return {
+                ...dashboardTask,
+                totalFocusTime: totalTime
+              };
+            })
+            .filter((task): task is DashboardTask => task !== null && task.totalFocusTime > 0)
+            .sort((a, b) => b.totalFocusTime - a.totalFocusTime);
+            
           setDisplayTasks(tasksForDate);
         } else {
           // Show all tasks by total focus time from timeSpent field
@@ -53,7 +77,7 @@ export const TopTasks: React.FC = () => {
     };
 
     updateTasks();
-  }, [showingToday, tasks, user]);
+  }, [showingToday, tasks, workSessions, user]);
   
   // Show empty state if no tasks
   if (isLoading) {
@@ -83,29 +107,7 @@ export const TopTasks: React.FC = () => {
           <button 
             className="flex items-center text-sm text-gray-600 hover:text-gray-800"
             onClick={() => {
-              const today = new Date();
-              const currentSelected = dateRange.startDate?.toDateString();
-              const todayString = today.toDateString();
-              
-              // Toggle between today and all time (30 days ago to today)
-              if (currentSelected === todayString) {
-                // Reset to default range (30 days)
-                const thirtyDaysAgo = new Date();
-                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-                thirtyDaysAgo.setHours(0, 0, 0, 0);
-                const endOfToday = new Date();
-                endOfToday.setHours(23, 59, 59, 999);
-                setDateRange(thirtyDaysAgo, endOfToday);
-                setShowingToday(false);
-              } else {
-                // Set to today only
-                const startOfToday = new Date();
-                startOfToday.setHours(0, 0, 0, 0);
-                const endOfToday = new Date();
-                endOfToday.setHours(23, 59, 59, 999);
-                setDateRange(startOfToday, endOfToday);
-                setShowingToday(true);
-              }
+              setShowingToday(!showingToday);
             }}
           >
             <span>{showingToday ? formattedDate : 'Last 30 days'}</span>
@@ -136,29 +138,7 @@ export const TopTasks: React.FC = () => {
         <button 
           className="flex items-center text-sm text-gray-600 hover:text-gray-800"
           onClick={() => {
-            const today = new Date();
-            const currentSelected = dateRange.startDate?.toDateString();
-            const todayString = today.toDateString();
-            
-            // Toggle between today and all time (30 days ago to today)
-            if (currentSelected === todayString) {
-              // Reset to default range (30 days)
-              const thirtyDaysAgo = new Date();
-              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-              thirtyDaysAgo.setHours(0, 0, 0, 0);
-              const endOfToday = new Date();
-              endOfToday.setHours(23, 59, 59, 999);
-              setDateRange(thirtyDaysAgo, endOfToday);
-              setShowingToday(false);
-            } else {
-              // Set to today only
-              const startOfToday = new Date();
-              startOfToday.setHours(0, 0, 0, 0);
-              const endOfToday = new Date();
-              endOfToday.setHours(23, 59, 59, 999);
-              setDateRange(startOfToday, endOfToday);
-              setShowingToday(true);
-            }
+            setShowingToday(!showingToday);
           }}
         >
           <span>{showingToday ? formattedDate : 'Last 30 days'}</span>
@@ -205,9 +185,9 @@ export const TopTasks: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className={`flex items-center text-xs font-medium ${task.isCompleted ? 'text-green-600' : 'text-yellow-600'}`}>
-                <div className={`w-2 h-2 rounded-full ${task.isCompleted ? 'bg-green-500' : 'bg-yellow-500'} mr-1`}></div>
-                <span>{task.isCompleted ? 'Completed' : 'To do'}</span>
+              <div className={`flex items-center text-xs font-medium ${task.completed ? 'text-green-600' : 'text-yellow-600'}`}>
+                <div className={`w-2 h-2 rounded-full ${task.completed ? 'bg-green-500' : 'bg-yellow-500'} mr-1`}></div>
+                <span>{task.completed ? 'Completed' : 'To do'}</span>
               </div>
             </div>
           );

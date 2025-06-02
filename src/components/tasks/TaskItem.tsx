@@ -21,10 +21,10 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   const { toggleTaskCompletion } = useTaskStore();
   
   // Use selectors to only subscribe to the specific values we need
-  const currentTaskId = useTimerStore(state => state.currentTaskId);
-  const setCurrentTaskId = useTimerStore(state => state.setCurrentTaskId);
+  const currentTask = useTimerStore(state => state.currentTask);
+  const setCurrentTask = useTimerStore(state => state.setCurrentTask);
   
-  const isSelected = currentTaskId === task.id;
+  const isSelected = currentTask?.id === task.id;
   
   // Status indicator styles
   const getStatusIndicator = () => {
@@ -54,7 +54,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
     // Don't select completed tasks
     if (task.completed) return;
     
-    setCurrentTaskId(task.id);
+    setCurrentTask(task);
   };
   
   const handleCheckboxChange = () => {
@@ -62,7 +62,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
     
     // If this was the current task, deselect it when marked complete
     if (isSelected && !task.completed) {
-      setCurrentTaskId(null);
+      setCurrentTask(null);
     }
   };
   
