@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import Card from '../../ui/Card';
-import { useWorkSessionStore } from '../../../store/useWorkSessionStore';
+import { useDashboardStore } from '../../../store/useDashboardStore';
 import { calculateFocusStreak } from '../../../utils/dashboardAdapter';
+import { getDateISOString } from '../../../utils/timeUtils';
 
 export const FocusStreak: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendarDays, setCalendarDays] = useState<Array<{ date: Date, hasFocused: boolean } | null>>([]);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const { workSessions } = useWorkSessionStore();
+  const { workSessions } = useDashboardStore();
   
   // Calculate real focus streak from WorkSession data
   const focusStreak = calculateFocusStreak(workSessions);
@@ -36,9 +37,9 @@ export const FocusStreak: React.FC = () => {
   
   // Check if a date has focus sessions
   const hasFocusOnDate = (date: Date): boolean => {
-    const dateString = date.toDateString();
+    const dateString = getDateISOString(date);
     return workSessions.some(session => 
-      session.startTime.toDateString() === dateString
+      session.date === dateString
     );
   };
 

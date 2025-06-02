@@ -1,11 +1,8 @@
 import { 
-  collection, 
   doc, 
   getDoc, 
-  setDoc, 
-  onSnapshot, 
-  serverTimestamp,
-  Timestamp 
+  setDoc,  
+  serverTimestamp, 
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { TimerState as TimerStateModel } from '../types/models';
@@ -24,15 +21,15 @@ export class TimerService {
   /**
    * Save timer state to Firestore
    */
-  async saveTimerState(userId: string, timerData: Omit<TimerStateModel, 'userId' | 'lastUpdated' | 'deviceId'>): Promise<void> {
+  async saveTimerState(userId: string, timerData: Partial<TimerStateModel>): Promise<void> {
     try {
       const timerDocRef = doc(db, TIMER_COLLECTION, userId);
       
-      const timerState: Omit<TimerStateModel, 'lastUpdated'> & { lastUpdated: any } = {
+      const timerState: Partial<TimerStateModel> = {
         userId,
         ...timerData,
-        deviceId: this.deviceId,
-        lastUpdated: serverTimestamp(),
+        activeDeviceId: this.deviceId,
+        updatedAt: new Date(),
       };
 
       await setDoc(timerDocRef, timerState, { merge: true });
@@ -51,63 +48,14 @@ export class TimerService {
       const timerDoc = await getDoc(timerDocRef);
       
       if (timerDoc.exists()) {
-        const data = timerDoc.data();
-        
-        // Convert Firestore Timestamp to Date
-        const timerState: TimerStateModel = {
-          ...data as Omit<TimerStateModel, 'lastUpdated' | 'sessionStartTime'>,
-          lastUpdated: data.lastUpdated instanceof Timestamp ? data.lastUpdated.toDate() : new Date(data.lastUpdated),
-          sessionStartTime: data.sessionStartTime instanceof Timestamp ? data.sessionStartTime.toDate() : (data.sessionStartTime ? new Date(data.sessionStartTime) : undefined),
-        };
-        
-        return timerState;
+        const data = timerDoc.data() as TimerStateModel;
+        return data;
       }
       
       return null;
     } catch (error) {
       console.error('Error loading timer state:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Subscribe to real-time timer state changes
-   */
-  subscribeToTimerState(userId: string, callback: (timerState: TimerStateModel | null) => void): void {
-    try {
-      const timerDocRef = doc(db, TIMER_COLLECTION, userId);
-      
-      this.unsubscribe = onSnapshot(timerDocRef, (doc) => {
-        if (doc.exists()) {
-          const data = doc.data();
-          
-          // Convert Firestore Timestamp to Date
-          const timerState: TimerStateModel = {
-            ...data as Omit<TimerStateModel, 'lastUpdated' | 'sessionStartTime'>,
-            lastUpdated: data.lastUpdated instanceof Timestamp ? data.lastUpdated.toDate() : new Date(data.lastUpdated),
-            sessionStartTime: data.sessionStartTime instanceof Timestamp ? data.sessionStartTime.toDate() : (data.sessionStartTime ? new Date(data.sessionStartTime) : undefined),
-          };
-          
-          callback(timerState);
-        } else {
-          callback(null);
-        }
-      }, (error) => {
-        console.error('Error in timer state subscription:', error);
-        callback(null);
-      });
-    } catch (error) {
-      console.error('Error subscribing to timer state:', error);
-    }
-  }
-
-  /**
-   * Unsubscribe from real-time updates
-   */
-  unsubscribeFromTimerState(): void {
-    if (this.unsubscribe) {
-      this.unsubscribe();
-      this.unsubscribe = null;
     }
   }
 
@@ -138,7 +86,7 @@ export class TimerService {
    * Check if this device is the active timer device
    */
   isActiveDevice(timerState: TimerStateModel | null): boolean {
-    return timerState?.deviceId === this.deviceId;
+    return timerState?.activeDeviceId === this.deviceId;
   }
 
   /**

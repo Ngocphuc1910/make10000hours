@@ -16,23 +16,15 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
   const isRunning = useTimerStore(state => state.isRunning);
   const mode = useTimerStore(state => state.mode);
   const sessionsCompleted = useTimerStore(state => state.sessionsCompleted);
-  const currentTaskId = useTimerStore(state => state.currentTaskId);
+  const currentTask = useTimerStore(state => state.currentTask);
   
   // Use selectors for less frequently changing values
   const isLoading = useTimerStore(state => state.isLoading);
   const isSyncing = useTimerStore(state => state.isSyncing);
-  const isActiveDevice = useTimerStore(state => state.isActiveDevice);
   const syncError = useTimerStore(state => state.syncError);
   
   // Get action functions (these don't change, so we can destructure them)
   const { start, pause, reset, skip, setMode } = useTimerStore();
-  
-  const { tasks } = useTaskStore();
-  
-  // Find current task
-  const currentTask = currentTaskId 
-    ? tasks.find(task => task.id === currentTaskId) 
-    : null;
   
   // Button handlers
   const handleStartPause = () => {

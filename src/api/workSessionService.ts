@@ -1,16 +1,17 @@
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  getDocs, 
-  query, 
-  where, 
-  orderBy, 
+import {
+  collection,
+  updateDoc,
+  deleteDoc,
+  doc,
+  getDocs,
+  query,
+  where,
+  orderBy,
   limit,
   Timestamp,
-  onSnapshot
+  onSnapshot,
+  getDoc,
+  setDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { WorkSession } from '../types/models';
@@ -21,21 +22,39 @@ export class WorkSessionService {
   private workSessionsCollection = collection(db, WORK_SESSIONS_COLLECTION);
 
   /**
-   * Create a new work session
+   * Upsert work session
    */
-  async createWorkSession(sessionData: Omit<WorkSession, 'id' | 'createdAt'>): Promise<string> {
+  async upsertWorkSession(sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt' | 'duration'>, durationChange = 0): Promise<string> {
     try {
-      const docData = {
-        ...sessionData,
-        startTime: Timestamp.fromDate(sessionData.startTime),
-        endTime: Timestamp.fromDate(sessionData.endTime),
-        createdAt: Timestamp.fromDate(new Date())
-      };
+      const sessionId = `${sessionData.taskId}_${sessionData.date}`;
+      const sessionRef = doc(this.workSessionsCollection, sessionId);
 
-      const docRef = await addDoc(this.workSessionsCollection, docData);
-      return docRef.id;
+      // Check if the session already exists
+      const sessionDoc = await getDoc(sessionRef);
+      if (sessionDoc.exists()) {
+        // Update existing session
+        const updateData: Partial<WorkSession> = { 
+          ...sessionData, 
+          duration: (sessionDoc.data()?.duration || 0) + durationChange,
+          updatedAt: new Date() ,
+        };
+
+        await updateDoc(sessionRef, updateData);
+      } else {
+        // Create new session
+        const newSession: WorkSession = {
+          ...sessionData,
+          id: sessionId,
+          duration: durationChange, // Initialize with the change
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        await setDoc(sessionRef, newSession);
+      }
+      return sessionId;
     } catch (error) {
-      console.error('Error creating work session:', error);
+      console.error('Error upserting work session:', error);
       throw error;
     }
   }
@@ -44,26 +63,25 @@ export class WorkSessionService {
    * Get work sessions for a user within a date range
    */
   async getWorkSessionsByDateRange(
-    userId: string, 
-    startDate: Date, 
+    userId: string,
+    startDate: Date,
     endDate: Date
   ): Promise<WorkSession[]> {
     try {
       const q = query(
         this.workSessionsCollection,
         where('userId', '==', userId),
-        where('startTime', '>=', Timestamp.fromDate(startDate)),
-        where('startTime', '<=', Timestamp.fromDate(endDate)),
-        orderBy('startTime', 'desc')
+        where('updatedAt', '>=', Timestamp.fromDate(startDate)),
+        where('updatedAt', '<=', Timestamp.fromDate(endDate)),
+        orderBy('updatedAt', 'desc')
       );
 
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        startTime: doc.data().startTime.toDate(),
-        endTime: doc.data().endTime.toDate(),
-        createdAt: doc.data().createdAt.toDate()
+        createdAt: doc.data().createdAt.toDate(),
+        updatedAt: doc.data().updatedAt.toDate(),
       })) as WorkSession[];
     } catch (error) {
       console.error('Error fetching work sessions:', error);
@@ -80,16 +98,15 @@ export class WorkSessionService {
         this.workSessionsCollection,
         where('userId', '==', userId),
         where('taskId', '==', taskId),
-        orderBy('startTime', 'desc')
+        orderBy('updatedAt', 'desc')
       );
 
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        startTime: doc.data().startTime.toDate(),
-        endTime: doc.data().endTime.toDate(),
-        createdAt: doc.data().createdAt.toDate()
+        createdAt: doc.data().createdAt.toDate(),
+        updatedAt: doc.data().updatedAt.toDate(),
       })) as WorkSession[];
     } catch (error) {
       console.error('Error fetching task work sessions:', error);
@@ -106,42 +123,18 @@ export class WorkSessionService {
         this.workSessionsCollection,
         where('userId', '==', userId),
         where('projectId', '==', projectId),
-        orderBy('startTime', 'desc')
+        orderBy('updatedAt', 'desc')
       );
 
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        startTime: doc.data().startTime.toDate(),
-        endTime: doc.data().endTime.toDate(),
-        createdAt: doc.data().createdAt.toDate()
+        createdAt: doc.data().createdAt.toDate(),
+        updatedAt: doc.data().updatedAt.toDate(),
       })) as WorkSession[];
     } catch (error) {
       console.error('Error fetching project work sessions:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update a work session
-   */
-  async updateWorkSession(sessionId: string, updates: Partial<WorkSession>): Promise<void> {
-    try {
-      const sessionRef = doc(this.workSessionsCollection, sessionId);
-      const updateData: any = { ...updates };
-
-      // Convert dates to Timestamps
-      if (updates.startTime) {
-        updateData.startTime = Timestamp.fromDate(updates.startTime);
-      }
-      if (updates.endTime) {
-        updateData.endTime = Timestamp.fromDate(updates.endTime);
-      }
-
-      await updateDoc(sessionRef, updateData);
-    } catch (error) {
-      console.error('Error updating work session:', error);
       throw error;
     }
   }
@@ -163,36 +156,25 @@ export class WorkSessionService {
    * Listen to work sessions for real-time updates
    */
   subscribeToWorkSessions(
-    userId: string, 
-    startDate: Date, 
-    endDate: Date,
+    userId: string,
     callback: (sessions: WorkSession[]) => void
   ): () => void {
     // Simplified query - only filter by userId to avoid index requirements
     // We'll filter by date range in memory
     const q = query(
       this.workSessionsCollection,
-      where('userId', '==', userId)
+      where('userId', '==', userId),
     );
 
     return onSnapshot(q, (querySnapshot) => {
-      const allSessions = querySnapshot.docs.map(doc => ({
+      const sessions = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        startTime: doc.data().startTime.toDate(),
-        endTime: doc.data().endTime.toDate(),
-        createdAt: doc.data().createdAt.toDate()
+        createdAt: doc.data().createdAt.toDate(),
+        updatedAt: doc.data().updatedAt.toDate(),
       })) as WorkSession[];
 
-      // Filter by date range in memory and sort
-      const filteredSessions = allSessions
-        .filter(session => 
-          session.startTime >= startDate && 
-          session.startTime <= endDate
-        )
-        .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
-
-      callback(filteredSessions);
+      callback(sessions);
     });
   }
 
@@ -204,7 +186,7 @@ export class WorkSessionService {
       const q = query(
         this.workSessionsCollection,
         where('userId', '==', userId),
-        orderBy('startTime', 'desc'),
+        orderBy('updatedAt', 'desc'),
         limit(limitCount)
       );
 
@@ -212,9 +194,8 @@ export class WorkSessionService {
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        startTime: doc.data().startTime.toDate(),
-        endTime: doc.data().endTime.toDate(),
-        createdAt: doc.data().createdAt.toDate()
+        createdAt: doc.data().createdAt.toDate(),
+        updatedAt: doc.data().updatedAt.toDate(),
       })) as WorkSession[];
     } catch (error) {
       console.error('Error fetching recent work sessions:', error);

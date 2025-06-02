@@ -169,3 +169,8 @@ export const calculateElapsedTime = (sessionStartTime: Date, lastUpdated: Date):
   
   return Math.min(elapsedSinceStart, elapsedSinceUpdate);
 }; 
+
+export const getDateISOString = (date: Date = new Date()): string => {
+  // Get current date in ISO format (YYYY-MM-DD)
+  return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD
+};

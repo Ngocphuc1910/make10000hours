@@ -47,9 +47,9 @@ export interface TimerState {
   sessionsCompleted: number;
   isRunning: boolean;
   currentTaskId: string | null;
-  lastUpdated: Date; // for conflict resolution and sync
+  updatedAt: Date;
   sessionStartTime?: Date; // when timer was started (for calculating elapsed time)
-  deviceId?: string; // to track which device is running the timer
+  activeDeviceId?: string; // to track which device is running the timer
 }
 
 export interface AppSettings {
@@ -73,14 +73,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 // Work session tracking for dashboard analytics
 export interface WorkSession {
-  id: string;
+  id: string; // {taskId}_{date}
   userId: string;
   taskId: string;
   projectId: string;
-  startTime: Date;
-  endTime: Date;
+  date: string; // YYYY-MM-DD format
   duration: number; // in minutes
-  sessionType: 'pomodoro' | 'manual' | 'continuous'; // how the session was created
-  notes?: string;
   createdAt: Date;
+  updatedAt: Date;
 }

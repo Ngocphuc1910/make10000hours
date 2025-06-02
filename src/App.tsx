@@ -24,8 +24,7 @@ import { formatTime } from './utils/timeUtils';
 const GlobalTabTitleUpdater: React.FC = () => {
   const isRunning = useTimerStore(state => state.isRunning);
   const currentTime = useTimerStore(state => state.currentTime);
-  const currentTaskId = useTimerStore(state => state.currentTaskId);
-  const { tasks } = useTaskStore();
+  const currentTask = useTimerStore(state => state.currentTask);
   const originalTitleRef = useRef<string>('');
 
   // Store original title on mount
@@ -37,9 +36,6 @@ const GlobalTabTitleUpdater: React.FC = () => {
   useEffect(() => {
     if (isRunning) {
       const timeDisplay = formatTime(currentTime);
-      const currentTask = currentTaskId 
-        ? tasks.find(task => task.id === currentTaskId) 
-        : null;
       const taskName = currentTask ? currentTask.title : 'Focus Session';
       document.title = `${timeDisplay} - ${taskName}`;
     } else {
@@ -50,7 +46,7 @@ const GlobalTabTitleUpdater: React.FC = () => {
     return () => {
       document.title = originalTitleRef.current;
     };
-  }, [isRunning, currentTime, currentTaskId, tasks]);
+  }, [isRunning, currentTime, currentTask]);
 
   return null; // This component renders nothing
 };

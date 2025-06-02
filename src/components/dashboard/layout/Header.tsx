@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Button from '../../ui/Button';
-import { Icon } from '../../ui/Icon';
-import { useFocusStore } from '../../../store/useFocusStore';
+import { RangeType, useDashboardStore } from '../../../store/useDashboardStore';
 import { useUIStore } from '../../../store/uiStore';
 import flatpickr from 'flatpickr';
 import 'flatpickr/dist/flatpickr.min.css';
@@ -18,7 +17,7 @@ type FlatpickrInstance = {
 export const Header: React.FC = () => {
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const { dateRange, setDateRange } = useFocusStore();
+  const { selectedRange, setSelectedRange } = useDashboardStore();
   const { toggleFocusMode } = useUIStore();
   const dateFilterRef = useRef<HTMLDivElement>(null);
   const dateRangeInputRef = useRef<HTMLInputElement>(null);
@@ -75,8 +74,7 @@ export const Header: React.FC = () => {
             if (daysDiff > 365) {
               const adjustedEndDate = new Date(selectedDates[0]);
               adjustedEndDate.setDate(adjustedEndDate.getDate() + 364);
-              // @ts-ignore - flatpickr setDate method exists
-              this.setDate([selectedDates[0], adjustedEndDate]);
+              fp.setDate([selectedDates[0], adjustedEndDate]);
             } else {
               setStartDate(selectedDates[0]);
               setEndDate(selectedDates[1]);
@@ -117,29 +115,34 @@ export const Header: React.FC = () => {
   // Handle date range selection
   const handleDateRangeSelect = (range: string) => {
     const end = new Date();
-    let start = new Date();
-    let label = range;
+    const start = new Date();
+    let type: RangeType = 'today';
     
     switch(range) {
       case 'Today':
         // Set to start of today
         start.setHours(0, 0, 0, 0);
+        type = 'today';
         break;
       case 'Last 7 Days':
         start.setDate(end.getDate() - 6); // -6 to include today = 7 days
         start.setHours(0, 0, 0, 0);
+        type = 'last 7 days';
         break;
       case 'Last 30 Days':
         start.setDate(end.getDate() - 29); // -29 to include today = 30 days
         start.setHours(0, 0, 0, 0);
+        type = 'last 30 days';
         break;
-      case 'Custom Range':
+      case 'Custom range':
         setShowDatePicker(true);
         setShowDateFilter(false);
         return; // Don't update dateRange yet
+      default:
+        type = 'all time';
     }
     
-    setDateRange({ startDate: start, endDate: end, label });
+    setSelectedRange({ startDate: start, endDate: end, rangeType: type });
     setShowDateFilter(false);
   };
   
@@ -147,10 +150,10 @@ export const Header: React.FC = () => {
   const applyCustomDateRange = () => {
     if (startDate && endDate) {
       const formattedRange = `${formatDate(startDate)} - ${formatDate(endDate)}`;
-      setDateRange({ 
+      setSelectedRange({ 
         startDate, 
         endDate, 
-        label: formattedRange
+        rangeType: 'custom'
       });
       setShowDatePicker(false);
       
@@ -159,6 +162,24 @@ export const Header: React.FC = () => {
         datePickerRef.current.destroy();
         datePickerRef.current = null;
       }
+    }
+  };
+
+  const getLabel = () => {
+    switch (selectedRange.rangeType) {
+      case 'today':
+        return 'Today';
+      case 'last 7 days':
+        return 'Last 7 days';
+      case 'last 30 days':
+        return 'Last 30 days';
+      case 'custom':
+        if (startDate && endDate) {
+          return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+        }
+        return 'Custom range';
+      default:
+        return 'All time';
     }
   };
 
@@ -189,7 +210,7 @@ export const Header: React.FC = () => {
               }
             }}
           >
-            <span>{dateRange.label}</span>
+            <span>{getLabel()}</span>
           </Button>
           
           {/* Date Range Dropdown */}
@@ -221,6 +242,12 @@ export const Header: React.FC = () => {
                 <div className="w-4 h-4 flex items-center justify-center">
                   <i className="ri-calendar-line"></i>
                 </div>
+              </button>
+              <button 
+                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50" 
+                onClick={() => handleDateRangeSelect('All time')}
+              >
+                All time
               </button>
             </div>
           )}
