@@ -26,18 +26,11 @@ interface DashboardState {
 }
 
 export const useDashboardStore = create<DashboardState>((set, get) => {
-  // Calculate default dates for "Last 30 days"
-  const defaultEndDate = new Date();
-  defaultEndDate.setHours(23, 59, 59, 999); // Set to end of today
-  const defaultStartDate = new Date();
-  defaultStartDate.setDate(defaultEndDate.getDate() - 29); // -29 to include today = 30 days
-  defaultStartDate.setHours(0, 0, 0, 0);
-  
   return {
     selectedRange: {
-      rangeType: 'last 30 days',
-      startDate: defaultStartDate,
-      endDate: defaultEndDate,
+      rangeType: 'all time',
+      startDate: null,
+      endDate: null,
     },
     workSessions: [],
     focusTimeView: 'daily',
