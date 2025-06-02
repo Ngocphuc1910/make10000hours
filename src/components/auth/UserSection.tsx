@@ -29,6 +29,9 @@ const UserSection: React.FC<UserSectionProps> = () => {
                 />
                 <div className="ml-3 text-left flex-1">
                   <p className="text-sm font-medium text-gray-900">{user.displayName}</p>
+                  {user.userName && (
+                    <p className="text-xs text-gray-500">@{user.userName}</p>
+                  )}
                 </div>
               </div>
               {showSignOut && (
