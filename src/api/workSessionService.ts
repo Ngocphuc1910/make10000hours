@@ -45,39 +45,80 @@ export class WorkSessionService {
   private workSessionsCollection = collection(db, WORK_SESSIONS_COLLECTION);
 
   /**
-   * Upsert work session
+   * Create a new work session (no longer upserts - creates separate sessions)
    */
-  async upsertWorkSession(sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt' | 'duration'>, durationChange = 0): Promise<string> {
+  async createWorkSession(sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     try {
-      const sessionId = `${sessionData.taskId}_${sessionData.date}`;
+      // Generate unique session ID with timestamp
+      const timestamp = new Date().getTime();
+      const sessionId = `${sessionData.taskId}_${sessionData.date}_${timestamp}`;
       const sessionRef = doc(this.workSessionsCollection, sessionId);
 
-      // Check if the session already exists
-      const sessionDoc = await getDoc(sessionRef);
-      if (sessionDoc.exists()) {
-        // Update existing session
-        const updateData: Partial<WorkSession> = { 
-          ...sessionData, 
-          duration: (sessionDoc.data()?.duration || 0) + durationChange,
-          updatedAt: new Date() ,
-        };
+      const newSession: WorkSession = {
+        ...sessionData,
+        id: sessionId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
 
-        await updateDoc(sessionRef, updateData);
-      } else {
-        // Create new session
-        const newSession: WorkSession = {
-          ...sessionData,
-          id: sessionId,
-          duration: durationChange, // Initialize with the change
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-
-        await setDoc(sessionRef, newSession);
-      }
+      await setDoc(sessionRef, newSession);
       return sessionId;
     } catch (error) {
+      console.error('Error creating work session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Legacy upsert method - kept for backward compatibility but now creates separate sessions
+   */
+  async upsertWorkSession(
+    sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt' | 'duration' | 'sessionType'>, 
+    durationChange = 0,
+    sessionType: WorkSession['sessionType'] = 'manual'
+  ): Promise<string> {
+    try {
+      // Create a new session instead of updating existing one
+      const workSession: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt'> = {
+        ...sessionData,
+        duration: Math.abs(durationChange), // Use absolute value for duration
+        sessionType,
+        notes: sessionType === 'manual' ? 
+          (durationChange > 0 ? `Manual time addition: +${durationChange}m` : `Manual time reduction: ${durationChange}m`) :
+          `${sessionType} session completed`
+      };
+
+      return await this.createWorkSession(workSession);
+    } catch (error) {
       console.error('Error upserting work session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a timer-based work session with precise timing
+   */
+  async createTimerSession(
+    sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt' | 'sessionType'>,
+    sessionType: 'pomodoro' | 'shortBreak' | 'longBreak',
+    startTime: Date,
+    endTime: Date
+  ): Promise<string> {
+    try {
+      const duration = Math.round((endTime.getTime() - startTime.getTime()) / (1000 * 60)); // Convert to minutes
+
+      const workSession: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt'> = {
+        ...sessionData,
+        duration,
+        sessionType,
+        startTime,
+        endTime,
+        notes: `${sessionType} session completed`
+      };
+
+      return await this.createWorkSession(workSession);
+    } catch (error) {
+      console.error('Error creating timer session:', error);
       throw error;
     }
   }
@@ -120,11 +161,11 @@ export class WorkSessionService {
    */
   async getWorkSessionsByTask(userId: string, taskId: string): Promise<WorkSession[]> {
     try {
+      // Remove orderBy to avoid index requirements - we don't need sorting for deletion
       const q = query(
         this.workSessionsCollection,
         where('userId', '==', userId),
-        where('taskId', '==', taskId),
-        orderBy('updatedAt', 'desc')
+        where('taskId', '==', taskId)
       );
 
       const querySnapshot = await getDocs(q);

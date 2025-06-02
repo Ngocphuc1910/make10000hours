@@ -1,0 +1,12 @@
+{
+  "id": "FIsiHQxJZBD8ROepOskf_2025-06-02_test_manual",
+  "userId": "4vGB2suNB8MW9ahD9gSlwywkFsk1",
+  "taskId": "FIsiHQxJZBD8ROepOskf",
+  "projectId": "lU2tNDKK0x0aLsfWsvMO",
+  "date": "2025-06-02",
+  "duration": 25,
+  "sessionType": "manual",
+  "notes": "Test session to verify automatic deletion when task is deleted",
+  "createdAt": "2025-06-02T16:00:00.000Z",
+  "updatedAt": "2025-06-02T16:00:00.000Z"
+} 

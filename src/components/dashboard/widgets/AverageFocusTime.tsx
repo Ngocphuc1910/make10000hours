@@ -25,7 +25,7 @@ export const AverageFocusTime: React.FC = () => {
       }
   });
   const [isLoading, setIsLoading] = useState(false);
-  
+
   useEffect(() => {
     const calculateFocusStats = () => {
       

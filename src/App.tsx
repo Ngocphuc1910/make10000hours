@@ -22,6 +22,11 @@ import { formatTime } from './utils/timeUtils';
 import { trackPageView, setAnalyticsUserId } from './utils/analytics';
 import { verifyAnalyticsSetup } from './utils/verifyAnalytics';
 
+// Import test utilities in development mode
+if (process.env.NODE_ENV === 'development') {
+  import('./utils/testTaskDeletion');
+}
+
 // Global tab title component - isolated to prevent parent re-renders
 const GlobalTabTitleUpdater: React.FC = () => {
   const isRunning = useTimerStore(state => state.isRunning);

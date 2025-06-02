@@ -26,6 +26,44 @@ A modern Pomodoro timer application built with React and Tailwind CSS, featuring
   - Configure timer settings
   - Integrated Spotify player (optional)
 
+### Task Management with Automatic Work Session Cleanup
+
+When deleting tasks, the system now automatically:
+
+- **Deletes all related work sessions** for the task to prevent orphaned data
+- **Maintains dashboard accuracy** by removing work session data that would otherwise show inflated focus times
+- **Provides cleanup utility** for existing orphaned sessions via the "Data Maintenance" section in the Average Focus Time widget
+
+#### Usage
+
+1. **Automatic Cleanup**: When you delete a task through the UI, all related work sessions are automatically deleted
+2. **Manual Cleanup**: Use the "Cleanup Orphaned Sessions" button in the Average Focus Time widget to clean existing orphaned data
+
+#### Technical Implementation
+
+```typescript
+// Enhanced deleteTask function in taskStore.ts
+deleteTask: async (id) => {
+  // 1. Get user context
+  const { user } = useUserStore.getState();
+  
+  // 2. Delete all related work sessions first
+  const workSessions = await workSessionService.getWorkSessionsByTask(user.uid, id);
+  await Promise.all(workSessions.map(session => 
+    workSessionService.deleteWorkSession(session.id)
+  ));
+  
+  // 3. Delete the task itself
+  await deleteDoc(doc(db, 'tasks', id));
+}
+```
+
+#### Benefits
+
+- **Data Integrity**: No more orphaned work sessions causing dashboard mismatches
+- **Accurate Analytics**: Dashboard widgets show correct focus time calculations
+- **Maintenance Tools**: Built-in utility to fix existing data issues
+
 ## Technology Stack
 
 - React with Hooks and Context API

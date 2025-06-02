@@ -209,7 +209,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
             taskId: task.id,
             projectId: finalProjectId || 'no-project',
             date: getDateISOString(), // Use today's date in YYYY-MM-DD format
-          }, timeDifference); // Can be positive (addition) or negative (reduction)
+          }, timeDifference, 'manual'); // Specify this is a manual session
         } catch (error) {
           console.error('Failed to create work session for manual edit:', error);
         }
