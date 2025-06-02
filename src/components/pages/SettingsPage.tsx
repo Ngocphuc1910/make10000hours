@@ -40,6 +40,7 @@ const SettingsPage = () => {
     try {
       await updateUserData({
         uid: user.uid,
+        userName: user.userName,
         settings
       });
       setMessage({ type: 'success', text: 'Settings saved successfully!' });
