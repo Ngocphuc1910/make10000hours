@@ -5,6 +5,7 @@ import { useUserStore } from './userStore';
 import { timerService } from '../api/timerService';
 import { workSessionService } from '../api/workSessionService';
 import { getDateISOString } from '../utils/timeUtils';
+import { trackPomodoroStarted, trackPomodoroCompleted } from '../utils/analytics';
 
 interface TimerState {
   // Timer status
@@ -89,6 +90,11 @@ export const useTimerStore = create<TimerState>((set, get) => {
       // Set session start time if not already running
       if (!state.isRunning) {
         sessionStartTime = new Date();
+        
+        // Track Pomodoro start in Analytics
+        if (state.mode === 'pomodoro' && state.currentTask) {
+          trackPomodoroStarted(state.currentTask.id, state.currentTask.timeEstimated || 0);
+        }
       }
       
       set({ 
@@ -126,7 +132,13 @@ export const useTimerStore = create<TimerState>((set, get) => {
     },
     
     skip: () => {
-      const { mode, sessionsCompleted, settings } = get();
+      const { mode, sessionsCompleted, settings, currentTask } = get();
+      
+      // Track Pomodoro completion in Analytics if completing a pomodoro session
+      if (mode === 'pomodoro' && currentTask) {
+        const actualTime = (settings.pomodoro * 60 - get().currentTime) / 60; // convert to minutes
+        trackPomodoroCompleted(currentTask.id, actualTime);
+      }
       
       // No need to create WorkSession - timeSpent increments during countdown provide the time tracking
       
@@ -165,6 +177,11 @@ export const useTimerStore = create<TimerState>((set, get) => {
       // If auto-starting next session, set new session start time
       if (autoStartPomodoro || autoStartBreak) {
         sessionStartTime = new Date();
+        
+        // Track new Pomodoro start if auto-starting
+        if (autoStartPomodoro && currentTask) {
+          trackPomodoroStarted(currentTask.id, currentTask.timeEstimated || 0);
+        }
       }
       
       get().saveToDatabase();

@@ -3,6 +3,7 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy,
 import { db } from '../api/firebase';
 import { useUserStore } from './userStore';
 import type { Task, Project } from '../types/models';
+import { trackTaskCreated, trackTaskCompleted, trackProjectCreated } from '../utils/analytics';
 
 interface TaskState {
   tasks: Task[];
@@ -128,6 +129,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       }
       
       const docRef = await addDoc(projectsCollection, newProject);
+      
+      // Track project creation in Analytics
+      trackProjectCreated(projectData.name);
+      
       return docRef.id;
     } catch (error) {
       console.error('Error adding project:', error);
@@ -187,6 +192,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       };
       
       await addDoc(tasksRef, newTask);
+      
+      // Track task creation in Analytics
+      trackTaskCreated(taskData.projectId);
     } catch (error) {
       console.error('Error adding task:', error);
       throw error;
@@ -235,6 +243,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         status,
         updatedAt: new Date()
       });
+      
+      // Track task completion in Analytics
+      if (completed) {
+        trackTaskCompleted(id, task.timeSpent, task.projectId);
+      }
     } catch (error) {
       console.error('Error toggling task completion:', error);
       throw error;
