@@ -8,6 +8,7 @@ import { useDashboardStore } from '../../../store/useDashboardStore';
 
 export const TopProjects: React.FC = () => {
   const { workSessions, selectedRange } = useDashboardStore();
+  const { projects, tasks } = useTaskStore();
   
   // Convert projects to dashboard format with task timeSpent data
   const dashboardProjects = projects
