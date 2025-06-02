@@ -13,58 +13,37 @@ export const createTestWorkSessions = async (userId: string, taskId: string, pro
     // Session 1: Yesterday, 2 hours
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
-    yesterday.setHours(9, 0, 0, 0);
+    const yesterdayDateStr = yesterday.toISOString().split('T')[0];
     
-    const session1End = new Date(yesterday);
-    session1End.setHours(11, 0, 0, 0);
-    
-    await workSessionService.createWorkSession({
+    await workSessionService.upsertWorkSession({
       userId,
       taskId,
       projectId,
-      startTime: yesterday,
-      endTime: session1End,
-      duration: 120, // 2 hours
-      sessionType: 'pomodoro',
-      notes: 'Test session - learning React'
-    });
+      date: yesterdayDateStr,
+    }, 120); // 2 hours
 
     // Session 2: Today, 1.5 hours
     const today = new Date(now);
-    today.setHours(10, 0, 0, 0);
+    const todayDateStr = today.toISOString().split('T')[0];
     
-    const session2End = new Date(today);
-    session2End.setHours(11, 30, 0, 0);
-    
-    await workSessionService.createWorkSession({
+    await workSessionService.upsertWorkSession({
       userId,
       taskId,
       projectId,
-      startTime: today,
-      endTime: session2End,
-      duration: 90, // 1.5 hours
-      sessionType: 'pomodoro',
-      notes: 'Test session - working on dashboard'
-    });
+      date: todayDateStr,
+    }, 90); // 1.5 hours
 
     // Session 3: 3 days ago, 45 minutes
     const threeDaysAgo = new Date(now);
     threeDaysAgo.setDate(now.getDate() - 3);
-    threeDaysAgo.setHours(14, 0, 0, 0);
+    const threeDaysAgoDateStr = threeDaysAgo.toISOString().split('T')[0];
     
-    const session3End = new Date(threeDaysAgo);
-    session3End.setHours(14, 45, 0, 0);
-    
-    await workSessionService.createWorkSession({
+    await workSessionService.upsertWorkSession({
       userId,
       taskId,
       projectId,
-      startTime: threeDaysAgo,
-      endTime: session3End,
-      duration: 45, // 45 minutes
-      sessionType: 'manual',
-      notes: 'Short focused session'
-    });
+      date: threeDaysAgoDateStr,
+    }, 45); // 45 minutes
 
     console.log('✅ Test work sessions created successfully!');
     console.log('🎯 Check your dashboard to see the sync in action');

@@ -19,14 +19,14 @@ export const ProjectsWidget: React.FC = () => {
   const totalFocusTime = workSessions.reduce((total, session) => total + (session.duration || 0), 0);
   
   // Create projects with focus time data
-  const projectsWithFocusTime = projects.map(project => ({
+  const projectsWithFocusTime = projects.map((project: any) => ({
     ...project,
     totalFocusTime: getProjectFocusTime(project.id)
   }));
   
   // Sort projects by total focus time (descending)
   const sortedProjects = [...projectsWithFocusTime]
-    .sort((a, b) => b.totalFocusTime - a.totalFocusTime)
+    .sort((a: any, b: any) => b.totalFocusTime - a.totalFocusTime)
     .slice(0, 4); // Show top 4 projects
   
   return (
@@ -50,7 +50,7 @@ export const ProjectsWidget: React.FC = () => {
             <p className="text-sm mt-1">Start a pomodoro session to see data here</p>
           </div>
         ) : (
-          sortedProjects.map(project => {
+          sortedProjects.map((project: any) => {
             // Calculate percentage of total time
             const percentage = totalFocusTime > 0 
               ? (project.totalFocusTime / totalFocusTime) * 100 

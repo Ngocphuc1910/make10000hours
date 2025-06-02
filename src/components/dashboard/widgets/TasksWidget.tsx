@@ -1,25 +1,16 @@
 import React from 'react';
-import { useFocusStore } from '../../../store/useFocusStore';
+import { useTaskStore } from '../../../store/taskStore';
 import { Link } from 'react-router-dom';
 import { formatMinutes } from '../../../utils/timeUtils';
 
 export const TasksWidget: React.FC = () => {
-  const tasks = useFocusStore(state => state.tasks);
-  const projects = useFocusStore(state => state.projects);
-  const toggleTaskCompletion = useFocusStore(state => state.toggleTaskCompletion);
+  const { tasks, projects, toggleTaskCompletion } = useTaskStore();
   
   // Get recent incomplete tasks
   const incompleteTasks = tasks
-    .filter(task => !task.isCompleted)
+    .filter(task => !task.completed)
     .sort((a, b) => {
-      // Sort by due date (if exists), then by creation date
-      if (a.dueDate && b.dueDate) {
-        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-      } else if (a.dueDate) {
-        return -1;
-      } else if (b.dueDate) {
-        return 1;
-      }
+      // Sort by creation date since dueDate doesn't exist
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     })
     .slice(0, 5); // Show top 5 tasks
@@ -35,96 +26,87 @@ export const TasksWidget: React.FC = () => {
     e.stopPropagation();
     toggleTaskCompletion(taskId);
   };
-  
+
+  if (incompleteTasks.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Tasks</h3>
+        <div className="text-center py-8">
+          <div className="text-gray-400 mb-4">
+            <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          </div>
+          <p className="text-gray-500 mb-4">All tasks completed! 🎉</p>
+          <Link 
+            to="/tasks" 
+            className="text-blue-600 hover:text-blue-700 font-medium"
+          >
+            Add new tasks
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-100 h-full">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-medium text-gray-800">
-          Tasks
-        </h3>
-        <Link
-          to="/dashboard/projects"
-          className="text-sm text-primary font-medium hover:underline"
+    <div className="bg-white rounded-lg shadow-sm border p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-gray-900">Recent Tasks</h3>
+        <Link 
+          to="/tasks" 
+          className="text-sm text-blue-600 hover:text-blue-700 font-medium"
         >
           View all
         </Link>
       </div>
       
-      <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-        {incompleteTasks.length > 0 ? (
-          incompleteTasks.map((task, index) => {
-            const project = getProjectForTask(task.projectId);
-            
-            return (
-              <div
-                key={task.id}
-                className="p-4 rounded-lg border border-gray-100 hover:border-gray-200 transition-all hover:shadow-sm cursor-pointer relative"
-              >
-                <div className="absolute left-0 top-0 bottom-0 w-1" 
-                  style={{ backgroundColor: project?.color || '#CBD5E1' }}>
-                </div>
-                
-                <div className="ml-2 flex items-center">
-                  <div className="flex items-center mr-3">
-                    <input
-                      type="checkbox"
-                      className="custom-checkbox"
-                      checked={task.isCompleted}
-                      onChange={(e) => handleToggleTask(task.id, e as any)}
-                    />
-                  </div>
-                  
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-800 line-clamp-1">
-                          {task.name}
-                        </h4>
-                        <div className="flex items-center mt-1">
-                          <div 
-                            className="w-2 h-2 rounded-full mr-1.5"
-                            style={{ backgroundColor: project?.color || '#CBD5E1' }}
-                          ></div>
-                          <span className="text-xs text-gray-500">
-                            {project?.name || 'Unknown project'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-500 whitespace-nowrap ml-4">
-                        {formatMinutes(task.totalFocusTime)}
-                      </div>
-                    </div>
-                    
-                    {task.dueDate && (
-                      <div className="mt-2 text-xs">
-                        <span className="text-gray-500">Due: </span>
-                        <span className={`font-medium ${
-                          new Date(task.dueDate) < new Date() ? 'text-red-500' : 'text-gray-600'
-                        }`}>
-                          {new Date(task.dueDate).toLocaleDateString()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-gray-700">
-                    {index + 1}
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        ) : (
-          <div className="py-10 text-center">
-            <p className="text-gray-500">No tasks to display</p>
-            <Link
-              to="/dashboard/projects"
-              className="mt-2 inline-block text-sm text-primary font-medium hover:underline"
+      <div className="space-y-3">
+        {incompleteTasks.map((task) => {
+          const project = getProjectForTask(task.projectId);
+          
+          return (
+            <div
+              key={task.id}
+              className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              Create a new task
-            </Link>
-          </div>
-        )}
+              <button
+                onClick={(e) => handleToggleTask(task.id, e)}
+                className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                  task.completed
+                    ? 'bg-green-500 border-green-500 text-white'
+                    : 'border-gray-300 hover:border-green-500'
+                }`}
+              >
+                {task.completed && (
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </button>
+              
+              <div className="flex-1 min-w-0">
+                <Link to={`/tasks/${task.id}`} className="block group">
+                  <p className={`text-sm font-medium group-hover:text-blue-600 transition-colors ${
+                    task.completed ? 'text-gray-500 line-through' : 'text-gray-900'
+                  }`}>
+                    {task.title}
+                  </p>
+                  {project && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {project.name}
+                    </p>
+                  )}
+                  {task.timeSpent > 0 && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      {formatMinutes(task.timeSpent)} focused
+                    </p>
+                  )}
+                </Link>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

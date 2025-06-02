@@ -46,8 +46,8 @@ export const TopTasks: React.FC = () => {
           
           // Convert to dashboard tasks with work session time
           const tasksForDate = Array.from(taskTimeMap.entries())
-            .map(([taskId, totalTime]) => {
-              const task = tasks.find(t => t.id === taskId);
+            .map(([taskId, totalTime]: [string, number]) => {
+              const task = tasks.find((t: any) => t.id === taskId);
               if (!task) return null;
               
               const dashboardTask = taskToDashboardTask(task);
@@ -57,15 +57,15 @@ export const TopTasks: React.FC = () => {
               };
             })
             .filter((task): task is DashboardTask => task !== null && task.totalFocusTime > 0)
-            .sort((a, b) => b.totalFocusTime - a.totalFocusTime);
+            .sort((a: DashboardTask, b: DashboardTask) => b.totalFocusTime - a.totalFocusTime);
             
           setDisplayTasks(tasksForDate);
         } else {
           // Show all tasks by total focus time from timeSpent field
           const sortedTasks = tasks
-            .map(task => taskToDashboardTask(task))
-            .filter(task => task.totalFocusTime > 0) // Only show tasks with time spent
-            .sort((a, b) => b.totalFocusTime - a.totalFocusTime);
+            .map((task: any) => taskToDashboardTask(task))
+            .filter((task: DashboardTask) => task.totalFocusTime > 0) // Only show tasks with time spent
+            .sort((a: DashboardTask, b: DashboardTask) => b.totalFocusTime - a.totalFocusTime);
           setDisplayTasks(sortedTasks);
         }
       } catch (error) {
@@ -166,8 +166,8 @@ export const TopTasks: React.FC = () => {
           `}
         </style>
         
-        {displayTasks.map((task, index) => {
-          const project = projects.find(p => p.id === task.projectId);
+        {displayTasks.map((task: DashboardTask, index: number) => {
+          const project = projects.find((p: any) => p.id === task.projectId);
           if (!project) return null;
           
           const formattedTime = formatMinutesToHoursAndMinutes(task.totalFocusTime);
