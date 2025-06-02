@@ -570,9 +570,7 @@ export const FocusTimeTrend: React.FC = () => {
   return (
     <Card title="Focus Time Trend">
       <div className="flex items-center justify-between mb-6">
-        <div className="text-sm text-gray-600">
-          {getViewDescription()}
-        </div>
+        <div></div>
         <div className="flex items-center space-x-2">
           <div className="inline-flex rounded-full bg-gray-100 p-1">
             <button 
