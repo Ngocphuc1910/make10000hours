@@ -41,6 +41,11 @@ export const FocusTimeTrend: React.FC = () => {
   
   // Filter work sessions based on selected date range
   const filteredWorkSessions = useMemo(() => {
+    // For 'all time' range, show all work sessions without filtering
+    if (selectedRange.rangeType === 'all time') {
+      return workSessions;
+    }
+    
     // For daily view, only use defaults when absolutely no range is set or it's literally just "today"
     if (focusTimeView === 'daily') {
       // Only override with defaults if no date range is set at all, or if it's "today" with no meaningful range
@@ -111,7 +116,39 @@ export const FocusTimeTrend: React.FC = () => {
         // Daily view - use selected date range or reasonable defaults
         let startDate: Date, endDate: Date;
         
-        if (selectedRange.startDate && selectedRange.endDate) {
+        if (selectedRange.rangeType === 'all time') {
+          // For 'all time', show all available data - calculate range from work sessions
+          if (filteredWorkSessions.length > 0) {
+            const allDates = filteredWorkSessions.map(session => new Date(session.date));
+            startDate = new Date(Math.min(...allDates.map(d => d.getTime())));
+            endDate = new Date(Math.max(...allDates.map(d => d.getTime())));
+            
+            console.log('All time daily view - original range:', {
+              startDate: startDate.toISOString(),
+              endDate: endDate.toISOString(),
+              allDatesCount: allDates.length
+            });
+            
+            // Limit to reasonable range for daily view (max 90 days)
+            const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+            if (daysDiff > 90) {
+              startDate = new Date(endDate);
+              startDate.setDate(endDate.getDate() - 89); // Last 90 days
+            }
+            
+            console.log('All time daily view - final range:', {
+              startDate: startDate.toISOString(),
+              endDate: endDate.toISOString(),
+              daysDiff: daysDiff
+            });
+          } else {
+            // Fallback if no data
+            endDate = new Date();
+            startDate = new Date();
+            startDate.setDate(endDate.getDate() - 6); // Last 7 days
+            console.log('All time daily view - no data fallback');
+          }
+        } else if (selectedRange.startDate && selectedRange.endDate) {
           // Use the user's selected range
           startDate = new Date(selectedRange.startDate);
           endDate = new Date(selectedRange.endDate);
@@ -124,6 +161,8 @@ export const FocusTimeTrend: React.FC = () => {
         
         // Generate all days in the range
         const current = new Date(startDate);
+        console.log('Daily view - generating days from:', startDate.toISOString(), 'to:', endDate.toISOString());
+        
         while (current <= endDate) {
           const dateStr = current.toISOString().split('T')[0];
           const displayDate = current.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -137,6 +176,8 @@ export const FocusTimeTrend: React.FC = () => {
           
           current.setDate(current.getDate() + 1);
         }
+        
+        console.log('Daily view - generated days:', days.length, 'days with data:', days.filter(d => d.value > 0).length);
       } else if (focusTimeView === 'weekly') {
         // Weekly view - group by weeks
         const weeklyData: Record<string, number> = {};
@@ -174,7 +215,56 @@ export const FocusTimeTrend: React.FC = () => {
         let startWeek = new Date();
         let endWeek = new Date();
         
-        if (selectedRange.startDate && selectedRange.endDate) {
+        if (selectedRange.rangeType === 'all time') {
+          // For 'all time', calculate range from all available data
+          if (filteredWorkSessions.length > 0) {
+            const allDates = filteredWorkSessions.map(session => new Date(session.date));
+            const earliestDate = new Date(Math.min(...allDates.map(d => d.getTime())));
+            const latestDate = new Date(Math.max(...allDates.map(d => d.getTime())));
+            
+            // Calculate Monday of the start week
+            const startDayOfWeek = earliestDate.getDay();
+            const daysFromMondayStart = startDayOfWeek === 0 ? 6 : startDayOfWeek - 1;
+            startWeek = new Date(earliestDate);
+            startWeek.setDate(earliestDate.getDate() - daysFromMondayStart);
+            startWeek.setHours(0, 0, 0, 0);
+            
+            // Calculate Monday of the end week
+            const endDayOfWeek = latestDate.getDay();
+            const daysFromMondayEnd = endDayOfWeek === 0 ? 6 : endDayOfWeek - 1;
+            endWeek = new Date(latestDate);
+            endWeek.setDate(latestDate.getDate() - daysFromMondayEnd);
+            endWeek.setHours(0, 0, 0, 0);
+            
+            // Calculate how many weeks we need
+            const weekDiff = Math.ceil((endWeek.getTime() - startWeek.getTime()) / (1000 * 60 * 60 * 24 * 7));
+            weeksToShow = Math.max(weekDiff + 1, 1); // At least 1 week
+            
+            // Limit to reasonable number of weeks (max 26 weeks = 6 months)
+            if (weeksToShow > 26) {
+              startWeek = new Date(endWeek);
+              startWeek.setDate(endWeek.getDate() - (25 * 7)); // Last 26 weeks
+              weeksToShow = 26;
+            }
+            
+            console.log('All time weekly view - calculated range:', {
+              startWeek: startWeek.toISOString(),
+              endWeek: endWeek.toISOString(),
+              weeksToShow: weeksToShow
+            });
+          } else {
+            // Default: show last 8 weeks
+            weeksToShow = 8;
+            endWeek = new Date();
+            const endDayOfWeek = endWeek.getDay();
+            const daysFromMonday = endDayOfWeek === 0 ? 6 : endDayOfWeek - 1;
+            endWeek.setDate(endWeek.getDate() - daysFromMonday);
+            endWeek.setHours(0, 0, 0, 0);
+            
+            startWeek = new Date(endWeek);
+            startWeek.setDate(endWeek.getDate() - ((weeksToShow - 1) * 7));
+          }
+        } else if (selectedRange.startDate && selectedRange.endDate) {
           // Use the actual selected range
           startWeek = new Date(selectedRange.startDate);
           endWeek = new Date(selectedRange.endDate);
@@ -195,7 +285,7 @@ export const FocusTimeTrend: React.FC = () => {
           const weekDiff = Math.ceil((endWeek.getTime() - startWeek.getTime()) / (1000 * 60 * 60 * 24 * 7));
           weeksToShow = Math.max(weekDiff + 1, 1); // At least 1 week
         } else {
-          // Default: show last 8 weeks
+          // Default: show last 8 weeks only when no specific range is set
           weeksToShow = 8;
           endWeek = new Date();
           const endDayOfWeek = endWeek.getDay();
@@ -263,7 +353,37 @@ export const FocusTimeTrend: React.FC = () => {
         let startMonth = new Date();
         let endMonth = new Date();
         
-        if (selectedRange.startDate && selectedRange.endDate) {
+        if (selectedRange.rangeType === 'all time') {
+          // For 'all time', calculate range from all available data
+          if (filteredWorkSessions.length > 0) {
+            const allDates = filteredWorkSessions.map(session => new Date(session.date));
+            const earliestDate = new Date(Math.min(...allDates.map(d => d.getTime())));
+            const latestDate = new Date(Math.max(...allDates.map(d => d.getTime())));
+            
+            startMonth = new Date(earliestDate.getFullYear(), earliestDate.getMonth(), 1);
+            endMonth = new Date(latestDate.getFullYear(), latestDate.getMonth(), 1);
+            
+            // Calculate how many months we need
+            const monthsDiff = (endMonth.getFullYear() - startMonth.getFullYear()) * 12 + 
+                              (endMonth.getMonth() - startMonth.getMonth());
+            monthsToShow = Math.max(monthsDiff + 1, 1); // At least 1 month
+            
+            // Limit to reasonable number of months (max 24 months = 2 years)
+            if (monthsToShow > 24) {
+              startMonth = new Date(endMonth);
+              startMonth.setMonth(endMonth.getMonth() - 23); // Last 24 months
+              monthsToShow = 24;
+            }
+          } else {
+            // Fallback: show last 6 months
+            monthsToShow = 6;
+            endMonth = new Date();
+            endMonth = new Date(endMonth.getFullYear(), endMonth.getMonth(), 1);
+            
+            startMonth = new Date(endMonth);
+            startMonth.setMonth(endMonth.getMonth() - (monthsToShow - 1));
+          }
+        } else if (selectedRange.startDate && selectedRange.endDate) {
           // Use the actual selected range
           startMonth = new Date(selectedRange.startDate.getFullYear(), selectedRange.startDate.getMonth(), 1);
           endMonth = new Date(selectedRange.endDate.getFullYear(), selectedRange.endDate.getMonth(), 1);
@@ -335,7 +455,7 @@ export const FocusTimeTrend: React.FC = () => {
     }
     
     // Show range type if it's a preset range
-    if (selectedRange.rangeType && selectedRange.rangeType !== 'today' && selectedRange.startDate && selectedRange.endDate) {
+    if (selectedRange.rangeType && selectedRange.rangeType !== 'today') {
       return `${selectedRange.rangeType} • ${sessionCount} sessions`;
     }
     
