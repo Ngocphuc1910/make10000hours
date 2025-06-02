@@ -4,6 +4,7 @@ import { db } from '../api/firebase';
 import { useUserStore } from './userStore';
 import type { Task, Project } from '../types/models';
 import { trackTaskCreated, trackTaskCompleted, trackProjectCreated } from '../utils/analytics';
+import { workSessionService } from '../api/workSessionService';
 
 interface TaskState {
   tasks: Task[];
@@ -31,6 +32,7 @@ interface TaskState {
   handleMoveCompletedDown: () => Promise<void>;
   handleArchiveCompleted: () => Promise<void>;
   cleanupListeners: () => void;
+  cleanupOrphanedWorkSessions: () => Promise<{ deletedCount: number; orphanedSessions: { id: string; taskId: string; duration: number; date: string; }[]; }>;
 }
 
 const tasksCollection = collection(db, 'tasks');
@@ -147,7 +149,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         throw new Error('User not authenticated');
       }
 
-      // Delete all tasks associated with the project first
+      console.log(`🗑️ Starting deletion of project ${projectId}...`);
+
+      // Get all tasks associated with the project
       const tasksQuery = query(
         tasksCollection,
         where('userId', '==', user.uid),
@@ -155,6 +159,32 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       );
 
       const tasksSnapshot = await getDocs(tasksQuery);
+      const taskIds = tasksSnapshot.docs.map(doc => doc.id);
+      
+      console.log(`📋 Found ${taskIds.length} tasks in project ${projectId}`);
+
+      // Delete all work sessions for each task first
+      if (taskIds.length > 0) {
+        try {
+          for (const taskId of taskIds) {
+            const workSessions = await workSessionService.getWorkSessionsByTask(user.uid, taskId);
+            console.log(`📋 Found ${workSessions.length} work sessions for task ${taskId}`);
+            
+            if (workSessions.length > 0) {
+              const deletePromises = workSessions.map(session => 
+                workSessionService.deleteWorkSession(session.id)
+              );
+              await Promise.all(deletePromises);
+              console.log(`✅ Deleted ${workSessions.length} work sessions for task ${taskId}`);
+            }
+          }
+        } catch (workSessionError) {
+          console.error('❌ Error deleting work sessions for project tasks:', workSessionError);
+          console.warn(`⚠️ Work session cleanup failed for project ${projectId}, but continuing with deletion`);
+        }
+      }
+
+      // Now delete all tasks and the project using batch
       const batch = writeBatch(db);
 
       // Add all task deletions to the batch
@@ -168,8 +198,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
       // Execute all deletions
       await batch.commit();
+      
+      console.log(`✅ Successfully deleted project ${projectId}, ${taskIds.length} tasks, and all related work sessions`);
     } catch (error) {
-      console.error('Error deleting project:', error);
+      console.error(`❌ Error deleting project ${projectId}:`, error);
       throw error;
     }
   },
@@ -218,10 +250,43 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   
   deleteTask: async (id) => {
     try {
+      const { user } = useUserStore.getState();
+      if (!user) throw new Error('No user found');
+
+      console.log(`🗑️ Starting deletion of task ${id}...`);
+
+      // First delete all related work sessions for this task
+      try {
+        const workSessions = await workSessionService.getWorkSessionsByTask(user.uid, id);
+        console.log(`📋 Found ${workSessions.length} work sessions for task ${id}`);
+        
+        if (workSessions.length > 0) {
+          // Delete each work session
+          const deletePromises = workSessions.map(async (session) => {
+            console.log(`🗑️ Deleting work session: ${session.id}`);
+            return workSessionService.deleteWorkSession(session.id);
+          });
+          
+          await Promise.all(deletePromises);
+          console.log(`✅ Successfully deleted ${workSessions.length} work sessions for task ${id}`);
+        } else {
+          console.log(`ℹ️ No work sessions found for task ${id}`);
+        }
+      } catch (workSessionError) {
+        console.error('❌ Error deleting work sessions for task:', workSessionError);
+        // Don't throw here - we still want to delete the task even if work session cleanup fails
+        // But log it clearly for debugging
+        console.warn(`⚠️ Work session cleanup failed for task ${id}, but continuing with task deletion`);
+      }
+
+      // Then delete the task itself
+      console.log(`🗑️ Deleting task ${id}...`);
       const taskRef = doc(db, 'tasks', id);
       await deleteDoc(taskRef);
+      
+      console.log(`✅ Successfully deleted task ${id} and all related work sessions`);
     } catch (error) {
-      console.error('Error deleting task:', error);
+      console.error(`❌ Error deleting task ${id}:`, error);
       throw error;
     }
   },
@@ -390,6 +455,60 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       set({ showDetailsMenu: false });
     } catch (error) {
       console.error('Error archiving completed tasks:', error);
+      throw error;
+    }
+  },
+
+  // Utility function to clean up orphaned work sessions
+  cleanupOrphanedWorkSessions: async () => {
+    try {
+      const { user } = useUserStore.getState();
+      const { tasks } = get();
+      
+      if (!user) throw new Error('No user found');
+
+      console.log('🧹 Starting cleanup of orphaned work sessions...');
+      
+      // Get all work sessions for the user
+      const allWorkSessions = await workSessionService.getRecentWorkSessions(user.uid, 1000);
+      console.log(`Found ${allWorkSessions.length} total work sessions`);
+      
+      // Get all current task IDs
+      const currentTaskIds = new Set(tasks.map(task => task.id));
+      console.log(`Found ${currentTaskIds.size} current tasks`);
+      
+      // Find orphaned work sessions (sessions with taskIds that don't exist anymore)
+      const orphanedSessions = allWorkSessions.filter(session => 
+        !currentTaskIds.has(session.taskId)
+      );
+      
+      console.log(`Found ${orphanedSessions.length} orphaned work sessions to delete`);
+      
+      if (orphanedSessions.length === 0) {
+        console.log('✅ No orphaned work sessions found');
+        return { deletedCount: 0, orphanedSessions: [] };
+      }
+      
+      // Delete orphaned work sessions
+      const deletePromises = orphanedSessions.map(session => 
+        workSessionService.deleteWorkSession(session.id)
+      );
+      
+      await Promise.all(deletePromises);
+      
+      console.log(`✅ Successfully deleted ${orphanedSessions.length} orphaned work sessions`);
+      
+      return { 
+        deletedCount: orphanedSessions.length, 
+        orphanedSessions: orphanedSessions.map(s => ({ 
+          id: s.id, 
+          taskId: s.taskId, 
+          duration: s.duration, 
+          date: s.date 
+        }))
+      };
+    } catch (error) {
+      console.error('Error cleaning up orphaned work sessions:', error);
       throw error;
     }
   },

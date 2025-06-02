@@ -134,13 +134,29 @@ export const useTimerStore = create<TimerState>((set, get) => {
     skip: () => {
       const { mode, sessionsCompleted, settings, currentTask } = get();
       
+      // Create work session for completed session with precise timing
+      if (sessionStartTime && currentTask) {
+        const sessionEndTime = new Date();
+        const duration = Math.round((sessionEndTime.getTime() - sessionStartTime.getTime()) / (1000 * 60)); // Convert to minutes
+        const { user } = useUserStore.getState();
+        
+        if (user) {
+          // Create timer-based work session with precise timing
+          workSessionService.createTimerSession({
+            userId: user.uid,
+            taskId: currentTask.id,
+            projectId: currentTask.projectId,
+            date: getDateISOString(), // use today's date
+            duration: duration
+          }, mode, sessionStartTime, sessionEndTime);
+        }
+      }
+      
       // Track Pomodoro completion in Analytics if completing a pomodoro session
       if (mode === 'pomodoro' && currentTask) {
         const actualTime = (settings.pomodoro * 60 - get().currentTime) / 60; // convert to minutes
         trackPomodoroCompleted(currentTask.id, actualTime);
       }
-      
-      // No need to create WorkSession - timeSpent increments during countdown provide the time tracking
       
       let nextMode: TimerMode = mode;
       let nextSessionsCompleted = sessionsCompleted;
@@ -200,12 +216,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
         const { currentTask } = get();
         if (currentTask) {
           timeSpentIncrement(currentTask.id, 1); // increment by 1 minute
-          workSessionService.upsertWorkSession({
-            userId: useUserStore.getState().user?.uid || '',
-            taskId: currentTask.id,
-            projectId: currentTask.projectId,
-            date: getDateISOString(), // use today's date
-          }, 1);
+          // No longer create work session here - only on session completion
         }
       }
 

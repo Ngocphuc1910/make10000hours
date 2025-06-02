@@ -73,12 +73,16 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 // Work session tracking for dashboard analytics
 export interface WorkSession {
-  id: string; // {taskId}_{date}
+  id: string; // unique session ID
   userId: string;
   taskId: string;
   projectId: string;
   date: string; // YYYY-MM-DD format
   duration: number; // in minutes
+  sessionType: 'manual' | 'pomodoro' | 'shortBreak' | 'longBreak'; // type of session
+  startTime?: Date; // when session started (for timer sessions)
+  endTime?: Date; // when session ended (for timer sessions)
+  notes?: string; // session notes
   createdAt: Date;
   updatedAt: Date;
 }
