@@ -4,9 +4,10 @@ import { useTaskStore } from '../../../store/taskStore';
 import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
 import { projectToDashboardProject } from '../../../utils/dashboardAdapter';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { useDashboardStore } from '../../../store/useDashboardStore';
 
 export const TopProjects: React.FC = () => {
-  const { tasks, projects } = useTaskStore();
+  const { workSessions, selectedRange } = useDashboardStore();
   
   // Convert projects to dashboard format with task timeSpent data
   const dashboardProjects = projects

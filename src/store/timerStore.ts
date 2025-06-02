@@ -1,10 +1,10 @@
 import { create } from 'zustand';
-import { DEFAULT_SETTINGS, type TimerMode, type TimerSettings, type TimerState as TimerStateModel } from '../types/models';
+import { DEFAULT_SETTINGS, Task, type TimerMode, type TimerSettings, type TimerState as TimerStateModel } from '../types/models';
 import { useTaskStore } from './taskStore';
 import { useUserStore } from './userStore';
-import { useWorkSessionStore } from './useWorkSessionStore';
 import { timerService } from '../api/timerService';
-import { calculateElapsedTime } from '../utils/timeUtils';
+import { workSessionService } from '../api/workSessionService';
+import { getDateISOString } from '../utils/timeUtils';
 
 interface TimerState {
   // Timer status
@@ -15,7 +15,7 @@ interface TimerState {
   sessionsCompleted: number;
   
   // Current task
-  currentTaskId: string | null;
+  currentTask: Task | null;
   
   // Settings
   settings: TimerSettings;
@@ -34,14 +34,13 @@ interface TimerState {
   skip: () => void;
   tick: () => void;
   setMode: (mode: TimerMode) => void;
-  setCurrentTaskId: (taskId: string | null) => void;
+  setCurrentTask: (task: Task | null) => void;
   setSettings: (settings: TimerSettings) => void;
   
   // Persistence actions
   initializePersistence: (userId: string) => Promise<void>;
   saveToDatabase: () => Promise<void>;
-  loadFromDatabase: (userId: string) => Promise<void>;
-  handleRemoteStateChange: (remoteState: TimerStateModel) => void;
+  syncFromRemoteState: (remoteState: TimerStateModel) => void;
   cleanupPersistence: () => void;
   resetTimerState: () => void;
 }
@@ -59,7 +58,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
     saveTimeoutId = setTimeout(async () => {
       const { saveToDatabase } = get();
       await saveToDatabase();
-    }, 2000); // Save after 2 seconds of inactivity
+    }, 10000); // Save after 10 seconds of inactivity
   };
 
   return {
@@ -69,7 +68,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
     totalTime: DEFAULT_SETTINGS.timer.pomodoro * 60,
     mode: 'pomodoro',
     sessionsCompleted: 0,
-    currentTaskId: null,
+    currentTask: null,
     settings: DEFAULT_SETTINGS.timer,
     
     // Persistence state
@@ -102,8 +101,6 @@ export const useTimerStore = create<TimerState>((set, get) => {
     },
     
     pause: () => {
-      const currentState = get();
-      
       // Clear session start time when paused - no need to create WorkSession
       // since timeSpent increments during countdown provide the time tracking
       sessionStartTime = null;
@@ -129,7 +126,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
     },
     
     skip: () => {
-      const { mode, sessionsCompleted, settings, currentTaskId, totalTime, currentTime } = get();
+      const { mode, sessionsCompleted, settings } = get();
       
       // No need to create WorkSession - timeSpent increments during countdown provide the time tracking
       
@@ -183,9 +180,15 @@ export const useTimerStore = create<TimerState>((set, get) => {
 
       // Increment time spent for the current task every minute while timer is actively running
       if (currentTime !== totalTime && currentTime % 60 === 0) {
-        const { currentTaskId } = get();
-        if (currentTaskId) {
-          timeSpentIncrement(currentTaskId, 1); // increment by 1 minute
+        const { currentTask } = get();
+        if (currentTask) {
+          timeSpentIncrement(currentTask.id, 1); // increment by 1 minute
+          workSessionService.upsertWorkSession({
+            userId: useUserStore.getState().user?.uid || '',
+            taskId: currentTask.id,
+            projectId: currentTask.projectId,
+            date: getDateISOString(), // use today's date
+          }, 1);
         }
       }
 
@@ -211,8 +214,8 @@ export const useTimerStore = create<TimerState>((set, get) => {
       get().saveToDatabase();
     },
     
-    setCurrentTaskId: (taskId: string | null) => {
-      set({ currentTaskId: taskId });
+    setCurrentTask: (task: Task | null) => {
+      set({ currentTask: task });
       debouncedSave();
     },
 
@@ -250,21 +253,15 @@ export const useTimerStore = create<TimerState>((set, get) => {
         const remoteState = await timerService.loadTimerState(userId);
         
         if (remoteState) {
-          get().handleRemoteStateChange(remoteState);
+          get().syncFromRemoteState(remoteState);
         } else {
           // No existing state, save current default state
           await get().saveToDatabase();
         }
         
-        // Subscribe to real-time updates
-        timerService.subscribeToTimerState(userId, (remoteState) => {
-          if (remoteState) {
-            get().handleRemoteStateChange(remoteState);
-          }
-        });
-        
         set({ isLoading: false });
       } catch (error) {
+        console.error('Failed to initialize timer persistence:', error);
         set({ 
           isLoading: false, 
           syncError: 'Failed to sync timer state' 
@@ -287,13 +284,13 @@ export const useTimerStore = create<TimerState>((set, get) => {
         set({ isSyncing: true, syncError: null });
         
         // Build timer data object, only including sessionStartTime if it exists
-        const timerData: any = {
+        const timerData: Partial<TimerStateModel> = {
           currentTime: state.currentTime,
           totalTime: state.totalTime,
           mode: state.mode,
           sessionsCompleted: state.sessionsCompleted,
           isRunning: state.isRunning,
-          currentTaskId: state.currentTaskId,
+          currentTaskId: state.currentTask ? state.currentTask.id : null,
         };
         
         // Only add sessionStartTime if timer is running and sessionStartTime exists
@@ -308,6 +305,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
           lastSyncTime: new Date() 
         });
       } catch (error) {
+        console.error('Failed to save timer state:', error);
         set({ 
           isSyncing: false, 
           syncError: 'Failed to save timer state' 
@@ -315,75 +313,18 @@ export const useTimerStore = create<TimerState>((set, get) => {
       }
     },
     
-    loadFromDatabase: async (userId: string) => {
-      try {
-        const remoteState = await timerService.loadTimerState(userId);
-        
-        if (remoteState) {
-          get().handleRemoteStateChange(remoteState);
-        }
-      } catch (error) {
-        throw error;
-      }
-    },
-    
-    handleRemoteStateChange: (remoteState: TimerStateModel) => {
-      const currentState = get();
-      const isFromThisDevice = timerService.isActiveDevice(remoteState);
-      
-      // Skip if we're getting our own state back and it's not more recent
-      if (isFromThisDevice && currentState.lastSyncTime && remoteState.lastUpdated) {
-        const localTime = currentState.lastSyncTime.getTime();
-        const remoteTime = remoteState.lastUpdated.getTime();
-        
-        // Skip if our local state is more recent (within 1 second tolerance)
-        if (localTime > remoteTime - 1000) {
-          return;
-        }
-      }
-      
-      // Calculate the actual current time based on running state
-      let adjustedCurrentTime = remoteState.currentTime;
-      let shouldBeRunning = remoteState.isRunning;
-      
-      if (remoteState.isRunning && remoteState.sessionStartTime && remoteState.lastUpdated) {
-        // Timer is running - calculate elapsed time and adjust
-        const elapsedTime = calculateElapsedTime(remoteState.sessionStartTime, remoteState.lastUpdated);
-        adjustedCurrentTime = Math.max(0, remoteState.currentTime - elapsedTime);
-        
-        // If timer has run out, it should be stopped
-        if (adjustedCurrentTime <= 0) {
-          shouldBeRunning = false;
-        }
-        
-        // Restore session start time if this device is taking control of a running timer
-        if (isFromThisDevice && shouldBeRunning) {
-          sessionStartTime = remoteState.sessionStartTime;
-        }
-      } else {
-        // Timer is paused or stopped - use exact saved time without adjustment
-        adjustedCurrentTime = remoteState.currentTime;
-        shouldBeRunning = false; // Ensure paused timers stay paused
-        // Clear session start time since timer is not running
-        sessionStartTime = null;
-      }
-      
-      // Update local state with remote state
+    syncFromRemoteState: (remoteState: TimerStateModel) => {
+      const currentTaskId = remoteState.currentTaskId || null;
+      const currentTask = currentTaskId
+        ? useTaskStore.getState().tasks.find(task => task.id === currentTaskId) || null
+        : null;
       set({
-        currentTime: adjustedCurrentTime,
-        totalTime: remoteState.totalTime,
-        mode: remoteState.mode,
-        sessionsCompleted: remoteState.sessionsCompleted,
-        isRunning: shouldBeRunning, // Use calculated running state
-        currentTaskId: remoteState.currentTaskId,
-        isActiveDevice: isFromThisDevice,
-        lastSyncTime: new Date(),
-        syncError: null
+        ...remoteState,
+        currentTask: currentTask,
       });
     },
     
     cleanupPersistence: () => {
-      timerService.unsubscribeFromTimerState();
       if (saveTimeoutId) {
         clearTimeout(saveTimeoutId);
         saveTimeoutId = null;
@@ -405,7 +346,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
         totalTime: settings.pomodoro * 60,
         mode: 'pomodoro',
         sessionsCompleted: 0,
-        currentTaskId: null,
+        currentTask: null,
         isActiveDevice: true,
         syncError: null
       });
@@ -434,20 +375,3 @@ useUserStore.subscribe(async (state) => {
     timerStore.resetTimerState();
   }
 });
-
-// Also check if user is already authenticated on store creation
-const userState = useUserStore.getState();
-if (userState.isAuthenticated && userState.user && !userState.isLoading) {
-  const timerStore = useTimerStore.getState();
-  const user = userState.user; // Store user reference to avoid null check issues
-  
-  // Initialize persistence asynchronously FIRST
-  timerStore.initializePersistence(user.uid)
-    .then(() => {
-      // THEN set settings after loading existing state
-      timerStore.setSettings(user.settings.timer);
-    })
-    .catch((error) => {
-      console.error('Failed to initialize timer persistence on store creation:', error);
-    });
-}
