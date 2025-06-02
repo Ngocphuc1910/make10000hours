@@ -13,14 +13,9 @@ export const FocusMode: React.FC<FocusModeProps> = ({ className = '' }) => {
   
   // Use selectors to only subscribe to the specific values we need
   const currentTime = useTimerStore(state => state.currentTime);
-  const currentTaskId = useTimerStore(state => state.currentTaskId);
+  const currentTask = useTimerStore(state => state.currentTask);
   
   const { tasks, projects } = useTaskStore();
-  
-  // Find current task
-  const currentTask = currentTaskId 
-    ? tasks.find(task => task.id === currentTaskId) 
-    : null;
   
   // Find project for current task
   const currentProject = currentTask && currentTask.projectId

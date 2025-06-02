@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useFocusStore } from '../../store/useFocusStore';
+import { useDashboardStore } from '../../store/useDashboardStore';
 import { formatMinutes } from '../../utils/timeUtils';
 import { useTaskStore } from '../../store/taskStore';
 import { TaskStatusBoard } from '../tasks';
