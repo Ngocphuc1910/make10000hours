@@ -123,26 +123,30 @@ export const Header: React.FC = () => {
         // Set to start of today
         start.setHours(0, 0, 0, 0);
         type = 'today';
+        setSelectedRange({ startDate: start, endDate: end, rangeType: type });
         break;
       case 'Last 7 Days':
         start.setDate(end.getDate() - 6); // -6 to include today = 7 days
         start.setHours(0, 0, 0, 0);
         type = 'last 7 days';
+        setSelectedRange({ startDate: start, endDate: end, rangeType: type });
         break;
       case 'Last 30 Days':
         start.setDate(end.getDate() - 29); // -29 to include today = 30 days
         start.setHours(0, 0, 0, 0);
         type = 'last 30 days';
+        setSelectedRange({ startDate: start, endDate: end, rangeType: type });
         break;
       case 'Custom range':
         setShowDatePicker(true);
         setShowDateFilter(false);
         return; // Don't update dateRange yet
       default:
+        // For 'All time', set null dates to indicate no filtering
         type = 'all time';
+        setSelectedRange({ startDate: null, endDate: null, rangeType: type });
     }
     
-    setSelectedRange({ startDate: start, endDate: end, rangeType: type });
     setShowDateFilter(false);
   };
   

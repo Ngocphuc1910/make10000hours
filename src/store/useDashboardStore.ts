@@ -25,45 +25,53 @@ interface DashboardState {
   cleanupListeners(): void;
 }
 
-export const useDashboardStore = create<DashboardState>((set, get) => ({
-  selectedRange: {
-    rangeType: 'today',
-    startDate: new Date(),
-    endDate: new Date(),
-  },
-  workSessions: [],
-  focusTimeView: 'daily',
-  unsubscribe: null,
+export const useDashboardStore = create<DashboardState>((set, get) => {
+  // Calculate default dates for "Last 30 days"
+  const defaultEndDate = new Date();
+  const defaultStartDate = new Date();
+  defaultStartDate.setDate(defaultEndDate.getDate() - 29); // -29 to include today = 30 days
+  defaultStartDate.setHours(0, 0, 0, 0);
+  
+  return {
+    selectedRange: {
+      rangeType: 'last 30 days',
+      startDate: defaultStartDate,
+      endDate: defaultEndDate,
+    },
+    workSessions: [],
+    focusTimeView: 'daily',
+    unsubscribe: null,
 
-  setSelectedRange: (range) => set({ selectedRange: range }),
-  setWorkSessions: (sessions) => set({ workSessions: sessions }),
-  setFocusTimeView: (view) => set({ focusTimeView: view }),
-  subscribeWorkSessions: (userId) => {
-    console.log('DashboardStore - Subscribing to work sessions for user:', userId);
-    const { unsubscribe } = get();
-    
-    // Clean up existing listener
-    if (unsubscribe) {
-      unsubscribe();
+    setSelectedRange: (range) => set({ selectedRange: range }),
+    setWorkSessions: (sessions) => set({ workSessions: sessions }),
+    setFocusTimeView: (view) => set({ focusTimeView: view }),
+    subscribeWorkSessions: (userId) => {
+      console.log('DashboardStore - Subscribing to work sessions for user:', userId);
+      const { unsubscribe } = get();
+      
+      // Clean up existing listener
+      if (unsubscribe) {
+        unsubscribe();
+      }
+      
+      // Subscribe to work sessions for the user
+      const newUnsubscribe = workSessionService.subscribeToWorkSessions(userId, (sessions) => {
+        console.log('DashboardStore - Received work sessions:', sessions.length);
+        console.log('DashboardStore - Work sessions:', sessions);
+        set({ workSessions: sessions });
+      });
+      
+      set({ unsubscribe: newUnsubscribe });
+    },
+    cleanupListeners: () => {
+      const { unsubscribe } = get();
+      if (unsubscribe) {
+        unsubscribe();
+        set({ unsubscribe: null, workSessions: [] });
+      }
     }
-    
-    // Subscribe to work sessions for the user
-    const newUnsubscribe = workSessionService.subscribeToWorkSessions(userId, (sessions) => {
-      console.log('DashboardStore - Received work sessions:', sessions.length);
-      console.log('DashboardStore - Work sessions:', sessions);
-      set({ workSessions: sessions });
-    });
-    
-    set({ unsubscribe: newUnsubscribe });
-  },
-  cleanupListeners: () => {
-    const { unsubscribe } = get();
-    if (unsubscribe) {
-      unsubscribe();
-      set({ unsubscribe: null, workSessions: [] });
-    }
-  }
-})); 
+  };
+});
 
 // Subscribe to user authentication changes
 useUserStore.subscribe((state) => {
