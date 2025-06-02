@@ -128,15 +128,16 @@ export const FocusTimeTrend: React.FC = () => {
             console.log('All time daily view - no data fallback');
           }
         } else if (selectedRange.startDate && selectedRange.endDate) {
-          // Use the user's selected range, but limit to reasonable number of days for visibility
+          // Use the user's selected range - respect their choice completely
           startDate = new Date(selectedRange.startDate);
           endDate = new Date(selectedRange.endDate);
           
-          // For daily view, limit to max 14 days to keep bars visible
+          // Only apply limits for extremely large ranges to prevent performance issues
           const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-          if (daysDiff > 14) {
-            startDate = new Date(endDate);
-            startDate.setDate(endDate.getDate() - 13); // Last 14 days
+          if (daysDiff > 365) {
+            // For very large ranges (>1 year), suggest using weekly or monthly view instead
+            // But still show the data if user insists on daily view
+            console.warn('Large date range selected for daily view. Consider using weekly or monthly view for better performance.');
           }
         } else {
           // Default to last 7 days for daily view for better visibility
@@ -465,10 +466,43 @@ export const FocusTimeTrend: React.FC = () => {
   // Calculate dynamic bar width based on number of data points
   const getBarWidth = () => {
     const dataLength = chartData.length;
-    if (dataLength <= 5) return 20;
-    if (dataLength <= 8) return 30;
-    if (dataLength <= 10) return 40;
-    return 50;
+    if (dataLength <= 5) return 60;
+    if (dataLength <= 8) return 50;
+    if (dataLength <= 15) return 40;
+    if (dataLength <= 31) return 30;
+    if (dataLength <= 60) return 20;
+    if (dataLength <= 90) return 15;
+    return 10; // Minimum width for very long ranges
+  };
+
+  // Calculate intelligent label interval to prevent overcrowding
+  const getLabelInterval = () => {
+    const dataLength = chartData.length;
+    let interval = 0;
+    
+    if (focusTimeView === 'daily') {
+      if (dataLength <= 7) interval = 0; // Show all labels for week or less
+      else if (dataLength <= 14) interval = 1; // Show every 2nd label for 2 weeks
+      else if (dataLength <= 31) interval = 2; // Show every 3rd label for month
+      else if (dataLength <= 60) interval = 4; // Show every 5th label for 2 months
+      else if (dataLength <= 90) interval = 6; // Show every 7th label for 3 months
+      else interval = Math.floor(dataLength / 10); // For very long ranges, show ~10 labels max
+    } else if (focusTimeView === 'weekly') {
+      if (dataLength <= 8) interval = 0; // Show all labels for 8 weeks or less
+      else if (dataLength <= 16) interval = 1; // Show every 2nd label for 16 weeks
+      else interval = Math.floor(dataLength / 8); // For longer ranges, show ~8 labels max
+    } else if (focusTimeView === 'monthly') {
+      if (dataLength <= 12) interval = 0; // Show all labels for year or less
+      else interval = Math.floor(dataLength / 12); // For longer ranges, show ~12 labels max
+    }
+    
+    console.log(`Label interval calculation: dataLength=${dataLength}, view=${focusTimeView}, interval=${interval}`);
+    return interval;
+  };
+
+  // Get chart bottom margin for horizontal labels
+  const getBottomMargin = () => {
+    return 45; // Optimized margin for horizontal labels
   };
 
   // Custom label formatter for bars
@@ -526,7 +560,7 @@ export const FocusTimeTrend: React.FC = () => {
         </div>
       </div>
       
-      <div className="h-80">
+      <div className="h-[28rem]">
         {chartData.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-gray-500">
@@ -539,10 +573,10 @@ export const FocusTimeTrend: React.FC = () => {
             <BarChart
               data={chartData}
               margin={{
-                top: 40,
-                right: 30,
-                left: 20,
-                bottom: focusTimeView === 'weekly' ? 60 : 40,
+                top: 30,
+                right: 20,
+                left: 15,
+                bottom: getBottomMargin(),
               }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
@@ -550,11 +584,11 @@ export const FocusTimeTrend: React.FC = () => {
                 dataKey="date" 
                 axisLine={{ stroke: '#e5e7eb' }}
                 tickLine={{ stroke: '#e5e7eb' }}
-                tick={{ fill: '#6b7280', fontSize: 11 }}
-                interval={0}
-                angle={focusTimeView === 'weekly' ? -45 : 0}
-                textAnchor={focusTimeView === 'weekly' ? 'end' : 'middle'}
-                height={focusTimeView === 'weekly' ? 80 : 60}
+                tick={{ fill: '#6b7280', fontSize: 12 }}
+                interval={getLabelInterval()}
+                angle={0}
+                textAnchor="middle"
+                height={55}
               />
               <YAxis 
                 axisLine={false}
