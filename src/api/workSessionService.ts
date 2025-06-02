@@ -213,6 +213,38 @@ export class WorkSessionService {
   }
 
   /**
+   * Update the projectId for all work sessions of a specific task
+   * Used when a task is moved to a different project
+   */
+  async updateWorkSessionsProjectId(userId: string, taskId: string, newProjectId: string): Promise<number> {
+    try {
+      // Get all work sessions for this task
+      const workSessions = await this.getWorkSessionsByTask(userId, taskId);
+      
+      if (workSessions.length === 0) {
+        return 0; // No sessions to update
+      }
+
+      // Update each session with the new projectId
+      const updatePromises = workSessions.map(async (session) => {
+        const sessionRef = doc(this.workSessionsCollection, session.id);
+        return updateDoc(sessionRef, {
+          projectId: newProjectId,
+          updatedAt: new Date()
+        });
+      });
+
+      await Promise.all(updatePromises);
+      
+      console.log(`✅ Updated ${workSessions.length} work sessions for task ${taskId} to project ${newProjectId}`);
+      return workSessions.length;
+    } catch (error) {
+      console.error('Error updating work sessions project ID:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Delete a work session
    */
   async deleteWorkSession(sessionId: string): Promise<void> {
