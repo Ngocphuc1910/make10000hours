@@ -3,8 +3,9 @@ import type { Task } from '../../types/models';
 import { useTaskStore } from '../../store/taskStore';
 import { Icon } from '../ui/Icon';
 import { useUserStore } from '../../store/userStore';
-import { useWorkSessionStore } from '../../store/useWorkSessionStore';
+import { workSessionService } from '../../api/workSessionService';
 import { formatMinutesToHoursAndMinutes } from '../../utils/timeUtils';
+import { getDateISOString } from '../../utils/timeUtils';
 
 interface TaskFormProps {
   task?: Task;
@@ -16,7 +17,6 @@ interface TaskFormProps {
 const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onCancel }) => {
   const { tasks, addTask, updateTask, deleteTask, projects, addProject } = useTaskStore();
   const { user } = useUserStore();
-  const { createWorkSession } = useWorkSessionStore();
   
   const [title, setTitle] = useState(task?.title || '');
   const [projectId, setProjectId] = useState(task?.projectId || '');
@@ -203,20 +203,13 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
       
       // Create WorkSession record for manual time changes (both additions and reductions)
       if (timeSpentChanged && timeDifference !== 0) {
-        const now = new Date();
         try {
-          await createWorkSession({
+          await workSessionService.upsertWorkSession({
             userId: user.uid,
             taskId: task.id,
             projectId: finalProjectId || 'no-project',
-            startTime: now,
-            endTime: now,
-            duration: timeDifference, // Can be positive (addition) or negative (reduction)
-            sessionType: 'manual',
-            notes: timeDifference > 0 
-              ? `Manual time added: +${timeDifference}m`
-              : `Manual time reduced: ${timeDifference}m`
-          });
+            date: getDateISOString(), // Use today's date in YYYY-MM-DD format
+          }, timeDifference); // Can be positive (addition) or negative (reduction)
         } catch (error) {
           console.error('Failed to create work session for manual edit:', error);
         }

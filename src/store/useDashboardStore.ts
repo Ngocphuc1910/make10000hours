@@ -39,6 +39,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   setWorkSessions: (sessions) => set({ workSessions: sessions }),
   setFocusTimeView: (view) => set({ focusTimeView: view }),
   subscribeWorkSessions: (userId) => {
+    console.log('DashboardStore - Subscribing to work sessions for user:', userId);
     const { unsubscribe } = get();
     
     // Clean up existing listener
@@ -48,6 +49,8 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     
     // Subscribe to work sessions for the user
     const newUnsubscribe = workSessionService.subscribeToWorkSessions(userId, (sessions) => {
+      console.log('DashboardStore - Received work sessions:', sessions.length);
+      console.log('DashboardStore - Work sessions:', sessions);
       set({ workSessions: sessions });
     });
     
@@ -66,11 +69,19 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
 useUserStore.subscribe((state) => {
   const dashboardStore = useDashboardStore.getState();
   
+  console.log('DashboardStore - User state changed:', {
+    isAuthenticated: state.isAuthenticated,
+    hasUser: !!state.user,
+    userId: state.user?.uid
+  });
+  
   if (state.isAuthenticated && state.user) {
     // User logged in, subscribe to work sessions
+    console.log('DashboardStore - User logged in, subscribing to work sessions');
     dashboardStore.subscribeWorkSessions(state.user.uid);
   } else {
     // User logged out, cleanup and reset
+    console.log('DashboardStore - User logged out, cleaning up');
     dashboardStore.setWorkSessions([]);
     dashboardStore.cleanupListeners();
   }

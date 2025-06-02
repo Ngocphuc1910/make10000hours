@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy, where, writeBatch, setDoc } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy, where, writeBatch, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../api/firebase';
 import { useUserStore } from './userStore';
 import type { Task, Project } from '../types/models';
@@ -11,6 +11,7 @@ interface TaskState {
   editingTaskId: string | null;
   showDetailsMenu: boolean;
   isLoading: boolean;
+  unsubscribe: (() => void) | null;
   
   // Actions
   initializeStore: () => Promise<void>;
@@ -28,6 +29,7 @@ interface TaskState {
   timeSpentIncrement: (id: string, increment: number) => Promise<void>;
   handleMoveCompletedDown: () => Promise<void>;
   handleArchiveCompleted: () => Promise<void>;
+  cleanupListeners: () => void;
 }
 
 const tasksCollection = collection(db, 'tasks');
@@ -40,6 +42,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   editingTaskId: null,
   showDetailsMenu: false,
   isLoading: false,
+  unsubscribe: null,
 
   initializeStore: async () => {
     const { user, isAuthenticated } = useUserStore.getState();
@@ -51,34 +54,57 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
     set({ isLoading: true });
     
-    // Get latest tasks and projects for the authenticated user
+    // Clean up existing listeners
+    const { unsubscribe } = get();
+    if (unsubscribe) {
+      unsubscribe();
+    }
+    
+    // Set up real-time listeners for tasks and projects
     const tasksQuery = query(
       tasksCollection, 
       where('userId', '==', user.uid),
       orderBy('order', 'asc')
     );
 
-    const fetchedTasks: Task[] = (await getDocs(tasksQuery)).docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Task[];
-    set({
-      tasks: fetchedTasks
-    });
-
     const projectsQuery = query(
       projectsCollection,
       where('userId', '==', user.uid)
     );
     
-    const fetchedProjects: Project[] = (await getDocs(projectsQuery)).docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Project[];
-    set({
-      projects: fetchedProjects,
-      isLoading: false
+    // Subscribe to real-time updates for tasks
+    const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
+      const fetchedTasks: Task[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Task[];
+      set({ tasks: fetchedTasks });
     });
+    
+    // Subscribe to real-time updates for projects
+    const unsubscribeProjects = onSnapshot(projectsQuery, (snapshot) => {
+      const fetchedProjects: Project[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Project[];
+      set({ projects: fetchedProjects, isLoading: false });
+    });
+    
+    // Combine unsubscribe functions
+    const combinedUnsubscribe = () => {
+      unsubscribeTasks();
+      unsubscribeProjects();
+    };
+    
+    set({ unsubscribe: combinedUnsubscribe });
+  },
+  
+  cleanupListeners: () => {
+    const { unsubscribe } = get();
+    if (unsubscribe) {
+      unsubscribe();
+      set({ unsubscribe: null, tasks: [], projects: [] });
+    }
   },
   
   addProject: async (projectData) => {
@@ -365,10 +391,6 @@ useUserStore.subscribe((state) => {
     taskStore.initializeStore();
   } else {
     // User logged out, cleanup and reset
-    useTaskStore.setState({ 
-      tasks: [], 
-      projects: [], 
-      isLoading: false 
-    });
+    taskStore.cleanupListeners();
   }
 });

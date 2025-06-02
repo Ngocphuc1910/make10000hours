@@ -1,19 +1,55 @@
-import type { WorkSession, Task, Project } from '../types/models';
-import type { FocusSession, Task as DashboardTask, Project as DashboardProject, FocusStreak } from '../types';
+import type { Task, Project, WorkSession } from '../types/models';
+
+// Dashboard specific types
+export interface DashboardTask extends Omit<Task, 'title'> {
+  name: string;
+  totalFocusTime: number;
+}
+
+export interface DashboardProject extends Omit<Project, 'name'> {
+  name: string;
+  totalFocusTime: number;
+  createdAt: Date;
+  isActive: boolean;
+}
+
+export interface FocusSession {
+  id: string;
+  taskId: string;
+  projectId: string;
+  startTime: Date;
+  endTime: Date;
+  duration: number;
+  notes?: string;
+}
+
+export interface FocusStreak {
+  currentStreak: number;
+  longestStreak: number;
+  totalFocusDays: number;
+  streakDates: { date: Date; hasFocused: boolean }[];
+}
 
 /**
- * Convert WorkSession to FocusSession format for dashboard widgets
+ * Convert WorkSession to FocusSession format for backward compatibility
  */
 export const workSessionToFocusSession = (workSession: WorkSession): FocusSession => {
+  // Create synthetic start/end times since WorkSession doesn't have them
+  const sessionDate = new Date(workSession.date);
+  const startTime = new Date(sessionDate);
+  startTime.setHours(9, 0, 0, 0); // Default to 9 AM
+  
+  const endTime = new Date(startTime);
+  endTime.setMinutes(startTime.getMinutes() + workSession.duration);
+
   return {
     id: workSession.id,
-    userId: workSession.userId,
-    projectId: workSession.projectId,
     taskId: workSession.taskId,
-    startTime: workSession.startTime,
-    endTime: workSession.endTime,
+    projectId: workSession.projectId,
+    startTime: startTime,
+    endTime: endTime,
     duration: workSession.duration,
-    notes: workSession.notes
+    notes: `Work session on ${workSession.date}`
   };
 };
 
@@ -33,9 +69,15 @@ export const taskToDashboardTask = (
     projectId: task.projectId,
     name: task.title, // Map title to name
     description: task.description || '',
-    isCompleted: task.completed,
+    completed: task.completed,
     totalFocusTime: totalFocusTime,
-    createdAt: task.createdAt
+    createdAt: task.createdAt,
+    status: task.status,
+    timeSpent: task.timeSpent,
+    timeEstimated: task.timeEstimated,
+    order: task.order,
+    hideFromPomodoro: task.hideFromPomodoro,
+    updatedAt: task.updatedAt
   };
 };
 
@@ -79,7 +121,7 @@ export const calculateFocusStreak = (workSessions: WorkSession[]): FocusStreak =
   const sessionsByDate = new Map<string, WorkSession[]>();
   
   workSessions.forEach(session => {
-    const dateKey = session.startTime.toDateString();
+    const dateKey = session.date; // Already in YYYY-MM-DD format
     if (!sessionsByDate.has(dateKey)) {
       sessionsByDate.set(dateKey, []);
     }
@@ -166,45 +208,74 @@ export const calculateFocusStreak = (workSessions: WorkSession[]): FocusStreak =
 };
 
 /**
- * Get tasks that were worked on for a specific date using daily time tracking
+ * Get tasks that were worked on for a specific date using work sessions
  */
 export const getTasksWorkedOnDate = async (
   date: Date,
   tasks: Task[],
-  userId: string
+  userId: string,
+  workSessions?: WorkSession[]
 ): Promise<DashboardTask[]> => {
   try {
-    const { dailyTimeSpentService } = await import('../api/dailyTimeSpentService');
+    // If work sessions are provided, use them. Otherwise, fetch from service.
+    let sessions = workSessions;
     
-    // Get all daily time spent records for this date
-    const dailyRecords = await dailyTimeSpentService.getDailyTimeSpent(userId, date, date);
+    if (!sessions) {
+      // Import and fetch work sessions for the date if not provided
+      const { workSessionService } = await import('../api/workSessionService');
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      sessions = await workSessionService.getWorkSessionsByDateRange(userId, startOfDay, endOfDay);
+    }
     
-    if (dailyRecords.length === 0) {
+    if (!sessions || sessions.length === 0) {
       return [];
     }
     
-    // Get unique task IDs that have time spent on this date
-    const taskIdsWorkedOn = new Set(dailyRecords.map(record => record.taskId));
+    // Filter sessions for the specific date
+    const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const sessionsForDate = sessions.filter(session => session.date === dateString);
+    
+    if (sessionsForDate.length === 0) {
+      return [];
+    }
+    
+    // Aggregate time by task for this date
+    const taskTimeMap = new Map<string, number>();
+    sessionsForDate.forEach(session => {
+      const current = taskTimeMap.get(session.taskId) || 0;
+      taskTimeMap.set(session.taskId, current + (session.duration || 0));
+    });
     
     // Convert to dashboard tasks and set time spent to the daily amount
-    return tasks
-      .filter(task => taskIdsWorkedOn.has(task.id))
-      .map(task => {
-        // Find the daily record for this task
-        const dailyRecord = dailyRecords.find(record => record.taskId === task.id);
-        const timeOnDate = dailyRecord?.timeSpent || 0;
+    return Array.from(taskTimeMap.entries())
+      .map(([taskId, timeOnDate]) => {
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return null;
         
-        return {
+        const dashboardTask: DashboardTask = {
           id: task.id,
           userId: task.userId,
           projectId: task.projectId,
           name: task.title,
           description: task.description || '',
-          isCompleted: task.completed,
+          completed: task.completed,
           totalFocusTime: timeOnDate, // Use time spent on this specific date
-          createdAt: task.createdAt
+          createdAt: task.createdAt,
+          status: task.status,
+          timeSpent: task.timeSpent,
+          timeEstimated: task.timeEstimated,
+          order: task.order,
+          hideFromPomodoro: task.hideFromPomodoro,
+          updatedAt: task.updatedAt
         };
+        
+        return dashboardTask;
       })
+      .filter((task): task is DashboardTask => task !== null)
       .sort((a, b) => b.totalFocusTime - a.totalFocusTime);
   } catch (error) {
     console.error('Error getting tasks worked on date:', error);
