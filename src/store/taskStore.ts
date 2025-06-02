@@ -235,11 +235,41 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   
   updateTask: async (id, updates) => {
     try {
+      const { user } = useUserStore.getState();
+      if (!user) throw new Error('No user found');
+
+      // Get the current task to check for projectId changes
+      const { tasks } = get();
+      const currentTask = tasks.find(t => t.id === id);
+      
+      // Check if projectId is being updated
+      const isProjectIdChanging = updates.projectId && currentTask && updates.projectId !== currentTask.projectId;
+      
+      // Update the task
       const taskRef = doc(db, 'tasks', id);
       await updateDoc(taskRef, {
         ...updates,
         updatedAt: new Date()
       });
+
+      // If projectId changed, update all related work sessions
+      if (isProjectIdChanging && updates.projectId) {
+        try {
+          const updatedCount = await workSessionService.updateWorkSessionsProjectId(
+            user.uid,
+            id,
+            updates.projectId
+          );
+          
+          if (updatedCount > 0) {
+            console.log(`🔄 Updated ${updatedCount} work sessions for task ${id} to project ${updates.projectId}`);
+          }
+        } catch (error) {
+          console.error('❌ Failed to update work sessions project ID:', error);
+          // Don't throw here - the task update succeeded, this is just cleanup
+          console.warn('⚠️ Task was updated but work session project IDs may be inconsistent');
+        }
+      }
       
       set({ editingTaskId: null });
     } catch (error) {
