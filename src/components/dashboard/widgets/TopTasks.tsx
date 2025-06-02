@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Card from '../../ui/Card';
 import { useDashboardStore } from '../../../store/useDashboardStore';
 import { useTaskStore } from '../../../store/taskStore';
@@ -10,74 +10,69 @@ export const TopTasks: React.FC = () => {
   const { workSessions, selectedRange } = useDashboardStore();
   const { tasks, projects } = useTaskStore();
   const { user } = useUserStore();
-  const [displayTasks, setDisplayTasks] = useState<DashboardTask[]>([]);
-  const [showingToday, setShowingToday] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Format the selected date
-  const formattedDate = showingToday 
-    ? new Date().toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric'
-      })
-    : 'Last 30 days';
+  console.log('TopTasks render - workSessions:', workSessions.length, 'selectedRange:', selectedRange);
   
-  // Update tasks when selected date changes
-  useEffect(() => {
-    const updateTasks = async () => {
-      if (!user) return;
-      
-      setIsLoading(true);
-      try {
-        if (showingToday) {
-          // Get tasks for today only using work sessions
-          const today = new Date();
-          const todayString = today.toISOString().split('T')[0];
-          
-          // Filter work sessions for today and aggregate by task
-          const todayWorkSessions = workSessions.filter(session => session.date === todayString);
-          const taskTimeMap = new Map<string, number>();
-          
-          todayWorkSessions.forEach(session => {
-            const current = taskTimeMap.get(session.taskId) || 0;
-            taskTimeMap.set(session.taskId, current + (session.duration || 0));
-          });
-          
-          // Convert to dashboard tasks with work session time
-          const tasksForDate = Array.from(taskTimeMap.entries())
-            .map(([taskId, totalTime]: [string, number]) => {
-              const task = tasks.find((t: any) => t.id === taskId);
-              if (!task) return null;
-              
-              const dashboardTask = taskToDashboardTask(task);
-              return {
-                ...dashboardTask,
-                totalFocusTime: totalTime
-              };
-            })
-            .filter((task): task is DashboardTask => task !== null && task.totalFocusTime > 0)
-            .sort((a: DashboardTask, b: DashboardTask) => b.totalFocusTime - a.totalFocusTime);
-            
-          setDisplayTasks(tasksForDate);
-        } else {
-          // Show all tasks by total focus time from timeSpent field
-          const sortedTasks = tasks
-            .map((task: any) => taskToDashboardTask(task))
-            .filter((task: DashboardTask) => task.totalFocusTime > 0) // Only show tasks with time spent
-            .sort((a: DashboardTask, b: DashboardTask) => b.totalFocusTime - a.totalFocusTime);
-          setDisplayTasks(sortedTasks);
-        }
-      } catch (error) {
-        console.error('Error updating tasks:', error);
-        setDisplayTasks([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Filter work sessions based on selected date range (same logic as other components)
+  const filteredWorkSessions = useMemo(() => {
+    // For 'all time' range, show all work sessions without filtering
+    if (selectedRange.rangeType === 'all time') {
+      return workSessions;
+    }
+    
+    // For all other cases, use the selected range if available
+    if (!selectedRange.startDate || !selectedRange.endDate) {
+      return workSessions;
+    }
+    
+    const startDate = new Date(selectedRange.startDate);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(selectedRange.endDate);
+    endDate.setHours(23, 59, 59, 999);
+    
+    return workSessions.filter(session => {
+      const sessionDate = new Date(session.date);
+      return sessionDate >= startDate && sessionDate <= endDate;
+    });
+  }, [workSessions, selectedRange]);
 
-    updateTasks();
-  }, [showingToday, tasks, workSessions, user]);
+  // Calculate task focus time from filtered work sessions
+  const displayTasks = useMemo(() => {
+    console.log('Calculating task time from filtered sessions:', filteredWorkSessions.length);
+    
+    if (!user || filteredWorkSessions.length === 0) {
+      return [];
+    }
+    
+    // Group filtered work sessions by task
+    const taskTimeMap = new Map<string, number>();
+    
+    filteredWorkSessions.forEach(session => {
+      const duration = session.duration || 0;
+      const current = taskTimeMap.get(session.taskId) || 0;
+      taskTimeMap.set(session.taskId, current + duration);
+      
+      console.log(`Added ${duration} minutes to task ${session.taskId}`);
+    });
+    
+    console.log('Task time map:', Object.fromEntries(taskTimeMap));
+    
+    // Convert to dashboard tasks with filtered time data
+    return Array.from(taskTimeMap.entries())
+      .map(([taskId, totalTime]: [string, number]) => {
+        const task = tasks.find((t: any) => t.id === taskId);
+        if (!task) return null;
+        
+        const dashboardTask = taskToDashboardTask(task);
+        return {
+          ...dashboardTask,
+          totalFocusTime: totalTime
+        };
+      })
+      .filter((task): task is DashboardTask => task !== null && task.totalFocusTime > 0)
+      .sort((a: DashboardTask, b: DashboardTask) => b.totalFocusTime - a.totalFocusTime);
+  }, [user, tasks, filteredWorkSessions]);
   
   // Show empty state if no tasks
   if (isLoading) {
@@ -104,16 +99,8 @@ export const TopTasks: React.FC = () => {
       <Card 
         title="Top Tasks" 
         action={
-          <button 
-            className="flex items-center text-sm text-gray-600 hover:text-gray-800"
-            onClick={() => {
-              setShowingToday(!showingToday);
-            }}
-          >
-            <span>{showingToday ? formattedDate : 'Last 30 days'}</span>
-            <div className="w-4 h-4 flex items-center justify-center ml-1">
-              <i className="ri-calendar-line"></i>
-            </div>
+          <button className="text-sm text-primary hover:text-primary-dark font-medium">
+            View All
           </button>
         }
       >
@@ -122,9 +109,7 @@ export const TopTasks: React.FC = () => {
             <div className="w-12 h-12 mx-auto mb-4 text-gray-400 flex items-center justify-center">
               <i className="ri-calendar-event-line ri-2x"></i>
             </div>
-            <p className="text-gray-500 text-sm">
-              {showingToday ? 'No work sessions found for today' : 'No tasks with focus time found'}
-            </p>
+            <p className="text-gray-500 text-sm">No tasks with focus time found</p>
           </div>
         </div>
       </Card>
@@ -135,16 +120,8 @@ export const TopTasks: React.FC = () => {
     <Card 
       title="Top Tasks" 
       action={
-        <button 
-          className="flex items-center text-sm text-gray-600 hover:text-gray-800"
-          onClick={() => {
-            setShowingToday(!showingToday);
-          }}
-        >
-          <span>{showingToday ? formattedDate : 'Last 30 days'}</span>
-          <div className="w-4 h-4 flex items-center justify-center ml-1">
-            <i className="ri-calendar-line"></i>
-          </div>
+        <button className="text-sm text-primary hover:text-primary-dark font-medium">
+          View All
         </button>
       }
     >
