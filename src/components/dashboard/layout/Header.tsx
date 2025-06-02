@@ -137,7 +137,7 @@ export const Header: React.FC = () => {
         type = 'last 30 days';
         setSelectedRange({ startDate: start, endDate: end, rangeType: type });
         break;
-      case 'Custom range':
+      case 'Custom Range':
         setShowDatePicker(true);
         setShowDateFilter(false);
         return; // Don't update dateRange yet
@@ -178,10 +178,10 @@ export const Header: React.FC = () => {
       case 'last 30 days':
         return 'Last 30 days';
       case 'custom':
-        if (startDate && endDate) {
-          return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+        if (selectedRange.startDate && selectedRange.endDate) {
+          return `${formatDate(selectedRange.startDate)} - ${formatDate(selectedRange.endDate)}`;
         }
-        return 'Custom range';
+        return 'Custom Range';
       default:
         return 'All time';
     }
