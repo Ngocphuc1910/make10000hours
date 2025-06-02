@@ -1,8 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import Card from '../../ui/Card';
 import { useTaskStore } from '../../../store/taskStore';
 import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
-import { projectToDashboardProject } from '../../../utils/dashboardAdapter';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useDashboardStore } from '../../../store/useDashboardStore';
 
@@ -10,26 +9,76 @@ export const TopProjects: React.FC = () => {
   const { workSessions, selectedRange } = useDashboardStore();
   const { projects, tasks } = useTaskStore();
   
-  // Convert projects to dashboard format with task timeSpent data
-  const dashboardProjects = projects
-    .map(project => projectToDashboardProject(project, tasks))
-    .sort((a, b) => b.totalFocusTime - a.totalFocusTime);
+  console.log('TopProjects render - workSessions:', workSessions.length, 'selectedRange:', selectedRange);
+  
+  // Filter work sessions based on selected date range (same logic as FocusTimeTrend)
+  const filteredWorkSessions = useMemo(() => {
+    // For 'all time' range, show all work sessions without filtering
+    if (selectedRange.rangeType === 'all time') {
+      return workSessions;
+    }
+    
+    // For all other cases, use the selected range if available
+    if (!selectedRange.startDate || !selectedRange.endDate) {
+      return workSessions;
+    }
+    
+    const startDate = new Date(selectedRange.startDate);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(selectedRange.endDate);
+    endDate.setHours(23, 59, 59, 999);
+    
+    return workSessions.filter(session => {
+      const sessionDate = new Date(session.date);
+      return sessionDate >= startDate && sessionDate <= endDate;
+    });
+  }, [workSessions, selectedRange]);
+
+  // Calculate project focus time from filtered work sessions
+  const projectsWithFilteredTime = useMemo(() => {
+    console.log('Calculating project time from filtered sessions:', filteredWorkSessions.length);
+    
+    // Group filtered work sessions by project
+    const projectTimeMap = new Map<string, number>();
+    
+    filteredWorkSessions.forEach(session => {
+      const duration = session.duration || 0;
+      const current = projectTimeMap.get(session.projectId) || 0;
+      projectTimeMap.set(session.projectId, current + duration);
+      
+      console.log(`Added ${duration} minutes to project ${session.projectId}`);
+    });
+    
+    console.log('Project time map:', Object.fromEntries(projectTimeMap));
+    
+    // Convert projects to dashboard format with filtered time data
+    return projects
+      .map(project => ({
+        id: project.id,
+        userId: project.userId,
+        name: project.name,
+        color: project.color || '#3B82F6', // Default blue color
+        totalFocusTime: projectTimeMap.get(project.id) || 0,
+        createdAt: new Date(),
+        isActive: true
+      }))
+      .filter(project => project.totalFocusTime > 0) // Only show projects with focus time in the selected range
+      .sort((a, b) => b.totalFocusTime - a.totalFocusTime);
+  }, [projects, filteredWorkSessions]);
 
   // Get top 9 projects and sum up the rest as "Others"
-  const topProjects = dashboardProjects.slice(0, 9);
-  const otherProjects = dashboardProjects.slice(9);
+  const topProjects = projectsWithFilteredTime.slice(0, 9);
+  const otherProjects = projectsWithFilteredTime.slice(9);
   const othersTotalTime = otherProjects.reduce((total, project) => total + project.totalFocusTime, 0);
 
   // Prepare data for the chart
   const chartData = [
-    ...topProjects
-      .filter(project => project.totalFocusTime > 0) // Filter out 0 minute projects
-      .map((project) => ({
-        name: '', // Empty name to remove x-axis labels
-        fullName: project.name,
-        value: project.totalFocusTime,
-        color: project.color
-      }))
+    ...topProjects.map((project) => ({
+      name: '', // Empty name to remove x-axis labels
+      fullName: project.name,
+      value: project.totalFocusTime,
+      color: project.color
+    }))
   ];
 
   if (otherProjects.length > 0 && othersTotalTime > 0) { // Only add Others if it has time
