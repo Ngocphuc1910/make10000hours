@@ -281,10 +281,10 @@ export const FocusTimeTrend: React.FC = () => {
   // Calculate dynamic bar width based on number of data points
   const getBarWidth = () => {
     const dataLength = chartData.length;
-    if (dataLength <= 5) return '25%';
-    if (dataLength <= 8) return '35%';
-    if (dataLength <= 10) return '50%';
-    return '65%';
+    if (dataLength <= 5) return 20;
+    if (dataLength <= 8) return 30;
+    if (dataLength <= 10) return 40;
+    return 50;
   };
 
   // Custom label formatter for bars
