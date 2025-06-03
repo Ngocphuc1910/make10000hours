@@ -381,9 +381,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
       try {
         // With the new approach, we increment duration by 1 for each minute boundary crossed
         // This function is called when a minute boundary is detected in the tick function
-        await workSessionService.updateSession(activeSession.sessionId, {
-          duration: 1 // Always increment by 1 minute when called
-        });
+        await workSessionService.incrementDuration(activeSession.sessionId, 1);
         
         // Update last update time locally
         set({
@@ -443,16 +441,17 @@ export const useTimerStore = create<TimerState>((set, get) => {
           }
         }
         
-        const updates: Partial<Pick<WorkSession, 'duration' | 'status' | 'endTime' | 'notes'>> = {
+        // First, increment any remaining uncounted minutes
+        if (remainingMinutes > 0) {
+          await workSessionService.incrementDuration(activeSession.sessionId, remainingMinutes);
+        }
+        
+        // Then update status and end time
+        const updates: Partial<Pick<WorkSession, 'status' | 'endTime' | 'notes'>> = {
           status,
           endTime: new Date(),
           notes: `Session ${status}${remainingMinutes > 0 ? `: +${remainingMinutes}m remaining` : ''}`,
         };
-        
-        // Only add remaining duration if there are uncounted minutes
-        if (remainingMinutes > 0) {
-          updates.duration = remainingMinutes;
-        }
         
         await workSessionService.updateSession(activeSession.sessionId, updates);
         
