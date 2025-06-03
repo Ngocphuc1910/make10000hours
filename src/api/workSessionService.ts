@@ -57,6 +57,7 @@ export class WorkSessionService {
       const newSession: WorkSession = {
         ...sessionData,
         id: sessionId,
+        status: sessionData.status || 'completed', // Default to completed if not specified
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -70,10 +71,149 @@ export class WorkSessionService {
   }
 
   /**
+   * Create an active work session for timer
+   */
+  async createActiveSession(
+    taskId: string,
+    projectId: string,
+    userId: string,
+    sessionType: 'pomodoro' | 'shortBreak' | 'longBreak' = 'pomodoro'
+  ): Promise<string> {
+    try {
+      const now = new Date();
+      const sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt'> = {
+        userId,
+        taskId,
+        projectId,
+        date: now.toISOString().split('T')[0], // YYYY-MM-DD format
+        duration: 0, // Start with 0 duration
+        sessionType,
+        status: 'active',
+        startTime: now,
+        notes: `${sessionType} session started`
+      };
+
+      return await this.createWorkSession(sessionData);
+    } catch (error) {
+      console.error('Error creating active session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update session status and duration
+   */
+  async updateSession(
+    sessionId: string,
+    updates: Partial<Pick<WorkSession, 'duration' | 'status' | 'endTime' | 'notes'>>
+  ): Promise<void> {
+    try {
+      const sessionRef = doc(this.workSessionsCollection, sessionId);
+      const updateData = {
+        ...updates,
+        updatedAt: new Date()
+      };
+
+      await updateDoc(sessionRef, updateData);
+    } catch (error) {
+      console.error('Error updating session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Complete a session with final duration and status
+   */
+  async completeSession(
+    sessionId: string,
+    duration: number,
+    status: 'completed' | 'paused' | 'switched',
+    notes?: string
+  ): Promise<void> {
+    try {
+      await this.updateSession(sessionId, {
+        duration,
+        status,
+        endTime: new Date(),
+        notes: notes || `Session ${status}: ${duration}m`
+      });
+    } catch (error) {
+      console.error('Error completing session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get active sessions for cleanup
+   */
+  async getActiveSessions(userId: string): Promise<WorkSession[]> {
+    try {
+      const q = query(
+        this.workSessionsCollection,
+        where('userId', '==', userId),
+        where('status', '==', 'active'),
+        orderBy('updatedAt', 'desc')
+      );
+
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: safeToDate(data.createdAt),
+          updatedAt: safeToDate(data.updatedAt),
+          startTime: data.startTime ? safeToDate(data.startTime) : undefined,
+          endTime: data.endTime ? safeToDate(data.endTime) : undefined,
+        };
+      }) as WorkSession[];
+    } catch (error) {
+      console.error('Error fetching active sessions:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Cleanup orphaned sessions on app restart
+   */
+  async cleanupOrphanedSessions(userId: string, cutoffMinutes: number = 60): Promise<number> {
+    try {
+      const activeSessions = await this.getActiveSessions(userId);
+      const cutoffTime = new Date(Date.now() - cutoffMinutes * 60 * 1000);
+      let cleanedCount = 0;
+
+      for (const session of activeSessions) {
+        const sessionAge = new Date(session.updatedAt);
+        
+        if (sessionAge < cutoffTime) {
+          // Calculate estimated duration based on time since last update
+          const estimatedDuration = Math.round(
+            (cutoffTime.getTime() - new Date(session.startTime || session.createdAt).getTime()) / (1000 * 60)
+          );
+
+          await this.completeSession(
+            session.id,
+            Math.max(estimatedDuration, session.duration), // Use whichever is larger
+            'completed',
+            `Auto-completed after app restart (estimated ${estimatedDuration}m)`
+          );
+          
+          cleanedCount++;
+        }
+      }
+
+      return cleanedCount;
+    } catch (error) {
+      console.error('Error cleaning up orphaned sessions:', error);
+      return 0;
+    }
+  }
+
+  /**
    * Legacy upsert method - kept for backward compatibility but now creates separate sessions
    */
   async upsertWorkSession(
-    sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt' | 'duration' | 'sessionType'>, 
+    sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt' | 'duration' | 'sessionType' | 'status'>, 
     durationChange = 0,
     sessionType: WorkSession['sessionType'] = 'manual'
   ): Promise<string> {
@@ -81,8 +221,9 @@ export class WorkSessionService {
       // Create a new session instead of updating existing one
       const workSession: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt'> = {
         ...sessionData,
-        duration: Math.abs(durationChange), // Use absolute value for duration
+        duration: durationChange, // Preserve the sign: positive for additions, negative for reductions
         sessionType,
+        status: 'completed', // Manual sessions are always completed
         notes: sessionType === 'manual' ? 
           (durationChange > 0 ? `Manual time addition: +${durationChange}m` : `Manual time reduction: ${durationChange}m`) :
           `${sessionType} session completed`
@@ -91,34 +232,6 @@ export class WorkSessionService {
       return await this.createWorkSession(workSession);
     } catch (error) {
       console.error('Error upserting work session:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Create a timer-based work session with precise timing
-   */
-  async createTimerSession(
-    sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt' | 'sessionType'>,
-    sessionType: 'pomodoro' | 'shortBreak' | 'longBreak',
-    startTime: Date,
-    endTime: Date
-  ): Promise<string> {
-    try {
-      const duration = Math.round((endTime.getTime() - startTime.getTime()) / (1000 * 60)); // Convert to minutes
-
-      const workSession: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt'> = {
-        ...sessionData,
-        duration,
-        sessionType,
-        startTime,
-        endTime,
-        notes: `${sessionType} session completed`
-      };
-
-      return await this.createWorkSession(workSession);
-    } catch (error) {
-      console.error('Error creating timer session:', error);
       throw error;
     }
   }

@@ -48,14 +48,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
 
   const handleCheckboxChange = () => {
     toggleTaskCompletion(task.id);
-    
-    // If completing a task, update its status too
-    if (!task.completed) {
-      onStatusChange(task.id, 'completed');
-    } else {
-      // If un-completing a task from 'completed', move to 'pomodoro'
-      onStatusChange(task.id, 'pomodoro');
-    }
+    // Status changes and timer handling are now managed automatically in the store
   };
 
   const handleEditClick = (e: React.MouseEvent) => {
