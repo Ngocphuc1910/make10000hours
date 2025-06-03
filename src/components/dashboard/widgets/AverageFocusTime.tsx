@@ -38,21 +38,24 @@ export const AverageFocusTime: React.FC = () => {
         currentWeekStart.setDate(currentWeekStart.getDate() - dayToMinus); // Set to start of the week (Monday)
         currentWeekStart.setHours(0, 0, 0, 0); // Normalize to start of the day
 
-        workSessions.forEach(session => {
-          const date = session.date;
-          const duration = session.duration; // duration in minutes
-          if (!timeSpentByDate[date]) {
-            timeSpentByDate[date] = duration;
-          } else {
-            timeSpentByDate[date] += duration;
-          }
+        // Filter out break sessions and calculate time spent
+        workSessions
+          .filter(session => session.sessionType === 'pomodoro' || session.sessionType === 'manual')
+          .forEach(session => {
+            const date = session.date;
+            const duration = session.duration; // duration in minutes
+            if (!timeSpentByDate[date]) {
+              timeSpentByDate[date] = duration;
+            } else {
+              timeSpentByDate[date] += duration;
+            }
 
-          // Calculate weekly time spent
-          const sessionDate = new Date(date);
-          if (sessionDate >= currentWeekStart) {
-            currentWeekTimeSpent += duration;
-          }
-        });
+            // Calculate weekly time spent
+            const sessionDate = new Date(date);
+            if (sessionDate >= currentWeekStart) {
+              currentWeekTimeSpent += duration;
+            }
+          });
         const totalFocusMinutes = Object.values(timeSpentByDate).reduce((sum, minutes) => sum + minutes, 0);
         const dailyAverageMinutes = totalFocusMinutes / Object.keys(timeSpentByDate).length || 0;
         setStats({

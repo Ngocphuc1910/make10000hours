@@ -125,18 +125,21 @@ export const FocusTimeTrend: React.FC = () => {
         sessions: filteredWorkSessions.map(s => ({ date: s.date, duration: s.duration }))
       });
       
-      filteredWorkSessions.forEach(session => {
-        // Normalize the date to ensure consistent format
-        const normalizedDate = normalizeDateString(session.date);
-        const duration = session.duration || 0;
-        
-        if (!timeByDate[normalizedDate]) {
-          timeByDate[normalizedDate] = 0;
-        }
-        timeByDate[normalizedDate] += duration;
-        
-        console.log(`Added ${duration} minutes to ${normalizedDate}`);
-      });
+      // Filter out break sessions and aggregate by date
+      filteredWorkSessions
+        .filter(session => session.sessionType === 'pomodoro' || session.sessionType === 'manual')
+        .forEach(session => {
+          // Normalize the date to ensure consistent format
+          const normalizedDate = normalizeDateString(session.date);
+          const duration = session.duration || 0;
+          
+          if (!timeByDate[normalizedDate]) {
+            timeByDate[normalizedDate] = 0;
+          }
+          timeByDate[normalizedDate] += duration;
+          
+          console.log(`Added ${duration} minutes to ${normalizedDate}`);
+        });
       
       console.log('Time by date aggregated:', timeByDate);
       

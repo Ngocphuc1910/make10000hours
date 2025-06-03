@@ -77,7 +77,7 @@ export class WorkSessionService {
     taskId: string,
     projectId: string,
     userId: string,
-    sessionType: 'pomodoro' | 'shortBreak' | 'longBreak' = 'pomodoro'
+    sessionType: 'pomodoro' | 'shortBreak' | 'longBreak'
   ): Promise<string> {
     try {
       const now = new Date();
@@ -87,7 +87,7 @@ export class WorkSessionService {
         projectId,
         date: now.toISOString().split('T')[0], // YYYY-MM-DD format
         duration: 0, // Start with 0 duration
-        sessionType,
+        sessionType, // Use the session type as provided
         status: 'active',
         startTime: now,
         notes: `${sessionType} session started`
