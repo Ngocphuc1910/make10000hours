@@ -59,11 +59,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   
   const handleCheckboxChange = () => {
     toggleTaskCompletion(task.id);
-    
-    // If this was the current task, deselect it when marked complete
-    if (isSelected && !task.completed) {
-      setCurrentTask(null);
-    }
+    // Timer pausing and task deselection is now handled automatically in the store
   };
   
   const handleEditClick = (e: React.MouseEvent) => {

@@ -81,9 +81,19 @@ export interface WorkSession {
   date: string; // YYYY-MM-DD format
   duration: number; // in minutes
   sessionType: 'manual' | 'pomodoro' | 'shortBreak' | 'longBreak'; // type of session
+  status: 'active' | 'paused' | 'completed' | 'switched'; // session status
   startTime?: Date; // when session started (for timer sessions)
   endTime?: Date; // when session ended (for timer sessions)
   notes?: string; // session notes
   createdAt: Date;
   updatedAt: Date;
+}
+
+// Active session tracking for timer store
+export interface ActiveSession {
+  sessionId: string;
+  taskId: string;
+  startTime: Date;
+  lastUpdateTime: Date;
+  status: 'active' | 'paused';
 }

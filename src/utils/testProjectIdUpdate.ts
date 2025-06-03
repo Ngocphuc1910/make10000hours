@@ -50,9 +50,10 @@ export async function testProjectIdUpdate(taskId?: string, newProjectId?: string
         userId: user.uid,
         taskId: testTaskId,
         projectId: currentTask.projectId,
-        date: new Date().toISOString().split('T')[0],
+        date: '2024-01-01',
         duration: 25,
         sessionType: 'manual',
+        status: 'completed',
         notes: 'Test session for project ID update verification'
       });
       console.log('✅ Test work session created');
