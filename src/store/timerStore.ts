@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DEFAULT_SETTINGS, Task, type TimerMode, type TimerSettings, type TimerState as TimerStateModel } from '../types/models';
+import { DEFAULT_SETTINGS, Task, type TimerMode, type TimerSettings, type TimerState as TimerStateModel, type ActiveSession, type WorkSession } from '../types/models';
 import { useTaskStore } from './taskStore';
 import { useUserStore } from './userStore';
 import { timerService } from '../api/timerService';
@@ -17,6 +17,10 @@ interface TimerState {
   
   // Current task
   currentTask: Task | null;
+  
+  // Active session tracking
+  activeSession: ActiveSession | null;
+  sessionStartTimerPosition: number | null; // Timer position when session started
   
   // Settings
   settings: TimerSettings;
@@ -38,6 +42,13 @@ interface TimerState {
   setCurrentTask: (task: Task | null) => void;
   setSettings: (settings: TimerSettings) => void;
   
+  // Session management actions
+  createActiveSession: () => Promise<void>;
+  updateActiveSession: () => Promise<void>;
+  completeActiveSession: (status: 'completed' | 'paused' | 'switched') => Promise<void>;
+  switchActiveSession: () => Promise<void>;
+  cleanupOrphanedSessions: () => Promise<void>;
+  
   // Persistence actions
   initializePersistence: (userId: string) => Promise<void>;
   saveToDatabase: () => Promise<void>;
@@ -48,7 +59,6 @@ interface TimerState {
 
 export const useTimerStore = create<TimerState>((set, get) => {
   let saveTimeoutId: NodeJS.Timeout | null = null;
-  let sessionStartTime: Date | null = null; // Track when the current session started
   
   // Debounced save function to avoid too frequent database writes
   const debouncedSave = () => {
@@ -70,6 +80,8 @@ export const useTimerStore = create<TimerState>((set, get) => {
     mode: 'pomodoro',
     sessionsCompleted: 0,
     currentTask: null,
+    activeSession: null,
+    sessionStartTimerPosition: null,
     settings: DEFAULT_SETTINGS.timer,
     
     // Persistence state
@@ -80,21 +92,16 @@ export const useTimerStore = create<TimerState>((set, get) => {
     syncError: null,
     
     // Actions
-    start: () => {
+    start: async () => {
       const state = get();
       if (!state.isActiveDevice) {
         // If not active device, take control
         set({ isActiveDevice: true });
       }
       
-      // Set session start time if not already running
-      if (!state.isRunning) {
-        sessionStartTime = new Date();
-        
-        // Track Pomodoro start in Analytics
-        if (state.mode === 'pomodoro' && state.currentTask) {
-          trackPomodoroStarted(state.currentTask.id, state.currentTask.timeEstimated || 0);
-        }
+      // Create active session if starting timer and we have a task
+      if (!state.isRunning && state.currentTask) {
+        await get().createActiveSession();
       }
       
       set({ 
@@ -102,54 +109,50 @@ export const useTimerStore = create<TimerState>((set, get) => {
         syncError: null 
       });
       
+      // Track Pomodoro start in Analytics
+      if (state.mode === 'pomodoro' && state.currentTask) {
+        trackPomodoroStarted(state.currentTask.id, state.currentTask.timeEstimated || 0);
+      }
+      
       // Save immediately when starting
       get().saveToDatabase();
     },
     
-    pause: () => {
-      // Clear session start time when paused - no need to create WorkSession
-      // since timeSpent increments during countdown provide the time tracking
-      sessionStartTime = null;
+    pause: async () => {
+      const state = get();
+      
+      // Complete active session when pausing
+      if (state.activeSession) {
+        await get().completeActiveSession('paused');
+      }
       
       set({ isRunning: false });
       
       // Save immediately when pausing to capture exact time
-      const updatedState = get();
-      updatedState.saveToDatabase();
+      get().saveToDatabase();
     },
     
     reset: () => {
       const { mode, settings } = get();
       const totalSeconds = settings[mode] * 60;
-      sessionStartTime = null; // Clear session start time when reset
+      
       set({ 
         currentTime: totalSeconds,
         totalTime: totalSeconds,
         isRunning: false,
+        activeSession: null,
+        sessionStartTimerPosition: null,
         settings
       });
       get().saveToDatabase();
     },
     
-    skip: () => {
-      const { mode, sessionsCompleted, settings, currentTask } = get();
+    skip: async () => {
+      const { mode, sessionsCompleted, settings, currentTask, activeSession } = get();
       
-      // Create work session for completed session with precise timing
-      if (sessionStartTime && currentTask) {
-        const sessionEndTime = new Date();
-        const duration = Math.round((sessionEndTime.getTime() - sessionStartTime.getTime()) / (1000 * 60)); // Convert to minutes
-        const { user } = useUserStore.getState();
-        
-        if (user) {
-          // Create timer-based work session with precise timing
-          workSessionService.createTimerSession({
-            userId: user.uid,
-            taskId: currentTask.id,
-            projectId: currentTask.projectId,
-            date: getDateISOString(), // use today's date
-            duration: duration
-          }, mode, sessionStartTime, sessionEndTime);
-        }
+      // Complete current active session
+      if (activeSession) {
+        await get().completeActiveSession('completed');
       }
       
       // Track Pomodoro completion in Analytics if completing a pomodoro session
@@ -173,9 +176,6 @@ export const useTimerStore = create<TimerState>((set, get) => {
         nextMode = 'pomodoro';
       }
       
-      // Reset session start time when switching modes
-      sessionStartTime = null;
-      
       // Set the new mode and reset timer
       const totalSeconds = settings[nextMode] * 60;
       const autoStartPomodoro = settings.autoStartPomodoros && nextMode === 'pomodoro';
@@ -187,15 +187,17 @@ export const useTimerStore = create<TimerState>((set, get) => {
         totalTime: totalSeconds,
         isRunning: autoStartPomodoro || autoStartBreak,
         sessionsCompleted: nextSessionsCompleted,
+        activeSession: null,
+        sessionStartTimerPosition: null,
         settings
       });
       
-      // If auto-starting next session, set new session start time
-      if (autoStartPomodoro || autoStartBreak) {
-        sessionStartTime = new Date();
+      // If auto-starting next session, create new active session
+      if ((autoStartPomodoro || autoStartBreak) && currentTask) {
+        await get().createActiveSession();
         
         // Track new Pomodoro start if auto-starting
-        if (autoStartPomodoro && currentTask) {
+        if (autoStartPomodoro) {
           trackPomodoroStarted(currentTask.id, currentTask.timeEstimated || 0);
         }
       }
@@ -204,19 +206,37 @@ export const useTimerStore = create<TimerState>((set, get) => {
     },
     
     tick: () => {
-      const { currentTime, totalTime, isActiveDevice, isRunning } = get();
+      const { currentTime, totalTime, isActiveDevice, isRunning, sessionStartTimerPosition, activeSession } = get();
       
       // Only tick if this is the active device and timer is running
       if (!isActiveDevice || !isRunning) return;
 
       const { timeSpentIncrement } = useTaskStore.getState();
 
-      // Increment time spent for the current task every minute while timer is actively running
-      if (currentTime !== totalTime && currentTime % 60 === 0) {
+      // Check if we hit a timer minute boundary and have an active session
+      if (currentTime !== totalTime && currentTime % 60 === 0 && activeSession && sessionStartTimerPosition !== null) {
         const { currentTask } = get();
-        if (currentTask) {
+        
+        // Calculate how many timer minute boundaries we've crossed since session start
+        const sessionStartMinute = Math.floor(sessionStartTimerPosition / 60);
+        const currentMinute = Math.floor(currentTime / 60);
+        const minutesCrossed = sessionStartMinute - currentMinute;
+        
+        console.log('Timer minute boundary hit:', {
+          sessionStartTimerPosition,
+          sessionStartMinute,
+          currentTime,
+          currentMinute,
+          minutesCrossed,
+          currentTask: currentTask?.title,
+          timer_display: `${Math.floor(currentTime / 60)}:${String(currentTime % 60).padStart(2, '0')}`
+        });
+        
+        if (currentTask && minutesCrossed > 0) {
           timeSpentIncrement(currentTask.id, 1); // increment by 1 minute
-          // No longer create work session here - only on session completion
+          
+          // Update active session duration with the number of minutes crossed
+          get().updateActiveSession();
         }
       }
 
@@ -232,18 +252,39 @@ export const useTimerStore = create<TimerState>((set, get) => {
     setMode: (mode: TimerMode) => {
       const { settings } = get();
       const totalSeconds = settings[mode] * 60;
+      
       set({
         mode,
         currentTime: totalSeconds,
         totalTime: totalSeconds,
         isRunning: false,
+        activeSession: null,
+        sessionStartTimerPosition: null,
         settings
       });
       get().saveToDatabase();
     },
     
-    setCurrentTask: (task: Task | null) => {
-      set({ currentTask: task });
+    setCurrentTask: async (task: Task | null) => {
+      const state = get();
+      
+      // If we're switching tasks while timer is running
+      if (state.isRunning && state.activeSession && state.currentTask && task && state.currentTask.id !== task.id) {
+        // Switch current session (only update status, don't recalculate duration)
+        await get().switchActiveSession();
+        
+        // Set new task and clear session tracking for fresh start
+        set({ 
+          currentTask: task,
+          sessionStartTimerPosition: null // Will be set when new session is created
+        });
+        
+        // Create new active session for new task
+        await get().createActiveSession();
+      } else {
+        set({ currentTask: task });
+      }
+      
       debouncedSave();
     },
 
@@ -272,10 +313,160 @@ export const useTimerStore = create<TimerState>((set, get) => {
       }
     },
     
+    // Session management actions
+    createActiveSession: async () => {
+      const { currentTask, mode, currentTime } = get();
+      const { user } = useUserStore.getState();
+      
+      if (!currentTask || !user) return;
+      
+      try {
+        const sessionId = await workSessionService.createActiveSession(
+          currentTask.id,
+          currentTask.projectId,
+          user.uid,
+          mode === 'pomodoro' ? 'pomodoro' : mode
+        );
+        
+        const activeSession: ActiveSession = {
+          sessionId,
+          taskId: currentTask.id,
+          startTime: new Date(),
+          lastUpdateTime: new Date(),
+          status: 'active'
+        };
+        
+        // Track the timer position when this session started
+        set({ 
+          activeSession,
+          sessionStartTimerPosition: currentTime
+        });
+        
+        console.log('Created new session:', {
+          sessionId,
+          taskId: currentTask.id,
+          startTimerPosition: currentTime,
+          timer_display: `${Math.floor(currentTime / 60)}:${String(currentTime % 60).padStart(2, '0')}`
+        });
+      } catch (error) {
+        console.error('Failed to create active session:', error);
+      }
+    },
+    
+    updateActiveSession: async () => {
+      const { activeSession, sessionStartTimerPosition, currentTime } = get();
+      
+      if (!activeSession || sessionStartTimerPosition === null) return;
+      
+      try {
+        // Calculate timer minute boundaries crossed since session started
+        const sessionStartMinute = Math.floor(sessionStartTimerPosition / 60);
+        const currentMinute = Math.floor(currentTime / 60);
+        const minutesCrossed = sessionStartMinute - currentMinute;
+        
+        // Debug logging to see what's happening
+        console.log('Session update debug:', {
+          sessionStartTimerPosition,
+          sessionStartMinute,
+          currentTime,
+          currentMinute,
+          minutesCrossed,
+          timer_display: `${Math.floor(currentTime / 60)}:${String(currentTime % 60).padStart(2, '0')}`
+        });
+        
+        // Only update if we have crossed timer minute boundaries
+        if (minutesCrossed > 0) {
+          await workSessionService.updateSession(activeSession.sessionId, {
+            duration: minutesCrossed
+          });
+          
+          // Update last update time locally
+          set({
+            activeSession: {
+              ...activeSession,
+              lastUpdateTime: new Date()
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Failed to update active session:', error);
+      }
+    },
+    
+    // New method: Switch session - only update status, don't recalculate duration
+    switchActiveSession: async () => {
+      const { activeSession } = get();
+      
+      if (!activeSession) return;
+      
+      try {
+        // Only update status to 'switched', keep existing duration
+        const updates: Partial<Pick<WorkSession, 'status' | 'endTime' | 'notes'>> = {
+          status: 'switched',
+          endTime: new Date(),
+          notes: 'Task switched'
+        };
+        
+        await workSessionService.updateSession(activeSession.sessionId, updates);
+        
+        set({ activeSession: null });
+      } catch (error) {
+        console.error('Failed to switch active session:', error);
+      }
+    },
+    
+    completeActiveSession: async (status: 'completed' | 'paused' | 'switched') => {
+      const { activeSession, sessionStartTimerPosition, currentTime } = get();
+      
+      if (!activeSession) return;
+      
+      try {
+        // Calculate final duration based on timer minute boundaries crossed
+        let minutesCrossed = 0;
+        if (sessionStartTimerPosition !== null) {
+          const sessionStartMinute = Math.floor(sessionStartTimerPosition / 60);
+          const currentMinute = Math.floor(currentTime / 60);
+          minutesCrossed = Math.max(0, sessionStartMinute - currentMinute);
+        }
+        
+        const updates: Partial<Pick<WorkSession, 'duration' | 'status' | 'endTime' | 'notes'>> = {
+          status,
+          endTime: new Date(),
+          notes: `Session ${status}: ${minutesCrossed}m`,
+          duration: minutesCrossed
+        };
+        
+        await workSessionService.updateSession(activeSession.sessionId, updates);
+        
+        set({ 
+          activeSession: null,
+          sessionStartTimerPosition: null
+        });
+      } catch (error) {
+        console.error('Failed to complete active session:', error);
+      }
+    },
+    
+    cleanupOrphanedSessions: async () => {
+      const { user } = useUserStore.getState();
+      
+      if (!user) return;
+      
+      try {
+        const cleanedCount = await workSessionService.cleanupOrphanedSessions(user.uid);
+        console.log(`Cleaned up ${cleanedCount} orphaned sessions`);
+      } catch (error) {
+        console.error('Failed to cleanup orphaned sessions:', error);
+      }
+    },
+    
     // Persistence methods
     initializePersistence: async (userId: string) => {
       try {
         set({ isLoading: true, syncError: null });
+        
+        // Cleanup orphaned sessions first
+        await get().cleanupOrphanedSessions();
         
         // Load initial state from database
         const remoteState = await timerService.loadTimerState(userId);
@@ -311,7 +502,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
       try {
         set({ isSyncing: true, syncError: null });
         
-        // Build timer data object, only including sessionStartTime if it exists
+        // Build timer data object
         const timerData: Partial<TimerStateModel> = {
           currentTime: state.currentTime,
           totalTime: state.totalTime,
@@ -321,9 +512,9 @@ export const useTimerStore = create<TimerState>((set, get) => {
           currentTaskId: state.currentTask ? state.currentTask.id : null,
         };
         
-        // Only add sessionStartTime if timer is running and sessionStartTime exists
-        if (state.isRunning && sessionStartTime) {
-          timerData.sessionStartTime = sessionStartTime;
+        // Include session start time if there's an active session
+        if (state.activeSession) {
+          timerData.sessionStartTime = state.activeSession.startTime;
         }
         
         await timerService.saveTimerState(userStore.user.uid, timerData);
@@ -357,17 +548,21 @@ export const useTimerStore = create<TimerState>((set, get) => {
         clearTimeout(saveTimeoutId);
         saveTimeoutId = null;
       }
+      
       set({
         isLoading: false,
         isSyncing: false,
         lastSyncTime: null,
         isActiveDevice: true,
-        syncError: null
+        syncError: null,
+        activeSession: null,
+        sessionStartTimerPosition: null
       });
     },
     
     resetTimerState: () => {
       const { settings } = get();
+      
       set({
         isRunning: false,
         currentTime: settings.pomodoro * 60,
@@ -375,6 +570,8 @@ export const useTimerStore = create<TimerState>((set, get) => {
         mode: 'pomodoro',
         sessionsCompleted: 0,
         currentTask: null,
+        activeSession: null,
+        sessionStartTimerPosition: null,
         isActiveDevice: true,
         syncError: null
       });

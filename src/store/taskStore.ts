@@ -331,6 +331,24 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       const completed = !task.completed;
       const status = completed ? 'completed' : 'pomodoro';
       
+      // If completing a task that is currently active in the timer, handle timer state
+      if (completed) {
+        // Import timer store dynamically to avoid circular dependency
+        const { useTimerStore } = await import('./timerStore');
+        const timerState = useTimerStore.getState();
+        
+        // Check if this task is currently active in the timer
+        if (timerState.currentTask && timerState.currentTask.id === id) {
+          // Pause the timer
+          if (timerState.isRunning) {
+            await timerState.pause();
+          }
+          
+          // Clear the current task from timer
+          await timerState.setCurrentTask(null);
+        }
+      }
+      
       // Keep the original order when unchecking
       const taskRef = doc(db, 'tasks', id);
       await updateDoc(taskRef, {

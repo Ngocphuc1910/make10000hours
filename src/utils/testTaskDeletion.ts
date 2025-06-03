@@ -19,6 +19,7 @@ export async function createTestWorkSession(taskId: string = "FIsiHQxJZBD8ROepOs
       date: "2025-06-02",
       duration: 25,
       sessionType: 'manual',
+      status: 'completed',
       notes: 'Test session to verify automatic deletion when task is deleted'
     });
     
