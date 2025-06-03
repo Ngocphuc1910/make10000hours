@@ -38,16 +38,18 @@ export const TopProjects: React.FC = () => {
   const projectsWithFilteredTime = useMemo(() => {
     console.log('Calculating project time from filtered sessions:', filteredWorkSessions.length);
     
-    // Group filtered work sessions by project
+    // Group filtered work sessions by project, excluding break sessions
     const projectTimeMap = new Map<string, number>();
     
-    filteredWorkSessions.forEach(session => {
-      const duration = session.duration || 0;
-      const current = projectTimeMap.get(session.projectId) || 0;
-      projectTimeMap.set(session.projectId, current + duration);
-      
-      console.log(`Added ${duration} minutes to project ${session.projectId}`);
-    });
+    filteredWorkSessions
+      .filter(session => session.sessionType === 'pomodoro' || session.sessionType === 'manual')
+      .forEach(session => {
+        const duration = session.duration || 0;
+        const current = projectTimeMap.get(session.projectId) || 0;
+        projectTimeMap.set(session.projectId, current + duration);
+        
+        console.log(`Added ${duration} minutes to project ${session.projectId}`);
+      });
     
     console.log('Project time map:', Object.fromEntries(projectTimeMap));
     
