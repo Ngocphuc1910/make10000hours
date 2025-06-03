@@ -11,7 +11,8 @@ import {
   Timestamp,
   onSnapshot,
   getDoc,
-  setDoc
+  setDoc,
+  increment
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { WorkSession } from '../types/models';
@@ -117,6 +118,27 @@ export class WorkSessionService {
       await updateDoc(sessionRef, updateData);
     } catch (error) {
       console.error('Error updating session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Increment session duration by specified minutes
+   */
+  async incrementDuration(
+    sessionId: string,
+    minutesToAdd: number
+  ): Promise<void> {
+    try {
+      const sessionRef = doc(this.workSessionsCollection, sessionId);
+      const updateData = {
+        duration: increment(minutesToAdd),
+        updatedAt: new Date()
+      };
+
+      await updateDoc(sessionRef, updateData);
+    } catch (error) {
+      console.error('Error incrementing session duration:', error);
       throw error;
     }
   }
