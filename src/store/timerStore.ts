@@ -210,7 +210,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
     },
     
     tick: () => {
-      const { currentTime, totalTime, isActiveDevice, isRunning, activeSession, lastCountedMinute } = get();
+      const { currentTime, totalTime, isActiveDevice, isRunning, activeSession, lastCountedMinute, mode } = get();
       
       // Only tick if this is the active device and timer is running
       if (!isActiveDevice || !isRunning) return;
@@ -237,18 +237,22 @@ export const useTimerStore = create<TimerState>((set, get) => {
             minutesBoundariesCrossed,
             currentTime,
             currentTask: currentTask?.title,
+            mode,
             timer_display: `${Math.floor(currentTime / 60)}:${String(currentTime % 60).padStart(2, '0')}`
           });
           
-          if (currentTask && minutesBoundariesCrossed > 0) {
-            // Increment time spent for each minute boundary crossed
-            timeSpentIncrement(currentTask.id, minutesBoundariesCrossed);
+          // Always update session duration for any session type
+          if (minutesBoundariesCrossed > 0) {
+            // Update active session duration
+            get().updateActiveSession();
             
             // Update the last counted minute to the current minute
             set({ lastCountedMinute: currentMinute });
             
-            // Update active session duration
-            get().updateActiveSession();
+            // Only increment task time spent for pomodoro sessions
+            if (mode === 'pomodoro' && currentTask) {
+              timeSpentIncrement(currentTask.id, minutesBoundariesCrossed);
+            }
           }
         }
       }
@@ -340,7 +344,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
           currentTask.id,
           currentTask.projectId,
           user.uid,
-          mode === 'pomodoro' ? 'pomodoro' : mode
+          mode // Pass the mode directly as the session type
         );
         
         const activeSession: ActiveSession = {
@@ -364,7 +368,8 @@ export const useTimerStore = create<TimerState>((set, get) => {
           taskId: currentTask.id,
           startTimerPosition: currentTime,
           startMinute: currentMinute,
-          timer_display: `${Math.floor(currentTime / 60)}:${String(currentTime % 60).padStart(2, '0')}`
+          timer_display: `${Math.floor(currentTime / 60)}:${String(currentTime % 60).padStart(2, '0')}`,
+          sessionType: mode
         });
       } catch (error) {
         console.error('Failed to create active session:', error);
@@ -426,7 +431,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
     },
     
     completeActiveSession: async (status: 'completed' | 'paused' | 'switched') => {
-      const { activeSession, lastCountedMinute, currentTime } = get();
+      const { activeSession, lastCountedMinute, currentTime, mode } = get();
       
       if (!activeSession) return;
       
@@ -444,15 +449,24 @@ export const useTimerStore = create<TimerState>((set, get) => {
         const updates: Partial<Pick<WorkSession, 'duration' | 'status' | 'endTime' | 'notes'>> = {
           status,
           endTime: new Date(),
-          notes: `Session ${status}${remainingMinutes > 0 ? `: +${remainingMinutes}m remaining` : ''}`,
+          notes: `${mode} session ${status}${remainingMinutes > 0 ? `: +${remainingMinutes}m remaining` : ''}`
         };
         
-        // Only add remaining duration if there are uncounted minutes
+        // Add remaining duration for any session type
         if (remainingMinutes > 0) {
           updates.duration = remainingMinutes;
         }
         
         await workSessionService.updateSession(activeSession.sessionId, updates);
+        
+        // Only update task time spent for pomodoro sessions
+        if (mode === 'pomodoro' && remainingMinutes > 0) {
+          const { currentTask } = get();
+          if (currentTask) {
+            const { timeSpentIncrement } = useTaskStore.getState();
+            timeSpentIncrement(currentTask.id, remainingMinutes);
+          }
+        }
         
         set({ 
           activeSession: null,
@@ -460,10 +474,11 @@ export const useTimerStore = create<TimerState>((set, get) => {
           lastCountedMinute: null
         });
         
-        console.log('Session completed:', {
+        console.log(`${mode} session completed:`, {
           sessionId: activeSession.sessionId,
           status,
-          remainingMinutes
+          remainingMinutes,
+          mode
         });
       } catch (error) {
         console.error('Failed to complete active session:', error);
