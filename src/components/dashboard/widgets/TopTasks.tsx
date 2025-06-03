@@ -45,16 +45,18 @@ export const TopTasks: React.FC = () => {
       return [];
     }
     
-    // Group filtered work sessions by task
+    // Group filtered work sessions by task, excluding break sessions
     const taskTimeMap = new Map<string, number>();
     
-    filteredWorkSessions.forEach(session => {
-      const duration = session.duration || 0;
-      const current = taskTimeMap.get(session.taskId) || 0;
-      taskTimeMap.set(session.taskId, current + duration);
-      
-      console.log(`Added ${duration} minutes to task ${session.taskId}`);
-    });
+    filteredWorkSessions
+      .filter(session => session.sessionType === 'pomodoro' || session.sessionType === 'manual')
+      .forEach(session => {
+        const duration = session.duration || 0;
+        const current = taskTimeMap.get(session.taskId) || 0;
+        taskTimeMap.set(session.taskId, current + duration);
+        
+        console.log(`Added ${duration} minutes to task ${session.taskId}`);
+      });
     
     console.log('Task time map:', Object.fromEntries(taskTimeMap));
     
