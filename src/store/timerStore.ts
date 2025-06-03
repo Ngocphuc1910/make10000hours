@@ -21,6 +21,7 @@ interface TimerState {
   // Active session tracking
   activeSession: ActiveSession | null;
   sessionStartTimerPosition: number | null; // Timer position when session started
+  lastCountedMinute: number | null; // Last minute boundary where time was incremented
   
   // Settings
   settings: TimerSettings;
@@ -82,6 +83,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
     currentTask: null,
     activeSession: null,
     sessionStartTimerPosition: null,
+    lastCountedMinute: null,
     settings: DEFAULT_SETTINGS.timer,
     
     // Persistence state
@@ -142,6 +144,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
         isRunning: false,
         activeSession: null,
         sessionStartTimerPosition: null,
+        lastCountedMinute: null,
         settings
       });
       get().saveToDatabase();
@@ -189,6 +192,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
         sessionsCompleted: nextSessionsCompleted,
         activeSession: null,
         sessionStartTimerPosition: null,
+        lastCountedMinute: null,
         settings
       });
       
@@ -206,37 +210,46 @@ export const useTimerStore = create<TimerState>((set, get) => {
     },
     
     tick: () => {
-      const { currentTime, totalTime, isActiveDevice, isRunning, sessionStartTimerPosition, activeSession } = get();
+      const { currentTime, totalTime, isActiveDevice, isRunning, activeSession, lastCountedMinute } = get();
       
       // Only tick if this is the active device and timer is running
       if (!isActiveDevice || !isRunning) return;
 
       const { timeSpentIncrement } = useTaskStore.getState();
 
-      // Check if we hit a timer minute boundary and have an active session
-      if (currentTime !== totalTime && currentTime % 60 === 0 && activeSession && sessionStartTimerPosition !== null) {
+      // Check if we have an active session and we've crossed a new minute boundary
+      if (activeSession && currentTime !== totalTime) {
         const { currentTask } = get();
-        
-        // Calculate how many timer minute boundaries we've crossed since session start
-        const sessionStartMinute = Math.floor(sessionStartTimerPosition / 60);
         const currentMinute = Math.floor(currentTime / 60);
-        const minutesCrossed = sessionStartMinute - currentMinute;
         
-        console.log('Timer minute boundary hit:', {
-          sessionStartTimerPosition,
-          sessionStartMinute,
-          currentTime,
-          currentMinute,
-          minutesCrossed,
-          currentTask: currentTask?.title,
-          timer_display: `${Math.floor(currentTime / 60)}:${String(currentTime % 60).padStart(2, '0')}`
-        });
-        
-        if (currentTask && minutesCrossed > 0) {
-          timeSpentIncrement(currentTask.id, 1); // increment by 1 minute
+        // Initialize lastCountedMinute if this is the first tick of the session
+        if (lastCountedMinute === null) {
+          // Set initial lastCountedMinute based on currentTime
+          // We want to count the first minute boundary we cross, not the current minute
+          set({ lastCountedMinute: currentMinute });
+        } else if (currentMinute < lastCountedMinute) {
+          // We've crossed a minute boundary! (timer counts down, so currentMinute decreases)
+          const minutesBoundariesCrossed = lastCountedMinute - currentMinute;
           
-          // Update active session duration with the number of minutes crossed
-          get().updateActiveSession();
+          console.log('Timer minute boundary crossed:', {
+            lastCountedMinute,
+            currentMinute,
+            minutesBoundariesCrossed,
+            currentTime,
+            currentTask: currentTask?.title,
+            timer_display: `${Math.floor(currentTime / 60)}:${String(currentTime % 60).padStart(2, '0')}`
+          });
+          
+          if (currentTask && minutesBoundariesCrossed > 0) {
+            // Increment time spent for each minute boundary crossed
+            timeSpentIncrement(currentTask.id, minutesBoundariesCrossed);
+            
+            // Update the last counted minute to the current minute
+            set({ lastCountedMinute: currentMinute });
+            
+            // Update active session duration
+            get().updateActiveSession();
+          }
         }
       }
 
@@ -260,6 +273,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
         isRunning: false,
         activeSession: null,
         sessionStartTimerPosition: null,
+        lastCountedMinute: null,
         settings
       });
       get().saveToDatabase();
@@ -276,7 +290,8 @@ export const useTimerStore = create<TimerState>((set, get) => {
         // Set new task and clear session tracking for fresh start
         set({ 
           currentTask: task,
-          sessionStartTimerPosition: null // Will be set when new session is created
+          sessionStartTimerPosition: null, // Will be set when new session is created
+          lastCountedMinute: null // Reset minute tracking for new task
         });
         
         // Create new active session for new task
@@ -336,16 +351,19 @@ export const useTimerStore = create<TimerState>((set, get) => {
           status: 'active'
         };
         
-        // Track the timer position when this session started
+        // Track the timer position when this session started and initialize minute tracking
+        const currentMinute = Math.floor(currentTime / 60);
         set({ 
           activeSession,
-          sessionStartTimerPosition: currentTime
+          sessionStartTimerPosition: currentTime,
+          lastCountedMinute: null // Will be set on first tick
         });
         
         console.log('Created new session:', {
           sessionId,
           taskId: currentTask.id,
           startTimerPosition: currentTime,
+          startMinute: currentMinute,
           timer_display: `${Math.floor(currentTime / 60)}:${String(currentTime % 60).padStart(2, '0')}`
         });
       } catch (error) {
@@ -354,40 +372,29 @@ export const useTimerStore = create<TimerState>((set, get) => {
     },
     
     updateActiveSession: async () => {
-      const { activeSession, sessionStartTimerPosition, currentTime } = get();
+      const { activeSession } = get();
       
-      if (!activeSession || sessionStartTimerPosition === null) return;
+      if (!activeSession) return;
       
       try {
-        // Calculate timer minute boundaries crossed since session started
-        const sessionStartMinute = Math.floor(sessionStartTimerPosition / 60);
-        const currentMinute = Math.floor(currentTime / 60);
-        const minutesCrossed = sessionStartMinute - currentMinute;
-        
-        // Debug logging to see what's happening
-        console.log('Session update debug:', {
-          sessionStartTimerPosition,
-          sessionStartMinute,
-          currentTime,
-          currentMinute,
-          minutesCrossed,
-          timer_display: `${Math.floor(currentTime / 60)}:${String(currentTime % 60).padStart(2, '0')}`
+        // With the new approach, we increment duration by 1 for each minute boundary crossed
+        // This function is called when a minute boundary is detected in the tick function
+        await workSessionService.updateSession(activeSession.sessionId, {
+          duration: 1 // Always increment by 1 minute when called
         });
         
-        // Only update if we have crossed timer minute boundaries
-        if (minutesCrossed > 0) {
-          await workSessionService.updateSession(activeSession.sessionId, {
-            duration: minutesCrossed
-          });
-          
-          // Update last update time locally
-          set({
-            activeSession: {
-              ...activeSession,
-              lastUpdateTime: new Date()
-            }
-          });
-        }
+        // Update last update time locally
+        set({
+          activeSession: {
+            ...activeSession,
+            lastUpdateTime: new Date()
+          }
+        });
+        
+        console.log('Session updated: +1 minute', {
+          sessionId: activeSession.sessionId,
+          lastUpdateTime: new Date()
+        });
       } catch (error) {
         console.error('Failed to update active session:', error);
       }
@@ -409,38 +416,54 @@ export const useTimerStore = create<TimerState>((set, get) => {
         
         await workSessionService.updateSession(activeSession.sessionId, updates);
         
-        set({ activeSession: null });
+        set({ 
+          activeSession: null,
+          lastCountedMinute: null // Reset minute tracking when switching
+        });
       } catch (error) {
         console.error('Failed to switch active session:', error);
       }
     },
     
     completeActiveSession: async (status: 'completed' | 'paused' | 'switched') => {
-      const { activeSession, sessionStartTimerPosition, currentTime } = get();
+      const { activeSession, lastCountedMinute, currentTime } = get();
       
       if (!activeSession) return;
       
       try {
-        // Calculate final duration based on timer minute boundaries crossed
-        let minutesCrossed = 0;
-        if (sessionStartTimerPosition !== null) {
-          const sessionStartMinute = Math.floor(sessionStartTimerPosition / 60);
+        // Calculate any remaining partial minute if we're in the middle of a minute
+        let remainingMinutes = 0;
+        if (lastCountedMinute !== null) {
           const currentMinute = Math.floor(currentTime / 60);
-          minutesCrossed = Math.max(0, sessionStartMinute - currentMinute);
+          if (currentMinute < lastCountedMinute) {
+            // We have some partial minute that hasn't been counted yet
+            remainingMinutes = lastCountedMinute - currentMinute;
+          }
         }
         
         const updates: Partial<Pick<WorkSession, 'duration' | 'status' | 'endTime' | 'notes'>> = {
           status,
           endTime: new Date(),
-          notes: `Session ${status}: ${minutesCrossed}m`,
-          duration: minutesCrossed
+          notes: `Session ${status}${remainingMinutes > 0 ? `: +${remainingMinutes}m remaining` : ''}`,
         };
+        
+        // Only add remaining duration if there are uncounted minutes
+        if (remainingMinutes > 0) {
+          updates.duration = remainingMinutes;
+        }
         
         await workSessionService.updateSession(activeSession.sessionId, updates);
         
         set({ 
           activeSession: null,
-          sessionStartTimerPosition: null
+          sessionStartTimerPosition: null,
+          lastCountedMinute: null
+        });
+        
+        console.log('Session completed:', {
+          sessionId: activeSession.sessionId,
+          status,
+          remainingMinutes
         });
       } catch (error) {
         console.error('Failed to complete active session:', error);
@@ -556,7 +579,8 @@ export const useTimerStore = create<TimerState>((set, get) => {
         isActiveDevice: true,
         syncError: null,
         activeSession: null,
-        sessionStartTimerPosition: null
+        sessionStartTimerPosition: null,
+        lastCountedMinute: null
       });
     },
     
@@ -572,6 +596,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
         currentTask: null,
         activeSession: null,
         sessionStartTimerPosition: null,
+        lastCountedMinute: null,
         isActiveDevice: true,
         syncError: null
       });
