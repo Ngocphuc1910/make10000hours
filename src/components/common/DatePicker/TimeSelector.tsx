@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface TimeSelectorProps {
   onTimeSelect?: (time: string) => void;
@@ -41,21 +41,29 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
     updateSelectedTime(startTime, time);
   };
 
+  const lastReportedTime = useRef<string>('');
+
+  const updateSelectedTime = useCallback((start: string, end: string) => {
+    const timeString = `${start} - ${end}`;
+    // Only call onTimeSelect if the value actually changed
+    if (onTimeSelect && timeString !== lastReportedTime.current) {
+      lastReportedTime.current = timeString;
+      onTimeSelect(timeString);
+    }
+  }, [onTimeSelect]);
+
   // Update times when initialTime prop changes
   useEffect(() => {
     if (initialTime.includes(' - ')) {
       const [newStartTime, newEndTime] = initialTime.split(' - ');
-      setStartTime(newStartTime);
-      setEndTime(newEndTime);
-      updateSelectedTime(newStartTime, newEndTime);
+      // Only update if the values actually changed
+      if (newStartTime !== startTime || newEndTime !== endTime) {
+        setStartTime(newStartTime);
+        setEndTime(newEndTime);
+        updateSelectedTime(newStartTime, newEndTime);
+      }
     }
-  }, [initialTime]);
-
-  const updateSelectedTime = (start: string, end: string) => {
-    if (onTimeSelect) {
-      onTimeSelect(`${start} - ${end}`);
-    }
-  };
+  }, [initialTime, updateSelectedTime, startTime, endTime]);
 
   return (
     <div className="space-y-3 border-t border-gray-100 pt-3">
