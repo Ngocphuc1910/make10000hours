@@ -54,8 +54,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const calendarInputRef = useRef<HTMLButtonElement>(null);
-  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
-  const datePickerRef = useRef<HTMLDivElement>(null);
+
   
   // Check if "No Project" project exists
   const noProject = projects.find(p => p.id === 'no-project');
@@ -100,75 +99,9 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
     }
   }, [isCreatingNewProject]);
 
-  // Close date picker when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
-        setShowDatePicker(false);
-      }
-    };
+  // Close date picker when clicking outside - handled by DatePicker component itself
 
-    if (showDatePicker) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showDatePicker]);
-
-  // Update popup position when showing
-  useEffect(() => {
-    if (showDatePicker && calendarInputRef.current) {
-      const updatePosition = () => {
-        const rect = calendarInputRef.current!.getBoundingClientRect();
-        const viewport = {
-          width: window.innerWidth,
-          height: window.innerHeight
-        };
-        
-        // Estimate popup dimensions based on includeTime state
-        const popupHeight = includeTime ? 380 : 240; // Estimated heights
-        const popupWidth = 300;
-        
-        // Calculate preferred positions - anchor to left side of button
-        let top = rect.bottom + 8; // Default: below the button
-        let left = rect.left;
-        
-        // Check if popup would extend beyond bottom of viewport
-        if (top + popupHeight > viewport.height - 20) {
-          // Position above the button instead
-          top = rect.top - popupHeight - 8;
-          
-          // If still doesn't fit above, use available space
-          if (top < 20) {
-            top = Math.max(20, viewport.height - popupHeight - 20);
-          }
-        }
-        
-        // Check if popup would extend beyond right edge
-        if (left + popupWidth > viewport.width - 20) {
-          left = Math.max(10, viewport.width - popupWidth - 10);
-        }
-        
-        // Ensure it doesn't go beyond left edge
-        if (left < 10) {
-          left = 10;
-        }
-        
-        setPopupPosition({ top, left });
-      };
-      
-      updatePosition();
-      
-      // Update position on scroll/resize
-      const handleUpdate = () => updatePosition();
-      window.addEventListener('scroll', handleUpdate, true);
-      window.addEventListener('resize', handleUpdate);
-      
-      return () => {
-        window.removeEventListener('scroll', handleUpdate, true);
-        window.removeEventListener('resize', handleUpdate);
-      };
-    }
-  }, [showDatePicker, includeTime]);
+  // DatePicker handles its own positioning with useSmartPosition hook
   
   // Auto-open project dropdown when focused via keyboard
   const handleProjectFocus = () => {
@@ -346,71 +279,29 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
     }
   };
 
-  const handleCalendarClick = () => {
+  const handleCalendarClick = useCallback(() => {
     setShowDatePicker(!showDatePicker);
-  };
+  }, [showDatePicker]);
 
-  const handleDateTimeSelect = (date: Date) => {
+  const handleDateTimeSelect = useCallback((date: Date) => {
     // Use local date formatting to avoid timezone issues
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     setCalendarDate(`${year}-${month}-${day}`);
     // Don't close the date picker here - let user click Confirm
-  };
+  }, []);
 
-  const handleTimeSelect = (time: string) => {
+  const handleTimeSelect = useCallback((time: string) => {
     const [start, end] = time.split(' - ');
     setStartTime(start);
     setEndTime(end);
-  };
+  }, []);
 
-  const handleTimeToggle = (enabled: boolean) => {
+  const handleTimeToggle = useCallback((enabled: boolean) => {
     setIncludeTime(enabled);
-    // Reposition popup when time toggle changes
-    if (showDatePicker && calendarInputRef.current) {
-      setTimeout(() => {
-        if (calendarInputRef.current) {
-          const rect = calendarInputRef.current.getBoundingClientRect();
-          const viewport = {
-            width: window.innerWidth,
-            height: window.innerHeight
-          };
-          
-          const popupHeight = enabled ? 380 : 240;
-          const popupWidth = 300;
-          
-          let top = rect.bottom + 8;
-          let left = rect.left;
-          
-          // Check if popup extends beyond viewport when expanding
-          if (top + popupHeight > viewport.height - 20) {
-            // Only move up by the amount needed to fit, not all the way above
-            const overflow = (top + popupHeight) - (viewport.height - 20);
-            top = Math.max(rect.bottom + 8 - overflow, 20);
-            
-            // If still not enough space, then move above button
-            if (top + popupHeight > viewport.height - 20) {
-              top = rect.top - popupHeight - 8;
-              if (top < 20) {
-                top = Math.max(20, viewport.height - popupHeight - 20);
-              }
-            }
-          }
-          
-          if (left + popupWidth > viewport.width - 20) {
-            left = Math.max(10, viewport.width - popupWidth - 10);
-          }
-          
-          if (left < 10) {
-            left = 10;
-          }
-          
-          setPopupPosition({ top, left });
-        }
-      }, 50);
-    }
-  };
+    // DatePicker will automatically reposition itself when content changes
+  }, []);
 
   const getSelectedProjectName = () => {
     if (isCreatingNewProject) return 'New Project';
@@ -637,58 +528,26 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
                 </button>
                 
                 {showDatePicker && createPortal(
-                  <>
-                    {/* Invisible overlay that allows scroll through */}
-                    <div 
-                      className="fixed inset-0 z-[9998]"
-                      style={{ pointerEvents: 'none' }}
-                    />
-                    {/* DatePicker popup */}
-                    <div 
-                      className="fixed z-[9999]"
-                      style={{
-                        top: popupPosition.top,
-                        left: popupPosition.left,
-                      }}
-                      onWheel={(e) => {
-                        // Allow wheel events to pass through to background when not scrolling within DatePicker
-                        const target = e.target as HTMLElement;
-                        const isScrollableArea = target.closest('.overflow-auto') || target.closest('.overflow-y-auto');
-                        
-                        if (!isScrollableArea) {
-                          e.preventDefault();
-                          // Find the scrollable container behind the popup
-                          const elementsBelow = document.elementsFromPoint(e.clientX, e.clientY);
-                          const scrollableElement = elementsBelow.find(el => 
-                            el.scrollHeight > el.clientHeight && 
-                            getComputedStyle(el).overflowY !== 'hidden'
-                          ) as HTMLElement;
-                          
-                          if (scrollableElement) {
-                            scrollableElement.scrollTop += e.deltaY;
-                          }
-                        }
-                      }}
-                    >
-                      <DatePicker
-                        selectedDate={calendarDate ? new Date(calendarDate) : undefined}
-                        onDateSelect={handleDateTimeSelect}
-                        onTimeSelect={handleTimeSelect}
-                        onTimeToggle={handleTimeToggle}
-                        onConfirm={() => setShowDatePicker(false)}
-                        onClear={() => {
-                          setCalendarDate('');
-                          setStartTime('09:00');
-                          setEndTime('10:00');
-                          setIncludeTime(false);
-                        }}
-                        includeTime={includeTime}
-                        showTimezone={true}
-                        initialStartTime={startTime}
-                        initialEndTime={endTime}
-                      />
-                    </div>
-                  </>,
+                  <DatePicker
+                    selectedDate={calendarDate ? new Date(calendarDate) : undefined}
+                    onDateSelect={handleDateTimeSelect}
+                    onTimeSelect={handleTimeSelect}
+                    onTimeToggle={handleTimeToggle}
+                    onConfirm={() => setShowDatePicker(false)}
+                    onClose={() => setShowDatePicker(false)}
+                    onClear={() => {
+                      setCalendarDate('');
+                      setStartTime('09:00');
+                      setEndTime('10:00');
+                      setIncludeTime(false);
+                    }}
+                    includeTime={includeTime}
+                    showTimezone={true}
+                    initialStartTime={startTime}
+                    initialEndTime={endTime}
+                    triggerRef={calendarInputRef}
+                    isOpen={showDatePicker}
+                  />,
                   document.body
                 )}
               </div>

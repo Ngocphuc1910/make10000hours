@@ -414,3 +414,42 @@ input[type="number"]::-webkit-outer-spin-button {
   width: 1px;
   background: #f3f4f6;
 }
+
+/* DatePicker Animations */
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.15s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.15s ease-out;
+}
+
+/* Enhanced DatePicker styles for better positioning */
+[data-datepicker] {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  backdrop-filter: blur(8px);
+}
+
+
