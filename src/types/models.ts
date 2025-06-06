@@ -10,6 +10,11 @@ export interface Task {
   timeEstimated: number; // in minutes
   order: number;
   hideFromPomodoro?: boolean;
+  // Calendar/scheduling fields
+  scheduledDate?: string; // YYYY-MM-DD format
+  scheduledStartTime?: string; // HH:MM format
+  scheduledEndTime?: string; // HH:MM format
+  includeTime?: boolean; // whether time is included in the schedule
   createdAt: Date;
   updatedAt: Date;
 }

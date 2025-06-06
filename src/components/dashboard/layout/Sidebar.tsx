@@ -18,7 +18,7 @@ export const Sidebar: React.FC = () => {
     { label: 'Dashboard', path: '/dashboard', icon: 'dashboard-line' },
     { label: 'Task Management', path: '/projects', icon: 'task-line' },
     { label: 'Pomodoro Timer', path: '/pomodoro', icon: 'timer-line' },
-    { label: 'Calendar', path: '/dashboard/calendar', icon: 'calendar-line' },
+    { label: 'Calendar', path: '/calendar', icon: 'calendar-line' },
     { label: 'Settings', path: '/dashboard/settings', icon: 'settings-line' },
   ];
 
