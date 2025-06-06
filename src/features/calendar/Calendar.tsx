@@ -26,6 +26,12 @@ export const Calendar: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [isAllDayEvent, setIsAllDayEvent] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [dragState, setDragState] = useState<DragState>({
+    isDragging: false,
+    startElement: null,
+    startY: 0,
+    dragIndicator: null
+  });
   
   // Get tasks and projects from task store
   const { tasks, projects, setEditingTaskId: setStoreEditingTaskId } = useTaskStore();
@@ -35,13 +41,6 @@ export const Calendar: React.FC = () => {
     return mergeEventsAndTasks(calendarEvents, tasks, projects);
   }, [calendarEvents, tasks, projects]);
   
-  const dragState = useRef<DragState>({
-    isDragging: false,
-    startElement: null,
-    startY: 0,
-    dragIndicator: null
-  });
-
   const handleNavigate = (direction: 'prev' | 'next' | 'today') => {
     if (direction === 'today') {
       setCurrentDate(new Date());
@@ -111,52 +110,61 @@ export const Calendar: React.FC = () => {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   };
 
+  const handleDragCreate = useCallback((startTime: Date, endTime: Date) => {
+    setSelectedDate(startTime);
+    setSelectedEvent(undefined);
+    setIsAllDayEvent(false);
+    setIsEventDialogOpen(true);
+  }, []);
+
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLElement>) => {
     const target = e.target as HTMLElement;
     if (target.classList.contains('day-column')) {
-      dragState.current.isDragging = true;
-      dragState.current.startElement = target;
-      const rect = target.getBoundingClientRect();
-      dragState.current.startY = e.clientY - rect.top;
+      setDragState({
+        isDragging: true,
+        startElement: target,
+        startY: e.clientY - target.getBoundingClientRect().top,
+        dragIndicator: null
+      });
 
       // Create drag indicator
       const dragIndicator = document.createElement('div');
       dragIndicator.className = 'task-item';
       dragIndicator.style.backgroundColor = '#BB5F5A';
       dragIndicator.style.opacity = '0.7';
-      dragIndicator.style.top = `${dragState.current.startY}px`;
+      dragIndicator.style.top = `${dragState.startY}px`;
       dragIndicator.style.height = '1px';
       dragIndicator.style.pointerEvents = 'none';
       dragIndicator.style.zIndex = '30';
 
       const timeDisplay = document.createElement('div');
       timeDisplay.className = 'text-xs text-white font-medium pl-2 pt-1';
-      const startTime = calculateTime(target, dragState.current.startY);
+      const startTime = calculateTime(target, dragState.startY);
       timeDisplay.textContent = formatTime(startTime.hour, startTime.minutes);
       dragIndicator.appendChild(timeDisplay);
 
       target.appendChild(dragIndicator);
-      dragState.current.dragIndicator = dragIndicator;
+      setDragState(prevState => ({ ...prevState, dragIndicator }));
     }
   }, [calculateTime]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!dragState.current.isDragging || !dragState.current.startElement || !dragState.current.dragIndicator) return;
+    if (!dragState.isDragging || !dragState.startElement || !dragState.dragIndicator) return;
 
-    const startElement = dragState.current.startElement;
+    const startElement = dragState.startElement;
     const rect = startElement.getBoundingClientRect();
     const currentY = e.clientY - rect.top;
     
-    const top = Math.min(dragState.current.startY, currentY);
-    const height = Math.abs(currentY - dragState.current.startY);
+    const top = Math.min(dragState.startY, currentY);
+    const height = Math.abs(currentY - dragState.startY);
     
-    dragState.current.dragIndicator.style.top = `${top}px`;
-    dragState.current.dragIndicator.style.height = `${height}px`;
+    dragState.dragIndicator.style.top = `${top}px`;
+    dragState.dragIndicator.style.height = `${height}px`;
 
     // Update time display
-    const timeDisplay = dragState.current.dragIndicator.querySelector('div');
+    const timeDisplay = dragState.dragIndicator.querySelector('div');
     if (timeDisplay) {
-      const startTime = calculateTime(startElement, dragState.current.startY);
+      const startTime = calculateTime(startElement, dragState.startY);
       const endTime = calculateTime(startElement, currentY);
       
       if (endTime.hour > startTime.hour || (endTime.hour === startTime.hour && endTime.minutes > startTime.minutes)) {
@@ -168,16 +176,16 @@ export const Calendar: React.FC = () => {
   }, [calculateTime]);
 
   const handleMouseUp = useCallback((e: MouseEvent) => {
-    if (!dragState.current.isDragging || !dragState.current.startElement) return;
+    if (!dragState.isDragging || !dragState.startElement) return;
 
-    const startElement = dragState.current.startElement;
+    const startElement = dragState.startElement;
     const rect = startElement.getBoundingClientRect();
     const endY = e.clientY - rect.top;
 
     // Only show dialog if drag distance is significant
-    if (Math.abs(endY - dragState.current.startY) > 10) {
+    if (Math.abs(endY - dragState.startY) > 10) {
       // Calculate start and end times
-      const startTime = calculateTime(startElement, dragState.current.startY);
+      const startTime = calculateTime(startElement, dragState.startY);
       const endTime = calculateTime(startElement, endY);
 
       // Create new event with drag times
@@ -195,24 +203,25 @@ export const Calendar: React.FC = () => {
     }
 
     // Clean up
-    if (dragState.current.dragIndicator) {
-      dragState.current.dragIndicator.remove();
+    if (dragState.dragIndicator) {
+      dragState.dragIndicator.remove();
     }
     
-    dragState.current.isDragging = false;
-    dragState.current.startElement = null;
-    dragState.current.dragIndicator = null;
+    setDragState(prevState => ({ ...prevState, isDragging: false, startElement: null, dragIndicator: null }));
   }, [calculateTime, currentDate]);
 
+  // Add document event listeners for drag
   React.useEffect(() => {
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-    
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [handleMouseMove, handleMouseUp]);
+    if (dragState.isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [dragState.isDragging, handleMouseMove, handleMouseUp]);
 
   return (
     <div className="flex flex-col h-full bg-white">
