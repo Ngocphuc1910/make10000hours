@@ -27,6 +27,22 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
   const [projectError, setProjectError] = useState(false);
   const [isCreatingNewProject, setIsCreatingNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
+  const [calendarDate, setCalendarDate] = useState(() => {
+    // For existing tasks, use their scheduled date
+    if (task?.scheduledDate) {
+      return task.scheduledDate;
+    }
+    // For new tasks, default to today
+    if (!task) {
+      const today = new Date();
+      return today.toISOString().split('T')[0]; // YYYY-MM-DD format
+    }
+    return '';
+  });
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [includeTime, setIncludeTime] = useState(task?.includeTime || false);
+  const [startTime, setStartTime] = useState(task?.scheduledStartTime || '09:00');
+  const [endTime, setEndTime] = useState(task?.scheduledEndTime || '10:00');
   
   const titleInputRef = useRef<HTMLTextAreaElement>(null);
   const projectSelectRef = useRef<HTMLSelectElement>(null);
@@ -34,6 +50,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
   const timeEstimatedRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
+  const calendarInputRef = useRef<HTMLInputElement>(null);
+  const datePickerRef = useRef<HTMLDivElement>(null);
   
   // Check if "No Project" project exists
   const noProject = projects.find(p => p.id === 'no-project');
@@ -51,6 +69,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
       setProjectId(getLastUsedProjectId());
     }
   }, []); // Remove dependencies to prevent re-runs
+
+  // Don't auto-set calendar date - let it be truly optional
 
   // Create "No Project" project if it doesn't exist - only run once
   useEffect(() => {
@@ -75,6 +95,20 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
       newProjectInputRef.current.focus();
     }
   }, [isCreatingNewProject]);
+
+  // Close date picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+        setShowDatePicker(false);
+      }
+    };
+
+    if (showDatePicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showDatePicker]);
   
   // Auto-open project dropdown when focused via keyboard
   const handleProjectFocus = () => {
@@ -118,12 +152,6 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
   }, []);
   
   // Debounced height adjustment for better performance during fast typing
-  useEffect(() => {
-    if (titleInputRef.current) {
-      adjustTextareaHeight(titleInputRef.current);
-    }
-  }, [title, adjustTextareaHeight]);
-  
   useEffect(() => {
     if (descriptionRef.current) {
       adjustTextareaHeight(descriptionRef.current);
@@ -180,7 +208,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
       localStorage.setItem('lastUsedProjectId', finalProjectId);
     }
     
-    const taskData = {
+    const taskData: any = {
       title: title.trim(),
       description: description.trim(),
       projectId: finalProjectId || 'no-project',
@@ -190,6 +218,17 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
       timeSpent: parseInt(timeSpent) || 0,
       timeEstimated: parseInt(timeEstimated) || 0
     };
+
+    // Only add calendar fields if they have values (avoid undefined in Firestore)
+    if (calendarDate && calendarDate.trim()) {
+      taskData.scheduledDate = calendarDate.trim();
+      taskData.includeTime = includeTime;
+      
+      if (includeTime && startTime && endTime) {
+        taskData.scheduledStartTime = startTime;
+        taskData.scheduledEndTime = endTime;
+      }
+    }
     
     // Check if timeSpent was manually changed (only for existing tasks)
     const originalTimeSpent = task?.timeSpent || 0;
@@ -216,7 +255,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
       }
     } else {
       // Add new task
-      addTask(taskData);
+      console.log('Creating new task with data:', taskData);
+      try {
+        await addTask(taskData);
+        console.log('Task created successfully');
+      } catch (error) {
+        console.error('Error creating task:', error);
+        return;
+      }
     }
     
     onCancel();
@@ -239,10 +285,65 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
       onCancel();
     }
   };
-  
-  const inputClasses = "text-sm font-medium text-gray-900 px-3 py-2 bg-gray-50 rounded-md border-none outline-none focus:outline-none focus:ring-2 focus:ring-gray-500 focus:bg-white transition-all duration-200";
-  const timeInputClasses = "w-16 text-sm font-medium text-gray-600 bg-transparent border-none text-right outline-none focus:outline-none transition-all duration-200";
-  const descriptionClasses = "text-sm text-gray-500 px-3 py-2 bg-gray-50 rounded-md border-none outline-none focus:outline-none focus:ring-2 focus:ring-gray-500 focus:bg-white transition-all duration-200";
+
+  const handleCalendarClick = () => {
+    // Set default date to today when opening date picker (if no date selected yet)
+    if (!showDatePicker && !calendarDate) {
+      const today = new Date();
+      const todayString = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+      setCalendarDate(todayString);
+    }
+    setShowDatePicker(!showDatePicker);
+  };
+
+  const getCalendarButtonText = () => {
+    if (!calendarDate) return 'Add to calendar';
+    
+    const date = new Date(calendarDate);
+    const options: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    const dateStr = date.toLocaleDateString('en-US', options); // "May 28, 2025" format
+    
+    if (!includeTime) {
+      return dateStr;
+    }
+    
+    return `${dateStr} ${startTime} - ${endTime}`;
+  };
+
+  const handleDateSelect = (date: string) => {
+    setCalendarDate(date);
+  };
+
+  const handleTimeToggle = (enabled: boolean) => {
+    setIncludeTime(enabled);
+  };
+
+  const handleProjectButtonClick = () => {
+    if (projectSelectRef.current) {
+      // Trigger focus and attempt to open dropdown
+      projectSelectRef.current.focus();
+      // Use showPicker if available (modern browsers)
+      if ('showPicker' in projectSelectRef.current && typeof (projectSelectRef.current as any).showPicker === 'function') {
+        try {
+          (projectSelectRef.current as any).showPicker();
+        } catch (e) {
+          console.log('showPicker not supported or failed');
+        }
+      }
+      // For browsers that don't support showPicker, simulate click
+      projectSelectRef.current.click();
+    }
+  };
+
+  const getSelectedProjectName = () => {
+    if (isCreatingNewProject) return 'New Project';
+    const selectedProject = projects.find(p => p.id === projectId);
+    return selectedProject?.name || 'Project';
+  };
   
   type InputElement = HTMLTextAreaElement | HTMLSelectElement | HTMLInputElement | null;
   
@@ -253,12 +354,19 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
     // Use only Enter/Return key (not Shift+Enter for new lines in textareas)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      console.log('handleKeyDown called, nextRef:', nextRef === descriptionRef ? 'descriptionRef' : nextRef === projectSelectRef ? 'projectSelectRef' : 'other');
       if (nextRef.current) {
-        nextRef.current.focus();
-        // If moving focus to project field, trigger dropdown
-        if (nextRef === projectSelectRef) {
-          setTimeout(() => handleProjectFocus(), 0);
-        }
+        // Use setTimeout to ensure proper focus in next tick
+        setTimeout(() => {
+          if (nextRef.current) {
+            nextRef.current.focus();
+            console.log('Focused on:', nextRef.current.tagName);
+            // If moving focus to project field, trigger dropdown
+            if (nextRef === projectSelectRef) {
+              setTimeout(() => handleProjectFocus(), 50);
+            }
+          }
+        }, 0);
       }
     }
   };
@@ -267,7 +375,37 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
     // Use only Enter/Return key (not Shift+Enter for new lines)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      // Move to project selection and open dropdown
+      if (projectSelectRef.current) {
+        projectSelectRef.current.focus();
+        setTimeout(() => handleProjectFocus(), 50);
+      }
+    }
+  };
+
+  const handleTimeEstimatedKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      // Since date is auto-selected by default, directly create the task
       handleSave();
+    }
+  };
+
+  const handleCalendarKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      // Create the task
+      handleSave();
+    }
+  };
+
+  const handleProjectKeyDown = (e: React.KeyboardEvent<HTMLSelectElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      // Move to time estimation
+      if (timeEstimatedRef.current) {
+        timeEstimatedRef.current.focus();
+      }
     }
   };
   
@@ -275,34 +413,55 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
     <div 
       key={task?.id || 'new-task'}
       ref={formRef}
-      className="task-card p-4 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 animate-fade-in"
+      className="task-card p-6 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 animate-fade-in"
     >
       <div className="flex-1 min-w-0">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <textarea
-              autoFocus
-              ref={titleInputRef}
-              className={`${inputClasses} w-full resize-none overflow-hidden min-h-[2.5rem] ${titleError ? 'ring-2 ring-red-200' : ''}`}
-              placeholder="What needs to be done?"
-              value={title}
-              rows={1}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                setTitleError(false);
-                adjustTextareaHeight(e.target);
-              }}
-              onKeyDown={(e) => handleKeyDown(e, projectSelectRef)}
-            />
-            
-            <div className="flex gap-3 items-stretch">
-              <div className="relative flex-[6] min-w-0">
-                {isCreatingNewProject ? (
-                  <div className="flex items-center gap-2">
+        <textarea
+          autoFocus
+          ref={titleInputRef}
+          className={`w-full text-lg font-medium text-gray-900 px-0 py-1 bg-transparent focus:outline-none border-none resize-none overflow-hidden ${titleError ? 'ring-2 ring-red-200' : ''}`}
+          placeholder="Task name"
+          value={title}
+          onChange={(e) => {
+            setTitle(e.target.value);
+            setTitleError(false);
+            // Auto-adjust height
+            const target = e.target as HTMLTextAreaElement;
+            adjustTextareaHeight(target);
+          }}
+          onKeyDown={(e) => handleKeyDown(e, descriptionRef)}
+          rows={1}
+          style={{ minHeight: '1.75rem' }}
+        />
+        
+        <textarea
+          ref={descriptionRef}
+          className="w-full text-sm text-gray-500 px-0 py-2 bg-transparent border-none focus:outline-none resize-none"
+          placeholder="Description"
+          value={description}
+          onChange={(e) => {
+            setDescription(e.target.value);
+            adjustTextareaHeight(e.target);
+          }}
+          onKeyDown={handleDescriptionKeyDown}
+          style={{ height: 'auto', minHeight: '1.5rem', marginBottom: '0.5rem' }}
+          rows={1}
+        />
+        
+        <div className="flex flex-wrap gap-3 mb-4">
+          <div className="flex flex-wrap gap-2 min-w-0">
+            {/* Project Selection */}
+            <div className="relative">
+              {isCreatingNewProject ? (
+                <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600">
+                    <div className="w-3.5 h-3.5 flex items-center justify-center">
+                      <Icon name="folder-line" className="w-3.5 h-3.5" />
+                    </div>
                     <input
                       ref={newProjectInputRef}
                       type="text"
-                      className={`${inputClasses} flex-1 ${projectError ? 'ring-2 ring-red-200' : ''}`}
+                      className={`bg-transparent border-none focus:outline-none p-0 text-xs ${projectError ? 'ring-2 ring-red-200' : ''}`}
                       placeholder="Enter project name"
                       value={newProjectName}
                       onChange={(e) => {
@@ -311,21 +470,23 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
                       }}
                       onKeyDown={(e) => handleKeyDown(e, timeEstimatedRef)}
                     />
-                    <button
-                      className="p-1.5 rounded-md hover:bg-gray-100 transition-colors duration-200"
-                      onClick={handleCancelNewProject}
-                      type="button"
-                    >
-                      <Icon name="close-line" className="w-4 h-4 text-gray-400" />
-                    </button>
                   </div>
-                ) : (
+                  <button
+                    className="p-1 rounded hover:bg-gray-100 transition-colors duration-200"
+                    onClick={handleCancelNewProject}
+                    type="button"
+                  >
+                    <Icon name="close-line" className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+                </div>
+              ) : (
+                <>
                   <select
                     ref={projectSelectRef}
-                    className={`${inputClasses} w-full appearance-none pr-8 h-full ${projectError ? 'ring-2 ring-red-200' : ''}`}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     value={projectId}
                     onChange={(e) => handleProjectChange(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, timeEstimatedRef)}
+                    onKeyDown={handleProjectKeyDown}
                   >
                     <option value="no-project">No Project</option>
                     <option value="create-new">Create new project</option>
@@ -337,100 +498,239 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
                         </option>
                       ))}
                   </select>
-                )}
-                
-                {!isCreatingNewProject && (
-                  <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                    <Icon name="arrow-down-s-line" className="w-4 h-4 text-gray-500" />
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex-[5] flex items-center bg-gray-50 rounded-md px-3 py-2 focus-within:ring-2 focus-within:ring-gray-500 focus-within:bg-white transition-all duration-200">
-                <div className="flex items-center gap-2">
-                  <Icon name="time-line" className="text-gray-400 flex-shrink-0" />
-                  {!task && (
-                    <span className="text-sm font-medium text-gray-600">Est.</span>
-                  )}
-                </div>
-                
-                <div className="flex items-center ml-auto gap-1">
-                  {task && (
-                    <>
-                      <input
-                        type="number"
-                        className={timeInputClasses}
-                        placeholder="0"
-                        min="0"
-                        value={timeSpent}
-                        onChange={(e) => setTimeSpent(e.target.value)}
-                      />
-                      <span className="text-sm font-medium text-gray-400 mx-1">/</span>
-                    </>
-                  )}
-                  <input
-                    ref={timeEstimatedRef}
-                    type="number"
-                    className={timeInputClasses}
-                    placeholder="0"
-                    min="0"
-                    value={timeEstimated}
-                    onChange={(e) => setTimeEstimated(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, descriptionRef)}
-                  />
-                  <span className="text-sm font-medium text-gray-500 ml-1">m</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <textarea
-            ref={descriptionRef}
-            className={`${descriptionClasses} min-h-[3rem] mb-3 resize-none w-full`}
-            rows={1}
-            placeholder="Add description (optional)"
-            value={description}
-            onChange={(e) => {
-              setDescription(e.target.value);
-              adjustTextareaHeight(e.target);
-            }}
-            onKeyDown={handleDescriptionKeyDown}
-          />
-          
-          <div className="flex justify-between items-center">
-            <div className="flex-1 flex gap-4">
-              {task && (
-                <>
                   <button
-                    className="text-sm font-medium text-red-500 hover:text-red-600 transition-colors duration-200"
-                    onClick={handleDelete}
+                    type="button"
+                    className={`flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600 hover:bg-gray-50 min-w-0 ${projectError ? 'ring-2 ring-red-200' : ''}`}
+                    onClick={handleProjectButtonClick}
                   >
-                    Delete
-                  </button>
-                  <button
-                    className="text-sm font-medium text-blue-500 hover:text-blue-600 transition-colors duration-200"
-                    onClick={handleWorkLater}
-                  >
-                    Work later
+                    <div className="w-3.5 h-3.5 flex items-center justify-center flex-shrink-0">
+                      <Icon name="folder-line" className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="truncate max-w-[8rem]">{getSelectedProjectName()}</span>
+                    <div className="w-3.5 h-3.5 flex items-center justify-center text-gray-400 flex-shrink-0">
+                      <Icon name="arrow-down-s-line" className="w-3.5 h-3.5" />
+                    </div>
                   </button>
                 </>
               )}
             </div>
-            
-            <div className="flex space-x-2">
-              <button
-                className="p-1.5 rounded-md bg-green-500/10 hover:bg-green-500/20 transition-colors duration-200 cursor-pointer"
-                onClick={handleSave}
-              >
-                <Icon name="check-line" className="w-5 h-5 text-green-500" />
-              </button>
-              <button
-                className="p-1.5 rounded-md hover:bg-gray-100 transition-colors duration-200"
-                onClick={onCancel}
-              >
-                <Icon name="close-line" className="w-5 h-5 text-gray-400" />
-              </button>
+
+            {/* Time Estimation */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600 flex-shrink-0">
+              <div className="w-3.5 h-3.5 flex items-center justify-center">
+                <Icon name="time-line" className="w-3.5 h-3.5" />
+              </div>
+              {task && (
+                <>
+                  <input
+                    type="number"
+                    className="w-7 text-center bg-transparent border-none focus:outline-none p-0 text-xs"
+                    placeholder="0"
+                    min="0"
+                    value={timeSpent}
+                    onChange={(e) => setTimeSpent(e.target.value)}
+                  />
+                  <span className="text-gray-400">/</span>
+                </>
+              )}
+              {!task && <span className="whitespace-nowrap">Est.</span>}
+                              <input
+                ref={timeEstimatedRef}
+                type="number"
+                className="w-7 text-center bg-transparent border-none focus:outline-none p-0 text-xs"
+                placeholder="0"
+                min="0"
+                value={timeEstimated}
+                onChange={(e) => setTimeEstimated(e.target.value)}
+                onKeyDown={handleTimeEstimatedKeyDown}
+              />
+              <span className="text-gray-500 whitespace-nowrap">m</span>
             </div>
+
+            {/* Calendar */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={handleCalendarClick}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600 hover:bg-gray-50 flex-shrink-0"
+              >
+                <div className="w-3.5 h-3.5 flex items-center justify-center">
+                  <Icon name="calendar-line" className="w-3.5 h-3.5" />
+                </div>
+                <span className="whitespace-nowrap">{getCalendarButtonText()}</span>
+              </button>
+
+              {/* Custom Date Picker */}
+              {showDatePicker && (
+                <div ref={datePickerRef} className="absolute top-full left-0 mt-2 p-4 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-80">
+                  {/* Date Input */}
+                  <div className="mb-4">
+                    <input
+                      ref={calendarInputRef}
+                      type="date"
+                      className="w-full px-3 py-2 border border-gray-200 rounded text-sm"
+                      value={calendarDate}
+                      onChange={(e) => handleDateSelect(e.target.value)}
+                      onKeyDown={handleCalendarKeyDown}
+                    />
+                  </div>
+
+                  {/* Calendar Grid */}
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">
+                        {calendarDate ? new Date(calendarDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                      </span>
+                      <div className="flex gap-1">
+                        <button type="button" className="p-1 hover:bg-gray-100 rounded">
+                          <Icon name="arrow-left-s-line" className="w-4 h-4" />
+                        </button>
+                        <button type="button" className="p-1 hover:bg-gray-100 rounded">
+                          <Icon name="arrow-right-s-line" className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Calendar Days */}
+                    <div className="grid grid-cols-7 gap-1 text-xs">
+                      {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                        <div key={day} className="text-center text-gray-500 py-2">{day}</div>
+                      ))}
+                      {/* Generate calendar days - simplified for now */}
+                      {Array.from({ length: 35 }, (_, i) => {
+                        const dayNum = i - 6; // Offset for month start
+                        const isToday = dayNum === new Date().getDate();
+                        const isSelected = calendarDate && dayNum === new Date(calendarDate).getDate();
+                        
+                        if (dayNum <= 0 || dayNum > 31) {
+                          return <div key={i} className="p-2"></div>;
+                        }
+                        
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => {
+                              const today = new Date();
+                              const selectedDate = new Date(today.getFullYear(), today.getMonth(), dayNum);
+                              handleDateSelect(selectedDate.toISOString().split('T')[0]);
+                            }}
+                            className={`p-2 text-center hover:bg-gray-100 rounded ${
+                              isSelected ? 'bg-blue-500 text-white' : isToday ? 'bg-gray-200' : ''
+                            }`}
+                          >
+                            {dayNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Include Time Toggle */}
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Include time</span>
+                      <button
+                        type="button"
+                        onClick={() => handleTimeToggle(!includeTime)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          includeTime ? 'bg-blue-500' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            includeTime ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Time Selection */}
+                  {includeTime && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="time"
+                          value={startTime}
+                          onChange={(e) => setStartTime(e.target.value)}
+                          className="px-3 py-2 border border-gray-200 rounded text-sm"
+                        />
+                        <span className="text-sm text-gray-500">-</span>
+                        <input
+                          type="time"
+                          value={endTime}
+                          onChange={(e) => setEndTime(e.target.value)}
+                          className="px-3 py-2 border border-gray-200 rounded text-sm"
+                        />
+                      </div>
+                      
+                      <div className="text-xs text-gray-500 space-y-1">
+                        <div className="flex justify-between">
+                          <span>Time format</span>
+                          <span>24 hour</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Timezone</span>
+                          <span>GMT+7</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Close button */}
+                  <div className="mt-4 pt-3 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => setShowDatePicker(false)}
+                      className="w-full py-2 text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            {task && (
+              <>
+                <button
+                  className="text-[#FF4D4F] hover:text-red-600 text-sm font-medium"
+                  onClick={handleDelete}
+                >
+                  Delete
+                </button>
+                <button
+                  className="text-[#4096FF] hover:text-blue-600 text-sm font-medium"
+                  onClick={handleWorkLater}
+                >
+                  Work later
+                </button>
+              </>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <button
+              className="w-10 h-10 rounded-full bg-[#F6FFED] hover:bg-[#E6FFD4] flex items-center justify-center transition-colors duration-200"
+              onClick={handleSave}
+            >
+              <div className="w-5 h-5 flex items-center justify-center text-[#52C41A]">
+                <Icon name="check-line" className="w-5 h-5" />
+              </div>
+            </button>
+            <button
+              className="w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors duration-200"
+              onClick={onCancel}
+            >
+              <div className="w-5 h-5 flex items-center justify-center text-[#909399]">
+                <Icon name="close-line" className="w-5 h-5" />
+              </div>
+            </button>
           </div>
         </div>
       </div>

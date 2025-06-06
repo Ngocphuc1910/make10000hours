@@ -21,6 +21,7 @@ import SettingsPage from './components/pages/SettingsPage';
 import { formatTime } from './utils/timeUtils';
 import { trackPageView, setAnalyticsUserId } from './utils/analytics';
 import { verifyAnalyticsSetup } from './utils/verifyAnalytics';
+import CalendarPage from './features/calendar/CalendarPage';
 
 // Import test utilities in development mode
 if (process.env.NODE_ENV === 'development') {
@@ -58,21 +59,6 @@ const GlobalTabTitleUpdater: React.FC = () => {
   return null; // This component renders nothing
 };
 
-// Placeholder components for routes that don't have pages yet
-const CalendarPage = () => (
-  <div className="w-full max-w-7xl mx-auto">
-    <h1 className="text-2xl font-bold mb-4">Calendar Page</h1>
-    <p>This page is under construction</p>
-  </div>
-);
-
-const SupportPage = () => (
-  <div className="w-full max-w-7xl mx-auto">
-    <h1 className="text-2xl font-bold mb-4">Help & Support</h1>
-    <p>This page is under construction</p>
-  </div>
-);
-
 // Analytics wrapper component to track page views
 const AnalyticsWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -93,6 +79,14 @@ const AnalyticsWrapper: React.FC<{ children: React.ReactNode }> = ({ children })
 
   return <>{children}</>;
 };
+
+// Keep the SupportPage component
+const SupportPage = () => (
+  <div className="w-full max-w-7xl mx-auto">
+    <h1 className="text-2xl font-bold mb-4">Help & Support</h1>
+    <p>This page is under construction</p>
+  </div>
+);
 
 const App = (): React.JSX.Element => {
   const { initialize } = useUserStore();
@@ -237,9 +231,9 @@ const App = (): React.JSX.Element => {
           <Route path="projects" element={<ProjectsPageWithLayout />} />
           <Route path="dashboard/*" element={<DashboardLayout />}>
             <Route index element={<DashboardPage />} />
-            <Route path="calendar" element={<CalendarPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
+          <Route path="calendar" element={<CalendarPage />} />
           <Route path="support" element={<SupportPageWithLayout />} />
         </Routes>
       </AnalyticsWrapper>
