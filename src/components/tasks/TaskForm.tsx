@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { Task } from '../../types/models';
 import { useTaskStore } from '../../store/taskStore';
 import { Icon } from '../ui/Icon';
@@ -6,6 +7,8 @@ import { useUserStore } from '../../store/userStore';
 import { workSessionService } from '../../api/workSessionService';
 import { formatMinutesToHoursAndMinutes } from '../../utils/timeUtils';
 import { getDateISOString } from '../../utils/timeUtils';
+import { DatePicker, DateTimeProvider, useDateTimeContext } from '../common/DatePicker';
+import { format } from 'date-fns';
 
 interface TaskFormProps {
   task?: Task;
@@ -50,7 +53,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
   const timeEstimatedRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
-  const calendarInputRef = useRef<HTMLInputElement>(null);
+  const calendarInputRef = useRef<HTMLButtonElement>(null);
+  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
   const datePickerRef = useRef<HTMLDivElement>(null);
   
   // Check if "No Project" project exists
@@ -109,6 +113,62 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showDatePicker]);
+
+  // Update popup position when showing
+  useEffect(() => {
+    if (showDatePicker && calendarInputRef.current) {
+      const updatePosition = () => {
+        const rect = calendarInputRef.current!.getBoundingClientRect();
+        const viewport = {
+          width: window.innerWidth,
+          height: window.innerHeight
+        };
+        
+        // Estimate popup dimensions based on includeTime state
+        const popupHeight = includeTime ? 380 : 240; // Estimated heights
+        const popupWidth = 300;
+        
+        // Calculate preferred positions - anchor to left side of button
+        let top = rect.bottom + 8; // Default: below the button
+        let left = rect.left;
+        
+        // Check if popup would extend beyond bottom of viewport
+        if (top + popupHeight > viewport.height - 20) {
+          // Position above the button instead
+          top = rect.top - popupHeight - 8;
+          
+          // If still doesn't fit above, use available space
+          if (top < 20) {
+            top = Math.max(20, viewport.height - popupHeight - 20);
+          }
+        }
+        
+        // Check if popup would extend beyond right edge
+        if (left + popupWidth > viewport.width - 20) {
+          left = Math.max(10, viewport.width - popupWidth - 10);
+        }
+        
+        // Ensure it doesn't go beyond left edge
+        if (left < 10) {
+          left = 10;
+        }
+        
+        setPopupPosition({ top, left });
+      };
+      
+      updatePosition();
+      
+      // Update position on scroll/resize
+      const handleUpdate = () => updatePosition();
+      window.addEventListener('scroll', handleUpdate, true);
+      window.addEventListener('resize', handleUpdate);
+      
+      return () => {
+        window.removeEventListener('scroll', handleUpdate, true);
+        window.removeEventListener('resize', handleUpdate);
+      };
+    }
+  }, [showDatePicker, includeTime]);
   
   // Auto-open project dropdown when focused via keyboard
   const handleProjectFocus = () => {
@@ -287,55 +347,68 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
   };
 
   const handleCalendarClick = () => {
-    // Set default date to today when opening date picker (if no date selected yet)
-    if (!showDatePicker && !calendarDate) {
-      const today = new Date();
-      const todayString = today.toISOString().split('T')[0]; // YYYY-MM-DD format
-      setCalendarDate(todayString);
-    }
     setShowDatePicker(!showDatePicker);
   };
 
-  const getCalendarButtonText = () => {
-    if (!calendarDate) return 'Add to calendar';
-    
-    const date = new Date(calendarDate);
-    const options: Intl.DateTimeFormatOptions = { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    };
-    const dateStr = date.toLocaleDateString('en-US', options); // "May 28, 2025" format
-    
-    if (!includeTime) {
-      return dateStr;
-    }
-    
-    return `${dateStr} ${startTime} - ${endTime}`;
+  const handleDateTimeSelect = (date: Date) => {
+    // Use local date formatting to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    setCalendarDate(`${year}-${month}-${day}`);
+    // Don't close the date picker here - let user click Confirm
   };
 
-  const handleDateSelect = (date: string) => {
-    setCalendarDate(date);
+  const handleTimeSelect = (time: string) => {
+    const [start, end] = time.split(' - ');
+    setStartTime(start);
+    setEndTime(end);
   };
 
   const handleTimeToggle = (enabled: boolean) => {
     setIncludeTime(enabled);
-  };
-
-  const handleProjectButtonClick = () => {
-    if (projectSelectRef.current) {
-      // Trigger focus and attempt to open dropdown
-      projectSelectRef.current.focus();
-      // Use showPicker if available (modern browsers)
-      if ('showPicker' in projectSelectRef.current && typeof (projectSelectRef.current as any).showPicker === 'function') {
-        try {
-          (projectSelectRef.current as any).showPicker();
-        } catch (e) {
-          console.log('showPicker not supported or failed');
+    // Reposition popup when time toggle changes
+    if (showDatePicker && calendarInputRef.current) {
+      setTimeout(() => {
+        if (calendarInputRef.current) {
+          const rect = calendarInputRef.current.getBoundingClientRect();
+          const viewport = {
+            width: window.innerWidth,
+            height: window.innerHeight
+          };
+          
+          const popupHeight = enabled ? 380 : 240;
+          const popupWidth = 300;
+          
+          let top = rect.bottom + 8;
+          let left = rect.left;
+          
+          // Check if popup extends beyond viewport when expanding
+          if (top + popupHeight > viewport.height - 20) {
+            // Only move up by the amount needed to fit, not all the way above
+            const overflow = (top + popupHeight) - (viewport.height - 20);
+            top = Math.max(rect.bottom + 8 - overflow, 20);
+            
+            // If still not enough space, then move above button
+            if (top + popupHeight > viewport.height - 20) {
+              top = rect.top - popupHeight - 8;
+              if (top < 20) {
+                top = Math.max(20, viewport.height - popupHeight - 20);
+              }
+            }
+          }
+          
+          if (left + popupWidth > viewport.width - 20) {
+            left = Math.max(10, viewport.width - popupWidth - 10);
+          }
+          
+          if (left < 10) {
+            left = 10;
+          }
+          
+          setPopupPosition({ top, left });
         }
-      }
-      // For browsers that don't support showPicker, simulate click
-      projectSelectRef.current.click();
+      }, 50);
     }
   };
 
@@ -410,331 +483,260 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
   };
   
   return (
-    <div 
-      key={task?.id || 'new-task'}
-      ref={formRef}
-      className="task-card p-6 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 animate-fade-in"
-    >
-      <div className="flex-1 min-w-0">
-        <textarea
-          autoFocus
-          ref={titleInputRef}
-          className={`w-full text-lg font-medium text-gray-900 px-0 py-1 bg-transparent focus:outline-none border-none resize-none overflow-hidden ${titleError ? 'ring-2 ring-red-200' : ''}`}
-          placeholder="Task name"
-          value={title}
-          onChange={(e) => {
-            setTitle(e.target.value);
-            setTitleError(false);
-            // Auto-adjust height
-            const target = e.target as HTMLTextAreaElement;
-            adjustTextareaHeight(target);
-          }}
-          onKeyDown={(e) => handleKeyDown(e, descriptionRef)}
-          rows={1}
-          style={{ minHeight: '1.75rem' }}
-        />
-        
-        <textarea
-          ref={descriptionRef}
-          className="w-full text-sm text-gray-500 px-0 py-2 bg-transparent border-none focus:outline-none resize-none"
-          placeholder="Description"
-          value={description}
-          onChange={(e) => {
-            setDescription(e.target.value);
-            adjustTextareaHeight(e.target);
-          }}
-          onKeyDown={handleDescriptionKeyDown}
-          style={{ height: 'auto', minHeight: '1.5rem', marginBottom: '0.5rem' }}
-          rows={1}
-        />
-        
-        <div className="flex flex-wrap gap-3 mb-4">
-          <div className="flex flex-wrap gap-2 min-w-0">
-            {/* Project Selection */}
-            <div className="relative">
-              {isCreatingNewProject ? (
-                <div className="flex items-center gap-1.5">
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600">
-                    <div className="w-3.5 h-3.5 flex items-center justify-center">
-                      <Icon name="folder-line" className="w-3.5 h-3.5" />
-                    </div>
-                    <input
-                      ref={newProjectInputRef}
-                      type="text"
-                      className={`bg-transparent border-none focus:outline-none p-0 text-xs ${projectError ? 'ring-2 ring-red-200' : ''}`}
-                      placeholder="Enter project name"
-                      value={newProjectName}
-                      onChange={(e) => {
-                        setNewProjectName(e.target.value);
-                        setProjectError(false);
-                      }}
-                      onKeyDown={(e) => handleKeyDown(e, timeEstimatedRef)}
-                    />
-                  </div>
-                  <button
-                    className="p-1 rounded hover:bg-gray-100 transition-colors duration-200"
-                    onClick={handleCancelNewProject}
-                    type="button"
-                  >
-                    <Icon name="close-line" className="w-3.5 h-3.5 text-gray-400" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <select
-                    ref={projectSelectRef}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    value={projectId}
-                    onChange={(e) => handleProjectChange(e.target.value)}
-                    onKeyDown={handleProjectKeyDown}
-                  >
-                    <option value="no-project">No Project</option>
-                    <option value="create-new">Create new project</option>
-                    {projects
-                      .filter(p => p.id !== 'no-project')
-                      .map(project => (
-                        <option key={project.id} value={project.id}>
-                          {project.name}
-                        </option>
-                      ))}
-                  </select>
-                  <button
-                    type="button"
-                    className={`flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600 hover:bg-gray-50 min-w-0 ${projectError ? 'ring-2 ring-red-200' : ''}`}
-                    onClick={handleProjectButtonClick}
-                  >
-                    <div className="w-3.5 h-3.5 flex items-center justify-center flex-shrink-0">
-                      <Icon name="folder-line" className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="truncate max-w-[8rem]">{getSelectedProjectName()}</span>
-                    <div className="w-3.5 h-3.5 flex items-center justify-center text-gray-400 flex-shrink-0">
-                      <Icon name="arrow-down-s-line" className="w-3.5 h-3.5" />
-                    </div>
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* Time Estimation */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600 flex-shrink-0">
-              <div className="w-3.5 h-3.5 flex items-center justify-center">
-                <Icon name="time-line" className="w-3.5 h-3.5" />
-              </div>
-              {task && (
-                <>
-                  <input
-                    type="number"
-                    className="w-7 text-center bg-transparent border-none focus:outline-none p-0 text-xs"
-                    placeholder="0"
-                    min="0"
-                    value={timeSpent}
-                    onChange={(e) => setTimeSpent(e.target.value)}
-                  />
-                  <span className="text-gray-400">/</span>
-                </>
-              )}
-              {!task && <span className="whitespace-nowrap">Est.</span>}
-                              <input
-                ref={timeEstimatedRef}
-                type="number"
-                className="w-7 text-center bg-transparent border-none focus:outline-none p-0 text-xs"
-                placeholder="0"
-                min="0"
-                value={timeEstimated}
-                onChange={(e) => setTimeEstimated(e.target.value)}
-                onKeyDown={handleTimeEstimatedKeyDown}
-              />
-              <span className="text-gray-500 whitespace-nowrap">m</span>
-            </div>
-
-            {/* Calendar */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={handleCalendarClick}
-                className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600 hover:bg-gray-50 flex-shrink-0"
-              >
-                <div className="w-3.5 h-3.5 flex items-center justify-center">
-                  <Icon name="calendar-line" className="w-3.5 h-3.5" />
-                </div>
-                <span className="whitespace-nowrap">{getCalendarButtonText()}</span>
-              </button>
-
-              {/* Custom Date Picker */}
-              {showDatePicker && (
-                <div ref={datePickerRef} className="absolute top-full left-0 mt-2 p-4 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-80">
-                  {/* Date Input */}
-                  <div className="mb-4">
-                    <input
-                      ref={calendarInputRef}
-                      type="date"
-                      className="w-full px-3 py-2 border border-gray-200 rounded text-sm"
-                      value={calendarDate}
-                      onChange={(e) => handleDateSelect(e.target.value)}
-                      onKeyDown={handleCalendarKeyDown}
-                    />
-                  </div>
-
-                  {/* Calendar Grid */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">
-                        {calendarDate ? new Date(calendarDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                      </span>
-                      <div className="flex gap-1">
-                        <button type="button" className="p-1 hover:bg-gray-100 rounded">
-                          <Icon name="arrow-left-s-line" className="w-4 h-4" />
-                        </button>
-                        <button type="button" className="p-1 hover:bg-gray-100 rounded">
-                          <Icon name="arrow-right-s-line" className="w-4 h-4" />
-                        </button>
+    <DateTimeProvider>
+      <div 
+        key={task?.id || 'new-task'}
+        ref={formRef}
+        className="task-card p-6 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 animate-fade-in relative"
+        style={{ zIndex: showDatePicker ? 1000 : 'auto' }}
+      >
+        <div className="flex-1 min-w-0">
+          <textarea
+            autoFocus
+            ref={titleInputRef}
+            className={`w-full text-lg font-medium text-gray-900 px-0 py-1 bg-transparent focus:outline-none border-none resize-none overflow-hidden ${titleError ? 'ring-2 ring-red-200' : ''}`}
+            placeholder="Task name"
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setTitleError(false);
+              // Auto-adjust height
+              const target = e.target as HTMLTextAreaElement;
+              adjustTextareaHeight(target);
+            }}
+            onKeyDown={(e) => handleKeyDown(e, descriptionRef)}
+            rows={1}
+            style={{ minHeight: '1.75rem' }}
+          />
+          
+          <textarea
+            ref={descriptionRef}
+            className="w-full text-sm text-gray-500 px-0 py-2 bg-transparent border-none focus:outline-none resize-none"
+            placeholder="Description"
+            value={description}
+            onChange={(e) => {
+              setDescription(e.target.value);
+              adjustTextareaHeight(e.target);
+            }}
+            onKeyDown={handleDescriptionKeyDown}
+            style={{ height: 'auto', minHeight: '1.5rem', marginBottom: '0.5rem' }}
+            rows={1}
+          />
+          
+          <div className="flex flex-wrap gap-3 mb-4">
+            <div className="flex flex-wrap gap-2 min-w-0">
+              {/* Project Selection */}
+              <div className="relative">
+                {isCreatingNewProject ? (
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600">
+                      <div className="w-3.5 h-3.5 flex items-center justify-center">
+                        <Icon name="folder-line" className="w-3.5 h-3.5" />
                       </div>
+                      <input
+                        ref={newProjectInputRef}
+                        type="text"
+                        className={`bg-transparent border-none focus:outline-none p-0 text-xs ${projectError ? 'ring-2 ring-red-200' : ''}`}
+                        placeholder="Enter project name"
+                        value={newProjectName}
+                        onChange={(e) => {
+                          setNewProjectName(e.target.value);
+                          setProjectError(false);
+                        }}
+                        onKeyDown={(e) => handleKeyDown(e, timeEstimatedRef)}
+                      />
                     </div>
-                    
-                    {/* Calendar Days */}
-                    <div className="grid grid-cols-7 gap-1 text-xs">
-                      {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-                        <div key={day} className="text-center text-gray-500 py-2">{day}</div>
-                      ))}
-                      {/* Generate calendar days - simplified for now */}
-                      {Array.from({ length: 35 }, (_, i) => {
-                        const dayNum = i - 6; // Offset for month start
-                        const isToday = dayNum === new Date().getDate();
-                        const isSelected = calendarDate && dayNum === new Date(calendarDate).getDate();
-                        
-                        if (dayNum <= 0 || dayNum > 31) {
-                          return <div key={i} className="p-2"></div>;
-                        }
-                        
-                        return (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => {
-                              const today = new Date();
-                              const selectedDate = new Date(today.getFullYear(), today.getMonth(), dayNum);
-                              handleDateSelect(selectedDate.toISOString().split('T')[0]);
-                            }}
-                            className={`p-2 text-center hover:bg-gray-100 rounded ${
-                              isSelected ? 'bg-blue-500 text-white' : isToday ? 'bg-gray-200' : ''
-                            }`}
-                          >
-                            {dayNum}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Include Time Toggle */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Include time</span>
-                      <button
-                        type="button"
-                        onClick={() => handleTimeToggle(!includeTime)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          includeTime ? 'bg-blue-500' : 'bg-gray-200'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            includeTime ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Time Selection */}
-                  {includeTime && (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="time"
-                          value={startTime}
-                          onChange={(e) => setStartTime(e.target.value)}
-                          className="px-3 py-2 border border-gray-200 rounded text-sm"
-                        />
-                        <span className="text-sm text-gray-500">-</span>
-                        <input
-                          type="time"
-                          value={endTime}
-                          onChange={(e) => setEndTime(e.target.value)}
-                          className="px-3 py-2 border border-gray-200 rounded text-sm"
-                        />
-                      </div>
-                      
-                      <div className="text-xs text-gray-500 space-y-1">
-                        <div className="flex justify-between">
-                          <span>Time format</span>
-                          <span>24 hour</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Timezone</span>
-                          <span>GMT+7</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Close button */}
-                  <div className="mt-4 pt-3 border-t border-gray-200">
                     <button
+                      className="p-1 rounded hover:bg-gray-100 transition-colors duration-200"
+                      onClick={handleCancelNewProject}
                       type="button"
-                      onClick={() => setShowDatePicker(false)}
-                      className="w-full py-2 text-sm text-blue-600 hover:text-blue-700"
                     >
-                      Done
+                      <Icon name="close-line" className="w-3.5 h-3.5 text-gray-400" />
                     </button>
                   </div>
+                ) : (
+                  <>
+                    <select
+                      ref={projectSelectRef}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      value={projectId}
+                      onChange={(e) => handleProjectChange(e.target.value)}
+                      onKeyDown={handleProjectKeyDown}
+                    >
+                      <option value="no-project">No Project</option>
+                      <option value="create-new">Create new project</option>
+                      {projects
+                        .filter(p => p.id !== 'no-project')
+                        .map(project => (
+                          <option key={project.id} value={project.id}>
+                            {project.name}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      className={`flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600 hover:bg-gray-50 min-w-0 ${projectError ? 'ring-2 ring-red-200' : ''}`}
+                      onClick={handleProjectFocus}
+                    >
+                      <div className="w-3.5 h-3.5 flex items-center justify-center flex-shrink-0">
+                        <Icon name="folder-line" className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="truncate max-w-[8rem]">{getSelectedProjectName()}</span>
+                      <div className="w-3.5 h-3.5 flex items-center justify-center text-gray-400 flex-shrink-0">
+                        <Icon name="arrow-down-s-line" className="w-3.5 h-3.5" />
+                      </div>
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Time Estimation */}
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600 flex-shrink-0">
+                <div className="w-3.5 h-3.5 flex items-center justify-center">
+                  <Icon name="time-line" className="w-3.5 h-3.5" />
                 </div>
-              )}
+                {task && (
+                  <>
+                    <input
+                      type="number"
+                      className="w-7 text-center bg-transparent border-none focus:outline-none p-0 text-xs"
+                      placeholder="0"
+                      min="0"
+                      value={timeSpent}
+                      onChange={(e) => setTimeSpent(e.target.value)}
+                    />
+                    <span className="text-gray-400">/</span>
+                  </>
+                )}
+                {!task && <span className="whitespace-nowrap">Est.</span>}
+                <input
+                  ref={timeEstimatedRef}
+                  type="number"
+                  className="w-7 text-center bg-transparent border-none focus:outline-none p-0 text-xs"
+                  placeholder="0"
+                  min="0"
+                  value={timeEstimated}
+                  onChange={(e) => setTimeEstimated(e.target.value)}
+                  onKeyDown={handleTimeEstimatedKeyDown}
+                />
+                <span className="text-gray-500 whitespace-nowrap">m</span>
+              </div>
+
+              {/* Calendar */}
+              <div className="relative">
+                <button
+                  ref={calendarInputRef}
+                  id="datePickerBtn"
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600 hover:bg-gray-50 min-w-0 flex-shrink-0"
+                  onClick={handleCalendarClick}
+                >
+                  <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                    <i className="ri-calendar-line"></i>
+                  </div>
+                  <span className="whitespace-nowrap">{calendarDate ? format(new Date(calendarDate), 'MMM dd, yyyy') + (includeTime ? `, ${startTime} - ${endTime}` : '') : 'Add to calendar'}</span>
+                </button>
+                
+                {showDatePicker && createPortal(
+                  <>
+                    {/* Invisible overlay that allows scroll through */}
+                    <div 
+                      className="fixed inset-0 z-[9998]"
+                      style={{ pointerEvents: 'none' }}
+                    />
+                    {/* DatePicker popup */}
+                    <div 
+                      className="fixed z-[9999]"
+                      style={{
+                        top: popupPosition.top,
+                        left: popupPosition.left,
+                      }}
+                      onWheel={(e) => {
+                        // Allow wheel events to pass through to background when not scrolling within DatePicker
+                        const target = e.target as HTMLElement;
+                        const isScrollableArea = target.closest('.overflow-auto') || target.closest('.overflow-y-auto');
+                        
+                        if (!isScrollableArea) {
+                          e.preventDefault();
+                          // Find the scrollable container behind the popup
+                          const elementsBelow = document.elementsFromPoint(e.clientX, e.clientY);
+                          const scrollableElement = elementsBelow.find(el => 
+                            el.scrollHeight > el.clientHeight && 
+                            getComputedStyle(el).overflowY !== 'hidden'
+                          ) as HTMLElement;
+                          
+                          if (scrollableElement) {
+                            scrollableElement.scrollTop += e.deltaY;
+                          }
+                        }
+                      }}
+                    >
+                      <DatePicker
+                        selectedDate={calendarDate ? new Date(calendarDate) : undefined}
+                        onDateSelect={handleDateTimeSelect}
+                        onTimeSelect={handleTimeSelect}
+                        onTimeToggle={handleTimeToggle}
+                        onConfirm={() => setShowDatePicker(false)}
+                        onClear={() => {
+                          setCalendarDate('');
+                          setStartTime('09:00');
+                          setEndTime('10:00');
+                          setIncludeTime(false);
+                        }}
+                        includeTime={includeTime}
+                        showTimezone={true}
+                        initialStartTime={startTime}
+                        initialEndTime={endTime}
+                      />
+                    </div>
+                  </>,
+                  document.body
+                )}
+              </div>
             </div>
           </div>
-        </div>
-        
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            {task && (
-              <>
-                <button
-                  className="text-[#FF4D4F] hover:text-red-600 text-sm font-medium"
-                  onClick={handleDelete}
-                >
-                  Delete
-                </button>
-                <button
-                  className="text-[#4096FF] hover:text-blue-600 text-sm font-medium"
-                  onClick={handleWorkLater}
-                >
-                  Work later
-                </button>
-              </>
-            )}
-          </div>
           
-          <div className="flex items-center gap-3">
-            <button
-              className="w-10 h-10 rounded-full bg-[#F6FFED] hover:bg-[#E6FFD4] flex items-center justify-center transition-colors duration-200"
-              onClick={handleSave}
-            >
-              <div className="w-5 h-5 flex items-center justify-center text-[#52C41A]">
-                <Icon name="check-line" className="w-5 h-5" />
-              </div>
-            </button>
-            <button
-              className="w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors duration-200"
-              onClick={onCancel}
-            >
-              <div className="w-5 h-5 flex items-center justify-center text-[#909399]">
-                <Icon name="close-line" className="w-5 h-5" />
-              </div>
-            </button>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              {task && (
+                <>
+                  <button
+                    className="text-[#FF4D4F] hover:text-red-600 text-sm font-medium"
+                    onClick={handleDelete}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    className="text-[#4096FF] hover:text-blue-600 text-sm font-medium"
+                    onClick={handleWorkLater}
+                  >
+                    Work later
+                  </button>
+                </>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <button
+                className="w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors duration-200"
+                onClick={onCancel}
+              >
+                <div className="w-5 h-5 flex items-center justify-center text-[#909399]">
+                  <Icon name="close-line" className="w-5 h-5" />
+                </div>
+              </button>
+              <button
+                className="w-10 h-10 rounded-full bg-[#F6FFED] hover:bg-[#E6FFD4] flex items-center justify-center transition-colors duration-200"
+                onClick={handleSave}
+              >
+                <div className="w-5 h-5 flex items-center justify-center text-[#52C41A]">
+                  <Icon name="check-line" className="w-5 h-5" />
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </DateTimeProvider>
   );
 };
 
