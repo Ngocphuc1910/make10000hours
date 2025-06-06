@@ -8,7 +8,8 @@ interface DayViewProps {
   onEventClick?: (event: CalendarEvent) => void;
   onTimeSlotClick?: (date: Date) => void;
   onAllDayClick?: (date: Date) => void;
-  onDragCreate?: (startTime: Date, endTime: Date) => void;
+  onMouseDown?: (e: React.MouseEvent<HTMLElement>) => void;
+  onDragCreate?: (start: Date, end: Date) => void;
 }
 
 interface DragState {
@@ -329,8 +330,13 @@ export const DayView: React.FC<DayViewProps> = ({
                     borderLeftColor: event.isTask ? event.color : undefined
                   }}
                   onClick={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     onEventClick?.(event);
+                  }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                   }}
                 >
                   <div className="task-item-title flex items-center">
