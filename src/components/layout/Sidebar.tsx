@@ -40,7 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
     {
       icon: 'calendar-line',
       label: 'Calendar',
-      path: '/dashboard/calendar'
+      path: '/calendar'
     },
     {
       icon: 'settings-line',

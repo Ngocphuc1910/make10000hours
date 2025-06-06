@@ -1,12 +1,13 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
   content: [
-    "./src/**/*.{js,jsx,ts,tsx}",
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
       colors: {
-        primary: "#BB5F5A",
+        primary: '#BB5F5A',
         secondary: "#6B7280",
         success: "#10B981",
         warning: "#F59E0B",
@@ -15,20 +16,20 @@ module.exports = {
       borderRadius: {
         'none': '0px',
         'sm': '4px',
-        'DEFAULT': '8px',
+        DEFAULT: '8px',
         'md': '12px',
         'lg': '16px',
         'xl': '20px',
         '2xl': '24px',
         '3xl': '32px',
         'full': '9999px',
-        'button': '8px',
+        'button': '8px'
       },
       fontFamily: {
-        'sans': ['Inter', 'sans-serif'],
-        'pacifico': ['Pacifico', 'cursive'],
+        sans: ['Inter', 'sans-serif'],
+        pacifico: ['Pacifico', 'cursive'],
       },
     },
   },
   plugins: [],
-}; 
+} 
