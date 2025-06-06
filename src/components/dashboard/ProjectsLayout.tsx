@@ -11,7 +11,7 @@ export const ProjectsLayout: React.FC<ProjectsLayoutProps> = ({ children }) => {
       <Sidebar />
       
       <main className="dashboard-main">
-        <div className="dashboard-content bg-white">
+        <div className="dashboard-content bg-white relative" style={{ zIndex: 1 }}>
           {children}
         </div>
       </main>

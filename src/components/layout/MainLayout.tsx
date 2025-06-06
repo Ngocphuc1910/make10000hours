@@ -143,7 +143,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         <TopBar />
         
         {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden relative">
+        <div className="flex-1 flex overflow-hidden relative" style={{ zIndex: 1 }}>
           {/* Timer Section */}
           <div 
             ref={timerSectionRef}
@@ -192,7 +192,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 flexShrink: 0
               }}
             >
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto overflow-x-visible">
                 {actualSidebarContent}
               </div>
             </div>
