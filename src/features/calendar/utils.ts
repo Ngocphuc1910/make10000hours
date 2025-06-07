@@ -1,5 +1,6 @@
 import { Task, Project } from '../../types/models';
-import { CalendarEvent } from './types';
+import { CalendarEvent, DropResult, DragItem } from './types';
+import { isSameDay, addMinutes, format } from 'date-fns';
 
 /**
  * Convert a task with scheduled date/time to a CalendarEvent
@@ -31,7 +32,8 @@ export const taskToCalendarEvent = (task: Task, project?: Project): CalendarEven
       end: scheduledDate,
       isAllDay: true,
       taskId: task.id, // Add reference to original task
-      isTask: true // Flag to identify this as a task event
+      isTask: true, // Flag to identify this as a task event
+      isDraggable: true
     };
   }
 
@@ -61,7 +63,8 @@ export const taskToCalendarEvent = (task: Task, project?: Project): CalendarEven
     end: endDate,
     isAllDay: false,
     taskId: task.id, // Add reference to original task
-    isTask: true // Flag to identify this as a task event
+    isTask: true, // Flag to identify this as a task event
+    isDraggable: true
   };
 };
 
@@ -98,5 +101,85 @@ export const mergeEventsAndTasks = (
   projects: Project[]
 ): CalendarEvent[] => {
   const taskEvents = tasksToCalendarEvents(tasks, projects);
-  return [...calendarEvents, ...taskEvents];
+  return [...calendarEvents.map(e => ({ ...e, isDraggable: true })), ...taskEvents];
+};
+
+// Drag & Drop Utilities
+
+/**
+ * Calculate new event times based on drop position
+ */
+export const calculateNewEventTime = (
+  originalEvent: CalendarEvent,
+  dropResult: DropResult
+): { start: Date; end: Date } => {
+  const duration = originalEvent.end.getTime() - originalEvent.start.getTime();
+  
+  if (dropResult.isAllDay || originalEvent.isAllDay) {
+    // For all-day events, just move to the target date
+    const start = new Date(dropResult.targetDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    return { start, end };
+  }
+  
+  // For timed events
+  let start: Date;
+  if (dropResult.targetTime) {
+    start = new Date(dropResult.targetDate);
+    start.setHours(dropResult.targetTime.hour, dropResult.targetTime.minute, 0, 0);
+  } else {
+    // Keep original time but change date
+    start = new Date(dropResult.targetDate);
+    start.setHours(originalEvent.start.getHours(), originalEvent.start.getMinutes(), 0, 0);
+  }
+  
+  const end = new Date(start.getTime() + duration);
+  return { start, end };
+};
+
+/**
+ * Check if a drop operation is valid
+ */
+export const isValidDrop = (
+  draggedEvent: CalendarEvent,
+  dropResult: DropResult,
+  allEvents: CalendarEvent[]
+): boolean => {
+  // Can't drop on same position
+  if (isSameDay(draggedEvent.start, dropResult.targetDate) && 
+      !dropResult.targetTime && 
+      draggedEvent.isAllDay === (dropResult.isAllDay || false)) {
+    return false;
+  }
+  
+  // Calculate new times
+  const { start, end } = calculateNewEventTime(draggedEvent, dropResult);
+  
+  // Check for conflicts with other events (excluding the dragged event)
+  const conflictingEvents = allEvents.filter(event => 
+    event.id !== draggedEvent.id &&
+    isSameDay(event.start, start) &&
+    !event.isAllDay &&
+    !dropResult.isAllDay &&
+    ((start >= event.start && start < event.end) ||
+     (end > event.start && end <= event.end) ||
+     (start <= event.start && end >= event.end))
+  );
+  
+  return conflictingEvents.length === 0;
+};
+
+/**
+ * Format time for display
+ */
+export const formatTimeForDisplay = (date: Date): string => {
+  return format(date, 'HH:mm');
+};
+
+/**
+ * Get event duration in minutes
+ */
+export const getEventDurationMinutes = (event: CalendarEvent): number => {
+  return Math.round((event.end.getTime() - event.start.getTime()) / (1000 * 60));
 }; 
