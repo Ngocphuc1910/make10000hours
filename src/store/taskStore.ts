@@ -27,6 +27,7 @@ interface TaskState {
   setEditingTaskId: (taskId: string | null) => void;
   setShowDetailsMenu: (show: boolean) => void;
   addProject: (project: Omit<Project, 'id' | 'userId'>) => Promise<string>;
+  updateProject: (projectId: string, updates: Partial<Omit<Project, 'id' | 'userId'>>) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
   timeSpentIncrement: (id: string, increment: number) => Promise<void>;
   handleMoveCompletedDown: () => Promise<void>;
@@ -138,6 +139,24 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       return docRef.id;
     } catch (error) {
       console.error('Error adding project:', error);
+      throw error;
+    }
+  },
+
+  updateProject: async (projectId, updates) => {
+    try {
+      const { user } = useUserStore.getState();
+      
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const projectRef = doc(db, 'projects', projectId);
+      await updateDoc(projectRef, updates);
+      
+      console.log(`✅ Successfully updated project ${projectId}`);
+    } catch (error) {
+      console.error(`❌ Error updating project ${projectId}:`, error);
       throw error;
     }
   },
