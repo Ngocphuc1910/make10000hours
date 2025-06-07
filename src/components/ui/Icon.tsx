@@ -32,7 +32,8 @@ import {
   Grid3X3,
   CheckCheck,
   MoreVertical,
-  Folder
+  Folder,
+  Palette
 } from 'lucide-react';
 
 interface IconProps {
@@ -74,7 +75,8 @@ const iconMap = {
   'layout-grid-line': Grid3X3,
   'checkbox-multiple-line': CheckCheck,
   'more-2-fill': MoreVertical,
-  'folder-line': Folder
+  'folder-line': Folder,
+  'palette-line': Palette
 };
 
 export const Icon: React.FC<IconProps> = ({ 
