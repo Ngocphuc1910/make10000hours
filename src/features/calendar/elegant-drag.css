@@ -1,0 +1,94 @@
+/* Elegant Drag & Drop Styling - Notion-inspired */
+
+.drop-zone {
+  position: relative;
+}
+
+.drop-zone:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Dragging states */
+.dragging {
+  transform: rotate(2deg);
+  z-index: 1000;
+  filter: drop-shadow(0 10px 25px rgba(0, 0, 0, 0.15));
+}
+
+.task-item.dragging {
+  border-radius: 8px;
+  animation: dragPulse 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes dragPulse {
+  0% {
+    transform: scale(0.98) rotate(1deg);
+  }
+  100% {
+    transform: scale(1.02) rotate(2deg);
+  }
+}
+
+/* Drop indicator enhancements */
+.drop-indicator {
+  border-radius: 6px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.drop-indicator.valid {
+  animation: dropGlow 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes dropGlow {
+  0% {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+  }
+  100% {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3), 0 0 8px rgba(59, 130, 246, 0.2);
+  }
+}
+
+/* Cursor enhancements */
+.cursor-grab:hover {
+  cursor: grab;
+}
+
+.cursor-grabbing,
+.cursor-grab:active {
+  cursor: grabbing;
+}
+
+/* Multi-hour drop zones */
+.drop-zone-multi {
+  border-radius: 6px;
+  backdrop-filter: blur(1px);
+}
+
+/* Color-matched drop zones */
+.drop-zone[data-color] {
+  border-color: var(--drop-color);
+  background-color: var(--drop-bg-color);
+}
+
+/* Dragged event preview time updates */
+.task-item.dragging .text-xs {
+  animation: timeUpdate 0.3s ease-in-out;
+}
+
+@keyframes timeUpdate {
+  0% {
+    opacity: 0.7;
+    transform: translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* End time indicator styling */
+.task-item.dragging .opacity-60 {
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
+} 
