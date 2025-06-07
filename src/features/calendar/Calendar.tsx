@@ -100,57 +100,52 @@ export const Calendar: React.FC = () => {
 
   const handleEventDrop = useCallback((item: DragItem, dropResult: DropResult) => {
     if (!isValidDrop(item.event, dropResult, allEvents)) {
-      console.warn('Invalid drop operation:', { event: item.event.title, target: dropResult.targetDate });
       return;
     }
 
-    const { start, end } = calculateNewEventTime(item.event, dropResult);
+    // Preserve the original event's all-day status when dropping in month view
+    // Only force all-day when explicitly dropped in week/day view all-day zones
+    const shouldBeAllDay = currentView === 'month' 
+      ? item.event.isAllDay  // In month view, preserve original isAllDay status
+      : (dropResult.isAllDay || false); // In week/day view, use drop zone's isAllDay status
+
+    const { start, end } = calculateNewEventTime(item.event, { 
+      ...dropResult, 
+      isAllDay: shouldBeAllDay 
+    });
+    
     const updatedEvent: CalendarEvent = {
       ...item.event,
       start,
       end,
-      isAllDay: dropResult.isAllDay || false
+      isAllDay: shouldBeAllDay
     };
-
-    console.log('Event dropped:', {
-      eventTitle: item.event.title,
-      from: item.event.start,
-      to: start,
-      isAllDay: dropResult.isAllDay
-    });
 
     // Update the event in the appropriate store
     if (item.event.isTask && item.event.taskId) {
       // Handle task updates through task store
       const task = tasks.find(t => t.id === item.event.taskId);
       if (task) {
-        console.log('Updating task scheduling:', {
-          taskId: task.id,
-          newStart: start,
-          newEnd: end,
-          isAllDay: dropResult.isAllDay
-        });
 
         // Prepare task update data
         const taskUpdateData: any = {
           scheduledDate: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`, // YYYY-MM-DD format in local timezone
-          includeTime: !dropResult.isAllDay
+          includeTime: !shouldBeAllDay
         };
 
         // Add time fields only if not all-day
-        if (!dropResult.isAllDay) {
+        if (!shouldBeAllDay) {
           taskUpdateData.scheduledStartTime = start.toTimeString().substring(0, 5); // HH:MM format
           taskUpdateData.scheduledEndTime = end.toTimeString().substring(0, 5); // HH:MM format
         } else {
-          // For all-day events, clear the time fields
-          taskUpdateData.scheduledStartTime = undefined;
-          taskUpdateData.scheduledEndTime = undefined;
+          // For all-day events, explicitly set time fields to null (Firebase compatible)
+          taskUpdateData.scheduledStartTime = null;
+          taskUpdateData.scheduledEndTime = null;
         }
 
         // Update the task through the task store
         updateTask(task.id, taskUpdateData).catch(error => {
           console.error('Failed to update task scheduling:', error);
-          // Could show a toast notification here
         });
       }
     } else {
@@ -159,7 +154,7 @@ export const Calendar: React.FC = () => {
         e.id === item.event.id ? updatedEvent : e
       ));
     }
-  }, [allEvents, calendarEvents, tasks]);
+  }, [allEvents, calendarEvents, tasks, currentView]);
 
   const calculateTime = useCallback((element: HTMLElement, y: number) => {
     const hour = parseInt(element.getAttribute('data-hour') || '0');
