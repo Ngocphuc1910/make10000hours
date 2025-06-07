@@ -8,11 +8,15 @@ import TaskForm from './TaskForm';
 interface TaskCardProps {
   task: Task;
   onStatusChange: (taskId: string, status: Task['status']) => void;
+  onReorder?: (draggedTaskId: string, targetTaskId: string, insertAfter?: boolean) => void;
+  onCrossColumnMove?: (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter?: boolean) => void;
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, onCrossColumnMove }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [dragPosition, setDragPosition] = useState<'top' | 'bottom' | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const toggleTaskCompletion = useTaskStore(state => state.toggleTaskCompletion);
   const projects = useTaskStore(state => state.projects);
@@ -35,14 +39,73 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     e.dataTransfer.setData('text/plain', task.id);
+    e.dataTransfer.setData('application/x-task-status', task.status);
     if (cardRef.current) {
-      cardRef.current.classList.add('opacity-50', 'scale-95');
+      cardRef.current.classList.add('dragging');
     }
   };
 
   const handleDragEnd = () => {
     if (cardRef.current) {
-      cardRef.current.classList.remove('opacity-50', 'scale-95');
+      cardRef.current.classList.remove('dragging');
+    }
+    setIsDragOver(false);
+    setDragPosition(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const rect = cardRef.current?.getBoundingClientRect();
+    if (rect) {
+      const y = e.clientY - rect.top;
+      const height = rect.height;
+      const isTopHalf = y < height / 2;
+      setDragPosition(isTopHalf ? 'top' : 'bottom');
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Only hide indicators if actually leaving the card
+    const rect = cardRef.current?.getBoundingClientRect();
+    if (rect) {
+      const x = e.clientX;
+      const y = e.clientY;
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        setIsDragOver(false);
+        setDragPosition(null);
+      }
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    setDragPosition(null);
+    
+    const draggedTaskId = e.dataTransfer.getData('text/plain');
+    const draggedTaskStatus = e.dataTransfer.getData('application/x-task-status');
+    
+    if (draggedTaskId && draggedTaskId !== task.id) {
+      if (draggedTaskStatus === task.status && onReorder) {
+        // Same column reordering
+        onReorder(draggedTaskId, task.id, dragPosition === 'bottom');
+      } else if (draggedTaskStatus !== task.status && onCrossColumnMove) {
+        // Cross column move with positioning
+        onCrossColumnMove(draggedTaskId, task.id, task.status, dragPosition === 'bottom');
+      }
     }
   };
 
@@ -66,17 +129,31 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
   }
 
   return (
-    <div
-      ref={cardRef}
-      className={`task-card flex items-start p-3 bg-white border border-gray-200 
-      ${task.completed ? 'opacity-70 text-gray-500' : ''}
-      rounded-md hover:shadow-sm cursor-pointer transition-all duration-200`}
-      draggable
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      data-task-id={task.id}
-      data-status={task.status}
-    >
+    <div className="relative">
+      {/* Drop indicator lines */}
+      {isDragOver && dragPosition === 'top' && (
+        <div className="absolute -top-1 left-0 right-0 h-0.5 border-t-2 border-dashed border-red-500 z-10"></div>
+      )}
+      {isDragOver && dragPosition === 'bottom' && (
+        <div className="absolute -bottom-1 left-0 right-0 h-0.5 border-b-2 border-dashed border-red-500 z-10"></div>
+      )}
+      
+      <div
+        ref={cardRef}
+        className={`task-card flex items-start p-3 bg-white border border-gray-200 
+        ${task.completed ? 'opacity-70 text-gray-500' : ''}
+        ${isDragOver ? 'drag-over' : ''}
+        rounded-md hover:shadow-sm cursor-pointer transition-all duration-200`}
+        draggable
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        data-task-id={task.id}
+        data-status={task.status}
+      >
       <div className="mr-3 mt-0.5">
         <CustomCheckbox
           id={`task-checkbox-${task.id}`}
@@ -135,6 +212,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
             <i className="ri-edit-line"></i>
           </div>
         </button>
+      </div>
       </div>
     </div>
   );
