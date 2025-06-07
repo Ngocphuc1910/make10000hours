@@ -4,6 +4,7 @@
 
 /* Import drag and drop styles */
 @import './features/calendar/styles/drag-improvements.css';
+@import './features/calendar/elegant-drag.css';
 
 @tailwind base;
 @tailwind components;
@@ -453,6 +454,31 @@ input[type="number"]::-webkit-outer-spin-button {
 [data-datepicker] {
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   backdrop-filter: blur(8px);
+}
+
+/* Month view event override - use relative positioning instead of absolute */
+.month-view-event.task-item {
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  width: auto !important;
+  margin: 0 !important;
+  transform: none !important;
+}
+
+.month-view-event.task-item:hover {
+  transform: none !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Ensure drag functionality works for month view events */
+.month-view-event.task-item[draggable="true"] {
+  cursor: grab !important;
+}
+
+.month-view-event.task-item.dragging {
+  cursor: grabbing !important;
+  opacity: 0.6 !important;
 }
 
 

@@ -39,14 +39,21 @@ export const EventDialog: React.FC<EventDialogProps> = ({
       setProject(PROJECTS[0].id);
       setDescription('');
       setIsAllDayEvent(isAllDay);
-      setStartDate(initialDate);
-      const endTime = new Date(initialDate);
+      // For all-day events, normalize the time to match mock data format
       if (isAllDay) {
-        endTime.setHours(23, 59, 59, 999);
+        const allDayStart = new Date(initialDate);
+        allDayStart.setHours(0, 0, 0, 0);
+        setStartDate(allDayStart);
+        
+        const allDayEnd = new Date(initialDate);
+        allDayEnd.setHours(0, 0, 0, 0);
+        setEndDate(allDayEnd);
       } else {
+        setStartDate(initialDate);
+        const endTime = new Date(initialDate);
         endTime.setHours(endTime.getHours() + 1);
+        setEndDate(endTime);
       }
-      setEndDate(endTime);
     }
   }, [initialEvent, initialDate, isAllDay]);
 
@@ -54,14 +61,26 @@ export const EventDialog: React.FC<EventDialogProps> = ({
     e.preventDefault();
     const selectedProject = PROJECTS.find(p => p.id === project) || PROJECTS[0];
     
+    // Normalize dates for all-day events to match mock data format
+    let finalStartDate = startDate;
+    let finalEndDate = endDate;
+    
+    if (isAllDayEvent) {
+      finalStartDate = new Date(startDate);
+      finalStartDate.setHours(0, 0, 0, 0);
+      
+      finalEndDate = new Date(endDate);
+      finalEndDate.setHours(0, 0, 0, 0);
+    }
+    
     onSave({
       id: initialEvent?.id || Math.random().toString(36).substr(2, 9),
       title,
       project,
       description,
       isAllDay: isAllDayEvent,
-      start: startDate,
-      end: endDate,
+      start: finalStartDate,
+      end: finalEndDate,
       color: selectedProject.color
     });
     
