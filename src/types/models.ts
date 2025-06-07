@@ -56,6 +56,9 @@ export interface TimerState {
   updatedAt: Date;
   sessionStartTime?: Date; // when timer was started (for calculating elapsed time)
   activeDeviceId?: string; // to track which device is running the timer
+  activeSessionId?: string; // ID of the active work session
+  sessionStartTimerPosition?: number | null; // timer position when session started
+  lastCountedMinute?: number | null; // last minute boundary counted
 }
 
 export interface AppSettings {
