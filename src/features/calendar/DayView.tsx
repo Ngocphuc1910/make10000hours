@@ -247,29 +247,33 @@ export const DayView: React.FC<DayViewProps> = ({
             <div className="flex items-center justify-center text-xs text-gray-500 py-2 border-r border-gray-200">
               All day
             </div>
-            <div 
-              className="min-h-[40px] cursor-pointer hover:bg-gray-50 transition-colors p-1"
-              onClick={() => onAllDayClick?.(currentDate)}
+            <DroppableTimeSlot
+              date={currentDate}
+              isAllDay={true}
+              onDrop={onEventDrop!}
+              className="min-h-[40px] cursor-pointer hover:bg-gray-50 transition-colors p-1 relative"
             >
-              {getAllDayEvents().map(event => (
-                <div
-                  key={event.id}
-                  className={`mx-1 mb-1 px-2 py-1 text-xs text-white rounded-md truncate cursor-pointer inline-flex items-center ${
-                    event.isTask ? 'border-l-2 border-white border-opacity-50' : ''
-                  }`}
-                  style={{ backgroundColor: event.color }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEventClick?.(event);
-                  }}
-                >
-                  {event.isTask && (
-                    <i className="ri-task-line text-xs mr-1 opacity-70" />
-                  )}
-                  {event.title}
-                </div>
-              ))}
-            </div>
+              <div 
+                className="w-full h-full"
+                onClick={() => onAllDayClick?.(currentDate)}
+              >
+                {getAllDayEvents().map(event => (
+                  <DraggableEvent
+                    key={event.id}
+                    event={event}
+                    onClick={onEventClick}
+                    sourceView="day"
+                    className={`mx-1 mb-1 px-2 py-1 text-xs rounded-md truncate flex items-center ${
+                      event.isTask ? 'border-l-2 border-white border-opacity-50' : ''
+                    }`}
+                  >
+                    <div className="flex items-center text-white">
+                      {event.title}
+                    </div>
+                  </DraggableEvent>
+                ))}
+              </div>
+            </DroppableTimeSlot>
           </div>
         </div>
 
@@ -289,20 +293,27 @@ export const DayView: React.FC<DayViewProps> = ({
             <div className="relative" ref={dayColumnRef}>
               {/* Time slots grid */}
               {HOURS.map(hour => (
-                <div
+                <DroppableTimeSlot
                   key={hour}
-                  className="h-[60px] border-b border-gray-200 cursor-cell hover:bg-gray-50 hover:bg-opacity-50"
-                  data-day={0}
-                  data-hour={hour}
-                  onMouseDown={handleMouseDown}
-                  onClick={(e) => {
-                    if (e.target === e.currentTarget && !dragState.isDragging) {
-                      const clickedDate = new Date(currentDate);
-                      clickedDate.setHours(hour);
-                      onTimeSlotClick?.(clickedDate);
-                    }
-                  }}
-                />
+                  date={currentDate}
+                  hour={hour}
+                  onDrop={onEventDrop!}
+                  className="h-[60px] border-b border-gray-200 cursor-cell hover:bg-gray-50 hover:bg-opacity-50 relative"
+                >
+                  <div
+                    className="w-full h-full"
+                    data-day={0}
+                    data-hour={hour}
+                    onMouseDown={handleMouseDown}
+                    onClick={(e) => {
+                      if (e.target === e.currentTarget && !dragState.isDragging) {
+                        const clickedDate = new Date(currentDate);
+                        clickedDate.setHours(hour);
+                        onTimeSlotClick?.(clickedDate);
+                      }
+                    }}
+                  />
+                </DroppableTimeSlot>
               ))}
 
               {/* Drag indicator */}
@@ -324,45 +335,38 @@ export const DayView: React.FC<DayViewProps> = ({
 
               {/* Events for this day - positioned absolutely */}
               {getDayEvents().map(event => (
-                <div
+                <DraggableEvent
                   key={event.id}
-                  className={`rounded cursor-pointer absolute ${
-                    event.isTask ? 'task-item border-l-4' : 'task-item'
+                  event={event}
+                  onClick={onEventClick}
+                  sourceView="day"
+                  className={`rounded absolute ${
+                    event.isTask ? 'border-l-4' : ''
                   }`}
                   style={{
                     ...getEventStyle(event),
                     borderLeftColor: event.isTask ? event.color : undefined
                   }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onEventClick?.(event);
-                  }}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
                 >
-                  <div className="task-item-title flex items-center">
+                  <div className="text-xs text-white font-medium px-2 py-1">
+                    <div className="flex items-center">
+                      <span className="truncate">{event.title}</span>
+                    </div>
+                    <div className="opacity-80 mt-1">
+                      {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
+                    </div>
                     {event.isTask && (
-                      <i className="ri-task-line text-xs mr-1 opacity-70" />
+                      <div className="text-xs opacity-70 mt-1 truncate">
+                        {event.project}
+                      </div>
                     )}
-                    {event.title}
+                    {!event.isTask && event.description && (
+                      <div className="text-xs opacity-75 mt-1 truncate">
+                        {event.description}
+                      </div>
+                    )}
                   </div>
-                  <div className="task-item-time">
-                    {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
-                  </div>
-                  {event.isTask && event.project && (
-                    <div className="text-xs opacity-70 mt-1">
-                      {event.project}
-                    </div>
-                  )}
-                  {!event.isTask && event.description && (
-                    <div className="text-xs opacity-75 mt-1 truncate">
-                      {event.description}
-                    </div>
-                  )}
-                </div>
+                </DraggableEvent>
               ))}
 
               {/* Current time indicator */}
