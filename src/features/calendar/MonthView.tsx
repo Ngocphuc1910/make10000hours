@@ -158,9 +158,6 @@ export const MonthView: React.FC<MonthViewProps> = ({
                         }}
                       >
                         <div className="text-xs font-medium truncate flex items-center" title={event.title} style={{ color: getAllDayEventText(event.color || '#3B82F6') }}>
-                          {event.isTask && (
-                            <i className="ri-task-line mr-1 opacity-70" />
-                          )}
                           {event.title}
                         </div>
                       </DraggableEvent>
@@ -183,9 +180,6 @@ export const MonthView: React.FC<MonthViewProps> = ({
                             className="inline-block w-2 h-2 rounded-full mr-1 flex-shrink-0 mt-0.5" 
                             style={{ backgroundColor: event.color }}
                           ></span>
-                          {event.isTask && (
-                            <i className="ri-task-line mr-1 opacity-70 flex-shrink-0" />
-                          )}
                           <span className="truncate text-xs">
                             {format(event.start, 'h:mm a')} {event.title}
                           </span>
