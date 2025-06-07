@@ -31,6 +31,16 @@ export const DroppableTimeSlot: React.FC<DroppableTimeSlotProps> = ({
         targetTime: hour !== undefined ? { hour, minute } : undefined,
         isAllDay
       };
+      
+      console.log('📍 DroppableTimeSlot drop:', {
+        eventTitle: item.event.title,
+        targetDate: date.toISOString(),
+        hour,
+        minute,
+        isAllDay,
+        dropResult
+      });
+      
       onDrop(item, dropResult);
       return dropResult;
     },
