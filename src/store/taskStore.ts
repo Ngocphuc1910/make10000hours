@@ -23,6 +23,7 @@ interface TaskState {
   toggleTaskCompletion: (taskId: string) => Promise<void>;
   updateTaskStatus: (taskId: string, status: Task['status']) => Promise<void>;
   reorderTasks: (taskId: string, newIndex: number) => Promise<void>;
+  moveTaskToStatusAndPosition: (taskId: string, newStatus: Task['status'], targetIndex: number) => Promise<void>;
   setIsAddingTask: (isAdding: boolean) => void;
   setEditingTaskId: (taskId: string | null) => void;
   setShowDetailsMenu: (show: boolean) => void;
@@ -445,6 +446,78 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       await Promise.all(updatePromises);
     } catch (error) {
       console.error('Error reordering tasks:', error);
+      throw error;
+    }
+  },
+
+  moveTaskToStatusAndPosition: async (taskId, newStatus, targetIndex) => {
+    try {
+      const { tasks } = get();
+      const taskIndex = tasks.findIndex(t => t.id === taskId);
+      
+      if (taskIndex === -1) return;
+      
+      const task = tasks[taskIndex];
+      const completed = newStatus === 'completed' ? true : 
+                       (task.status === 'completed' ? false : task.completed);
+      
+      // Create a copy of tasks and update the task with new status
+      const updatedTasks = [...tasks];
+      updatedTasks[taskIndex] = {
+        ...task,
+        status: newStatus,
+        completed,
+        hideFromPomodoro: newStatus === 'pomodoro' ? false : task.hideFromPomodoro
+      };
+      
+      // Remove the task from its current position
+      const [movedTask] = updatedTasks.splice(taskIndex, 1);
+      
+      // Adjust target index if the moved task was before the target position
+      const adjustedTargetIndex = taskIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      
+      // Insert at the adjusted target position
+      updatedTasks.splice(adjustedTargetIndex, 0, movedTask);
+      
+      // Optimized: Only update tasks that actually changed position or status
+      const tasksToUpdate = [];
+      
+      // Always update the moved task (status + position change)
+      const movedTaskRef = doc(db, 'tasks', taskId);
+      tasksToUpdate.push(
+        updateDoc(movedTaskRef, {
+          status: newStatus,
+          completed,
+          hideFromPomodoro: newStatus === 'pomodoro' ? false : task.hideFromPomodoro,
+          order: adjustedTargetIndex,
+          updatedAt: new Date()
+        })
+      );
+      
+      // Only update tasks whose order actually changed
+      const originalTasks = tasks;
+      for (let i = 0; i < updatedTasks.length; i++) {
+        const currentTask = updatedTasks[i];
+        const originalTask = originalTasks.find(t => t.id === currentTask.id);
+        
+        // Skip the moved task (already handled above) and tasks with unchanged order
+        if (currentTask.id === taskId || !originalTask || originalTask.order === i) {
+          continue;
+        }
+        
+        const taskRef = doc(db, 'tasks', currentTask.id);
+        tasksToUpdate.push(
+          updateDoc(taskRef, {
+            order: i,
+            updatedAt: new Date()
+          })
+        );
+      }
+      
+      // Execute only necessary updates
+      await Promise.all(tasksToUpdate);
+    } catch (error) {
+      console.error('Error moving task to status and position:', error);
       throw error;
     }
   },

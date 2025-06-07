@@ -170,6 +170,7 @@ code {
 
 .task-card.dragging {
   opacity: 0.5;
+  transform: scale(0.95);
   cursor: grabbing;
 }
 
@@ -221,6 +222,99 @@ input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+
+/* Status Section Styling */
+.status-section {
+  height: 100%;
+  position: relative;
+}
+
+.status-section:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #f3f4f6;
+}
+
+.status-section-header {
+  position: sticky;
+  top: 0;
+  background-color: #fff;
+  z-index: 5;
+}
+
+.task-list-container {
+  position: relative;
+}
+
+/* Thin auto-hiding scrollbars for task columns */
+.task-list-container {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease;
+}
+
+.task-list-container:hover {
+  scrollbar-color: #cbd5e180 transparent;
+}
+
+.task-list-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+.task-list-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.task-list-container::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 2px;
+  transition: background-color 0.3s ease;
+}
+
+.task-list-container:hover::-webkit-scrollbar-thumb {
+  background-color: #cbd5e180;
+}
+
+.task-list-container::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
+/* Status Badge Colors */
+.status-badge {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.pomodoro-badge {
+  background-color: #ef4444;
+}
+
+.todo-badge {
+  background-color: #3b82f6;
+}
+
+.completed-badge {
+  background-color: #10b981;
+}
+
+.red-badge {
+  background-color: #ef4444;
+}
+
+.blue-badge {
+  background-color: #3b82f6;
+}
+
+.green-badge {
+  background-color: #10b981;
 }
 
 .calendar-grid {
