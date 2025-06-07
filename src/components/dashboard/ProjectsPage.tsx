@@ -58,48 +58,38 @@ export const ProjectsPage: React.FC = () => {
 
   return (
     <div 
-      className="p-1 bg-white" 
+      className="h-full flex flex-col bg-white" 
       onClick={handleClickOutside}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
       {/* Header */}
-      <div className="border-b border-gray-200 bg-white sticky top-0 z-10 mb-6">
+      <div className="border-b border-gray-200 bg-white flex-shrink-0">
         <div className="px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center">
+          <div className="flex items-center space-x-4">
             <h1 className="text-xl font-semibold text-gray-900">Task Management</h1>
-            <span className="ml-4 text-sm text-gray-500">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
-          </div>
-          
-          <div className="flex items-center space-x-3">
-            <button className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary/90 whitespace-nowrap">
-              <div className="w-4 h-4 flex items-center justify-center mr-1.5">
-                <Icon name="add-line" />
+            
+            {/* Search Box */}
+            <div className="relative w-80">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                <Icon name="search-line" className="w-5 h-5 text-gray-400" />
               </div>
-              New Project
-            </button>
-          </div>
-        </div>
-        
-        <div className="px-6 py-3 flex items-center justify-between border-t border-gray-100">
-          <div className="relative flex-1 max-w-md">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <Icon name="search-line" className="w-5 h-5 text-gray-400" />
+              <input 
+                type="search" 
+                className="block w-full pl-10 pr-3 py-2 border-none rounded-md bg-gray-100 focus:bg-white focus:ring-2 focus:ring-primary focus:outline-none text-sm" 
+                placeholder="Search tasks and projects..." 
+              />
             </div>
-            <input 
-              type="search" 
-              className="block w-full pl-10 pr-3 py-2 border-none rounded-md bg-gray-100 focus:bg-white focus:ring-2 focus:ring-primary focus:outline-none text-sm" 
-              placeholder="Search tasks and projects..." 
-            />
           </div>
           
           <div className="flex items-center space-x-3">
             {/* View Type Switch */}
-            <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 min-w-fit">
+            <div className="inline-flex rounded-full bg-gray-100 p-1">
               <button 
-                className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 whitespace-nowrap min-w-[140px] justify-center focus:outline-none focus:ring-0 ${
+                type="button"
+                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${
                   viewType === 'status'
-                    ? 'bg-white text-gray-900 shadow-sm border border-red-500'
+                    ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
                 onClick={() => setViewType('status')}
@@ -110,9 +100,10 @@ export const ProjectsPage: React.FC = () => {
                 By Status
               </button>
               <button 
-                className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 whitespace-nowrap min-w-[140px] justify-center focus:outline-none focus:ring-0 ${
+                type="button"
+                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${
                   viewType === 'project'
-                    ? 'bg-white text-gray-900 shadow-sm border border-red-500'
+                    ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
                 onClick={() => setViewType('project')}
@@ -127,14 +118,18 @@ export const ProjectsPage: React.FC = () => {
         </div>
       </div>
       
-      {/* Content based on view type */}
-      {viewType === 'status' ? (
-        <div className="px-6">
-          <TaskStatusBoard />
-        </div>
-      ) : (
-        <ProjectView />
-      )}
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto">
+        {viewType === 'status' ? (
+          <div className="px-6 py-6">
+            <TaskStatusBoard />
+          </div>
+        ) : (
+          <div className="py-6">
+            <ProjectView />
+          </div>
+        )}
+      </div>
     </div>
   );
 }; 
