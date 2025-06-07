@@ -318,6 +318,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
     // Use only Enter/Return key (not Shift+Enter for new lines in textareas)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      
+      // If editing an existing task, save immediately
+      if (task) {
+        handleSave();
+        return;
+      }
+      
+      // For new task creation, move to next field
       console.log('handleKeyDown called, nextRef:', nextRef === descriptionRef ? 'descriptionRef' : nextRef === projectSelectRef ? 'projectSelectRef' : 'other');
       if (nextRef.current) {
         // Use setTimeout to ensure proper focus in next tick
@@ -339,7 +347,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
     // Use only Enter/Return key (not Shift+Enter for new lines)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // Move to project selection and open dropdown
+      
+      // If editing an existing task, save immediately
+      if (task) {
+        handleSave();
+        return;
+      }
+      
+      // For new task creation, move to project selection and open dropdown
       if (projectSelectRef.current) {
         projectSelectRef.current.focus();
         setTimeout(() => handleProjectFocus(), 50);
@@ -350,7 +365,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
   const handleTimeEstimatedKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // Since date is auto-selected by default, directly create the task
+      // Always save the task (both creation and editing end here)
       handleSave();
     }
   };
@@ -358,7 +373,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
   const handleCalendarKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // Create the task
+      // Always save the task (both creation and editing end here)
       handleSave();
     }
   };
@@ -366,7 +381,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
   const handleProjectKeyDown = (e: React.KeyboardEvent<HTMLSelectElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // Move to time estimation
+      
+      // If editing an existing task, save immediately
+      if (task) {
+        handleSave();
+        return;
+      }
+      
+      // For new task creation, move to time estimation
       if (timeEstimatedRef.current) {
         timeEstimatedRef.current.focus();
       }

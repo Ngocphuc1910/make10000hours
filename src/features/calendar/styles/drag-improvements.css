@@ -1,0 +1,133 @@
+/* Drag and Drop Improvements for Calendar */
+
+/* Dragging state styles */
+.task-item {
+  transition: all 0.2s ease;
+}
+
+.task-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Drag feedback */
+.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+  cursor: grabbing !important;
+}
+
+/* Drop zone feedback */
+.drop-zone {
+  transition: all 0.2s ease;
+}
+
+.drop-zone.drag-over {
+  background-color: rgba(59, 130, 246, 0.1);
+  border: 2px dashed #3b82f6;
+}
+
+.drop-zone.invalid-drop {
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 2px dashed #ef4444;
+}
+
+/* Current time indicator for day/week view */
+.current-time-indicator {
+  position: relative;
+}
+
+.current-time-indicator::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #ef4444;
+  z-index: 20;
+}
+
+.current-time-indicator::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
+  border-radius: 50%;
+  z-index: 21;
+}
+
+/* Drag preview styles */
+.drag-preview {
+  background: rgba(59, 130, 246, 0.8);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* Enhanced task item styles */
+.task-item.border-l-4 {
+  border-left-width: 4px;
+  border-left-style: solid;
+}
+
+/* Improved hover states for calendar cells */
+.calendar-cell:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Time slot hover improvements */
+.time-slot {
+  position: relative;
+}
+
+.time-slot:hover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(59, 130, 246, 0.05);
+  pointer-events: none;
+}
+
+/* Drag indicator for time selection */
+.drag-indicator {
+  position: absolute;
+  background: rgba(187, 95, 90, 0.7);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 30;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Smooth animations for calendar events */
+@keyframes eventAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.event-appear {
+  animation: eventAppear 0.2s ease-out;
+}
+
+/* Responsive drag improvements for mobile */
+@media (max-width: 768px) {
+  .task-item {
+    min-height: 44px; /* Better touch targets */
+  }
+  
+  .drop-zone {
+    min-height: 48px;
+  }
+} 

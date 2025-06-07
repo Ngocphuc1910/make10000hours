@@ -1,6 +1,8 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { format, isSameDay, isToday } from 'date-fns';
-import { CalendarEvent } from './types';
+import { CalendarEvent, DragItem, DropResult } from './types';
+import { DraggableEvent } from './components/DraggableEvent';
+import { DroppableTimeSlot } from './components/DroppableTimeSlot';
 
 interface DayViewProps {
   currentDate: Date;
@@ -10,6 +12,7 @@ interface DayViewProps {
   onAllDayClick?: (date: Date) => void;
   onMouseDown?: (e: React.MouseEvent<HTMLElement>) => void;
   onDragCreate?: (start: Date, end: Date) => void;
+  onEventDrop?: (item: DragItem, dropResult: DropResult) => void;
 }
 
 interface DragState {
@@ -28,7 +31,8 @@ export const DayView: React.FC<DayViewProps> = ({
   onEventClick,
   onTimeSlotClick,
   onAllDayClick,
-  onDragCreate
+  onDragCreate,
+  onEventDrop
 }) => {
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
