@@ -12,6 +12,8 @@ interface TaskItemProps {
   projectColor?: string;
   isNewTask?: boolean;
   onCancel?: () => void;
+  onReorder?: (draggedTaskId: string, targetTaskId: string, insertAfter?: boolean) => void;
+  onCrossProjectMove?: (draggedTaskId: string, targetTaskId: string, newProjectId: string, insertAfter?: boolean) => void;
 }
 
 const TaskItem: React.FC<TaskItemProps> = ({
@@ -19,7 +21,9 @@ const TaskItem: React.FC<TaskItemProps> = ({
   projectId,
   projectColor = '#4f46e5',
   isNewTask = false,
-  onCancel
+  onCancel,
+  onReorder,
+  onCrossProjectMove
 }) => {
   const updateTask = useTaskStore(state => state.updateTask);
   const toggleTaskCompletion = useTaskStore(state => state.toggleTaskCompletion);
@@ -29,6 +33,8 @@ const TaskItem: React.FC<TaskItemProps> = ({
   const [isEditing, setIsEditing] = useState(isNewTask);
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [dragPosition, setDragPosition] = useState<'top' | 'bottom' | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   // Get project info
   const project = task ? projects.find(p => p.id === task.projectId) : null;
@@ -77,35 +83,33 @@ const TaskItem: React.FC<TaskItemProps> = ({
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent) => {
     if (!task) return;
-    setIsDragging(true);
-    
-    // Set task data in the drag event
-    e.dataTransfer.setData('application/json', JSON.stringify({
-      id: task.id,
-      projectId: task.projectId,
-      status: task.status,
-      completed: task.completed
-    }));
-    
-    // Set drag image and effect
-    e.dataTransfer.effectAllowed = 'move';
-    setTimeout(() => {
-      const target = e.target as HTMLElement;
-      target.classList.add('dragging');
-    }, 0);
+    e.dataTransfer.setData('text/plain', task.id);
+    e.dataTransfer.setData('application/x-task-project', task.projectId);
+    if (cardRef.current) {
+      cardRef.current.classList.add('dragging');
+    }
   };
   
-  const handleDragEnd = (e: React.DragEvent) => {
-    if (!task) return;
-    setIsDragging(false);
-    const target = e.target as HTMLElement;
-    target.classList.remove('dragging');
+  const handleDragEnd = () => {
+    if (cardRef.current) {
+      cardRef.current.classList.remove('dragging');
+    }
+    setIsDragOver(false);
+    setDragPosition(null);
   };
   
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    e.dataTransfer.dropEffect = 'move';
+    
+    const rect = cardRef.current?.getBoundingClientRect();
+    if (rect) {
+      const y = e.clientY - rect.top;
+      const height = rect.height;
+      const isTopHalf = y < height / 2;
+      setDragPosition(isTopHalf ? 'top' : 'bottom');
+      setIsDragOver(true);
+    }
   };
   
   const handleDragEnter = (e: React.DragEvent) => {
@@ -116,29 +120,37 @@ const TaskItem: React.FC<TaskItemProps> = ({
   
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(false);
+    e.stopPropagation();
+    
+    // Only hide indicators if actually leaving the card
+    const rect = cardRef.current?.getBoundingClientRect();
+    if (rect) {
+      const x = e.clientX;
+      const y = e.clientY;
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        setIsDragOver(false);
+        setDragPosition(null);
+      }
+    }
   };
   
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
+    setDragPosition(null);
     
-    try {
-      const droppedData = JSON.parse(e.dataTransfer.getData('application/json'));
-      
-      // Don't do anything if dropping on itself
-      if (droppedData.id === task?.id) return;
-      
-      // Update the task with new project or status
-      if (droppedData.id && task) {
-        updateTask(droppedData.id, {
-          projectId: task.projectId,
-          status: task.status
-        });
+    const draggedTaskId = e.dataTransfer.getData('text/plain');
+    const draggedTaskProjectId = e.dataTransfer.getData('application/x-task-project');
+    
+    if (draggedTaskId && draggedTaskId !== task?.id && task) {
+      if (draggedTaskProjectId === task.projectId && onReorder) {
+        // Same project reordering
+        onReorder(draggedTaskId, task.id, dragPosition === 'bottom');
+      } else if (draggedTaskProjectId !== task.projectId && onCrossProjectMove) {
+        // Cross project move with positioning
+        onCrossProjectMove(draggedTaskId, task.id, task.projectId, dragPosition === 'bottom');
       }
-    } catch (error) {
-      console.error('Error handling drop:', error);
     }
   };
 
@@ -158,20 +170,31 @@ const TaskItem: React.FC<TaskItemProps> = ({
   if (!task) return null;
 
   return (
-    <div 
-      className={`task-card flex items-start p-3 bg-white border border-gray-200 
-      ${task.completed ? 'opacity-70 text-gray-500' : ''}
-      rounded-md hover:shadow-sm cursor-pointer transition-all duration-200 ${isDragging ? 'dragging' : ''} ${isDragOver ? 'drag-over' : ''}`}
-      draggable={true}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      onDragOver={handleDragOver}
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      data-task-id={task.id}
-      data-status={task.status}
-    >
+    <div className="relative">
+      {/* Drop indicator lines */}
+      {isDragOver && dragPosition === 'top' && (
+        <div className="absolute -top-1 left-0 right-0 h-0.5 border-t-2 border-dashed border-red-500 z-10"></div>
+      )}
+      {isDragOver && dragPosition === 'bottom' && (
+        <div className="absolute -bottom-1 left-0 right-0 h-0.5 border-b-2 border-dashed border-red-500 z-10"></div>
+      )}
+      
+      <div 
+        ref={cardRef}
+        className={`task-card flex items-start p-3 bg-white border border-gray-200 
+        ${task.completed ? 'opacity-70 text-gray-500' : ''}
+        ${isDragOver ? 'drag-over' : ''}
+        rounded-md hover:shadow-sm cursor-pointer transition-all duration-200`}
+        draggable={true}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        data-task-id={task.id}
+        data-status={task.status}
+      >
       <div className="mr-3 mt-0.5">
         <CustomCheckbox
           id={`task-checkbox-${task.id}`}
@@ -230,6 +253,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
             <i className="ri-edit-line"></i>
           </div>
         </button>
+      </div>
       </div>
     </div>
   );
