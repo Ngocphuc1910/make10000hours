@@ -121,9 +121,7 @@ export const ProjectsPage: React.FC = () => {
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto">
         {viewType === 'status' ? (
-          <div className="px-6 py-6">
-            <TaskStatusBoard />
-          </div>
+          <TaskStatusBoard />
         ) : (
           <div className="py-6">
             <ProjectView />
