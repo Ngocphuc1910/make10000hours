@@ -9,6 +9,7 @@ import { formatMinutesToHoursAndMinutes } from '../../utils/timeUtils';
 import { getDateISOString } from '../../utils/timeUtils';
 import { DatePicker, DateTimeProvider, useDateTimeContext } from '../common/DatePicker';
 import { format } from 'date-fns';
+import { getRandomPresetColor } from '../../utils/colorUtils';
 
 interface TaskFormProps {
   task?: Task;
@@ -186,7 +187,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
       try {
         const newProjectId = await addProject({
           name: newProjectName.trim(),
-          color: '#BB5F5A' // Use primary color from design system
+          color: getRandomPresetColor()
         });
         finalProjectId = newProjectId;
         

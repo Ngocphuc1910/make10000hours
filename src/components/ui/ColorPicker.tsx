@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Icon } from './Icon';
+import { PRESET_COLORS, isValidHexColor } from '../../utils/colorUtils';
 
 interface ColorPickerProps {
   isOpen: boolean;
@@ -21,21 +22,8 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
   const modalRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Preset colors that match the project's design system
-  const presetColors = [
-    '#81B214', // Light Green
-    '#33B679', // Emerald Green
-    '#C21505', // Bright Red
-    '#176B87', // Teal Blue
-    '#CB8697', // Rose Pink
-    '#55B7C0', // Sky Blue
-    '#B66283', // Mauve Pink
-    '#CC9000', // Golden Yellow
-    '#419197', // Dark Teal
-    '#B02C00', // Dark Red
-    '#FFD700', // Lighter Green (alternative)
-    '#FF7F50'  // Sea Green (alternative)
-  ];
+  // Use shared preset colors
+  const presetColors = PRESET_COLORS;
 
   // Update input when currentColor changes
   useEffect(() => {
@@ -76,11 +64,8 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
     };
   }, [isOpen, onClose]);
 
-  // Validate hex color
-  const validateHexColor = (color: string): boolean => {
-    const hexRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-    return hexRegex.test(color);
-  };
+  // Use shared validation function
+  const validateHexColor = isValidHexColor;
 
   const handleInputChange = (value: string) => {
     setInputColor(value);
