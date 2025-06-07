@@ -4,6 +4,7 @@ import { useTaskStore } from '../../../store/taskStore';
 import { Icon } from '../../ui/Icon';
 import TaskItem from '../../../components/dashboard/views/TaskItem';
 import ColorPicker from '../../ui/ColorPicker';
+import { getRandomPresetColor } from '../../../utils/colorUtils';
 
 interface ProjectCardProps {
   project?: Project;
@@ -35,6 +36,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const [showDropdown, setShowDropdown] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [selectedColor, setSelectedColor] = useState(project?.color || '#BB5F5A');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editingName, setEditingName] = useState(project?.name || '');
   const [draggedOverFilter, setDraggedOverFilter] = useState<string | null>(null);
   
   // Save activeFilter to localStorage whenever it changes
@@ -50,6 +53,13 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       setSelectedColor(project.color);
     }
   }, [project?.color]);
+
+  // Update editing name when project name changes
+  React.useEffect(() => {
+    if (project?.name) {
+      setEditingName(project.name);
+    }
+  }, [project?.name]);
   
   // Filter tasks for this project
   const projectTasks = project ? tasks.filter(task => task.projectId === project.id) : [];
@@ -78,7 +88,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     
     addProject({
       name: projectName.trim(),
-      color: getRandomColor()
+      color: getRandomPresetColor()
     });
     
     if (onCancel) onCancel();
@@ -91,11 +101,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     }
   };
   
-  // Generate a random color for new projects
-  const getRandomColor = () => {
-    const colors = ['#4f46e5', '#10b981', '#ef4444', '#f59e0b', '#6366f1'];
-    return colors[Math.floor(Math.random() * colors.length)];
-  };
+
   
   // Handle adding a new task
   const handleAddTask = () => {
@@ -166,6 +172,49 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const handleCloseColorPicker = () => {
     setSelectedColor(project?.color || '#BB5F5A');
     setShowColorPicker(false);
+  };
+
+  // Handle inline name editing
+  const handleEditName = () => {
+    setEditingName(project?.name || '');
+    setIsEditingName(true);
+    setShowDropdown(false);
+  };
+
+  // Handle saving inline name edit
+  const handleSaveNameEdit = async () => {
+    if (!project || !editingName.trim()) {
+      // If empty, revert to original name
+      setEditingName(project?.name || '');
+      setIsEditingName(false);
+      return;
+    }
+    
+    try {
+      await updateProject(project.id, { name: editingName.trim() });
+      console.log(`Project name updated to ${editingName.trim()}`);
+      setIsEditingName(false);
+    } catch (error) {
+      console.error('Error updating project name:', error);
+      alert('Failed to update project name. Please try again.');
+      setEditingName(project?.name || '');
+      setIsEditingName(false);
+    }
+  };
+
+  // Handle canceling inline name edit
+  const handleCancelNameEdit = () => {
+    setEditingName(project?.name || '');
+    setIsEditingName(false);
+  };
+
+  // Handle key press for inline editing
+  const handleNameKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveNameEdit();
+    } else if (e.key === 'Escape') {
+      handleCancelNameEdit();
+    }
   };
 
   // Close dropdown when clicking outside
@@ -317,14 +366,45 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   return (
     <div className="project-container bg-white border border-gray-200 rounded-lg shadow-sm w-[600px] min-w-[600px]">
       <div 
-        className="project-header flex items-center justify-between px-4 py-3 bg-gray-50 rounded-t-lg cursor-pointer"
-        onClick={toggleCollapsed}
+        className={`project-header flex items-center justify-between px-4 py-3 bg-gray-50 rounded-t-lg ${isEditingName ? 'cursor-default' : 'cursor-pointer'}`}
+        onClick={!isEditingName ? toggleCollapsed : undefined}
       >
-        <div className="flex items-center">
+        <div className="flex items-center flex-1">
           <div className="w-5 h-5 flex items-center justify-center mr-2 text-gray-500">
             <Icon name={isCollapsed ? "arrow-right-s-line" : "arrow-down-s-line"} />
           </div>
-          <h3 className="font-medium text-gray-900">{project.name}</h3>
+          {isEditingName ? (
+            <div className="flex items-center flex-1 mr-4">
+              <input 
+                type="text" 
+                className="flex-1 font-medium text-gray-900 bg-transparent border border-red-300 focus:border-red-500 focus:outline-none rounded-md px-3 py-1.5" 
+                value={editingName}
+                onChange={(e) => setEditingName(e.target.value)}
+                onKeyDown={handleNameKeyPress}
+                autoFocus
+              />
+              <button 
+                onClick={handleSaveNameEdit}
+                className="p-1.5 ml-2 rounded-md hover:bg-gray-100 transition-colors duration-200" 
+                title="Save"
+              >
+                <div className="w-4 h-4 flex items-center justify-center text-green-600">
+                  <Icon name="check-line" />
+                </div>
+              </button>
+              <button 
+                onClick={handleCancelNameEdit}
+                className="p-1.5 rounded-md hover:bg-gray-100 transition-colors duration-200" 
+                title="Cancel"
+              >
+                <div className="w-4 h-4 flex items-center justify-center text-gray-400">
+                  <Icon name="close-line" />
+                </div>
+              </button>
+            </div>
+          ) : (
+            <h3 className="font-medium text-gray-900">{project.name}</h3>
+          )}
         </div>
         <div className="flex items-center space-x-4">
           <div className="flex items-center">
@@ -357,14 +437,30 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10 overflow-hidden">
                 <div className="py-1 px-2">
                   <button 
-                    onClick={handleChangeColor}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleChangeColor();
+                    }}
                     className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left flex items-center transition-colors duration-200 rounded-md"
                   >
                     <Icon name="palette-line" size={16} className="mr-2" />
                     Update color
                   </button>
                   <button 
-                    onClick={handleDeleteProject}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditName();
+                    }}
+                    className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left flex items-center transition-colors duration-200 rounded-md"
+                  >
+                    <Icon name="edit-line" size={16} className="mr-2" />
+                    Edit project name
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteProject();
+                    }}
                     className="w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left flex items-center transition-colors duration-200 rounded-md"
                   >
                     <Icon name="delete-bin-line" size={16} className="mr-2" />
@@ -487,6 +583,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         onColorChange={handleColorChange}
         onSave={handleSaveColor}
       />
+
+
     </div>
   );
 };
