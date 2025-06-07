@@ -355,11 +355,6 @@ export const DayView: React.FC<DayViewProps> = ({
                     <div className="opacity-80 mt-1">
                       {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
                     </div>
-                    {event.isTask && (
-                      <div className="text-xs opacity-70 mt-1 truncate">
-                        {event.project}
-                      </div>
-                    )}
                     {!event.isTask && event.description && (
                       <div className="text-xs opacity-75 mt-1 truncate">
                         {event.description}

@@ -88,9 +88,12 @@ export const MonthView: React.FC<MonthViewProps> = ({
   };
 
   const days = getDaysInMonth();
+  
+  // Calculate number of rows needed (5 or 6)
+  const numberOfRows = Math.ceil(days.length / 7);
 
   return (
-    <div className="min-w-[1024px] bg-white h-full flex flex-col">
+    <div className="w-full bg-white h-full flex flex-col">
       {/* Week day headers */}
       <div className="grid grid-cols-7 border-b border-gray-200">
         {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map(day => (
@@ -103,8 +106,9 @@ export const MonthView: React.FC<MonthViewProps> = ({
         ))}
       </div>
 
-      {/* Calendar grid - fixed height with 6 rows */}
-      <div className="grid grid-cols-7 grid-rows-6 flex-1">
+      {/* Calendar grid - dynamic rows (5 or 6) */}
+      <div className="grid grid-cols-7 flex-1 min-h-0"
+           style={{ gridTemplateRows: `repeat(${numberOfRows}, minmax(120px, 1fr))` }}>
         {days.map((day, idx) => {
           const dayEvents = getEventsForDay(day);
           const isCurrentMonth = isSameMonth(day, currentDate);
@@ -123,7 +127,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                 ${!isCurrentMonth ? 'bg-gray-50' : 'bg-white'}
                 ${isCurrentDay ? 'bg-primary bg-opacity-5' : ''}
                 ${idx % 7 === 6 ? '!border-r-0' : ''}
-                ${Math.floor(idx / 7) === 5 ? '!border-b-0' : ''}
+                ${Math.floor(idx / 7) === numberOfRows - 1 ? '!border-b-0' : ''}
               `}
             >
               <div 

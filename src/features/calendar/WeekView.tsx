@@ -307,7 +307,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
 
         {/* Calendar Grid */}
         <div className="flex-1 overflow-auto relative bg-white">
-          <div className="grid min-h-[1440px]" style={{ gridTemplateColumns: '64px 1fr' }}>
+          <div className="grid min-h-[1440px]" style={{ gridTemplateColumns: '64px 1fr', paddingRight: 'var(--scrollbar-width)' }}>
             {/* Time column */}
             <div className="bg-white border-r border-gray-200">
               {HOURS.map(hour => (
@@ -384,11 +384,6 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         <div className="opacity-80 mt-1">
                           {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
                         </div>
-                        {event.isTask && (
-                          <div className="text-xs opacity-70 mt-1 truncate">
-                            {event.project}
-                          </div>
-                        )}
                       </div>
                     </DraggableEvent>
                   ))}
