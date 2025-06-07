@@ -294,9 +294,6 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         }`}
                       >
                         <div className="flex items-center text-white">
-                          {event.isTask && (
-                            <i className="ri-task-line text-xs mr-1 opacity-70" />
-                          )}
                           {event.title}
                         </div>
                       </DraggableEvent>
@@ -382,9 +379,6 @@ export const WeekView: React.FC<WeekViewProps> = ({
                     >
                       <div className="text-xs text-white font-medium px-2 py-1">
                         <div className="flex items-center">
-                          {event.isTask && (
-                            <i className="ri-task-line text-xs mr-1 opacity-70" />
-                          )}
                           <span className="truncate">{event.title}</span>
                         </div>
                         <div className="opacity-80 mt-1">
