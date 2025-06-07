@@ -3,6 +3,7 @@ import type { Project, Task } from '../../../types/models';
 import { useTaskStore } from '../../../store/taskStore';
 import { Icon } from '../../ui/Icon';
 import TaskItem from '../../../components/dashboard/views/TaskItem';
+import ColorPicker from '../../ui/ColorPicker';
 
 interface ProjectCardProps {
   project?: Project;
@@ -18,6 +19,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const tasks = useTaskStore(state => state.tasks);
   const addProject = useTaskStore(state => state.addProject);
   const deleteProject = useTaskStore(state => state.deleteProject);
+  const updateProject = useTaskStore(state => state.updateProject);
   const updateTask = useTaskStore(state => state.updateTask);
   const [projectName, setProjectName] = useState(project?.name || '');
   
@@ -31,6 +33,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [selectedColor, setSelectedColor] = useState(project?.color || '#BB5F5A');
   const [draggedOverFilter, setDraggedOverFilter] = useState<string | null>(null);
   
   // Save activeFilter to localStorage whenever it changes
@@ -39,6 +43,13 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       localStorage.setItem(`projectFilter_${project.id}`, activeFilter);
     }
   }, [activeFilter, project]);
+
+  // Update selected color when project color changes
+  React.useEffect(() => {
+    if (project?.color) {
+      setSelectedColor(project.color);
+    }
+  }, [project?.color]);
   
   // Filter tasks for this project
   const projectTasks = project ? tasks.filter(task => task.projectId === project.id) : [];
@@ -123,6 +134,38 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         alert('Failed to delete project. Please try again.');
       }
     }
+  };
+
+  // Handle opening color picker
+  const handleChangeColor = () => {
+    setSelectedColor(project?.color || '#BB5F5A');
+    setShowColorPicker(true);
+    setShowDropdown(false);
+  };
+
+  // Handle color change
+  const handleColorChange = (color: string) => {
+    setSelectedColor(color);
+  };
+
+  // Handle saving color
+  const handleSaveColor = async () => {
+    if (!project) return;
+    
+    try {
+      await updateProject(project.id, { color: selectedColor });
+      console.log(`Project color updated to ${selectedColor}`);
+      setShowColorPicker(false);
+    } catch (error) {
+      console.error('Error updating project color:', error);
+      alert('Failed to update project color. Please try again.');
+    }
+  };
+
+  // Handle closing color picker
+  const handleCloseColorPicker = () => {
+    setSelectedColor(project?.color || '#BB5F5A');
+    setShowColorPicker(false);
   };
 
   // Close dropdown when clicking outside
@@ -291,7 +334,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                 className="h-2 rounded-full progress-bar-animation" 
                 style={{ 
                   width: `${progressPercentage}%`,
-                  backgroundColor: '#BB5F5A'
+                  backgroundColor: project.color || '#BB5F5A'
                 }}
               ></div>
             </div>
@@ -313,6 +356,13 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             {showDropdown && (
               <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10 overflow-hidden">
                 <div className="py-1 px-2">
+                  <button 
+                    onClick={handleChangeColor}
+                    className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left flex items-center transition-colors duration-200 rounded-md"
+                  >
+                    <Icon name="palette-line" size={16} className="mr-2" />
+                    Update color
+                  </button>
                   <button 
                     onClick={handleDeleteProject}
                     className="w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left flex items-center transition-colors duration-200 rounded-md"
@@ -428,6 +478,15 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Color Picker Modal */}
+      <ColorPicker
+        isOpen={showColorPicker}
+        onClose={handleCloseColorPicker}
+        currentColor={project?.color || '#BB5F5A'}
+        onColorChange={handleColorChange}
+        onSave={handleSaveColor}
+      />
     </div>
   );
 };
