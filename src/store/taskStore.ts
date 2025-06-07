@@ -245,10 +245,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       // Check if projectId is being updated
       const isProjectIdChanging = updates.projectId && currentTask && updates.projectId !== currentTask.projectId;
       
+      // Filter out undefined values to prevent Firebase errors
+      const filteredUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([_, value]) => value !== undefined)
+      );
+
       // Update the task
       const taskRef = doc(db, 'tasks', id);
       await updateDoc(taskRef, {
-        ...updates,
+        ...filteredUpdates,
         updatedAt: new Date()
       });
 
