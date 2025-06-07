@@ -36,7 +36,7 @@ export const Calendar: React.FC = () => {
   });
   
   // Get tasks and projects from task store
-  const { tasks, projects, setEditingTaskId: setStoreEditingTaskId } = useTaskStore();
+  const { tasks, projects, updateTask, setEditingTaskId: setStoreEditingTaskId } = useTaskStore();
   
   // Merge calendar events with task events
   const allEvents = useMemo(() => {
@@ -124,15 +124,34 @@ export const Calendar: React.FC = () => {
       // Handle task updates through task store
       const task = tasks.find(t => t.id === item.event.taskId);
       if (task) {
-        // For now, just log the update - task store integration would go here
-        console.log('Task update needed:', {
+        console.log('Updating task scheduling:', {
           taskId: task.id,
           newStart: start,
           newEnd: end,
           isAllDay: dropResult.isAllDay
         });
-        // TODO: Implement task store update method
-        // updateTask(task.id, { scheduledDate: start, scheduledStartTime: ..., scheduledEndTime: ... });
+
+        // Prepare task update data
+        const taskUpdateData: any = {
+          scheduledDate: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`, // YYYY-MM-DD format in local timezone
+          includeTime: !dropResult.isAllDay
+        };
+
+        // Add time fields only if not all-day
+        if (!dropResult.isAllDay) {
+          taskUpdateData.scheduledStartTime = start.toTimeString().substring(0, 5); // HH:MM format
+          taskUpdateData.scheduledEndTime = end.toTimeString().substring(0, 5); // HH:MM format
+        } else {
+          // For all-day events, clear the time fields
+          taskUpdateData.scheduledStartTime = undefined;
+          taskUpdateData.scheduledEndTime = undefined;
+        }
+
+        // Update the task through the task store
+        updateTask(task.id, taskUpdateData).catch(error => {
+          console.error('Failed to update task scheduling:', error);
+          // Could show a toast notification here
+        });
       }
     } else {
       // Update calendar event

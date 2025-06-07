@@ -146,26 +146,69 @@ export const isValidDrop = (
   dropResult: DropResult,
   allEvents: CalendarEvent[]
 ): boolean => {
+  console.log('🔍 Validating drop:', {
+    eventTitle: draggedEvent.title,
+    targetDate: dropResult.targetDate.toISOString().split('T')[0],
+    targetTime: dropResult.targetTime,
+    isAllDay: dropResult.isAllDay,
+    totalEvents: allEvents.length
+  });
+
   // Can't drop on same position
   if (isSameDay(draggedEvent.start, dropResult.targetDate) && 
       !dropResult.targetTime && 
       draggedEvent.isAllDay === (dropResult.isAllDay || false)) {
+    console.log('❌ Drop blocked: Same position');
     return false;
   }
   
   // Calculate new times
   const { start, end } = calculateNewEventTime(draggedEvent, dropResult);
   
+  console.log('📅 Calculated new times:', {
+    start: start.toISOString(),
+    end: end.toISOString(),
+    startLocal: `${start.getHours()}:${start.getMinutes().toString().padStart(2, '0')}`,
+    endLocal: `${end.getHours()}:${end.getMinutes().toString().padStart(2, '0')}`
+  });
+
+  // For all-day drops, allow them (no time conflict check needed)
+  if (dropResult.isAllDay) {
+    console.log('✅ All-day drop allowed');
+    return true;
+  }
+  
   // Check for conflicts with other events (excluding the dragged event)
-  const conflictingEvents = allEvents.filter(event => 
+  const eventsOnSameDay = allEvents.filter(event => 
     event.id !== draggedEvent.id &&
-    isSameDay(event.start, start) &&
+    isSameDay(event.start, start)
+  );
+  
+  console.log('📊 Events on same day:', eventsOnSameDay.map(e => ({
+    title: e.title,
+    isAllDay: e.isAllDay,
+    time: e.isAllDay ? 'All day' : `${e.start.getHours()}:${e.start.getMinutes().toString().padStart(2, '0')}-${e.end.getHours()}:${e.end.getMinutes().toString().padStart(2, '0')}`
+  })));
+
+  const conflictingEvents = eventsOnSameDay.filter(event => 
     !event.isAllDay &&
-    !dropResult.isAllDay &&
     ((start >= event.start && start < event.end) ||
      (end > event.start && end <= event.end) ||
      (start <= event.start && end >= event.end))
   );
+  
+  if (conflictingEvents.length > 0) {
+    console.log('❌ Drop blocked - Conflicts detected:', {
+      targetDate: start.toISOString().split('T')[0],
+      targetTime: `${start.getHours()}:${start.getMinutes().toString().padStart(2, '0')}-${end.getHours()}:${end.getMinutes().toString().padStart(2, '0')}`,
+      conflicts: conflictingEvents.map(e => ({
+        title: e.title,
+        time: `${e.start.getHours()}:${e.start.getMinutes().toString().padStart(2, '0')}-${e.end.getHours()}:${e.end.getMinutes().toString().padStart(2, '0')}`
+      }))
+    });
+  } else {
+    console.log('✅ Drop allowed - No conflicts found');
+  }
   
   return conflictingEvents.length === 0;
 };
