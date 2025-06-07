@@ -66,7 +66,7 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '' }) => 
   };
 
   return (
-    <div className={`grid grid-cols-1 md:grid-cols-3 gap-6 min-h-[calc(100vh-8.5rem)] ${className}`}>
+    <div className={`grid grid-cols-3 h-full ${className}`}>
       {/* To Do List Column */}
       <TaskColumn
         title="To Do List"
