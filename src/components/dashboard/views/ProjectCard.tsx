@@ -25,10 +25,16 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const [projectName, setProjectName] = useState(project?.name || '');
   
   // Persist activeFilter state in localStorage per project to prevent automatic tab switching
-  const [activeFilter, setActiveFilter] = useState<'pomodoro' | 'todo' | 'completed'>(() => {
-    if (!project) return 'todo';
-    const saved = localStorage.getItem(`projectFilter_${project.id}`);
-    return (saved as 'pomodoro' | 'todo' | 'completed') || 'todo';
+  const [activeFilter, setActiveFilter] = useState<'pomodoro' | 'todo' | 'completed' | null>(() => {
+    if (!project) return null;
+    
+    // For now, always start with no filter selected to show all tasks by default
+    // Later this can be changed to restore saved filter if desired
+    return null;
+    
+    // Commented out localStorage restoration to ensure no chip is selected by default:
+    // const saved = localStorage.getItem(`projectFilter_${project.id}`);
+    // return (saved === 'pomodoro' || saved === 'todo' || saved === 'completed') ? saved : null;
   });
   
   const [isAddingTask, setIsAddingTask] = useState(false);
@@ -43,7 +49,11 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   // Save activeFilter to localStorage whenever it changes
   React.useEffect(() => {
     if (project) {
-      localStorage.setItem(`projectFilter_${project.id}`, activeFilter);
+      if (activeFilter === null) {
+        localStorage.removeItem(`projectFilter_${project.id}`);
+      } else {
+        localStorage.setItem(`projectFilter_${project.id}`, activeFilter);
+      }
     }
   }, [activeFilter, project]);
 
@@ -66,10 +76,30 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   
   // Filter tasks based on selected filter
   const filteredTasks = projectTasks.filter(task => {
+    if (activeFilter === null) return true; // Show all tasks when no filter is selected
     if (activeFilter === 'pomodoro') return task.status === 'pomodoro';
     if (activeFilter === 'todo') return !task.completed && task.status === 'todo';
     if (activeFilter === 'completed') return task.completed;
     return true;
+  }).sort((a, b) => {
+    // Sort tasks by status only when no filter is active (showing all tasks)
+    if (activeFilter === null) {
+      // Define sort order: todo -> pomodoro -> completed
+      const statusOrder = { 'todo': 1, 'pomodoro': 2, 'completed': 3 };
+      
+      // Get status priority for task a
+      const aStatus = a.completed ? 'completed' : a.status;
+      const aPriority = statusOrder[aStatus as keyof typeof statusOrder] || 4;
+      
+      // Get status priority for task b  
+      const bStatus = b.completed ? 'completed' : b.status;
+      const bPriority = statusOrder[bStatus as keyof typeof statusOrder] || 4;
+      
+      return aPriority - bPriority;
+    }
+    
+    // No sorting when a filter is active
+    return 0;
   });
   
   // Calculate project progress
@@ -260,14 +290,14 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
           // If moving from completed to another status, mark as not completed
           updateTask(droppedData.id, {
             projectId: project.id,
-            status: filterType,
+            status: filterType as 'pomodoro' | 'todo' | 'completed',
             completed: false
           });
         } else {
           // Normal case
           updateTask(droppedData.id, {
             projectId: project.id,
-            status: filterType,
+            status: filterType as 'pomodoro' | 'todo' | 'completed',
             // If dropping in completed filter, mark as completed
             completed: filterType === 'completed'
           });
@@ -476,14 +506,14 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         <div className="project-tasks px-4 py-2">
           <div className="flex items-center justify-between py-2 border-b border-gray-100">
             <div className="flex items-center space-x-3 task-filters">
-              {/* Reordered tabs: To do list > In Pomodoro > Completed */}
+              {/* To do list */}
               <button 
                 className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full whitespace-nowrap ${
                   activeFilter === 'todo'
                     ? 'bg-primary/10 text-primary hover:bg-primary/20'
                     : 'text-gray-600 hover:bg-gray-100'
                 } ${draggedOverFilter === 'todo' ? 'drag-over' : ''}`}
-                onClick={() => setActiveFilter('todo')}
+                onClick={() => setActiveFilter(activeFilter === 'todo' ? null : 'todo')}
                 onDragOver={(e) => handleFilterDragOver(e, 'todo')}
                 onDragLeave={handleFilterDragLeave}
                 onDrop={(e) => handleFilterDrop(e, 'todo')}
@@ -500,7 +530,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                     ? 'bg-primary/10 text-primary hover:bg-primary/20'
                     : 'text-gray-600 hover:bg-gray-100'
                 } ${draggedOverFilter === 'pomodoro' ? 'drag-over' : ''}`}
-                onClick={() => setActiveFilter('pomodoro')}
+                onClick={() => setActiveFilter(activeFilter === 'pomodoro' ? null : 'pomodoro')}
                 onDragOver={(e) => handleFilterDragOver(e, 'pomodoro')}
                 onDragLeave={handleFilterDragLeave}
                 onDrop={(e) => handleFilterDrop(e, 'pomodoro')}
@@ -517,7 +547,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                     ? 'bg-primary/10 text-primary hover:bg-primary/20'
                     : 'text-gray-600 hover:bg-gray-100'
                 } ${draggedOverFilter === 'completed' ? 'drag-over' : ''}`}
-                onClick={() => setActiveFilter('completed')}
+                onClick={() => setActiveFilter(activeFilter === 'completed' ? null : 'completed')}
                 onDragOver={(e) => handleFilterDragOver(e, 'completed')}
                 onDragLeave={handleFilterDragLeave}
                 onDrop={(e) => handleFilterDrop(e, 'completed')}
