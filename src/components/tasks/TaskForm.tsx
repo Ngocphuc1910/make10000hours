@@ -19,7 +19,7 @@ interface TaskFormProps {
 }
 
 const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onCancel }) => {
-  const { tasks, addTask, updateTask, deleteTask, projects, addProject } = useTaskStore();
+  const { addTask, updateTask, deleteTask, projects, addProject } = useTaskStore();
   const { user } = useUserStore();
   
   const [title, setTitle] = useState(task?.title || '');
@@ -72,26 +72,20 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
     if (!task?.projectId) { // Only set if not editing existing task
       setProjectId(getLastUsedProjectId());
     }
-  }, []); // Remove dependencies to prevent re-runs
 
-  // Don't auto-set calendar date - let it be truly optional
-
-  // Create "No Project" project if it doesn't exist - only run once
-  useEffect(() => {
     if (!noProject && user && !task) { // Only for new tasks
       useTaskStore.getState().addProject({
         name: 'No Project',
         color: '#6B7280' // gray-500
       });
     }
-  }, []); // Remove dependencies to prevent re-runs
-  
-  // Focus on title input when form opens - only run once
-  useEffect(() => {
+
     if (titleInputRef.current) {
       titleInputRef.current.focus();
     }
-  }, []);
+  }, []); // Remove dependencies to prevent re-runs
+
+  // Don't auto-set calendar date - let it be truly optional
 
   // Focus on new project input when creating new project
   useEffect(() => {
