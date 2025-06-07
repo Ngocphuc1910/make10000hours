@@ -23,16 +23,18 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
 
   // Preset colors that match the project's design system
   const presetColors = [
-    '#81B214',
-    '#33B679',
-    '#C21505',
-    '#176B87',
-    '#CB8697',
-    '#55B7C0',
-    '#B66283',
-    '#CC9000',
-    '#419197',
-    '#B02C00'
+    '#81B214', // Light Green
+    '#33B679', // Emerald Green
+    '#C21505', // Bright Red
+    '#176B87', // Teal Blue
+    '#CB8697', // Rose Pink
+    '#55B7C0', // Sky Blue
+    '#B66283', // Mauve Pink
+    '#CC9000', // Golden Yellow
+    '#419197', // Dark Teal
+    '#B02C00', // Dark Red
+    '#FFD700', // Lighter Green (alternative)
+    '#FF7F50'  // Sea Green (alternative)
   ];
 
   // Update input when currentColor changes
