@@ -9,7 +9,15 @@ interface ProjectViewProps {
 
 const ProjectView: React.FC<ProjectViewProps> = ({ className = '' }) => {
   const projects = useTaskStore(state => state.projects);
+  const tasks = useTaskStore(state => state.tasks);
   const [isAddingProject, setIsAddingProject] = useState(false);
+  
+  // Sort projects by number of tasks (most to least)
+  const sortedProjects = [...projects].sort((a, b) => {
+    const aTaskCount = tasks.filter(task => task.projectId === a.id).length;
+    const bTaskCount = tasks.filter(task => task.projectId === b.id).length;
+    return bTaskCount - aTaskCount; // Descending order (most tasks first)
+  });
   
   // Handler for adding a new project
   const handleAddProject = () => {
@@ -23,8 +31,8 @@ const ProjectView: React.FC<ProjectViewProps> = ({ className = '' }) => {
 
   return (
     <div className={`px-6 py-4 flex space-x-6 overflow-x-auto min-h-[calc(100vh-8.5rem)] items-start ${className}`}>
-      {/* Map through projects and render project cards */}
-      {projects.map(project => (
+      {/* Map through sorted projects and render project cards */}
+      {sortedProjects.map(project => (
         <ProjectCard 
           key={project.id} 
           project={project}
