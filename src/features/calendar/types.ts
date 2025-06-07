@@ -11,6 +11,7 @@ export interface CalendarEvent {
   isAllDay: boolean;
   taskId?: string;
   isTask?: boolean;
+  isDraggable?: boolean;
 }
 
 export interface Project {
@@ -37,4 +38,26 @@ export interface CalendarState {
 export interface TimeSlot {
   hour: number;
   minute: number;
+}
+
+// Drag & Drop Types
+export interface DragItem {
+  type: 'event';
+  event: CalendarEvent;
+  sourceDate: Date;
+  sourceView: CalendarView;
+}
+
+export interface DropResult {
+  targetDate: Date;
+  targetTime?: { hour: number; minute: number };
+  isAllDay?: boolean;
+}
+
+export interface DragState {
+  isDragging: boolean;
+  draggedEvent: CalendarEvent | null;
+  sourceDate: Date | null;
+  targetDate: Date | null;
+  isValidDrop: boolean;
 } 

@@ -1,13 +1,15 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays } from 'date-fns';
-import { CalendarEvent, CalendarView } from './types';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
+import { CalendarEvent, CalendarView, DragItem, DropResult } from './types';
 import WeekView from './WeekView';
 import DayView from './DayView';
 import MonthView from './MonthView';
 import EventDialog from './EventDialog';
 import { mockEvents } from './mockData';
 import { useTaskStore } from '../../store/taskStore';
-import { mergeEventsAndTasks } from './utils';
+import { mergeEventsAndTasks, calculateNewEventTime, isValidDrop } from './utils';
 import TaskForm from '../../components/tasks/TaskForm';
 
 interface DragState {
@@ -95,6 +97,50 @@ export const Calendar: React.FC = () => {
     }
     setIsEventDialogOpen(false);
   };
+
+  const handleEventDrop = useCallback((item: DragItem, dropResult: DropResult) => {
+    if (!isValidDrop(item.event, dropResult, allEvents)) {
+      console.warn('Invalid drop operation:', { event: item.event.title, target: dropResult.targetDate });
+      return;
+    }
+
+    const { start, end } = calculateNewEventTime(item.event, dropResult);
+    const updatedEvent: CalendarEvent = {
+      ...item.event,
+      start,
+      end,
+      isAllDay: dropResult.isAllDay || false
+    };
+
+    console.log('Event dropped:', {
+      eventTitle: item.event.title,
+      from: item.event.start,
+      to: start,
+      isAllDay: dropResult.isAllDay
+    });
+
+    // Update the event in the appropriate store
+    if (item.event.isTask && item.event.taskId) {
+      // Handle task updates through task store
+      const task = tasks.find(t => t.id === item.event.taskId);
+      if (task) {
+        // For now, just log the update - task store integration would go here
+        console.log('Task update needed:', {
+          taskId: task.id,
+          newStart: start,
+          newEnd: end,
+          isAllDay: dropResult.isAllDay
+        });
+        // TODO: Implement task store update method
+        // updateTask(task.id, { scheduledDate: start, scheduledStartTime: ..., scheduledEndTime: ... });
+      }
+    } else {
+      // Update calendar event
+      setCalendarEvents(calendarEvents.map(e => 
+        e.id === item.event.id ? updatedEvent : e
+      ));
+    }
+  }, [allEvents, calendarEvents, tasks]);
 
   const calculateTime = useCallback((element: HTMLElement, y: number) => {
     const hour = parseInt(element.getAttribute('data-hour') || '0');
@@ -224,7 +270,8 @@ export const Calendar: React.FC = () => {
   }, [dragState.isDragging, handleMouseMove, handleMouseUp]);
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <DndProvider backend={HTML5Backend}>
+      <div className="flex flex-col h-full bg-white">
       {/* Calendar Controls */}
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center space-x-2">
@@ -330,6 +377,7 @@ export const Calendar: React.FC = () => {
             onTimeSlotClick={handleTimeSlotClick}
             onAllDayClick={handleAllDayClick}
             onMouseDown={handleMouseDown}
+            onEventDrop={handleEventDrop}
           />
         )}
         
@@ -341,6 +389,7 @@ export const Calendar: React.FC = () => {
             onTimeSlotClick={handleTimeSlotClick}
             onAllDayClick={handleAllDayClick}
             onMouseDown={handleMouseDown}
+            onEventDrop={handleEventDrop}
           />
         )}
 
@@ -350,6 +399,7 @@ export const Calendar: React.FC = () => {
             events={allEvents}
             onEventClick={handleEventClick}
             onDateClick={handleTimeSlotClick}
+            onEventDrop={handleEventDrop}
           />
         )}
       </div>
@@ -377,7 +427,8 @@ export const Calendar: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </DndProvider>
   );
 };
 
