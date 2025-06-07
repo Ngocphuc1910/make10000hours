@@ -7,7 +7,7 @@ import WeekView from './WeekView';
 import DayView from './DayView';
 import MonthView from './MonthView';
 import EventDialog from './EventDialog';
-import { mockEvents } from './mockData';
+
 import { useTaskStore } from '../../store/taskStore';
 import { mergeEventsAndTasks, calculateNewEventTime, isValidDrop } from './utils';
 import TaskForm from '../../components/tasks/TaskForm';
@@ -22,7 +22,7 @@ interface DragState {
 export const Calendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentView, setCurrentView] = useState<CalendarView>('week');
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(mockEvents);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent>();
   const [selectedDate, setSelectedDate] = useState<Date>();
