@@ -10,23 +10,12 @@
 
 /* Dragging states */
 .dragging {
-  transform: rotate(2deg);
   z-index: 1000;
   filter: drop-shadow(0 10px 25px rgba(0, 0, 0, 0.15));
 }
 
 .task-item.dragging {
   border-radius: 8px;
-  animation: dragPulse 0.6s ease-in-out infinite alternate;
-}
-
-@keyframes dragPulse {
-  0% {
-    transform: scale(0.98) rotate(1deg);
-  }
-  100% {
-    transform: scale(1.02) rotate(2deg);
-  }
 }
 
 /* Drop indicator enhancements */
@@ -73,18 +62,7 @@
 
 /* Dragged event preview time updates */
 .task-item.dragging .text-xs {
-  animation: timeUpdate 0.3s ease-in-out;
-}
-
-@keyframes timeUpdate {
-  0% {
-    opacity: 0.7;
-    transform: translateY(-2px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  /* No animation */
 }
 
 /* End time indicator styling */

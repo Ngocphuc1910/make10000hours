@@ -46,7 +46,7 @@ export const DraggableEvent: React.FC<DraggableEventProps> = ({
   const eventContent = children || (
     <div className="text-xs text-white font-medium truncate px-2 py-1">
       {!event.isAllDay && (
-        <div className="text-[10px] opacity-80 transition-all duration-200">
+        <div className="text-[10px] opacity-80">
           {formatTimeForDisplay(event.start)}
         </div>
       )}
@@ -58,8 +58,8 @@ export const DraggableEvent: React.FC<DraggableEventProps> = ({
     <div
       ref={event.isDraggable !== false ? drag as any : null}
       className={`
-        task-item relative rounded cursor-pointer transition-all duration-200
-        ${isDragging ? 'opacity-60 scale-95 dragging shadow-lg' : 'hover:shadow-md'}
+        task-item relative rounded cursor-pointer
+        ${isDragging ? 'opacity-60 dragging shadow-lg' : 'hover:shadow-md'}
         ${event.isDraggable !== false ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}
         ${className}
       `}
