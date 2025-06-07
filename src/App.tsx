@@ -92,26 +92,49 @@ const App = (): React.JSX.Element => {
   const { initialize } = useUserStore();
   const { setIsAddingTask } = useTaskStore();
   const { isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar } = useUIStore();
-  
-  // Use selectors for timer state - only subscribe to what we need for the global timer
-  const isRunning = useTimerStore(state => state.isRunning);
-  const isActiveDevice = useTimerStore(state => state.isActiveDevice);
-  const tick = useTimerStore(state => state.tick);
 
   // Global timer interval - runs regardless of current page
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    
-    if (isRunning && isActiveDevice) {
-      interval = setInterval(() => {
-        tick();
-      }, 1000);
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
+    let intervalId: NodeJS.Timeout | null = null;
+
+    const manageInterval = () => {
+      // Get the latest state directly from the store
+      const { isRunning, isActiveDevice } = useTimerStore.getState();
+
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+
+      if (isRunning && isActiveDevice) {
+        intervalId = setInterval(() => {
+          // Call tick using getState to ensure it's the most current version from the store
+          useTimerStore.getState().tick();
+        }, 1000);
+      }
     };
-  }, [isRunning, isActiveDevice, tick]);
+
+    // Initial setup of the interval based on the current store state
+    manageInterval();
+
+    // Subscribe to changes in timer store state relevant to the interval
+    const unsubscribe = useTimerStore.subscribe(
+      (state, prevState) => {
+        // Only re-evaluate the interval if isRunning or isActiveDevice changes
+        if (state.isRunning !== prevState.isRunning || state.isActiveDevice !== prevState.isActiveDevice) {
+          manageInterval();
+        }
+      }
+    );
+
+    // Cleanup function to clear interval and unsubscribe when App component unmounts
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+      unsubscribe();
+    };
+  }, []); 
 
   useEffect(() => {
     // TODO: fix the problem that this runs twice on initial load. Check for React.StrictMode
