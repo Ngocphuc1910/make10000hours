@@ -14,6 +14,7 @@ interface TimerState {
   totalTime: number; // total seconds for current session
   mode: TimerMode;
   sessionsCompleted: number;
+  enableStartPauseBtn: boolean; // Whether to enable start/pause button
   
   // Current task
   currentTask: Task | null;
@@ -56,6 +57,7 @@ interface TimerState {
   syncFromRemoteState: (remoteState: TimerStateModel) => Promise<void>;
   cleanupPersistence: () => void;
   resetTimerState: () => void;
+  setEnableStartPauseBtn: (enable: boolean) => void;
 }
 
 export const useTimerStore = create<TimerState>((set, get) => {
@@ -72,6 +74,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
     sessionStartTimerPosition: null,
     lastCountedMinute: null,
     settings: DEFAULT_SETTINGS.timer,
+    enableStartPauseBtn: true,
     
     // Persistence state
     isLoading: false,
@@ -644,7 +647,11 @@ export const useTimerStore = create<TimerState>((set, get) => {
         isActiveDevice: true,
         syncError: null
       });
-    }
+    },
+
+    setEnableStartPauseBtn: (enable: boolean) => {
+      set({ enableStartPauseBtn: enable });
+    },
   };
 });
 
