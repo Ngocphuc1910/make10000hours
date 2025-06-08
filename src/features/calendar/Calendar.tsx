@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, isSameDay } from 'date-fns';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -42,6 +42,44 @@ export const Calendar: React.FC = () => {
   const allEvents = useMemo(() => {
     return mergeEventsAndTasks(calendarEvents, tasks, projects);
   }, [calendarEvents, tasks, projects]);
+
+  // Keyboard shortcuts for view switching
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only handle shortcuts if no modal is open and target is not an input/textarea
+      const target = event.target as HTMLElement;
+      if (
+        editingTaskId || 
+        isDragCreateTaskOpen || 
+        isTimeSlotTaskOpen ||
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      switch (event.key.toLowerCase()) {
+        case 'd':
+          event.preventDefault();
+          setCurrentView('day');
+          break;
+        case 'w':
+          event.preventDefault();
+          setCurrentView('week');
+          break;
+        case 'm':
+          event.preventDefault();
+          setCurrentView('month');
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [editingTaskId, isDragCreateTaskOpen, isTimeSlotTaskOpen]);
   
   const handleNavigate = (direction: 'prev' | 'next' | 'today') => {
     if (direction === 'today') {
