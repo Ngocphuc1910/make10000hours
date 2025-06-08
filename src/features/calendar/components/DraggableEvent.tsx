@@ -1,7 +1,7 @@
 import React from 'react';
 import { useDrag } from 'react-dnd';
 import { CalendarEvent, DragItem } from '../types';
-import { formatTimeForDisplay } from '../utils';
+import { formatTimeForDisplay, getEventDurationMinutes } from '../utils';
 
 interface DraggableEventProps {
   event: CalendarEvent;
@@ -22,11 +22,28 @@ export const DraggableEvent: React.FC<DraggableEventProps> = ({
 }) => {
   const [{ isDragging }, drag] = useDrag<DragItem, any, { isDragging: boolean }>({
     type: 'event',
-    item: {
-      type: 'event' as const,
-      event,
-      sourceDate: event.start,
-      sourceView: sourceView as any
+    item: () => {
+      const displayDuration = getEventDurationMinutes(event);
+      const actualDuration = event.end.getTime() - event.start.getTime();
+      
+      // Debug logging for zero-duration events
+      if (actualDuration === 0) {
+        console.log('Creating drag item for zero-duration event:', {
+          eventId: event.id,
+          actualDuration: actualDuration,
+          displayDurationMinutes: displayDuration,
+          start: event.start,
+          end: event.end
+        });
+      }
+      
+      return {
+        type: 'event' as const,
+        event,
+        sourceDate: event.start,
+        sourceView: sourceView as any,
+        displayDurationMinutes: displayDuration
+      };
     },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
