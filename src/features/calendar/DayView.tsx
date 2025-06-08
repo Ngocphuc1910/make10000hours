@@ -3,6 +3,7 @@ import { format, isSameDay, isToday } from 'date-fns';
 import { CalendarEvent, DragItem, DropResult } from './types';
 import { DraggableEvent } from './components/DraggableEvent';
 import { DroppableTimeSlot } from './components/DroppableTimeSlot';
+import { useTaskStore } from '../../store/taskStore';
 
 interface DayViewProps {
   currentDate: Date;
@@ -13,6 +14,7 @@ interface DayViewProps {
   onMouseDown?: (e: React.MouseEvent<HTMLElement>) => void;
   onDragCreate?: (start: Date, end: Date) => void;
   onEventDrop?: (item: DragItem, dropResult: DropResult) => void;
+  clearDragIndicator?: boolean;
 }
 
 interface DragState {
@@ -32,8 +34,10 @@ export const DayView: React.FC<DayViewProps> = ({
   onTimeSlotClick,
   onAllDayClick,
   onDragCreate,
-  onEventDrop
+  onEventDrop,
+  clearDragIndicator
 }) => {
+  const { projects } = useTaskStore();
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
     startElement: null,
@@ -56,6 +60,13 @@ export const DayView: React.FC<DayViewProps> = ({
   });
 
   const dayColumnRef = useRef<HTMLDivElement>(null);
+
+  // Get last used project color for drag indicator
+  const getLastUsedProjectColor = useCallback(() => {
+    const lastUsedProjectId = localStorage.getItem('lastUsedProjectId') || 'no-project';
+    const lastUsedProject = projects.find(p => p.id === lastUsedProjectId);
+    return lastUsedProject?.color || '#EF4444'; // fallback to red
+  }, [projects]);
 
   // Get regular events for the day
   const getDayEvents = () => {
@@ -94,8 +105,8 @@ export const DayView: React.FC<DayViewProps> = ({
     const rect = element.getBoundingClientRect();
     const minutes = Math.floor((y / rect.height) * 60);
     
-    // Round minutes to nearest 5
-    const roundedMinutes = Math.round(minutes / 5) * 5;
+    // Round minutes to nearest 15
+    const roundedMinutes = Math.round(minutes / 15) * 15;
     const totalMinutes = hour * 60 + roundedMinutes;
     
     const resultDate = new Date(currentDate);
@@ -183,20 +194,14 @@ export const DayView: React.FC<DayViewProps> = ({
       onDragCreate?.(dragIndicator.startTime, dragIndicator.endTime);
     }
 
-    // Reset drag state
+    // Reset drag state but keep indicator visible for task creation
     setDragState({
       isDragging: false,
       startElement: null,
       startY: 0,
       startTime: null
     });
-    setDragIndicator({
-      visible: false,
-      top: 0,
-      height: 0,
-      startTime: null,
-      endTime: null
-    });
+    // Don't reset dragIndicator here - let it persist during task creation
   }, [dragState, dragIndicator, onDragCreate]);
 
   // Add document event listeners for drag
@@ -217,6 +222,19 @@ export const DayView: React.FC<DayViewProps> = ({
     if (!start || !end) return '';
     return `${format(start, 'HH:mm')} - ${format(end, 'HH:mm')}`;
   };
+
+  // React to clearDragIndicator prop changes
+  React.useEffect(() => {
+    if (clearDragIndicator) {
+      setDragIndicator({
+        visible: false,
+        top: 0,
+        height: 0,
+        startTime: null,
+        endTime: null
+      });
+    }
+  }, [clearDragIndicator]);
 
   return (
     <div className="flex flex-col h-full">
@@ -319,12 +337,14 @@ export const DayView: React.FC<DayViewProps> = ({
               {/* Drag indicator */}
               {dragIndicator.visible && (
                 <div
-                  className="absolute bg-primary bg-opacity-70 rounded pointer-events-none z-20 px-2 py-1"
+                  className="absolute rounded pointer-events-none z-20 px-2 py-1"
                   style={{
                     top: `${dragIndicator.top}px`,
                     height: `${dragIndicator.height}px`,
                     left: '2px',
                     right: '2px',
+                    backgroundColor: getLastUsedProjectColor(),
+                    opacity: 0.7,
                   }}
                 >
                   <div className="text-xs text-white font-medium">
