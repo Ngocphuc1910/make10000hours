@@ -82,16 +82,27 @@ export const DayView: React.FC<DayViewProps> = ({
     );
   };
 
+  // Calculate all-day row height based on number of events
+  const getAllDayRowHeight = () => {
+    const eventCount = getAllDayEvents().length;
+    return Math.max(40, eventCount * 26 + 12); // 24px per event + 2px gap + 12px padding (4px top + 8px bottom)
+  };
+
   // Calculate event position and height
   const getEventStyle = (event: CalendarEvent) => {
     const startHour = event.start.getHours() + (event.start.getMinutes() / 60);
     const endHour = event.end.getHours() + (event.end.getMinutes() / 60);
     const duration = endHour - startHour;
+    
+    // For zero-duration events, use 30-minute height for display
+    const displayHeight = duration === 0 
+      ? 30  // 30 minutes = 30px (since TIME_SLOT_HEIGHT is 60px per hour)
+      : Math.max(duration * TIME_SLOT_HEIGHT, 30);
 
     return {
       position: 'absolute' as const,
       top: `${startHour * TIME_SLOT_HEIGHT}px`,
-      height: `${Math.max(duration * TIME_SLOT_HEIGHT, 30)}px`,
+      height: `${displayHeight}px`,
       left: '2px',
       right: '2px',
       backgroundColor: event.color,
@@ -262,33 +273,53 @@ export const DayView: React.FC<DayViewProps> = ({
         {/* All Day Row */}
         <div className="bg-white border-b border-gray-200">
           <div className="grid" style={{ gridTemplateColumns: '64px 1fr', paddingRight: 'var(--scrollbar-width)' }}>
-            <div className="flex items-center justify-center text-xs text-gray-500 py-2 border-r border-gray-200">
+            <div 
+              className="flex items-center justify-center text-xs text-gray-500 border-r border-gray-200"
+              style={{ height: `${getAllDayRowHeight()}px` }}
+            >
               All day
             </div>
             <DroppableTimeSlot
               date={currentDate}
               isAllDay={true}
               onDrop={onEventDrop!}
-              className="min-h-[40px] cursor-pointer hover:bg-gray-50 transition-colors p-1 relative"
+              className="cursor-pointer hover:bg-gray-50 transition-colors relative"
+              style={{ height: `${getAllDayRowHeight()}px` }}
             >
               <div 
-                className="w-full h-full"
-                onClick={() => onAllDayClick?.(currentDate)}
+                className="w-full h-full flex flex-col items-center justify-start px-1 pt-1 pb-2 overflow-hidden"
+                onClick={(e) => {
+                  // Only trigger if clicking on empty space
+                  if (e.target === e.currentTarget) {
+                    onAllDayClick?.(currentDate);
+                  }
+                }}
               >
-                {getAllDayEvents().map(event => (
-                  <DraggableEvent
+                {getAllDayEvents().map((event, index) => (
+                  <div
                     key={event.id}
-                    event={event}
-                    onClick={onEventClick}
-                    sourceView="day"
-                    className={`mx-1 mb-1 px-2 py-1 text-xs rounded-md truncate flex items-center ${
-                      event.isTask ? 'border-l-2 border-white border-opacity-50' : ''
-                    }`}
+                    className="flex-shrink-0 relative w-full"
+                    style={{ height: '24px', marginBottom: '2px', minWidth: 0 }}
                   >
-                    <div className="flex items-center text-white">
-                      {event.title}
-                    </div>
-                  </DraggableEvent>
+                    <DraggableEvent
+                      event={event}
+                      onClick={onEventClick}
+                      sourceView="day"
+                      className={`absolute inset-0 px-2 py-1 text-xs rounded truncate flex items-center ${
+                        event.isTask ? 'border-l-2 border-white border-opacity-50' : ''
+                      }`}
+                      style={{
+                        backgroundColor: event.color,
+                        position: 'relative',
+                        width: '100%',
+                        height: '100%'
+                      }}
+                    >
+                      <div className="flex items-center text-white w-full">
+                        <span className="truncate">{event.title}</span>
+                      </div>
+                    </DraggableEvent>
+                  </div>
                 ))}
               </div>
             </DroppableTimeSlot>
@@ -326,7 +357,21 @@ export const DayView: React.FC<DayViewProps> = ({
                     onClick={(e) => {
                       if (e.target === e.currentTarget && !dragState.isDragging) {
                         const clickedDate = new Date(currentDate);
-                        clickedDate.setHours(hour);
+                        clickedDate.setHours(hour, 0, 0, 0); // Set hour and reset minutes/seconds
+                        
+                        // Show time slot indicator using existing dragIndicator system
+                        const startTime = new Date(clickedDate);
+                        const endTime = new Date(clickedDate);
+                        endTime.setHours(endTime.getHours() + 1); // 1-hour duration
+                        
+                        setDragIndicator({
+                          visible: true,
+                          top: hour * TIME_SLOT_HEIGHT,
+                          height: TIME_SLOT_HEIGHT,
+                          startTime,
+                          endTime
+                        });
+                        
                         onTimeSlotClick?.(clickedDate);
                       }
                     }}
@@ -402,6 +447,6 @@ export const DayView: React.FC<DayViewProps> = ({
       </div>
     </div>
   );
-};
+  };
 
 export default DayView;

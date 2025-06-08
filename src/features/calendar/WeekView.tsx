@@ -27,6 +27,7 @@ interface DragState {
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const TIME_SLOT_HEIGHT = 60; // pixels per hour
+const TIME_COLUMN_WIDTH = 64; // 16 * 4 = 64px (w-16)
 
 export const WeekView: React.FC<WeekViewProps> = ({
   currentDate,
@@ -91,16 +92,35 @@ export const WeekView: React.FC<WeekViewProps> = ({
     );
   };
 
+  // Calculate the maximum number of all-day events across all days
+  const getMaxAllDayEventsCount = () => {
+    return Math.max(
+      ...weekDays.map(day => getAllDayEvents(day).length),
+      1 // Minimum of 1 to ensure some height
+    );
+  };
+
+  // Calculate all-day row height based on max events
+  const getAllDayRowHeight = () => {
+    const maxEvents = getMaxAllDayEventsCount();
+    return Math.max(40, maxEvents * 26 + 12); // 24px per event + 2px gap + 12px padding
+  };
+
   // Calculate event position and height
   const getEventStyle = (event: CalendarEvent) => {
     const startHour = event.start.getHours() + (event.start.getMinutes() / 60);
     const endHour = event.end.getHours() + (event.end.getMinutes() / 60);
     const duration = endHour - startHour;
+    
+    // For zero-duration events, use 30-minute height for display
+    const displayHeight = duration === 0 
+      ? 30  // 30 minutes = 30px (since TIME_SLOT_HEIGHT is 60px per hour)
+      : Math.max(duration * TIME_SLOT_HEIGHT, 30);
 
     return {
       position: 'absolute' as const,
       top: `${startHour * TIME_SLOT_HEIGHT}px`,
-      height: `${Math.max(duration * TIME_SLOT_HEIGHT, 30)}px`,
+      height: `${displayHeight}px`,
       left: '2px',
       right: '2px',
       backgroundColor: event.color,
@@ -144,7 +164,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
 
     setDragIndicator({
       visible: true,
-      top: startY + (parseInt(element.getAttribute('data-hour') || '0') * TIME_SLOT_HEIGHT) + 100,
+      top: startY + (parseInt(element.getAttribute('data-hour') || '0') * TIME_SLOT_HEIGHT) + 80 + getAllDayRowHeight(),
       height: 1,
       startTime,
       endTime: startTime,
@@ -189,7 +209,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
       
       setDragIndicator(prev => ({
         ...prev,
-        top: top + 100, // Add offset for sticky headers
+        top: top + 80 + getAllDayRowHeight(), // Add offset for sticky headers
         height: Math.max(height, 30), // Minimum height
         endTime: endTime > dragState.startTime! ? endTime : dragState.startTime!,
         startTime: endTime > dragState.startTime! ? dragState.startTime! : endTime
@@ -263,20 +283,90 @@ export const WeekView: React.FC<WeekViewProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* Single scrollable container for perfect alignment */}
-      <div className="flex-1 overflow-auto" ref={scrollableRef}>
-        <div className="flex min-h-[calc(100vh-120px)]">
-          {/* Time column with sticky headers */}
-          <div className="w-16 flex-shrink-0 bg-white border-r border-gray-200 sticky left-0 z-20">
-            {/* GMT header */}
-            <div className="h-[60px] border-b border-gray-200 flex items-center justify-center text-xs text-gray-500 bg-white sticky top-0 z-30">
-              GMT+07
+      {/* Unified Grid Container */}
+      <div className="grid grid-cols-8 flex-1" style={{ gridTemplateColumns: '64px repeat(7, 1fr)' }}>
+        
+        {/* Fixed Date Headers Row */}
+        <div className="col-span-8 grid grid-cols-subgrid bg-white border-b border-gray-200 sticky top-0 z-30" style={{ height: '80px' }}>
+          {/* GMT header */}
+          <div className="border-r border-gray-200 flex items-center justify-center text-xs text-gray-500 bg-white">
+            GMT+07
+          </div>
+          {/* Day headers */}
+          {weekDays.map((day, dayIndex) => (
+            <div key={dayIndex} className={`flex flex-col items-center justify-center py-3 bg-white ${dayIndex < 6 ? 'border-r border-gray-200' : ''} ${isToday(day) ? 'bg-blue-50' : ''}`}>
+              <div className="text-xs text-gray-500 font-medium mb-1">{format(day, 'EEE').toUpperCase()}</div>
+              <div className={`text-lg font-medium ${isToday(day) ? 'text-primary bg-primary text-white rounded-full w-8 h-8 flex items-center justify-center' : 'text-gray-800'}`}>
+                {format(day, 'd')}
+              </div>
             </div>
-            {/* All day header */}
-            <div className="h-[40px] border-b border-gray-200 flex items-center justify-center text-xs text-gray-500 bg-white sticky top-[60px] z-30">
-              All day
+          ))}
+        </div>
+
+        {/* All Day Events Row */}
+        <div className="col-span-8 grid grid-cols-subgrid bg-white border-b border-gray-200 sticky z-30" 
+             style={{ 
+               height: `${getAllDayRowHeight()}px`,
+               top: '80px'
+             }}>
+          {/* All day label */}
+          <div className="border-r border-gray-200 flex items-center justify-center text-xs text-gray-500 bg-white">
+            All day
+          </div>
+          {/* All day events */}
+          {weekDays.map((day, dayIndex) => (
+            <div key={dayIndex} className={`relative ${dayIndex < 6 ? 'border-r border-gray-200' : ''}`}>
+              <DroppableTimeSlot
+                date={day}
+                isAllDay={true}
+                onDrop={onEventDrop!}
+                className="h-full cursor-pointer hover:bg-gray-50 transition-colors relative"
+              >
+                <div 
+                  className="w-full h-full flex flex-col items-center justify-start px-1 pt-1 pb-2 overflow-hidden"
+                  onClick={(e) => {
+                    // Only trigger if clicking on empty space
+                    if (e.target === e.currentTarget) {
+                      onAllDayClick?.(day);
+                    }
+                  }}
+                >
+                  {getAllDayEvents(day).map((event, index) => (
+                    <div
+                      key={event.id}
+                      className="flex-shrink-0 relative w-full"
+                      style={{ height: '24px', marginBottom: '2px', minWidth: 0 }}
+                    >
+                      <DraggableEvent
+                        event={event}
+                        onClick={onEventClick}
+                        sourceView="week"
+                        className={`absolute inset-0 px-2 py-1 text-xs rounded truncate flex items-center ${
+                          event.isTask ? 'border-l-2 border-white border-opacity-50' : ''
+                        }`}
+                        style={{
+                          backgroundColor: event.color,
+                          position: 'relative',
+                          width: '100%',
+                          height: '100%'
+                        }}
+                      >
+                        <div className="flex items-center text-white w-full">
+                          <span className="truncate">{event.title}</span>
+                        </div>
+                      </DraggableEvent>
+                    </div>
+                  ))}
+                </div>
+              </DroppableTimeSlot>
             </div>
-            {/* Time slots */}
+          ))}
+        </div>
+
+        {/* Scrollable Content Area */}
+        <div className="col-span-8 grid grid-cols-subgrid overflow-auto" ref={scrollableRef}>
+          {/* Time Column for all hours */}
+          <div className="bg-white border-r border-gray-200">
             {HOURS.map(hour => (
               <div key={hour} className="h-[60px] border-b border-gray-200 flex items-start justify-center pt-1">
                 <span className="text-xs text-gray-500">{format(new Date().setHours(hour, 0), 'HH:mm')}</span>
@@ -284,139 +374,114 @@ export const WeekView: React.FC<WeekViewProps> = ({
             ))}
           </div>
 
-          {/* Day columns with sticky headers */}
-          <div className="flex-1 week-grid-cols" ref={weekGridRef}>
+          {/* Day Columns */}
+          <div className="contents" ref={weekGridRef}>
             {weekDays.map((day, dayIndex) => (
               <div key={dayIndex} className={`relative day-column ${dayIndex < 6 ? 'border-r border-gray-200' : ''}`}>
-                {/* Day header - sticky positioned */}
-                <div className={`h-[60px] border-b border-gray-200 flex flex-col items-center justify-center py-3 bg-white sticky top-0 z-20 ${isToday(day) ? 'bg-blue-50' : ''}`}>
-                  <div className="text-xs text-gray-500 font-medium mb-1">{format(day, 'EEE').toUpperCase()}</div>
-                  <div className={`text-lg font-medium ${isToday(day) ? 'text-primary bg-primary text-white rounded-full w-8 h-8 flex items-center justify-center' : 'text-gray-800'}`}>
-                    {format(day, 'd')}
-                  </div>
-                </div>
-
-                {/* All Day Row - sticky positioned */}
-                <div className="h-[40px] border-b border-gray-200 bg-white sticky top-[60px] z-20">
-                  <DroppableTimeSlot
-                    date={day}
-                    isAllDay={true}
-                    onDrop={onEventDrop!}
-                    className="h-full cursor-pointer hover:bg-gray-50 transition-colors p-1 relative"
-                  >
-                    <div 
-                      className="w-full h-full"
-                      onClick={() => onAllDayClick?.(day)}
-                    >
-                      {getAllDayEvents(day).map(event => (
-                        <DraggableEvent
-                          key={event.id}
-                          event={event}
-                          onClick={onEventClick}
-                          sourceView="week"
-                          className={`mx-1 mb-1 px-2 py-1 text-xs rounded-md truncate flex items-center ${
-                            event.isTask ? 'border-l-2 border-white border-opacity-50' : ''
-                          }`}
-                        >
-                          <div className="flex items-center text-white">
-                            {event.title}
-                          </div>
-                        </DraggableEvent>
-                      ))}
-                    </div>
-                  </DroppableTimeSlot>
-                </div>
-
-                {/* Time slots grid */}
-                {HOURS.map(hour => (
-                  <DroppableTimeSlot
-                    key={hour}
-                    date={day}
-                    hour={hour}
-                    onDrop={onEventDrop!}
-                    className="h-[60px] border-b border-gray-200 cursor-cell hover:bg-gray-50 hover:bg-opacity-50 relative"
-                  >
-                    <div
-                      className="w-full h-full"
-                      data-day={dayIndex}
-                      data-hour={hour}
-                      onMouseDown={handleMouseDown}
-                      onClick={(e) => {
-                        if (e.target === e.currentTarget && !dragState.isDragging) {
-                          const clickedDate = new Date(day);
-                          clickedDate.setHours(hour);
-                          onTimeSlotClick?.(clickedDate);
-                        }
-                      }}
-                    />
-                  </DroppableTimeSlot>
-                ))}
-
-                {/* Drag indicator for this day */}
-                {dragIndicator.visible && dragIndicator.dayIndex === dayIndex && (
+              {/* Time slots grid */}
+              {HOURS.map(hour => (
+                <DroppableTimeSlot
+                  key={hour}
+                  date={day}
+                  hour={hour}
+                  onDrop={onEventDrop!}
+                  className="h-[60px] border-b border-gray-200 cursor-cell hover:bg-gray-50 hover:bg-opacity-50 relative"
+                >
                   <div
-                    className="absolute rounded pointer-events-none z-20 px-2 py-1"
-                    style={{
-                      top: `${dragIndicator.top}px`,
-                      height: `${dragIndicator.height}px`,
-                      left: '2px',
-                      right: '2px',
-                      backgroundColor: getLastUsedProjectColor(),
-                      opacity: 0.7,
-                    }}
-                  >
-                    <div className="text-xs text-white font-medium">
-                      {formatTimeRange(dragIndicator.startTime, dragIndicator.endTime)}
-                    </div>
-                  </div>
-                )}
-
-                {/* Events for this day - positioned absolutely */}
-                {getDayEvents(day).map(event => (
-                  <DraggableEvent
-                    key={event.id}
-                    event={event}
-                    onClick={onEventClick}
-                    sourceView="week"
-                    className={`rounded absolute ${
-                      event.isTask ? 'border-l-4' : ''
-                    }`}
-                    style={{
-                      ...getEventStyle(event),
-                      top: `${parseFloat(getEventStyle(event).top) + 100}px`, // Offset for sticky headers
-                      borderLeftColor: event.isTask ? event.color : undefined
-                    }}
-                  >
-                    <div className="text-xs text-white font-medium px-2 py-1">
-                      <div className="flex items-center">
-                        <span className="truncate">{event.title}</span>
-                      </div>
-                      <div className="opacity-80 mt-1">
-                        {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
-                      </div>
-                      {!event.isTask && event.description && (
-                        <div className="text-xs opacity-75 mt-1 truncate">
-                          {event.description}
-                        </div>
-                      )}
-                    </div>
-                  </DraggableEvent>
-                ))}
-
-                {/* Current time indicator */}
-                {isToday(day) && (
-                  <div
-                    className="current-time-indicator absolute"
-                    style={{
-                      top: `${(new Date().getHours() * TIME_SLOT_HEIGHT) + ((new Date().getMinutes() / 60) * TIME_SLOT_HEIGHT) + 100}px`, // Offset for sticky headers
-                      left: 0,
-                      right: 0,
-                      zIndex: 15,
+                    className="w-full h-full"
+                    data-day={dayIndex}
+                    data-hour={hour}
+                    onMouseDown={handleMouseDown}
+                    onClick={(e) => {
+                      if (e.target === e.currentTarget && !dragState.isDragging) {
+                        const clickedDate = new Date(day);
+                        clickedDate.setHours(hour, 0, 0, 0); // Set hour and reset minutes/seconds
+                        
+                        // Show time slot indicator using existing dragIndicator system
+                        const startTime = new Date(clickedDate);
+                        const endTime = new Date(clickedDate);
+                        endTime.setHours(endTime.getHours() + 1); // 1-hour duration
+                        
+                        setDragIndicator({
+                          visible: true,
+                          top: hour * TIME_SLOT_HEIGHT + 80 + getAllDayRowHeight(),
+                          height: TIME_SLOT_HEIGHT,
+                          startTime,
+                          endTime,
+                          dayIndex
+                        });
+                        
+                        onTimeSlotClick?.(clickedDate);
+                      }
                     }}
                   />
-                )}
-              </div>
-            ))}
+                </DroppableTimeSlot>
+              ))}
+
+              {/* Drag indicator for this day */}
+              {dragIndicator.visible && dragIndicator.dayIndex === dayIndex && (
+                <div
+                  className="absolute rounded pointer-events-none z-20 px-2 py-1"
+                  style={{
+                    top: `${dragIndicator.top - 80 - getAllDayRowHeight()}px`,
+                    height: `${dragIndicator.height}px`,
+                    left: '2px',
+                    right: '2px',
+                    backgroundColor: getLastUsedProjectColor(),
+                    opacity: 0.7,
+                  }}
+                >
+                  <div className="text-xs text-white font-medium">
+                    {formatTimeRange(dragIndicator.startTime, dragIndicator.endTime)}
+                  </div>
+                </div>
+              )}
+
+              {/* Events for this day - positioned absolutely */}
+              {getDayEvents(day).map(event => (
+                <DraggableEvent
+                  key={event.id}
+                  event={event}
+                  onClick={onEventClick}
+                  sourceView="week"
+                  className={`rounded absolute ${
+                    event.isTask ? 'border-l-4' : ''
+                  }`}
+                  style={{
+                    ...getEventStyle(event),
+                    borderLeftColor: event.isTask ? event.color : undefined
+                  }}
+                >
+                  <div className="text-xs text-white font-medium px-2 py-1">
+                    <div className="flex items-center">
+                      <span className="truncate">{event.title}</span>
+                    </div>
+                    <div className="opacity-80 mt-1">
+                      {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
+                    </div>
+                    {!event.isTask && event.description && (
+                      <div className="text-xs opacity-75 mt-1 truncate">
+                        {event.description}
+                      </div>
+                    )}
+                  </div>
+                </DraggableEvent>
+              ))}
+
+              {/* Current time indicator */}
+              {isToday(day) && (
+                <div
+                  className="current-time-indicator absolute"
+                  style={{
+                    top: `${(new Date().getHours() * TIME_SLOT_HEIGHT) + ((new Date().getMinutes() / 60) * TIME_SLOT_HEIGHT)}px`,
+                    left: 0,
+                    right: 0,
+                    zIndex: 15,
+                  }}
+                />
+              )}
+            </div>
+          ))}
           </div>
         </div>
       </div>
