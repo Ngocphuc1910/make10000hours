@@ -15,7 +15,7 @@ export const Sidebar: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const navItems: NavItem[] = [
-    { label: 'Dashboard', path: '/dashboard', icon: 'dashboard-line' },
+    { label: 'Productivity Insights', path: '/dashboard', icon: 'dashboard-line' },
     { label: 'Task Management', path: '/projects', icon: 'task-line' },
     { label: 'Pomodoro Timer', path: '/pomodoro', icon: 'timer-line' },
     { label: 'Calendar', path: '/calendar', icon: 'calendar-line' },

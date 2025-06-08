@@ -4,12 +4,14 @@ import { formatMinutes } from '../../utils/timeUtils';
 import { useTaskStore } from '../../store/taskStore';
 import { TaskStatusBoard } from '../tasks';
 import { Icon } from '../ui/Icon';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import ProjectView from './views/ProjectView';
+import { Tooltip } from '../ui/Tooltip';
 
 type ViewType = 'project' | 'status';
 
 export const ProjectsPage: React.FC = () => {
+  const navigate = useNavigate();
   // Get initial view type from localStorage or default to 'status'
   const [viewType, setViewType] = useState<ViewType>(() => {
     const saved = localStorage.getItem('taskManagementViewType');
@@ -64,8 +66,7 @@ export const ProjectsPage: React.FC = () => {
       onDragEnd={handleDragEnd}
     >
       {/* Header */}
-      <div className="border-b border-gray-200 bg-white flex-shrink-0">
-        <div className="px-6 py-4 flex items-center justify-between">
+      <div className="h-16 border-b border-gray-200 bg-white flex-shrink-0 flex items-center justify-between px-6">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-semibold text-gray-900">Task Management</h1>
             
@@ -82,7 +83,7 @@ export const ProjectsPage: React.FC = () => {
             </div>
           </div>
           
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-4">
             {/* View Type Switch */}
             <div className="inline-flex rounded-full bg-gray-100 p-1">
               <button 
@@ -114,9 +115,56 @@ export const ProjectsPage: React.FC = () => {
                 By Project
               </button>
             </div>
+            
+            {/* Navigation Icons */}
+            <Tooltip text="Pomodoro Timer">
+              <button 
+                className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+                onClick={() => navigate('/pomodoro')}
+                aria-label="Go to Pomodoro Timer"
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  <Icon name="timer-line" size={20} />
+                </span>
+              </button>
+            </Tooltip>
+            
+            <Tooltip text="Task management">
+              <button 
+                className="p-2 rounded-full bg-gray-100 !rounded-button whitespace-nowrap"
+                aria-label="Current page: Task Management"
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  <Icon name="task-line" size={20} />
+                </span>
+              </button>
+            </Tooltip>
+            
+            <Tooltip text="Productivity Insights">
+              <button 
+                className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+                onClick={() => navigate('/dashboard')}
+                aria-label="Go to Dashboard"
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  <Icon name="dashboard-line" size={20} />
+                </span>
+              </button>
+            </Tooltip>
+            
+            <Tooltip text="Calendar">
+              <button 
+                className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+                onClick={() => navigate('/calendar')}
+                aria-label="Go to Calendar"
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  <Icon name="calendar-line" size={20} />
+                </span>
+              </button>
+            </Tooltip>
           </div>
         </div>
-      </div>
       
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto">
