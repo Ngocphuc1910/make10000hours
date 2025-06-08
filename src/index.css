@@ -572,4 +572,10 @@ input[type="number"]::-webkit-outer-spin-button {
   opacity: 0.6 !important;
 }
 
+/* Week View Grid Alignment Fix */
+.week-grid-cols {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
 
