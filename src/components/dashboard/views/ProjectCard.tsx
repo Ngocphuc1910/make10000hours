@@ -22,19 +22,17 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const deleteProject = useTaskStore(state => state.deleteProject);
   const updateProject = useTaskStore(state => state.updateProject);
   const updateTask = useTaskStore(state => state.updateTask);
+  const reorderTasks = useTaskStore(state => state.reorderTasks);
+  const moveTaskToStatusAndPosition = useTaskStore(state => state.moveTaskToStatusAndPosition);
   const [projectName, setProjectName] = useState(project?.name || '');
   
   // Persist activeFilter state in localStorage per project to prevent automatic tab switching
   const [activeFilter, setActiveFilter] = useState<'pomodoro' | 'todo' | 'completed' | null>(() => {
     if (!project) return null;
     
-    // For now, always start with no filter selected to show all tasks by default
-    // Later this can be changed to restore saved filter if desired
-    return null;
-    
-    // Commented out localStorage restoration to ensure no chip is selected by default:
-    // const saved = localStorage.getItem(`projectFilter_${project.id}`);
-    // return (saved === 'pomodoro' || saved === 'todo' || saved === 'completed') ? saved : null;
+    // Restore saved filter from localStorage to maintain filter state across re-renders
+    const saved = localStorage.getItem(`projectFilter_${project.id}`);
+    return (saved === 'pomodoro' || saved === 'todo' || saved === 'completed') ? saved : null;
   });
   
   const [isAddingTask, setIsAddingTask] = useState(false);
@@ -56,6 +54,58 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       }
     }
   }, [activeFilter, project]);
+
+  // Handle task reordering within the same project
+  const handleTaskReorder = (draggedTaskId: string, targetTaskId: string, insertAfter: boolean = false) => {
+    if (!project) return;
+    
+    const allTasks = useTaskStore.getState().tasks;
+    const targetIndex = allTasks.findIndex(t => t.id === targetTaskId);
+    const newIndex = insertAfter ? targetIndex + 1 : targetIndex;
+    
+    reorderTasks(draggedTaskId, newIndex);
+  };
+
+  // Handle cross-project moves with positioning
+  const handleCrossProjectMove = async (draggedTaskId: string, targetTaskId: string, newProjectId: string, insertAfter: boolean = false) => {
+    if (!project) return;
+    
+    const allTasks = useTaskStore.getState().tasks;
+    const targetIndex = allTasks.findIndex(t => t.id === targetTaskId);
+    const finalIndex = insertAfter ? targetIndex + 1 : targetIndex;
+    
+    // Determine the target status based on the active filter
+    let targetStatus: Task['status'] | undefined;
+    let targetCompleted: boolean | undefined;
+    
+    if (activeFilter) {
+      // If there's an active filter, update the status to match the filter
+      targetStatus = activeFilter;
+      targetCompleted = activeFilter === 'completed' ? true : false;
+    } else {
+      // If no filter is active, keep the original status
+      const draggedTask = allTasks.find(t => t.id === draggedTaskId);
+      targetStatus = draggedTask?.status;
+      targetCompleted = draggedTask?.completed;
+    }
+    
+    // Update the task's project and status (if filter is active) while positioning
+    const draggedTask = allTasks.find(t => t.id === draggedTaskId);
+    if (draggedTask) {
+      const updateData: Partial<Task> = {
+        projectId: newProjectId,
+        ...(targetStatus && { status: targetStatus }),
+        ...(targetCompleted !== undefined && { completed: targetCompleted })
+      };
+      
+      await updateTask(draggedTaskId, updateData);
+      
+      // Small delay to ensure the project update is processed, then reorder
+      setTimeout(() => {
+        reorderTasks(draggedTaskId, finalIndex);
+      }, 50);
+    }
+  };
 
   // Update selected color when project color changes
   React.useEffect(() => {
@@ -281,22 +331,31 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     e.stopPropagation();
     setDraggedOverFilter(null);
     
-    try {
-      const droppedData = JSON.parse(e.dataTransfer.getData('application/json'));
+    // Get task data from the new format
+    const draggedTaskId = e.dataTransfer.getData('text/plain');
+    const draggedTaskProjectId = e.dataTransfer.getData('application/x-task-project');
+    
+    if (draggedTaskId && project) {
+      // Get the current task to check its current status
+      const allTasks = useTaskStore.getState().tasks;
+      const draggedTask = allTasks.find(t => t.id === draggedTaskId);
       
-      if (droppedData.id && project) {
+      if (draggedTask) {
+        // Determine if we need to change project (cross-project drop)
+        const targetProjectId = draggedTaskProjectId !== project.id ? project.id : draggedTask.projectId;
+        
         // Special handling when dragging from completed to other statuses
-        if (droppedData.completed && filterType !== 'completed') {
+        if (draggedTask.completed && filterType !== 'completed') {
           // If moving from completed to another status, mark as not completed
-          updateTask(droppedData.id, {
-            projectId: project.id,
+          updateTask(draggedTaskId, {
+            projectId: targetProjectId,
             status: filterType as 'pomodoro' | 'todo' | 'completed',
             completed: false
           });
         } else {
           // Normal case
-          updateTask(droppedData.id, {
-            projectId: project.id,
+          updateTask(draggedTaskId, {
+            projectId: targetProjectId,
             status: filterType as 'pomodoro' | 'todo' | 'completed',
             // If dropping in completed filter, mark as completed
             completed: filterType === 'completed'
@@ -311,8 +370,6 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
           filterElement.classList.remove('drop-success');
         }, 500);
       }
-    } catch (error) {
-      console.error('Error handling drop on filter:', error);
     }
   };
   
@@ -579,6 +636,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                 key={task.id} 
                 task={task} 
                 projectColor={project.color}
+                onReorder={handleTaskReorder}
+                onCrossProjectMove={handleCrossProjectMove}
               />
             ))}
             

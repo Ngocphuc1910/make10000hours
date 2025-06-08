@@ -54,26 +54,13 @@ interface TimerState {
   // Persistence actions
   initializePersistence: (userId: string) => Promise<void>;
   saveToDatabase: () => Promise<void>;
-  syncFromRemoteState: (remoteState: TimerStateModel) => void;
+  syncFromRemoteState: (remoteState: TimerStateModel) => Promise<void>;
   cleanupPersistence: () => void;
   resetTimerState: () => void;
   setEnableStartPauseBtn: (enable: boolean) => void;
 }
 
 export const useTimerStore = create<TimerState>((set, get) => {
-  let saveTimeoutId: NodeJS.Timeout | null = null;
-  
-  // Debounced save function to avoid too frequent database writes
-  const debouncedSave = () => {
-    if (saveTimeoutId) {
-      clearTimeout(saveTimeoutId);
-    }
-    
-    saveTimeoutId = setTimeout(async () => {
-      const { saveToDatabase } = get();
-      await saveToDatabase();
-    }, 10000); // Save after 10 seconds of inactivity
-  };
 
   return {
     // Initial state
@@ -259,7 +246,8 @@ export const useTimerStore = create<TimerState>((set, get) => {
 
       if (currentTime > 0) {
         set({ currentTime: currentTime - 1 });
-        debouncedSave(); // Debounced save while ticking
+        // Save immediately on every tick for real-time persistence
+        get().saveToDatabase();
       } else if (currentTime === 0) {
         // Timer finished, move to next mode
         get().skip();
@@ -304,7 +292,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
         set({ currentTask: task });
       }
       
-      debouncedSave();
+      get().saveToDatabase();
     },
 
     setSettings: (settings: TimerSettings) => {
@@ -499,7 +487,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
         const remoteState = await timerService.loadTimerState(userId);
         
         if (remoteState) {
-          get().syncFromRemoteState(remoteState);
+          await get().syncFromRemoteState(remoteState);
         } else {
           // No existing state, save current default state
           await get().saveToDatabase();
@@ -539,9 +527,11 @@ export const useTimerStore = create<TimerState>((set, get) => {
           currentTaskId: state.currentTask ? state.currentTask.id : null,
         };
         
-        // Include session start time if there's an active session
+        // Include session data for calculating work time during reload
         if (state.activeSession) {
           timerData.sessionStartTime = state.activeSession.startTime;
+          timerData.activeSessionId = state.activeSession.sessionId;
+          timerData.sessionStartTimerPosition = state.sessionStartTimerPosition;
         }
         
         await timerService.saveTimerState(userStore.user.uid, timerData);
@@ -559,23 +549,76 @@ export const useTimerStore = create<TimerState>((set, get) => {
       }
     },
     
-    syncFromRemoteState: (remoteState: TimerStateModel) => {
+    syncFromRemoteState: async (remoteState: TimerStateModel) => {
       const currentTaskId = remoteState.currentTaskId || null;
       const currentTask = currentTaskId
         ? useTaskStore.getState().tasks.find(task => task.id === currentTaskId) || null
         : null;
+      
+      // First, set the basic timer state
       set({
         ...remoteState,
         currentTask: currentTask,
+        activeSession: null, // Will be created fresh if needed
+        sessionStartTimerPosition: null,
+        lastCountedMinute: null,
       });
+      
+      // If timer is running and we have a task, create a fresh session for accurate tracking
+      if (remoteState.isRunning && currentTask && remoteState.mode === 'pomodoro') {
+        try {
+          // Complete any existing active session first (calculate time worked before reload)
+          if (remoteState.activeSessionId) {
+            const { user } = useUserStore.getState();
+            if (user) {
+              const activeSessions = await workSessionService.getActiveSessions(user.uid);
+              const existingSession = activeSessions.find(session => 
+                session.id === remoteState.activeSessionId && 
+                session.status === 'active'
+              );
+              
+              if (existingSession && remoteState.sessionStartTime && remoteState.sessionStartTimerPosition) {
+                // Calculate how much time was worked before page reload
+                const timeWorkedBeforeReload = Math.floor(
+                  (remoteState.sessionStartTimerPosition - remoteState.currentTime) / 60
+                );
+                
+                if (timeWorkedBeforeReload > 0) {
+                  await workSessionService.incrementDuration(existingSession.id, timeWorkedBeforeReload);
+                }
+                
+                // Complete the session
+                await workSessionService.updateSession(existingSession.id, {
+                  status: 'completed',
+                  endTime: new Date(),
+                  notes: `Session completed: ${timeWorkedBeforeReload}m (page reload)`
+                });
+                
+                console.log('Completed previous session before creating new one:', {
+                  sessionId: existingSession.id,
+                  timeWorked: timeWorkedBeforeReload,
+                  reason: 'page reload'
+                });
+              }
+            }
+          }
+          
+          // Create a fresh new session starting from current timer position
+          await get().createActiveSession();
+          
+          console.log('Created fresh session after page reload:', {
+            taskId: currentTask.id,
+            timerPosition: remoteState.currentTime,
+            reason: 'page reload with running timer'
+          });
+          
+        } catch (error) {
+          console.error('Failed to handle session during page reload:', error);
+        }
+      }
     },
     
     cleanupPersistence: () => {
-      if (saveTimeoutId) {
-        clearTimeout(saveTimeoutId);
-        saveTimeoutId = null;
-      }
-      
       set({
         isLoading: false,
         isSyncing: false,
