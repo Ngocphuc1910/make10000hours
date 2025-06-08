@@ -8,17 +8,20 @@ import { workSessionService } from '../../api/workSessionService';
 import { formatMinutesToHoursAndMinutes } from '../../utils/timeUtils';
 import { getDateISOString } from '../../utils/timeUtils';
 import { DatePicker, DateTimeProvider, useDateTimeContext } from '../common/DatePicker';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { getRandomPresetColor } from '../../utils/colorUtils';
 
 interface TaskFormProps {
   task?: Task;
   status?: Task['status'];
   initialProjectId?: string;
+  initialStartTime?: Date;
+  initialEndTime?: Date;
   onCancel: () => void;
+  onSave?: () => void;
 }
 
-const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onCancel }) => {
+const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, initialStartTime, initialEndTime, onCancel, onSave }) => {
   const addTask = useTaskStore(state => state.addTask);
   const updateTask = useTaskStore(state => state.updateTask);
   const deleteTask = useTaskStore(state => state.deleteTask);
@@ -40,6 +43,13 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
     if (task?.scheduledDate) {
       return task.scheduledDate;
     }
+    // For drag-create, use the initial start time date
+    if (initialStartTime) {
+      const year = initialStartTime.getFullYear();
+      const month = String(initialStartTime.getMonth() + 1).padStart(2, '0');
+      const day = String(initialStartTime.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
     // For new tasks, default to today
     if (!task) {
       const today = new Date();
@@ -48,9 +58,29 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
     return '';
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [includeTime, setIncludeTime] = useState(task?.includeTime || false);
-  const [startTime, setStartTime] = useState(task?.scheduledStartTime || '09:00');
-  const [endTime, setEndTime] = useState(task?.scheduledEndTime || '10:00');
+  const [includeTime, setIncludeTime] = useState(() => {
+    if (task?.includeTime !== undefined) return task.includeTime;
+    if (initialStartTime && initialEndTime) return true;
+    return false;
+  });
+  const [startTime, setStartTime] = useState(() => {
+    if (task?.scheduledStartTime) return task.scheduledStartTime;
+    if (initialStartTime) {
+      const hours = String(initialStartTime.getHours()).padStart(2, '0');
+      const minutes = String(initialStartTime.getMinutes()).padStart(2, '0');
+      return `${hours}:${minutes}`;
+    }
+    return '09:00';
+  });
+  const [endTime, setEndTime] = useState(() => {
+    if (task?.scheduledEndTime) return task.scheduledEndTime;
+    if (initialEndTime) {
+      const hours = String(initialEndTime.getHours()).padStart(2, '0');
+      const minutes = String(initialEndTime.getMinutes()).padStart(2, '0');
+      return `${hours}:${minutes}`;
+    }
+    return '10:00';
+  });
   
   const titleInputRef = useRef<HTMLTextAreaElement>(null);
   const projectSelectRef = useRef<HTMLSelectElement>(null);
@@ -220,6 +250,13 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
         taskData.scheduledStartTime = startTime;
         taskData.scheduledEndTime = endTime;
       }
+
+      // Auto-change status: "To do list" → "In Pomodoro" when scheduled for today
+      const scheduledDate = new Date(calendarDate.trim());
+      const isScheduledForToday = isSameDay(scheduledDate, new Date());
+      if (isScheduledForToday && task?.status === 'todo') {
+        taskData.status = 'pomodoro';
+      }
     }
     
     // Check if timeSpent was manually changed (only for existing tasks)
@@ -249,15 +286,24 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onC
       // Add new task
       console.log('Creating new task with data:', taskData);
       try {
-        await addTask(taskData);
-        console.log('Task created successfully');
+        console.log('About to call addTask...');
+        const taskId = await addTask(taskData);
+        console.log('Task created successfully with ID:', taskId);
       } catch (error) {
         console.error('Error creating task:', error);
-        return;
+        // Don't return here - still close the form and let user try again
       }
     }
     
-    onCancel();
+    // Call onSave if provided, otherwise fall back to onCancel
+    console.log('About to call callback - onSave available:', !!onSave);
+    if (onSave) {
+      console.log('Calling onSave callback');
+      onSave();
+    } else {
+      console.log('Calling onCancel callback');
+      onCancel();
+    }
   };
 
   const handleDelete = () => {
