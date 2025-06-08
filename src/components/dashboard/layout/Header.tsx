@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Button from '../../ui/Button';
+import { Icon } from '../../ui/Icon';
+import { Tooltip } from '../../ui/Tooltip';
 import { RangeType, useDashboardStore } from '../../../store/useDashboardStore';
 import { useUIStore } from '../../../store/uiStore';
 import flatpickr from 'flatpickr';
@@ -15,6 +18,7 @@ type FlatpickrInstance = {
 };
 
 export const Header: React.FC = () => {
+  const navigate = useNavigate();
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const { selectedRange, setSelectedRange } = useDashboardStore();
@@ -197,7 +201,7 @@ export const Header: React.FC = () => {
   return (
     <div className="h-16 border-b border-gray-200 flex items-center justify-between px-6 bg-white">
       <div className="flex items-center">
-        <div className="text-lg font-semibold text-gray-800">Dashboard</div>
+        <div className="text-lg font-semibold text-gray-800">Productivity Insights</div>
         <div className="ml-4 text-sm text-gray-500">{formattedDate}</div>
       </div>
       
@@ -311,27 +315,53 @@ export const Header: React.FC = () => {
           )}
         </div>
         
-        {/* Notification button */}
-        <button 
-          className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
-          aria-label="Notifications"
-        >
-          <span className="w-5 h-5 flex items-center justify-center">
-            <i className="ri-notification-line"></i>
-          </span>
-        </button>
+        {/* Navigation Icons */}
+        <Tooltip text="Pomodoro Timer">
+          <button 
+            className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+            onClick={() => navigate('/pomodoro')}
+            aria-label="Go to Pomodoro Timer"
+          >
+            <span className="w-5 h-5 flex items-center justify-center">
+              <Icon name="timer-line" size={20} />
+            </span>
+          </button>
+        </Tooltip>
         
-        {/* Focus Mode button */}
-        <button 
-          id="focusModeBtn" 
-          className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
-          onClick={toggleFocusMode}
-          aria-label="Toggle Focus Mode"
-        >
-          <span className="w-5 h-5 flex items-center justify-center">
-            <i className="ri-fullscreen-line" id="focusModeIcon"></i>
-          </span>
-        </button>
+        <Tooltip text="Task management">
+          <button 
+            className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+            onClick={() => navigate('/projects')}
+            aria-label="Go to Task Management"
+          >
+            <span className="w-5 h-5 flex items-center justify-center">
+              <Icon name="task-line" size={20} />
+            </span>
+          </button>
+        </Tooltip>
+        
+        <Tooltip text="Productivity Insights">
+          <button 
+            className="p-2 rounded-full bg-gray-100 !rounded-button whitespace-nowrap"
+            aria-label="Current page: Productivity Insights"
+          >
+            <span className="w-5 h-5 flex items-center justify-center">
+              <Icon name="dashboard-line" size={20} />
+            </span>
+          </button>
+        </Tooltip>
+        
+        <Tooltip text="Calendar">
+          <button 
+            className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+            onClick={() => navigate('/calendar')}
+            aria-label="Go to Calendar"
+          >
+            <span className="w-5 h-5 flex items-center justify-center">
+              <Icon name="calendar-line" size={20} />
+            </span>
+          </button>
+        </Tooltip>
       </div>
     </div>
   );
