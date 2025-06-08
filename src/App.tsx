@@ -90,7 +90,7 @@ const SupportPage = () => (
 
 const App = (): React.JSX.Element => {
   const { initialize } = useUserStore();
-  const { setIsAddingTask } = useTaskStore();
+  const setIsAddingTask = useTaskStore(state => state.setIsAddingTask);
   const { isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar } = useUIStore();
 
   // Global timer interval - runs regardless of current page
@@ -222,6 +222,8 @@ const App = (): React.JSX.Element => {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar, setIsAddingTask]);
+
+  console.log('App component rendered');
 
   // Wrap PomodoroPage with MainLayout
   const PomodoroPageWithLayout = () => (
