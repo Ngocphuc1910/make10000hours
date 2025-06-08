@@ -211,7 +211,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
       // Only increment time spent during pomodoro sessions, not during breaks
       if (activeSession && currentTime !== totalTime && mode === 'pomodoro') {
         const { currentTask } = get();
-        const currentMinute = Math.floor(currentTime / 60);
+        const currentMinute = Math.floor((currentTime - 2) / 60);
         
         // Initialize lastCountedMinute if this is the first tick of the session
         if (lastCountedMinute === null) {
