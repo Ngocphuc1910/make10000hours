@@ -113,7 +113,8 @@ export const calculateNewEventTime = (
   originalEvent: CalendarEvent,
   dropResult: DropResult
 ): { start: Date; end: Date } => {
-  const duration = originalEvent.end.getTime() - originalEvent.start.getTime();
+  // Use actual duration to preserve zero-duration events
+  const actualDuration = originalEvent.end.getTime() - originalEvent.start.getTime();
   
   if (dropResult.isAllDay || originalEvent.isAllDay) {
     // For all-day events, just move to the target date
@@ -134,7 +135,8 @@ export const calculateNewEventTime = (
     start.setHours(originalEvent.start.getHours(), originalEvent.start.getMinutes(), 0, 0);
   }
   
-  const end = new Date(start.getTime() + duration);
+  // Preserve original duration (including zero duration for same start/end time events)
+  const end = new Date(start.getTime() + actualDuration);
   return { start, end };
 };
 
@@ -185,8 +187,25 @@ export const formatTimeForDisplay = (date: Date): string => {
 };
 
 /**
- * Get event duration in minutes
+ * Get actual event duration in minutes (preserves original data)
+ */
+export const getActualEventDurationMinutes = (event: CalendarEvent): number => {
+  const durationMs = event.end.getTime() - event.start.getTime();
+  return Math.round(durationMs / (1000 * 60));
+};
+
+/**
+ * Get event duration in minutes (for UI display purposes)
  */
 export const getEventDurationMinutes = (event: CalendarEvent): number => {
-  return Math.round((event.end.getTime() - event.start.getTime()) / (1000 * 60));
-}; 
+  const actualDurationMs = event.end.getTime() - event.start.getTime();
+  const actualDurationMinutes = actualDurationMs / (1000 * 60);
+  
+  // For zero-duration events (same start/end time), return 30 minutes
+  if (actualDurationMinutes === 0) {
+    return 30;
+  }
+  
+  // For other events, return actual duration but with 30-minute minimum
+  return Math.max(actualDurationMinutes, 30);
+};

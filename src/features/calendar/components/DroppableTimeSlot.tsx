@@ -48,9 +48,24 @@ export const DroppableTimeSlot: React.FC<DroppableTimeSlotProps> = ({
   // Calculate drop zone height based on dragged event duration
   const getDropZoneHeight = () => {
     if (!draggedItem || isAllDay) return 'auto';
-    const durationMinutes = getEventDurationMinutes(draggedItem.event);
+    
+    // Use the display duration from the drag item (already handles zero-duration events)
+    const durationMinutes = draggedItem.displayDurationMinutes;
     const cellHeight = 60; // 60px per hour slot
-    return `${(durationMinutes / 60) * cellHeight}px`;
+    const heightPx = (durationMinutes / 60) * cellHeight;
+    const finalHeight = `${Math.max(heightPx, 30)}px`;
+    
+    // Debug logging for zero-duration events
+    if (durationMinutes === 30) {
+      console.log('Zero-duration event detected:', {
+        originalStart: draggedItem.event.start,
+        originalEnd: draggedItem.event.end,
+        displayDurationMinutes: durationMinutes,
+        calculatedHeight: finalHeight
+      });
+    }
+    
+    return finalHeight;
   };
 
   // Get the event color for drop zone styling

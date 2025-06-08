@@ -70,6 +70,10 @@ export const Calendar: React.FC = () => {
     setIsTimeSlotTaskOpen(false);
     setTimeSlotData(null);
     
+    // Clear any existing drag indicators
+    setClearDragIndicator(true);
+    setTimeout(() => setClearDragIndicator(false), 100);
+    
     // Always open TaskForm for all events (both tasks and regular events)
     if (event.isTask && event.taskId) {
       setEditingTaskId(event.taskId);
@@ -87,6 +91,10 @@ export const Calendar: React.FC = () => {
     setStoreEditingTaskId(null);
     setIsDragCreateTaskOpen(false);
     setDragCreateData(null);
+    
+    // Clear any existing drag indicators
+    setClearDragIndicator(true);
+    setTimeout(() => setClearDragIndicator(false), 100);
     
     // Create start and end times (1 hour duration by default)
     const startTime = new Date(date);
@@ -107,6 +115,10 @@ export const Calendar: React.FC = () => {
     setStoreEditingTaskId(null);
     setIsDragCreateTaskOpen(false);
     setDragCreateData(null);
+    
+    // Clear any existing drag indicators
+    setClearDragIndicator(true);
+    setTimeout(() => setClearDragIndicator(false), 100);
     
     // Create all-day event times
     const startTime = new Date(date);
@@ -282,6 +294,10 @@ export const Calendar: React.FC = () => {
 
           <button
             onClick={() => {
+              // Clear any existing drag indicators
+              setClearDragIndicator(true);
+              setTimeout(() => setClearDragIndicator(false), 100);
+              
               setEditingTaskId('new');
               setStoreEditingTaskId('new');
             }}
@@ -357,10 +373,14 @@ export const Calendar: React.FC = () => {
               onCancel={() => {
                 setEditingTaskId(null);
                 setStoreEditingTaskId(null);
+                setClearDragIndicator(true);
+                setTimeout(() => setClearDragIndicator(false), 100);
               }}
               onSave={() => {
                 setEditingTaskId(null);
                 setStoreEditingTaskId(null);
+                setClearDragIndicator(true);
+                setTimeout(() => setClearDragIndicator(false), 100);
               }}
             />
           </div>
@@ -403,10 +423,14 @@ export const Calendar: React.FC = () => {
               onCancel={() => {
                 setIsTimeSlotTaskOpen(false);
                 setTimeSlotData(null);
+                setClearDragIndicator(true);
+                setTimeout(() => setClearDragIndicator(false), 100);
               }}
               onSave={() => {
                 setIsTimeSlotTaskOpen(false);
                 setTimeSlotData(null);
+                setClearDragIndicator(true);
+                setTimeout(() => setClearDragIndicator(false), 100);
               }}
             />
           </div>

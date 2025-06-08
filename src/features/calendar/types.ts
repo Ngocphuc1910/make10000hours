@@ -46,6 +46,7 @@ export interface DragItem {
   event: CalendarEvent;
   sourceDate: Date;
   sourceView: CalendarView;
+  displayDurationMinutes: number; // UI duration for zero-duration events
 }
 
 export interface DropResult {
