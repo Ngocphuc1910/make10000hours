@@ -19,6 +19,7 @@ export const TaskListSorted: React.FC = () => {
     pause,
     setEnableStartPauseBtn,
     start,
+    currentTask,
   } = useTimerStore();
 
   // UI state
@@ -34,8 +35,8 @@ export const TaskListSorted: React.FC = () => {
   const taskListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (editingTaskId) {
-      // If editing a task, disable the start/pause button
+    if (currentTask && editingTaskId === currentTask.id) {
+      // If editing the current task, disable the start/pause button
       setEnableStartPauseBtn(false);
 
       if (isRunning) {
@@ -43,7 +44,7 @@ export const TaskListSorted: React.FC = () => {
         pause();
       }
     } else {
-      // If not editing, enable the start/pause button
+      // Otherwise, enable the start/pause button
       setEnableStartPauseBtn(true);
     }
   }, [editingTaskId]);
