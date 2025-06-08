@@ -101,10 +101,10 @@ export const DayView: React.FC<DayViewProps> = ({
 
     return {
       position: 'absolute' as const,
-      top: `${startHour * TIME_SLOT_HEIGHT}px`,
-      height: `${displayHeight}px`,
-      left: '2px',
-      right: '2px',
+      top: `${startHour * TIME_SLOT_HEIGHT + 2}px`,
+      height: `${displayHeight - 4}px`,
+      left: '4px',
+      right: '4px',
       backgroundColor: event.color,
       zIndex: 10,
     };
@@ -382,12 +382,12 @@ export const DayView: React.FC<DayViewProps> = ({
               {/* Drag indicator */}
               {dragIndicator.visible && (
                 <div
-                  className="absolute rounded pointer-events-none z-20 px-2 py-1"
+                  className="absolute rounded pointer-events-none z-20 pl-0.5 pr-1 py-1"
                   style={{
-                    top: `${dragIndicator.top}px`,
-                    height: `${dragIndicator.height}px`,
-                    left: '2px',
-                    right: '2px',
+                    top: `${dragIndicator.top + 2}px`,
+                    height: `${dragIndicator.height - 4}px`,
+                    left: '4px',
+                    right: '4px',
                     backgroundColor: getLastUsedProjectColor(),
                     opacity: 0.7,
                   }}
@@ -413,15 +413,15 @@ export const DayView: React.FC<DayViewProps> = ({
                     borderLeftColor: event.isTask ? event.color : undefined
                   }}
                 >
-                  <div className="text-xs text-white font-medium px-2 py-1">
-                    <div className="flex items-center">
-                      <span className="truncate">{event.title}</span>
+                  <div className="pl-0.5 pr-1 py-1">
+                    <div className="task-item-title">
+                      {event.title}
                     </div>
-                    <div className="opacity-80 mt-1">
+                    <div className="task-item-time">
                       {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
                     </div>
                     {!event.isTask && event.description && (
-                      <div className="text-xs opacity-75 mt-1 truncate">
+                      <div className="text-xs opacity-75 mt-1 truncate text-white">
                         {event.description}
                       </div>
                     )}

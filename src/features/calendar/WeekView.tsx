@@ -119,10 +119,10 @@ export const WeekView: React.FC<WeekViewProps> = ({
 
     return {
       position: 'absolute' as const,
-      top: `${startHour * TIME_SLOT_HEIGHT}px`,
-      height: `${displayHeight}px`,
-      left: '2px',
-      right: '2px',
+      top: `${startHour * TIME_SLOT_HEIGHT + 2}px`,
+      height: `${displayHeight - 4}px`,
+      left: '4px',
+      right: '4px',
       backgroundColor: event.color,
       zIndex: 10,
     };
@@ -284,7 +284,9 @@ export const WeekView: React.FC<WeekViewProps> = ({
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Unified Grid Container */}
-      <div className="grid grid-cols-8 flex-1" style={{ gridTemplateColumns: '64px repeat(7, 1fr)' }}>
+      <div className="grid grid-cols-8 flex-1" style={{ 
+        gridTemplateColumns: `${TIME_COLUMN_WIDTH}px repeat(7, minmax(0, 1fr))`
+      }}>
         
         {/* Fixed Date Headers Row */}
         <div className="col-span-8 grid grid-cols-subgrid bg-white border-b border-gray-200 sticky top-0 z-30" style={{ height: '80px' }}>
@@ -294,7 +296,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
           </div>
           {/* Day headers */}
           {weekDays.map((day, dayIndex) => (
-            <div key={dayIndex} className={`flex flex-col items-center justify-center py-3 bg-white ${dayIndex < 6 ? 'border-r border-gray-200' : ''} ${isToday(day) ? 'bg-blue-50' : ''}`}>
+            <div key={dayIndex} className={`flex flex-col items-center justify-center py-3 bg-white min-w-0 ${dayIndex < 6 ? 'border-r border-gray-200' : ''} ${isToday(day) ? 'bg-blue-50' : ''}`}>
               <div className="text-xs text-gray-500 font-medium mb-1">{format(day, 'EEE').toUpperCase()}</div>
               <div className={`text-lg font-medium ${isToday(day) ? 'text-primary bg-primary text-white rounded-full w-8 h-8 flex items-center justify-center' : 'text-gray-800'}`}>
                 {format(day, 'd')}
@@ -310,12 +312,12 @@ export const WeekView: React.FC<WeekViewProps> = ({
                top: '80px'
              }}>
           {/* All day label */}
-          <div className="border-r border-gray-200 flex items-center justify-center text-xs text-gray-500 bg-white">
+          <div className="border-r border-b border-gray-200 flex items-center justify-center text-xs text-gray-500 bg-white">
             All day
           </div>
           {/* All day events */}
           {weekDays.map((day, dayIndex) => (
-            <div key={dayIndex} className={`relative ${dayIndex < 6 ? 'border-r border-gray-200' : ''}`}>
+            <div key={dayIndex} className={`relative min-w-0 ${dayIndex < 6 ? 'border-r border-gray-200' : ''}`}>
               <DroppableTimeSlot
                 date={day}
                 isAllDay={true}
@@ -377,7 +379,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
           {/* Day Columns */}
           <div className="contents" ref={weekGridRef}>
             {weekDays.map((day, dayIndex) => (
-              <div key={dayIndex} className={`relative day-column ${dayIndex < 6 ? 'border-r border-gray-200' : ''}`}>
+              <div key={dayIndex} className={`relative day-column min-w-0 ${dayIndex < 6 ? 'border-r border-gray-200' : ''}`}>
               {/* Time slots grid */}
               {HOURS.map(hour => (
                 <DroppableTimeSlot
@@ -421,12 +423,12 @@ export const WeekView: React.FC<WeekViewProps> = ({
               {/* Drag indicator for this day */}
               {dragIndicator.visible && dragIndicator.dayIndex === dayIndex && (
                 <div
-                  className="absolute rounded pointer-events-none z-20 px-2 py-1"
+                  className="absolute rounded pointer-events-none z-20 pl-0.5 pr-1 py-1"
                   style={{
-                    top: `${dragIndicator.top - 80 - getAllDayRowHeight()}px`,
-                    height: `${dragIndicator.height}px`,
-                    left: '2px',
-                    right: '2px',
+                    top: `${dragIndicator.top - 80 - getAllDayRowHeight() + 2}px`,
+                    height: `${dragIndicator.height - 4}px`,
+                    left: '4px',
+                    right: '4px',
                     backgroundColor: getLastUsedProjectColor(),
                     opacity: 0.7,
                   }}
@@ -452,15 +454,15 @@ export const WeekView: React.FC<WeekViewProps> = ({
                     borderLeftColor: event.isTask ? event.color : undefined
                   }}
                 >
-                  <div className="text-xs text-white font-medium px-2 py-1">
-                    <div className="flex items-center">
-                      <span className="truncate">{event.title}</span>
+                  <div className="pl-0.5 pr-1 py-1">
+                    <div className="task-item-title">
+                      {event.title}
                     </div>
-                    <div className="opacity-80 mt-1">
+                    <div className="task-item-time">
                       {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
                     </div>
                     {!event.isTask && event.description && (
-                      <div className="text-xs opacity-75 mt-1 truncate">
+                      <div className="text-xs opacity-75 mt-1 truncate text-white">
                         {event.description}
                       </div>
                     )}

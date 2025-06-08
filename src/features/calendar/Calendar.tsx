@@ -358,6 +358,10 @@ export const Calendar: React.FC = () => {
             onEventClick={handleEventClick}
             onDateClick={handleTimeSlotClick}
             onEventDrop={handleEventDrop}
+            onDayViewClick={(date) => {
+              setCurrentDate(date);
+              setCurrentView('day');
+            }}
           />
         )}
       </div>
