@@ -2,10 +2,13 @@ import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, isSameDay } from 'date-fns';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
+import { useNavigate } from 'react-router-dom';
 import { CalendarEvent, CalendarView, DragItem, DropResult } from './types';
 import WeekView from './WeekView';
 import DayView from './DayView';
 import MonthView from './MonthView';
+import Icon from '../../components/ui/Icon';
+import { Tooltip } from '../../components/ui/Tooltip';
 // EventDialog import removed - using TaskForm for all calendar interactions
 
 import { useTaskStore } from '../../store/taskStore';
@@ -42,6 +45,8 @@ export const Calendar: React.FC = () => {
   const allEvents = useMemo(() => {
     return mergeEventsAndTasks(calendarEvents, tasks, projects);
   }, [calendarEvents, tasks, projects]);
+
+  const navigate = useNavigate();
 
   // Keyboard shortcuts for view switching
   useEffect(() => {
@@ -265,7 +270,7 @@ export const Calendar: React.FC = () => {
     <DndProvider backend={HTML5Backend}>
       <div className="flex flex-col h-full bg-white">
       {/* Calendar Controls */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+      <div className="h-16 border-b border-gray-200 px-6 flex items-center justify-between bg-white">
         <div className="flex items-center space-x-2">
           <button
             onClick={() => handleNavigate('today')}
@@ -296,7 +301,7 @@ export const Calendar: React.FC = () => {
           </h2>
         </div>
 
-        <div className="flex items-center">
+        <div className="flex items-center space-x-4">
           <div className="flex bg-gray-100 p-1 rounded-full">
             <button
               onClick={() => setCurrentView('day')}
@@ -330,34 +335,52 @@ export const Calendar: React.FC = () => {
             </button>
           </div>
 
-          <button
-            onClick={() => {
-              // Clear any existing drag indicators
-              setClearDragIndicator(true);
-              setTimeout(() => setClearDragIndicator(false), 100);
-              
-              setEditingTaskId('new');
-              setStoreEditingTaskId('new');
-            }}
-            className="ml-4 px-4 py-1.5 bg-primary text-white text-sm font-medium rounded-button hover:bg-opacity-90 flex items-center"
-          >
-            <div className="w-4 h-4 flex items-center justify-center mr-1">
-              <i className="ri-add-line" />
-            </div>
-            Add Task
-          </button>
-
-          <button className="ml-2 p-2 rounded-full hover:bg-gray-100">
-            <div className="w-5 h-5 flex items-center justify-center text-gray-500">
-              <i className="ri-settings-4-line" />
-            </div>
-          </button>
-
-          <button className="ml-2 p-2 rounded-full hover:bg-gray-100">
-            <div className="w-5 h-5 flex items-center justify-center text-gray-500">
-              <i className="ri-more-2-fill" />
-            </div>
-          </button>
+          <Tooltip text="Pomodoro Timer">
+            <button 
+              className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+              onClick={() => navigate('/pomodoro')}
+              aria-label="Go to Pomodoro Timer"
+            >
+              <span className="w-5 h-5 flex items-center justify-center">
+                <Icon name="timer-line" size={20} />
+              </span>
+            </button>
+          </Tooltip>
+          
+          <Tooltip text="Task management">
+            <button 
+              className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+              onClick={() => navigate('/projects')}
+              aria-label="Go to Task Management"
+            >
+              <span className="w-5 h-5 flex items-center justify-center">
+                <Icon name="task-line" size={20} />
+              </span>
+            </button>
+          </Tooltip>
+          
+          <Tooltip text="Productivity Insights">
+            <button 
+              className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+              onClick={() => navigate('/dashboard')}
+              aria-label="Go to Productivity Insights"
+            >
+              <span className="w-5 h-5 flex items-center justify-center">
+                <Icon name="dashboard-line" size={20} />
+              </span>
+            </button>
+          </Tooltip>
+          
+          <Tooltip text="Calendar">
+            <button 
+              className="p-2 rounded-full bg-gray-100 !rounded-button whitespace-nowrap"
+              aria-label="Current page: Calendar"
+            >
+              <span className="w-5 h-5 flex items-center justify-center">
+                <Icon name="calendar-line" size={20} />
+              </span>
+            </button>
+          </Tooltip>
         </div>
       </div>
 

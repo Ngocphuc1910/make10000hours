@@ -34,7 +34,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
     },
     {
       icon: 'dashboard-line',
-      label: 'Dashboard',
+      label: 'Productivity Insights',
       path: '/dashboard'
     },
     {
