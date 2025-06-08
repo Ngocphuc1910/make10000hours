@@ -63,31 +63,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
     return colorMap[color] || 'bg-blue-500';
   };
 
-  // Get background color for all-day events
-  const getAllDayEventBg = (color: string) => {
-    const colorMap: { [key: string]: string } = {
-      '#3B82F6': '#dbeafe', // blue-100
-      '#84CC16': '#dcfce7', // green-100
-      '#F59E0B': '#fefce8', // yellow-100 
-      '#EF4444': '#fee2e2', // red-100
-      '#EC4899': '#fdf2f8', // pink-100
-      '#BB5F5A': '#fee2e2'  // red-100
-    };
-    return colorMap[color] || '#dbeafe';
-  };
 
-  // Get text color for all-day events
-  const getAllDayEventText = (color: string) => {
-    const colorMap: { [key: string]: string } = {
-      '#3B82F6': '#1e40af', // blue-800
-      '#84CC16': '#166534', // green-800
-      '#F59E0B': '#92400e', // yellow-800
-      '#EF4444': '#991b1b', // red-800 
-      '#EC4899': '#be185d', // pink-800
-      '#BB5F5A': '#991b1b'  // red-800
-    };
-    return colorMap[color] || '#1e40af';
-  };
 
   const days = getDaysInMonth();
   
@@ -150,75 +126,77 @@ export const MonthView: React.FC<MonthViewProps> = ({
                 {/* Events container with flexible height */}
                 <div className="flex-1 min-h-0">
                   {(() => {
-                    // Calculate available space for events (roughly 4-5 events max visible)
+                    // Show max 4 events with priority: all-day events first, then timed events
                     const maxVisibleEvents = 4;
                     const eventsToShow: CalendarEvent[] = [];
                     const totalEvents = allDayEvents.length + timedEvents.length;
                     
-                    // Add all-day events first (prioritized)
-                    eventsToShow.push(...allDayEvents);
+                    // Add all-day events first (up to max limit)
+                    const allDayToShow = allDayEvents.slice(0, maxVisibleEvents);
+                    eventsToShow.push(...allDayToShow);
                     
-                    // Add timed events next, respecting max visible limit
+                    // Add timed events only if we have remaining slots
                     const remainingSlots = maxVisibleEvents - eventsToShow.length;
                     if (remainingSlots > 0) {
-                      eventsToShow.push(...timedEvents.slice(0, remainingSlots));
+                      const timedToShow = timedEvents.slice(0, remainingSlots);
+                      eventsToShow.push(...timedToShow);
                     }
                     
                     const remainingEvents = totalEvents - eventsToShow.length;
                     
                     return (
                       <>
-                        {eventsToShow.map((event, eventIdx) => {
-                          if (event.isAllDay) {
-                            return (
-                              <DraggableEvent
-                                key={event.id}
-                                event={event}
-                                onClick={onEventClick}
-                                sourceView="month"
-                                className="month-view-event block cursor-grab rounded text-xs px-1.5 py-0.5 min-h-[18px] mb-0.5"
-                                style={{ 
-                                  backgroundColor: getAllDayEventBg(event.color || '#3B82F6'),
-                                  border: 'none'
-                                }}
-                              >
-                                <div 
-                                  className="font-medium truncate leading-tight" 
-                                  title={event.title} 
-                                  style={{ color: getAllDayEventText(event.color || '#3B82F6') }}
+                        <div className="space-y-4">
+                          {eventsToShow.map((event, eventIdx) => {
+                            if (event.isAllDay) {
+                              return (
+                                <DraggableEvent
+                                  key={event.id}
+                                  event={event}
+                                  onClick={onEventClick}
+                                  sourceView="month"
+                                  className="month-view-event block w-full cursor-grab rounded text-xs px-2 py-1 h-5 flex items-center"
+                                  style={{ 
+                                    backgroundColor: event.color
+                                  }}
                                 >
-                                  {event.title}
-                                </div>
-                              </DraggableEvent>
-                            );
-                          } else {
-                            return (
-                              <DraggableEvent
-                                key={event.id}
-                                event={event}
-                                onClick={onEventClick}
-                                sourceView="month"
-                                className="month-view-event block hover:bg-gray-50 rounded px-1 py-0.5 min-h-[16px] mb-1"
-                                style={{ backgroundColor: 'transparent' }}
-                              >
-                                <div className="flex items-center w-full text-gray-900 leading-tight text-xs">
-                                  <span 
-                                    className="inline-block w-1.5 h-1.5 rounded-full mr-1 flex-shrink-0" 
-                                    style={{ backgroundColor: event.color }}
-                                  ></span>
-                                  <span className="truncate">
-                                    {format(event.start, 'h:mm a')} {event.title}
-                                  </span>
-                                </div>
-                              </DraggableEvent>
-                            );
-                          }
-                        })}
+                                  <div 
+                                    className="font-medium truncate leading-tight w-full text-white" 
+                                    title={event.title}
+                                  >
+                                    {event.title}
+                                  </div>
+                                </DraggableEvent>
+                              );
+                            } else {
+                              return (
+                                <DraggableEvent
+                                  key={event.id}
+                                  event={event}
+                                  onClick={onEventClick}
+                                  sourceView="month"
+                                  className="month-view-event block hover:bg-gray-50 rounded px-1 py-0.5 min-h-[16px] text-xs"
+                                  style={{ backgroundColor: 'transparent' }}
+                                >
+                                  <div className="flex items-center w-full text-gray-900 leading-tight">
+                                    <span 
+                                      className="inline-block w-1.5 h-1.5 rounded-full mr-1 flex-shrink-0" 
+                                      style={{ backgroundColor: event.color }}
+                                    ></span>
+                                    <span className="truncate">
+                                      {format(event.start, 'h:mm a')} {event.title}
+                                    </span>
+                                  </div>
+                                </DraggableEvent>
+                              );
+                            }
+                          })}
+                        </div>
                         
                         {/* Show "X more" if there are additional events */}
                         {remainingEvents > 0 && (
                           <div 
-                            className="text-xs text-gray-500 font-medium cursor-pointer hover:text-primary hover:bg-gray-50 px-1 py-0.5 rounded min-h-[16px] flex items-center"
+                            className="text-xs text-gray-500 font-medium cursor-pointer hover:text-primary hover:bg-gray-50 px-1 py-0.5 rounded min-h-[16px] flex items-center mt-1"
                             onClick={(e) => {
                               e.stopPropagation();
                               onDayViewClick?.(day);
@@ -240,4 +218,4 @@ export const MonthView: React.FC<MonthViewProps> = ({
   );
 };
 
-export default MonthView; 
+export default MonthView;
