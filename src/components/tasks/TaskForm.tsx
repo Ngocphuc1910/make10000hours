@@ -19,7 +19,11 @@ interface TaskFormProps {
 }
 
 const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, onCancel }) => {
-  const { addTask, updateTask, deleteTask, projects, addProject } = useTaskStore();
+  const addTask = useTaskStore(state => state.addTask);
+  const updateTask = useTaskStore(state => state.updateTask);
+  const deleteTask = useTaskStore(state => state.deleteTask);
+  const projects = useTaskStore(state => state.projects);
+  const addProject = useTaskStore(state => state.addProject);
   const { user } = useUserStore();
   
   const [title, setTitle] = useState(task?.title || '');
