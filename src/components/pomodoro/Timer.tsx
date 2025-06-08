@@ -17,6 +17,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
   const mode = useTimerStore(state => state.mode);
   const sessionsCompleted = useTimerStore(state => state.sessionsCompleted);
   const currentTask = useTimerStore(state => state.currentTask);
+  const enableStartPauseBtn = useTimerStore(state => state.enableStartPauseBtn);
   
   // Use selectors for less frequently changing values
   const isLoading = useTimerStore(state => state.isLoading);
@@ -28,6 +29,10 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
   
   // Button handlers
   const handleStartPause = () => {
+    if (!enableStartPauseBtn) {
+      console.warn('Start/Pause button is disabled');
+      return;
+    }
     if (isRunning) {
       pause();
     } else {
@@ -106,9 +111,9 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
       
       <div className="flex items-center space-x-4 mb-8 flex-wrap justify-center">
         <button 
-          className="px-5 sm:px-6 py-3 rounded-full font-medium bg-primary text-white hover:bg-opacity-90 !rounded-button whitespace-nowrap m-1"
+          className={`px-5 sm:px-6 py-3 rounded-full font-medium bg-primary text-white hover:bg-opacity-90 !rounded-button whitespace-nowrap m-1 ${(!enableStartPauseBtn || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
           onClick={handleStartPause}
-          disabled={isLoading}
+          disabled={isLoading || !enableStartPauseBtn}
         >
           <div className="flex items-center">
             <div className="w-5 h-5 flex items-center justify-center">
@@ -162,4 +167,4 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
   );
 };
 
-export default Timer; 
+export default Timer;

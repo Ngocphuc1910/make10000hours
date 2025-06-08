@@ -83,6 +83,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         id: doc.id,
         ...doc.data(),
       })) as Task[];
+      console.log(`Fetched ${fetchedTasks.length} tasks for user ${user.uid}`);
       set({ tasks: fetchedTasks });
     });
     
