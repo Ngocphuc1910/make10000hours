@@ -17,7 +17,7 @@ interface TaskState {
   
   // Actions
   initializeStore: () => Promise<void>;
-  addTask: (taskData: Omit<Task, 'id' | 'order' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  addTask: (taskData: Omit<Task, 'id' | 'order' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   updateTask: (taskId: string, taskData: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   toggleTaskCompletion: (taskId: string) => Promise<void>;
@@ -229,11 +229,14 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   
   addTask: async (taskData) => {
     try {
+      console.log('addTask started');
       const { user } = useUserStore.getState();
       if (!user) throw new Error('No user found');
+      console.log('User found:', user.uid);
       
       const tasksRef = collection(db, 'tasks');
       const { tasks } = get();
+      console.log('Current tasks count:', tasks.length);
       
       // Add task with next order number
       const newTask = {
@@ -243,11 +246,20 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         createdAt: new Date(),
         updatedAt: new Date()
       };
+      console.log('About to add task to Firestore:', newTask);
       
-      await addDoc(tasksRef, newTask);
+      // Fire and forget - don't wait for addDoc to complete since it hangs
+      // The real-time listener will update the UI when the task is created
+      addDoc(tasksRef, newTask).then((docRef) => {
+        console.log('Firestore addDoc completed, docRef:', docRef.id);
+        // Track task creation in Analytics
+        trackTaskCreated(taskData.projectId);
+      }).catch((error) => {
+        console.error('Error in addDoc:', error);
+      });
       
-      // Track task creation in Analytics
-      trackTaskCreated(taskData.projectId);
+      console.log('Task creation initiated successfully');
+      return 'pending'; // Return immediately
     } catch (error) {
       console.error('Error adding task:', error);
       throw error;

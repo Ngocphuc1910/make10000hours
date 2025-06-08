@@ -1,39 +1,39 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
-import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays } from 'date-fns';
+import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, isSameDay } from 'date-fns';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { CalendarEvent, CalendarView, DragItem, DropResult } from './types';
 import WeekView from './WeekView';
 import DayView from './DayView';
 import MonthView from './MonthView';
-import EventDialog from './EventDialog';
+// EventDialog import removed - using TaskForm for all calendar interactions
 
 import { useTaskStore } from '../../store/taskStore';
 import { mergeEventsAndTasks, calculateNewEventTime, isValidDrop } from './utils';
 import TaskForm from '../../components/tasks/TaskForm';
 
-interface DragState {
-  isDragging: boolean;
-  startElement: HTMLElement | null;
-  startY: number;
-  dragIndicator: HTMLElement | null;
-}
+// Old DragState interface - removed since we have new drag-to-create system
 
 export const Calendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentView, setCurrentView] = useState<CalendarView>('week');
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
-  const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent>();
-  const [selectedDate, setSelectedDate] = useState<Date>();
-  const [isAllDayEvent, setIsAllDayEvent] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [dragState, setDragState] = useState<DragState>({
-    isDragging: false,
-    startElement: null,
-    startY: 0,
-    dragIndicator: null
-  });
+  const [isDragCreateTaskOpen, setIsDragCreateTaskOpen] = useState(false);
+  const [dragCreateData, setDragCreateData] = useState<{
+    startTime: Date;
+    endTime: Date;
+    status: 'pomodoro' | 'todo';
+  } | null>(null);
+  const [isTimeSlotTaskOpen, setIsTimeSlotTaskOpen] = useState(false);
+  const [timeSlotData, setTimeSlotData] = useState<{
+    startTime: Date;
+    endTime: Date;
+    status: 'pomodoro' | 'todo';
+    isAllDay?: boolean;
+  } | null>(null);
+  const [clearDragIndicator, setClearDragIndicator] = useState(false);
+  // Old drag state - removed since we have new drag-to-create system
   
   // Get tasks and projects from task store
   const { tasks, projects, updateTask, setEditingTaskId: setStoreEditingTaskId } = useTaskStore();
@@ -64,39 +64,65 @@ export const Calendar: React.FC = () => {
   };
 
   const handleEventClick = (event: CalendarEvent) => {
-    // If this is a task event, open task editing instead of event dialog
+    // Close any open forms first
+    setIsDragCreateTaskOpen(false);
+    setDragCreateData(null);
+    setIsTimeSlotTaskOpen(false);
+    setTimeSlotData(null);
+    
+    // Always open TaskForm for all events (both tasks and regular events)
     if (event.isTask && event.taskId) {
       setEditingTaskId(event.taskId);
       setStoreEditingTaskId(event.taskId);
     } else {
-      setSelectedEvent(event);
-      setIsAllDayEvent(event.isAllDay);
-      setIsEventDialogOpen(true);
+      // For regular events, open TaskForm for new task creation
+      setEditingTaskId('new');
+      setStoreEditingTaskId('new');
     }
   };
 
   const handleTimeSlotClick = (date: Date) => {
-    setSelectedDate(date);
-    setSelectedEvent(undefined);
-    setIsAllDayEvent(false);
-    setIsEventDialogOpen(true);
+    // Close any open forms first
+    setEditingTaskId(null);
+    setStoreEditingTaskId(null);
+    setIsDragCreateTaskOpen(false);
+    setDragCreateData(null);
+    
+    // Create start and end times (1 hour duration by default)
+    const startTime = new Date(date);
+    const endTime = new Date(date);
+    endTime.setHours(endTime.getHours() + 1);
+    
+    // Determine task status based on whether the scheduled date is today
+    const isToday = isSameDay(startTime, new Date());
+    const status: 'pomodoro' | 'todo' = isToday ? 'pomodoro' : 'todo';
+    
+    setTimeSlotData({ startTime, endTime, status, isAllDay: false });
+    setIsTimeSlotTaskOpen(true);
   };
 
   const handleAllDayClick = (date: Date) => {
-    setSelectedDate(date);
-    setSelectedEvent(undefined);
-    setIsAllDayEvent(true);
-    setIsEventDialogOpen(true);
+    // Close any open forms first
+    setEditingTaskId(null);
+    setStoreEditingTaskId(null);
+    setIsDragCreateTaskOpen(false);
+    setDragCreateData(null);
+    
+    // Create all-day event times
+    const startTime = new Date(date);
+    startTime.setHours(0, 0, 0, 0);
+    const endTime = new Date(date);
+    endTime.setHours(23, 59, 59, 999);
+    
+    // Determine task status based on whether the scheduled date is today
+    const isToday = isSameDay(startTime, new Date());
+    const status: 'pomodoro' | 'todo' = isToday ? 'pomodoro' : 'todo';
+    
+    setTimeSlotData({ startTime, endTime, status, isAllDay: true });
+    setIsTimeSlotTaskOpen(true);
   };
 
-  const handleSaveEvent = (event: CalendarEvent) => {
-    if (selectedEvent) {
-      setCalendarEvents(calendarEvents.map(e => e.id === selectedEvent.id ? event : e));
-    } else {
-      setCalendarEvents([...calendarEvents, event]);
-    }
-    setIsEventDialogOpen(false);
-  };
+  // Old handleSaveEvent - removed since we only use TaskForm now
 
   const handleEventDrop = useCallback((item: DragItem, dropResult: DropResult) => {
     if (!isValidDrop(item.event, dropResult, allEvents)) {
@@ -143,6 +169,12 @@ export const Calendar: React.FC = () => {
           taskUpdateData.scheduledEndTime = null;
         }
 
+        // Auto-change status: "To do list" → "In Pomodoro" when moved to today
+        const isMovedToToday = isSameDay(start, new Date());
+        if (isMovedToToday && task.status === 'todo') {
+          taskUpdateData.status = 'pomodoro';
+        }
+
         // Update the task through the task store
         updateTask(task.id, taskUpdateData).catch(error => {
           console.error('Failed to update task scheduling:', error);
@@ -156,132 +188,28 @@ export const Calendar: React.FC = () => {
     }
   }, [allEvents, calendarEvents, tasks, currentView]);
 
-  const calculateTime = useCallback((element: HTMLElement, y: number) => {
-    const hour = parseInt(element.getAttribute('data-hour') || '0');
-    const rect = element.getBoundingClientRect();
-    const minutes = Math.floor((y / rect.height) * 60);
-    const roundedMinutes = Math.round(minutes / 5) * 5;
-    const totalHours = hour + Math.floor(roundedMinutes / 60);
-    const finalMinutes = roundedMinutes % 60;
-    return { hour: totalHours, minutes: finalMinutes };
-  }, []);
-
-  const formatTime = (hours: number, minutes: number) => {
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-  };
+  // Old calculateTime and formatTime - removed since we have new drag-to-create system
 
   const handleDragCreate = useCallback((startTime: Date, endTime: Date) => {
-    setSelectedDate(startTime);
-    setSelectedEvent(undefined);
-    setIsAllDayEvent(false);
-    setIsEventDialogOpen(true);
+    // Close any open forms first
+    setEditingTaskId(null);
+    setStoreEditingTaskId(null);
+    setIsTimeSlotTaskOpen(false);
+    setTimeSlotData(null);
+    
+    // Determine task status based on whether the scheduled date is today
+    const isToday = isSameDay(startTime, new Date());
+    const status: 'pomodoro' | 'todo' = isToday ? 'pomodoro' : 'todo';
+    
+    setDragCreateData({ startTime, endTime, status });
+    setIsDragCreateTaskOpen(true);
   }, []);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLElement>) => {
-    const target = e.target as HTMLElement;
-    if (target.classList.contains('day-column')) {
-      setDragState({
-        isDragging: true,
-        startElement: target,
-        startY: e.clientY - target.getBoundingClientRect().top,
-        dragIndicator: null
-      });
+  // Old drag functions - removed since we have new drag-to-create system in DayView/WeekView
 
-      // Create drag indicator
-      const dragIndicator = document.createElement('div');
-      dragIndicator.className = 'task-item';
-      dragIndicator.style.backgroundColor = '#BB5F5A';
-      dragIndicator.style.opacity = '0.7';
-      dragIndicator.style.top = `${dragState.startY}px`;
-      dragIndicator.style.height = '1px';
-      dragIndicator.style.pointerEvents = 'none';
-      dragIndicator.style.zIndex = '30';
+  // Old drag logic - removed since we have new drag-to-create system
 
-      const timeDisplay = document.createElement('div');
-      timeDisplay.className = 'text-xs text-white font-medium pl-2 pt-1';
-      const startTime = calculateTime(target, dragState.startY);
-      timeDisplay.textContent = formatTime(startTime.hour, startTime.minutes);
-      dragIndicator.appendChild(timeDisplay);
-
-      target.appendChild(dragIndicator);
-      setDragState(prevState => ({ ...prevState, dragIndicator }));
-    }
-  }, [calculateTime]);
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!dragState.isDragging || !dragState.startElement || !dragState.dragIndicator) return;
-
-    const startElement = dragState.startElement;
-    const rect = startElement.getBoundingClientRect();
-    const currentY = e.clientY - rect.top;
-    
-    const top = Math.min(dragState.startY, currentY);
-    const height = Math.abs(currentY - dragState.startY);
-    
-    dragState.dragIndicator.style.top = `${top}px`;
-    dragState.dragIndicator.style.height = `${height}px`;
-
-    // Update time display
-    const timeDisplay = dragState.dragIndicator.querySelector('div');
-    if (timeDisplay) {
-      const startTime = calculateTime(startElement, dragState.startY);
-      const endTime = calculateTime(startElement, currentY);
-      
-      if (endTime.hour > startTime.hour || (endTime.hour === startTime.hour && endTime.minutes > startTime.minutes)) {
-        timeDisplay.textContent = `${formatTime(startTime.hour, startTime.minutes)} - ${formatTime(endTime.hour, endTime.minutes)}`;
-      } else {
-        timeDisplay.textContent = `${formatTime(endTime.hour, endTime.minutes)} - ${formatTime(startTime.hour, startTime.minutes)}`;
-      }
-    }
-  }, [calculateTime]);
-
-  const handleMouseUp = useCallback((e: MouseEvent) => {
-    if (!dragState.isDragging || !dragState.startElement) return;
-
-    const startElement = dragState.startElement;
-    const rect = startElement.getBoundingClientRect();
-    const endY = e.clientY - rect.top;
-
-    // Only show dialog if drag distance is significant
-    if (Math.abs(endY - dragState.startY) > 10) {
-      // Calculate start and end times
-      const startTime = calculateTime(startElement, dragState.startY);
-      const endTime = calculateTime(startElement, endY);
-
-      // Create new event with drag times
-      const newDate = new Date(currentDate);
-      const startDate = new Date(newDate);
-      startDate.setHours(Math.min(startTime.hour, endTime.hour), Math.min(startTime.minutes, endTime.minutes), 0, 0);
-      
-      const endDate = new Date(newDate);
-      endDate.setHours(Math.max(startTime.hour, endTime.hour), Math.max(startTime.minutes, endTime.minutes), 0, 0);
-
-      setSelectedDate(startDate);
-      setSelectedEvent(undefined);
-      setIsAllDayEvent(false);
-      setIsEventDialogOpen(true);
-    }
-
-    // Clean up
-    if (dragState.dragIndicator) {
-      dragState.dragIndicator.remove();
-    }
-    
-    setDragState(prevState => ({ ...prevState, isDragging: false, startElement: null, dragIndicator: null }));
-  }, [calculateTime, currentDate]);
-
-  // Add document event listeners for drag
-  React.useEffect(() => {
-    if (dragState.isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [dragState.isDragging, handleMouseMove, handleMouseUp]);
+  // Old drag event listeners - removed since we have new drag-to-create system
 
   return (
     <DndProvider backend={HTML5Backend}>
@@ -354,10 +282,8 @@ export const Calendar: React.FC = () => {
 
           <button
             onClick={() => {
-              setSelectedEvent(undefined);
-              setSelectedDate(new Date());
-              setIsAllDayEvent(false);
-              setIsEventDialogOpen(true);
+              setEditingTaskId('new');
+              setStoreEditingTaskId('new');
             }}
             className="ml-4 px-4 py-1.5 bg-primary text-white text-sm font-medium rounded-button hover:bg-opacity-90 flex items-center"
           >
@@ -390,8 +316,9 @@ export const Calendar: React.FC = () => {
             onEventClick={handleEventClick}
             onTimeSlotClick={handleTimeSlotClick}
             onAllDayClick={handleAllDayClick}
-            onMouseDown={handleMouseDown}
+            onDragCreate={handleDragCreate}
             onEventDrop={handleEventDrop}
+            clearDragIndicator={clearDragIndicator}
           />
         )}
         
@@ -402,8 +329,9 @@ export const Calendar: React.FC = () => {
             onEventClick={handleEventClick}
             onTimeSlotClick={handleTimeSlotClick}
             onAllDayClick={handleAllDayClick}
-            onMouseDown={handleMouseDown}
+            onDragCreate={handleDragCreate}
             onEventDrop={handleEventDrop}
+            clearDragIndicator={clearDragIndicator}
           />
         )}
 
@@ -418,24 +346,67 @@ export const Calendar: React.FC = () => {
         )}
       </div>
 
-      <EventDialog
-        isOpen={isEventDialogOpen}
-        onClose={() => setIsEventDialogOpen(false)}
-        onSave={handleSaveEvent}
-        initialEvent={selectedEvent}
-        initialDate={selectedDate}
-        isAllDay={isAllDayEvent}
-      />
+      {/* EventDialog removed - using TaskForm for all calendar interactions */}
 
       {/* Task Form Overlay for editing tasks */}
       {editingTaskId && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
             <TaskForm
-              task={tasks.find(t => t.id === editingTaskId)}
+              task={editingTaskId === 'new' ? undefined : tasks.find(t => t.id === editingTaskId)}
               onCancel={() => {
                 setEditingTaskId(null);
                 setStoreEditingTaskId(null);
+              }}
+              onSave={() => {
+                setEditingTaskId(null);
+                setStoreEditingTaskId(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Task Form Overlay for drag-create */}
+      {isDragCreateTaskOpen && dragCreateData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <TaskForm
+              initialStartTime={dragCreateData.startTime}
+              initialEndTime={dragCreateData.endTime}
+              status={dragCreateData.status}
+              onCancel={() => {
+                setIsDragCreateTaskOpen(false);
+                setDragCreateData(null);
+                setClearDragIndicator(true);
+                setTimeout(() => setClearDragIndicator(false), 100);
+              }}
+              onSave={() => {
+                setIsDragCreateTaskOpen(false);
+                setDragCreateData(null);
+                setClearDragIndicator(true);
+                setTimeout(() => setClearDragIndicator(false), 100);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Task Form Overlay for time slot clicks */}
+      {isTimeSlotTaskOpen && timeSlotData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <TaskForm
+              initialStartTime={timeSlotData.startTime}
+              initialEndTime={timeSlotData.endTime}
+              status={timeSlotData.status}
+              onCancel={() => {
+                setIsTimeSlotTaskOpen(false);
+                setTimeSlotData(null);
+              }}
+              onSave={() => {
+                setIsTimeSlotTaskOpen(false);
+                setTimeSlotData(null);
               }}
             />
           </div>
