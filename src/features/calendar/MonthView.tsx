@@ -113,14 +113,16 @@ export const MonthView: React.FC<MonthViewProps> = ({
                 onClick={() => onDateClick?.(day)}
               >
                 {/* Date number */}
-                <div className={`text-sm mb-1 flex-shrink-0 ${
-                  isCurrentDay 
-                    ? 'text-primary font-medium' 
-                    : !isCurrentMonth 
-                      ? 'text-gray-400' 
-                      : 'text-gray-900'
-                }`}>
-                  {format(day, 'd')}
+                <div className="text-sm mb-1 flex-shrink-0">
+                  {isCurrentDay ? (
+                    <div className="text-primary bg-primary text-white rounded-full w-6 h-6 flex items-center justify-center font-medium">
+                      {format(day, 'd')}
+                    </div>
+                  ) : (
+                    <div className={!isCurrentMonth ? 'text-gray-400' : 'text-gray-900'}>
+                      {format(day, 'd')}
+                    </div>
+                  )}
                 </div>
 
                 {/* Events container with flexible height */}

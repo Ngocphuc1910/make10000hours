@@ -261,7 +261,7 @@ export const DayView: React.FC<DayViewProps> = ({
             </div>
             
             {/* Day header */}
-            <div className={`flex flex-col items-center justify-center py-3 ${isToday(currentDate) ? 'bg-blue-50' : ''}`}>
+            <div className="flex flex-col items-center justify-center py-3">
               <div className="text-xs text-gray-500 font-medium mb-1">{format(currentDate, 'EEE').toUpperCase()}</div>
               <div className={`text-lg font-medium ${isToday(currentDate) ? 'text-primary bg-primary text-white rounded-full w-8 h-8 flex items-center justify-center' : 'text-gray-800'}`}>
                 {format(currentDate, 'd')}
