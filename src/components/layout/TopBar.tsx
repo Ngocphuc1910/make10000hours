@@ -11,7 +11,7 @@ interface TopBarProps {
 
 export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
   const navigate = useNavigate();
-  const { toggleFocusMode, toggleRightSidebar, isRightSidebarOpen } = useUIStore();
+  const { toggleFocusMode } = useUIStore();
   const currentDate = getCurrentFormattedDate();
   
   return (
@@ -22,15 +22,31 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
       </div>
       
       <div className="flex items-center space-x-4">
-        <button 
-          className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
-          onClick={toggleRightSidebar}
-          aria-label={isRightSidebarOpen ? "Hide Tasks Panel" : "Show Tasks Panel"}
-        >
-          <span className="w-5 h-5 flex items-center justify-center">
-            <Icon name={isRightSidebarOpen ? 'layout-right-2-line' : 'layout-right-line'} size={20} />
-          </span>
-        </button>
+        {/* Focus Mode Icon */}
+        <Tooltip text="Focus mode">
+          <button 
+            id="focusModeBtn" 
+            className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+            onClick={toggleFocusMode}
+            aria-label="Toggle Focus Mode"
+          >
+            <span className="w-5 h-5 flex items-center justify-center">
+              <Icon name="fullscreen-line" size={20} />
+            </span>
+          </button>
+        </Tooltip>
+        
+        {/* Navigation Icons */}
+        <Tooltip text="Pomodoro Timer">
+          <button 
+            className="p-2 rounded-full bg-gray-100 !rounded-button whitespace-nowrap"
+            aria-label="Current page: Pomodoro Timer"
+          >
+            <span className="w-5 h-5 flex items-center justify-center">
+              <Icon name="timer-line" size={20} />
+            </span>
+          </button>
+        </Tooltip>
         
         <Tooltip text="Task management">
           <button 
@@ -67,17 +83,6 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
             </span>
           </button>
         </Tooltip>
-        
-        <button 
-          id="focusModeBtn" 
-          className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
-          onClick={toggleFocusMode}
-          aria-label="Toggle Focus Mode"
-        >
-          <span className="w-5 h-5 flex items-center justify-center">
-            <Icon name="fullscreen-line" size={20} />
-          </span>
-        </button>
       </div>
     </div>
   );
