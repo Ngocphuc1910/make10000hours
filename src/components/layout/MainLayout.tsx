@@ -6,6 +6,7 @@ import FocusMode from '../pomodoro/FocusMode';
 import { Outlet, useLocation } from 'react-router-dom';
 import TaskList from '../tasks/TaskList';
 import { Icon } from '../ui/Icon';
+import { Tooltip } from '../ui/Tooltip';
 
 interface MainLayoutProps {
   children?: React.ReactNode;
@@ -165,19 +166,24 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           {isRightSidebarOpen && (
             <div 
               id="resizeDivider" 
-              className="w-[1px] bg-gray-200/20 cursor-col-resize hover:bg-primary/20 flex items-center justify-center"
+              className="w-[1px] bg-gray-200/20 cursor-col-resize hover:bg-primary/20 flex items-center justify-center group"
               onMouseDown={handleResizeStart}
             >
               <div className="w-4 h-full opacity-0"></div>
-              <button 
-                className="absolute w-6 h-16 bg-white border border-gray-200 rounded-l-md flex items-center justify-center shadow-sm -right-0 top-1/2 transform -translate-y-1/2"
-                onClick={() => useUIStore.getState().toggleRightSidebar()}
-                aria-label="Hide Tasks Panel"
-              >
-                <div className="flex items-center justify-center">
-                  <Icon name="arrow-right-s-line" size={16} className="text-gray-500" />
-                </div>
-              </button>
+              <Tooltip text="Hide task list (Shift + \)" placement="bottom" offset={32}>
+                <button 
+                  className="absolute w-6 h-12 bg-white border border-gray-200 rounded-l-md flex items-center justify-center shadow-sm hover:shadow-md -right-0 top-1/2 transform -translate-y-1/2 transition-all duration-200 hover:bg-gray-50 group-hover:border-primary/30 sidebar-edge-toggle"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    useUIStore.getState().toggleRightSidebar();
+                  }}
+                  aria-label="Hide task list (Shift + \)"
+                >
+                  <div className="flex items-center justify-center">
+                    <Icon name="arrow-right-s-line" size={14} className="text-gray-500 transition-colors group-hover:text-primary" />
+                  </div>
+                </button>
+              </Tooltip>
             </div>
           )}
           
@@ -200,15 +206,17 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           
           {/* Right sidebar show button - displayed when sidebar is hidden */}
           {!isRightSidebarOpen && (
-            <button 
-              className="p-2 rounded-l-lg bg-white shadow-md hover:bg-gray-100 fixed right-0 top-1/2 transform -translate-y-1/2 z-20"
-              onClick={() => useUIStore.getState().toggleRightSidebar()}
-              aria-label="Show Tasks Panel"
-            >
-              <div className="w-5 h-5 flex items-center justify-center text-gray-700">
-                <Icon name="layout-right-line" size={20} />
-              </div>
-            </button>
+            <Tooltip text="Show task list (Shift + \)" placement="left" offset={24}>
+              <button 
+                className="fixed right-0 top-1/2 transform -translate-y-1/2 z-[100] w-6 h-12 bg-white border border-gray-200 border-r-0 rounded-l-md shadow-md hover:shadow-lg transition-all duration-200 hover:bg-gray-50 hover:border-primary/30 group sidebar-edge-toggle sidebar-toggle-show"
+                onClick={() => useUIStore.getState().toggleRightSidebar()}
+                aria-label="Show task list (Shift + \)"
+              >
+                <div className="w-4 h-4 flex items-center justify-center text-gray-600 group-hover:text-primary transition-colors">
+                  <Icon name="arrow-left-s-line" size={14} />
+                </div>
+              </button>
+            </Tooltip>
           )}
         </div>
       </div>
