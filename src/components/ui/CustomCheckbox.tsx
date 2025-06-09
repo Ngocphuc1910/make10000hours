@@ -1,6 +1,7 @@
 import React from 'react';
 
 interface CustomCheckboxProps {
+  id?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
@@ -8,6 +9,7 @@ interface CustomCheckboxProps {
 }
 
 const CustomCheckbox: React.FC<CustomCheckboxProps> = ({ 
+  id,
   checked, 
   onChange, 
   disabled = false,
@@ -16,6 +18,7 @@ const CustomCheckbox: React.FC<CustomCheckboxProps> = ({
   return (
     <label className={`relative inline-flex items-center cursor-pointer ${disabled ? 'cursor-not-allowed' : ''} ${className}`}>
       <input
+        id={id}
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
