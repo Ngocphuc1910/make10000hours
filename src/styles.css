@@ -285,4 +285,68 @@
 
 .task-complete-animation {
   animation: taskComplete 0.4s ease-out;
+}
+
+/* Enhanced sidebar toggle animations */
+.sidebar-toggle-show {
+  animation: slideInFromRight 0.2s ease-out;
+}
+
+.sidebar-toggle-hide {
+  animation: slideOutToRight 0.2s ease-out;
+}
+
+@keyframes slideInFromRight {
+  from {
+    transform: translateX(100%) translateY(-50%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0) translateY(-50%);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutToRight {
+  from {
+    transform: translateX(0) translateY(-50%);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%) translateY(-50%);
+    opacity: 0;
+  }
+}
+
+/* Sidebar edge toggle button enhancements */
+.sidebar-edge-toggle {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 50;
+  opacity: 0.9;
+  pointer-events: auto;
+}
+
+.sidebar-edge-toggle:hover {
+  transform: translateY(-50%) scale(1.05);
+  opacity: 1;
+}
+
+.sidebar-edge-toggle:active {
+  transform: translateY(-50%) scale(0.95);
+}
+
+/* Ensure toggle doesn't interfere with drag operations */
+#resizeDivider .sidebar-edge-toggle {
+  pointer-events: auto;
+}
+
+#resizeDivider {
+  position: relative;
+}
+
+/* Subtle animation for compact toggle */
+.sidebar-edge-toggle:hover .ri-arrow-left-s-line,
+.sidebar-edge-toggle:hover .ri-arrow-right-s-line {
+  transform: translateX(1px);
 } 
