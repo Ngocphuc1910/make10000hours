@@ -26,18 +26,14 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   
   const isSelected = currentTask?.id === task.id;
   
-  // Status indicator styles
+  // Project color indicator styles
   const getStatusIndicator = () => {
-    switch (task.status) {
-      case 'pomodoro':
-        return <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-1.5"></span>;
-      case 'todo':
-        return <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1.5"></span>;
-      case 'completed':
-        return <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1.5"></span>;
-      default:
-        return null;
-    }
+    return (
+      <span 
+        className="inline-block w-2 h-2 rounded-full mr-1.5" 
+        style={{ backgroundColor: project.color }}
+      ></span>
+    );
   };
   
   const handleTaskClick = (e: React.MouseEvent) => {
