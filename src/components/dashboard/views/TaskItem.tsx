@@ -39,19 +39,15 @@ const TaskItem: React.FC<TaskItemProps> = ({
   // Get project info
   const project = task ? projects.find(p => p.id === task.projectId) : null;
 
-  // Status indicator styles
+  // Project color indicator styles
   const getStatusIndicator = () => {
-    if (!task) return null;
-    switch (task.status) {
-      case 'pomodoro':
-        return <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-1.5"></span>;
-      case 'todo':
-        return <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1.5"></span>;
-      case 'completed':
-        return <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1.5"></span>;
-      default:
-        return null;
-    }
+    if (!task || !project) return null;
+    return (
+      <span 
+        className="inline-block w-2 h-2 rounded-full mr-1.5" 
+        style={{ backgroundColor: project.color }}
+      ></span>
+    );
   };
   
   // Handle checkbox change
