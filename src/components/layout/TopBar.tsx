@@ -83,6 +83,18 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
             </span>
           </button>
         </Tooltip>
+        
+        <Tooltip text="Deep Focus">
+          <button 
+            className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+            onClick={() => navigate('/deep-focus')}
+            aria-label="Go to Deep Focus"
+          >
+            <span className="w-5 h-5 flex items-center justify-center">
+              <Icon name="brain-line" size={20} />
+            </span>
+          </button>
+        </Tooltip>
       </div>
     </div>
   );
