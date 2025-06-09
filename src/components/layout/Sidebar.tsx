@@ -43,6 +43,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
       path: '/calendar'
     },
     {
+      icon: 'brain-line',
+      label: 'Deep Focus',
+      path: '/deep-focus'
+    },
+    {
       icon: 'settings-line',
       label: 'Settings',
       path: '/dashboard/settings'
@@ -67,6 +72,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
       return true;
     }
     if (path === '/projects' && location.pathname === '/projects') {
+      return true;
+    }
+    if (path === '/deep-focus' && location.pathname === '/deep-focus') {
       return true;
     }
     if (path.startsWith('/dashboard/') && location.pathname.startsWith(path)) {

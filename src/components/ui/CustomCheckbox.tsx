@@ -1,36 +1,42 @@
-import React, { InputHTMLAttributes, forwardRef } from 'react';
+import React from 'react';
 
-interface CustomCheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
-  checked?: boolean;
-  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+interface CustomCheckboxProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
   className?: string;
 }
 
-export const CustomCheckbox = forwardRef<HTMLInputElement, CustomCheckboxProps>(
-  ({ checked, onChange, className = '', ...props }, ref) => {
-    return (
+const CustomCheckbox: React.FC<CustomCheckboxProps> = ({ 
+  checked, 
+  onChange, 
+  disabled = false,
+  className = ''
+}) => {
+  return (
+    <label className={`relative inline-flex items-center cursor-pointer ${disabled ? 'cursor-not-allowed' : ''} ${className}`}>
       <input
         type="checkbox"
-        ref={ref}
         checked={checked}
-        onChange={onChange}
-        className={`appearance-none w-5 h-5 border-2 border-gray-300 rounded focus:outline-none 
-        cursor-pointer relative transition-all duration-200 bg-white 
-        checked:bg-primary checked:border-primary ${className}`}
-        style={{
-          backgroundPosition: 'center',
-          backgroundSize: '70%',
-          backgroundRepeat: 'no-repeat',
-          backgroundImage: checked
-            ? `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E")`
-            : 'none'
-        }}
-        {...props}
+        onChange={(e) => onChange(e.target.checked)}
+        disabled={disabled}
+        className="sr-only peer"
       />
-    );
-  }
-);
-
-CustomCheckbox.displayName = 'CustomCheckbox';
+      <div className="w-[18px] h-[18px] border-2 border-gray-300 rounded-[4px] bg-white transition-all duration-200 peer-checked:bg-[#BB5F5A] peer-checked:border-[#BB5F5A] peer-disabled:opacity-50 relative">
+        <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${checked ? 'opacity-100' : 'opacity-0'}`}>
+          <svg width="10" height="8" viewBox="0 0 10 8" fill="none" className="text-white">
+            <path 
+              d="M1 4L3.5 6.5L9 1" 
+              stroke="currentColor" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+      </div>
+    </label>
+  );
+};
 
 export default CustomCheckbox; 
