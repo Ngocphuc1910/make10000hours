@@ -22,6 +22,7 @@ import { formatTime } from './utils/timeUtils';
 import { trackPageView, setAnalyticsUserId } from './utils/analytics';
 import { verifyAnalyticsSetup } from './utils/verifyAnalytics';
 import CalendarPage from './features/calendar/CalendarPage';
+import DeepFocusPage from './components/pages/DeepFocusPage';
 
 // Import test utilities in development mode
 if (process.env.NODE_ENV === 'development') {
@@ -259,6 +260,7 @@ const App = (): React.JSX.Element => {
             <Route path="settings" element={<SettingsPage />} />
           </Route>
           <Route path="calendar" element={<CalendarPage />} />
+          <Route path="deep-focus" element={<DeepFocusPage />} />
           <Route path="support" element={<SupportPageWithLayout />} />
         </Routes>
       </AnalyticsWrapper>
