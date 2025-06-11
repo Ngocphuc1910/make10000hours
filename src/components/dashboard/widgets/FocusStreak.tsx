@@ -78,8 +78,8 @@ export const FocusStreak: React.FC = () => {
     
     const days: Array<{ date: Date, hasFocused: boolean } | null> = [];
     
-    // Generate 6 weeks of days (42 days total)
-    for (let i = 0; i < 42; i++) {
+    // Generate 5 weeks of days (35 days total) - optimized from 6x7 to 5x7
+    for (let i = 0; i < 35; i++) {
       const currentDate = new Date(startDate);
       currentDate.setDate(startDate.getDate() + i);
       
@@ -234,22 +234,6 @@ export const FocusStreak: React.FC = () => {
             )}
           </div>
         ))}
-      </div>
-      
-      {/* Streak information */}
-      <div className="flex items-center justify-between mt-6">
-        <div className="flex items-center">
-          <span className="text-sm text-gray-600 mr-2">Longest streak</span>
-          <span className="text-sm font-medium text-gray-800">{focusStreak.longestStreak} days</span>
-        </div>
-        <div className="flex items-center">
-          <span className="text-sm text-gray-600 mr-2">Current streak</span>
-          <span className="text-sm font-medium text-gray-800">{focusStreak.currentStreak} days</span>
-        </div>
-        <div className="flex items-center">
-          <span className="text-sm text-gray-600 mr-2">Total focus days</span>
-          <span className="text-sm font-medium text-gray-800">{focusStreak.totalFocusDays} days</span>
-        </div>
       </div>
     </Card>
   );
