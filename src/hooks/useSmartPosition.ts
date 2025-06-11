@@ -25,7 +25,7 @@ export const useSmartPosition = ({
   offset = 4,
   viewportPadding = 8,
   modalThreshold = 200
-}: UseSmartPositionProps): Position & { isReady: boolean } => {
+}: UseSmartPositionProps): Position & { isReady: boolean, recalculate: () => void } => {
   const [position, setPosition] = useState<Position>({
     top: 0,
     left: 0,
@@ -206,5 +206,6 @@ export const useSmartPosition = ({
     };
   }, [isOpen, calculatePosition, contentRef]);
 
-  return { ...position, isReady };
-}; 
+  // Return the calculatePosition function so it can be called from outside
+  return { ...position, isReady, recalculate: calculatePosition };
+};
