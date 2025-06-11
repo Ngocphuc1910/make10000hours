@@ -71,6 +71,16 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   useEffect(() => {
     setShowTimeSelector(includeTime);
   }, [includeTime]);
+  
+  // Recalculate position when time selector visibility changes
+  useEffect(() => {
+    // Use a small timeout to allow the DOM to update first
+    const timer = setTimeout(() => {
+      position.recalculate();
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, [showTimeSelector, position.recalculate]);
 
   // Initialize selected time based on props
   useEffect(() => {
@@ -280,4 +290,4 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   );
 };
 
-export default DatePicker; 
+export default DatePicker;
