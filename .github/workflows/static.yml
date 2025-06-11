@@ -28,6 +28,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,29 +38,35 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ matrix.node-version }}
           cache: 'npm'
           
-      - name: Clean install dependencies
+      - name: Install dependencies
         run: |
-          npm ci --prefer-offline --no-audit --progress=false
+          npm cache clean --force
+          npm install --legacy-peer-deps --no-optional
           
       # Build the site
       - name: Build
         run: npm run build
         env:
           CI: false
+          NODE_ENV: production
+          ROLLUP_WATCH: false
           VITE_FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
           VITE_FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
           
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        if: matrix.node-version == 20
         
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
+        if: matrix.node-version == 20
         with:
           path: './dist'
           
       - name: Deploy to GitHub Pages
         id: deployment
+        if: matrix.node-version == 20
         uses: actions/deploy-pages@v4
