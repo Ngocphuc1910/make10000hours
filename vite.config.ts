@@ -8,5 +8,17 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     minify: 'esbuild',
-  }
+    rollupOptions: {
+      external: [],
+      output: {
+        manualChunks: undefined,
+      }
+    },
+    commonjsOptions: {
+      include: [/node_modules/],
+    }
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom'],
+  },
 })
