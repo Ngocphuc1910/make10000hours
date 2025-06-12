@@ -335,9 +335,14 @@ const DeepFocusPage: React.FC = () => {
   const formatMinutesToHours = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    // Generate consistent seconds based on minutes for visual consistency
-    const seconds = Math.floor((minutes * 13) % 60); // Using 13 as multiplier for varied seconds
-    return `${hours}h ${mins}m ${seconds}s`;
+    
+    if (hours === 0) {
+      return `${mins}m`;
+    } else if (mins === 0) {
+      return `${hours}h`;
+    } else {
+      return `${hours}h ${mins}m`;
+    }
   };
 
   return (
@@ -609,7 +614,7 @@ const DeepFocusPage: React.FC = () => {
             {/* Usage Chart */}
             <div className="bg-white rounded-lg p-6">
               <div className="flex items-center justify-between mb-6">
-                <div className="text-sm font-medium">Usage Time: <span className="text-gray-600">273h 54m 11s</span></div>
+                <div className="text-sm font-medium">Usage Time: <span className="text-gray-600">273h 54m</span></div>
                 <div className="flex space-x-2">
                   <button className="p-1 text-gray-400 hover:text-gray-600 transition-colors duration-200">
                     <Icon name="more-2-fill" className="w-5 h-5" />
@@ -680,13 +685,29 @@ const DeepFocusPage: React.FC = () => {
               
               {/* Site Usage List */}
               <div className="space-y-4">
-                {siteUsage.map((site) => (
-                  <SiteUsageCard
-                    key={site.id}
-                    site={site}
-                    formatTime={formatMinutesToHours}
-                  />
-                ))}
+                {siteUsage.map((site, index) => {
+                  // Define the same default colors as used in the pie chart
+                  const defaultColors = [
+                    '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de'
+                  ];
+                  
+                  // Use default color for top 5 sites, gray for others
+                  const progressBarColor = index < 5 ? defaultColors[index] : '#9CA3AF';
+                  
+                  // Calculate percentage based on actual time data (same as pie chart)
+                  const totalTimeSpent = siteUsage.reduce((sum, s) => sum + s.timeSpent, 0);
+                  const calculatedPercentage = totalTimeSpent > 0 ? (site.timeSpent / totalTimeSpent) * 100 : 0;
+                  
+                  return (
+                    <SiteUsageCard
+                      key={site.id}
+                      site={site}
+                      formatTime={formatMinutesToHours}
+                      color={progressBarColor}
+                      percentage={calculatedPercentage}
+                    />
+                  );
+                })}
               </div>
             </div>
           </div>
