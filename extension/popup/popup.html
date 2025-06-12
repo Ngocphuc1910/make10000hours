@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Focus Time Tracker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="header-content">
+        <div class="logo">
+          <span class="logo-icon">🎯</span>
+          <h1 class="logo-text">Focus Tracker</h1>
+        </div>
+        <div class="status-indicators">
+          <div id="tracking-status" class="status-indicator">
+            <span class="status-dot"></span>
+            <span class="status-text">Tracking</span>
+          </div>
+          <div id="focus-mode-indicator" class="status-indicator hidden">
+            <span class="focus-icon">🔒</span>
+            <span class="status-text">Focus Mode</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Tab Navigation -->
+    <nav class="tab-navigation">
+      <button class="tab-btn active" data-tab="overview">
+        <span class="tab-icon">📊</span>
+        <span class="tab-text">Overview</span>
+      </button>
+      <button class="tab-btn" data-tab="analytics">
+        <span class="tab-icon">📈</span>
+        <span class="tab-text">Analytics</span>
+      </button>
+      <button class="tab-btn" data-tab="goals">
+        <span class="tab-icon">🎯</span>
+        <span class="tab-text">Goals</span>
+      </button>
+    </nav>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+      <!-- Overview Tab (existing content) -->
+      <div id="overview-tab" class="tab-pane active">
+        <!-- Today's Stats Overview -->
+        <section class="stats-overview">
+          <div class="stat-card primary">
+            <div class="stat-icon">⏱️</div>
+            <div class="stat-content">
+              <div id="total-time" class="stat-value">0h 0m</div>
+              <div class="stat-label">Today's Total</div>
+            </div>
+          </div>
+          
+          <div class="stat-card secondary">
+            <div class="stat-icon">🌐</div>
+            <div class="stat-content">
+              <div id="sites-visited" class="stat-value">0</div>
+              <div class="stat-label">Sites Visited</div>
+            </div>
+          </div>
+          
+          <div class="stat-card tertiary">
+            <div class="stat-icon">📊</div>
+            <div class="stat-content">
+              <div id="productivity-score" class="stat-value">0%</div>
+              <div class="stat-label">Productivity</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Current Session -->
+        <section class="current-session">
+          <div class="section-header">
+            <h3>Current Session</h3>
+            <div id="session-timer" class="session-timer">00:00</div>
+          </div>
+          
+          <div id="current-site" class="current-site">
+            <div class="site-info">
+              <div class="site-icon">🌐</div>
+              <div class="site-details">
+                <div class="site-name">No active site</div>
+                <div class="site-time">Not tracking</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Top Sites Today -->
+        <section class="top-sites">
+          <div class="section-header">
+            <h3>Top Sites Today</h3>
+            <button id="view-all-btn" class="view-all-btn">View All</button>
+          </div>
+          
+          <div id="top-sites-list" class="sites-list">
+            <!-- Site cards will be populated by JavaScript -->
+            <div class="loading-state">
+              <div class="loading-spinner"></div>
+              <div class="loading-text">Loading stats...</div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Analytics Tab (new enhanced analytics) -->
+      <div id="analytics-tab" class="tab-pane">
+        <div id="analytics-dashboard"></div>
+      </div>
+
+      <!-- Goals Tab (productivity goals) -->
+      <div id="goals-tab" class="tab-pane">
+        <div id="productivity-goals-widget"></div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <section class="quick-actions">
+      <div class="action-buttons">
+        <button id="focus-mode-toggle" class="action-btn primary">
+          <span class="btn-icon">🎯</span>
+          <span class="btn-text">Enable Focus Mode</span>
+        </button>
+        
+        <button id="block-current-site" class="action-btn secondary">
+          <span class="btn-icon">🚫</span>
+          <span class="btn-text">Block Current Site</span>
+        </button>
+      </div>
+      
+      <div class="secondary-actions">
+        <button id="settings-btn" class="secondary-btn">
+          <span class="btn-icon">⚙️</span>
+          Settings
+        </button>
+        
+        <button id="export-data-btn" class="secondary-btn">
+          <span class="btn-icon">📤</span>
+          Export Data
+        </button>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="popup-footer">
+      <div class="footer-links">
+        <button id="help-btn" class="footer-link">Help</button>
+        <button id="feedback-btn" class="footer-link">Feedback</button>
+      </div>
+      <div class="version-info">v1.0.0</div>
+    </footer>
+  </div>
+
+  <!-- Modals -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Modal Title</h3>
+        <button id="modal-close" class="modal-close">×</button>
+      </div>
+      <div id="modal-content" class="modal-content">
+        <!-- Dynamic content -->
+      </div>
+      <div class="modal-footer">
+        <button id="modal-cancel" class="btn secondary">Cancel</button>
+        <button id="modal-confirm" class="btn primary">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div id="loading-overlay" class="loading-overlay hidden">
+    <div class="loading-spinner large"></div>
+    <div class="loading-text">Processing...</div>
+  </div>
+
+  <!-- Component Scripts -->
+  <script src="/components/chartComponents.js"></script>
+  <script src="/components/analyticsUI.js"></script>
+  
+  <!-- Main Scripts -->
+  <script src="popup.js"></script>
+</body>
+</html> 
