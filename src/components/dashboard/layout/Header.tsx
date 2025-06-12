@@ -366,8 +366,7 @@ export const Header: React.FC = () => {
             <span className="w-5 h-5 flex items-center justify-center">
               <Icon 
                 name="timer-line" 
-                size={20} 
-                className={isDeepFocusActive ? 'text-[rgb(187,95,90)]' : ''}
+                size={20}
               />
             </span>
           </button>
@@ -382,8 +381,7 @@ export const Header: React.FC = () => {
             <span className="w-5 h-5 flex items-center justify-center">
               <Icon 
                 name="task-line" 
-                size={20} 
-                className={isDeepFocusActive ? 'text-[rgb(187,95,90)]' : ''}
+                size={20}
               />
             </span>
           </button>
@@ -397,8 +395,7 @@ export const Header: React.FC = () => {
             <span className="w-5 h-5 flex items-center justify-center">
               <Icon 
                 name="dashboard-line" 
-                size={20} 
-                className={isDeepFocusActive ? 'text-[rgb(187,95,90)]' : ''}
+                size={20}
               />
             </span>
           </button>
@@ -413,8 +410,7 @@ export const Header: React.FC = () => {
             <span className="w-5 h-5 flex items-center justify-center">
               <Icon 
                 name="calendar-line" 
-                size={20} 
-                className={isDeepFocusActive ? 'text-[rgb(187,95,90)]' : ''}
+                size={20}
               />
             </span>
           </button>
@@ -429,8 +425,7 @@ export const Header: React.FC = () => {
             <span className="w-5 h-5 flex items-center justify-center">
               <Icon 
                 name="brain-line" 
-                size={20} 
-                className={isDeepFocusActive ? 'text-[rgb(187,95,90)]' : ''}
+                size={20}
               />
             </span>
           </button>
