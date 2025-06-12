@@ -1,5 +1,6 @@
 import React from 'react';
 import { Icon } from './Icon';
+import FaviconImage from './FaviconImage';
 import { SiteUsage } from '../../types/deepFocus';
 
 interface SiteUsageCardProps {
@@ -46,11 +47,13 @@ const SiteUsageCard: React.FC<SiteUsageCardProps> = ({ site, formatTime }) => {
     <div>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center">
-          <div 
-            className="w-8 h-8 rounded-lg flex items-center justify-center mr-3"
-            style={{ backgroundColor: lightBg, color: textColor }}
-          >
-            <Icon name={site.icon} />
+          <div className="mr-3">
+            <FaviconImage 
+              domain={site.url} 
+              size={32}
+              className="shadow-sm border border-gray-200"
+              fallbackIcon={site.icon}
+            />
           </div>
           <div>
             <div className="font-medium">{site.name}</div>

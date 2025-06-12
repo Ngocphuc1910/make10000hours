@@ -9,6 +9,7 @@ import { Icon } from '../ui/Icon';
 import { Tooltip } from '../ui/Tooltip';
 import Button from '../ui/Button';
 import { formatTime } from '../../utils/timeUtils';
+import { FaviconService } from '../../utils/faviconUtils';
 import UsageLineChart from '../charts/UsageLineChart';
 import UsagePieChart from '../charts/UsagePieChart';
 import AddSiteModal from '../ui/AddSiteModal';
@@ -101,6 +102,33 @@ const DeepFocusPage: React.FC = () => {
     };
     window.addEventListener('message', debugHandler);
   }, [loadExtensionData]);
+
+  // Preload favicons for better UX
+  useEffect(() => {
+    const preloadFavicons = async () => {
+      try {
+        // Collect all domains from blocked sites and site usage
+        const domains = [
+          ...blockedSites.map(site => site.url),
+          ...siteUsage.map(site => site.url)
+        ];
+        
+        // Preload favicons for different sizes used in the UI
+        await Promise.all([
+          FaviconService.preloadFavicons(domains, 32), // SiteUsageCard size
+          FaviconService.preloadFavicons(domains, 40)  // AnimatedSiteCard size
+        ]);
+        
+        console.log('Favicons preloaded for', domains.length, 'domains');
+      } catch (error) {
+        console.warn('Failed to preload some favicons:', error);
+      }
+    };
+
+    if (blockedSites.length > 0 || siteUsage.length > 0) {
+      preloadFavicons();
+    }
+  }, [blockedSites, siteUsage]);
 
   // Close date filter when clicking outside
   useEffect(() => {
