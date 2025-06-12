@@ -1,10 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import Sidebar from '../layout/Sidebar';
 import { useDeepFocusStore } from '../../store/deepFocusStore';
 import { useExtensionSync } from '../../hooks/useExtensionSync';
 import { useDeepFocusSync } from '../../hooks/useDeepFocusSync';
+import { useExtensionDateRange } from '../../hooks/useExtensionDateRange';
+import { useDashboardStore } from '../../store/useDashboardStore';
+import { useUserStore } from '../../store/userStore';
 import { Icon } from '../ui/Icon';
 import { Tooltip } from '../ui/Tooltip';
 import Button from '../ui/Button';
@@ -43,6 +46,10 @@ const DeepFocusPage: React.FC = () => {
     dailyUsage, 
     isExtensionConnected,
     isDeepFocusActive,
+    totalSessionsCount,
+    loadDeepFocusSessions,
+    subscribeToSessions,
+    unsubscribeFromSessions,
     toggleBlockedSite, 
     removeBlockedSite, 
     addBlockedSite,
@@ -54,6 +61,9 @@ const DeepFocusPage: React.FC = () => {
     toggleDeepFocus,
     loadFocusStatus
   } = useDeepFocusStore();
+  
+  const { workSessions } = useDashboardStore();
+  const { user } = useUserStore();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -78,6 +88,169 @@ const DeepFocusPage: React.FC = () => {
   // Extension sync hooks
   const { refreshData } = useExtensionSync();
   useDeepFocusSync(); // Sync Deep Focus state across pages
+  const { loadDateRangeData, isLoading: dateRangeLoading } = useExtensionDateRange();
+
+  // State for extension-loaded data
+  const [extensionData, setExtensionData] = useState<{
+    siteUsage: any[];
+    dailyUsage: any[];
+    timeMetrics: any;
+  } | null>(null);
+
+  // Helper function to check if a date string is within the selected range
+  const isDateInRange = (dateStr: string): boolean => {
+    if (selectedRange.rangeType === 'all time' || !selectedRange.startDate || !selectedRange.endDate) {
+      return true;
+    }
+
+    // Parse date string (assuming format like '12/05' or full date)
+    let dateToCheck: Date;
+    if (dateStr.includes('/')) {
+      // Format like '12/05' - assume current year
+      const [month, day] = dateStr.split('/');
+      const currentYear = new Date().getFullYear();
+      dateToCheck = new Date(currentYear, parseInt(month) - 1, parseInt(day));
+    } else {
+      dateToCheck = new Date(dateStr);
+    }
+
+    return dateToCheck >= selectedRange.startDate && dateToCheck <= selectedRange.endDate;
+  };
+
+  // Load extension data when date range changes
+  useEffect(() => {
+    const loadExtensionDateData = async () => {
+      if (selectedRange.rangeType === 'all time' || !selectedRange.startDate || !selectedRange.endDate) {
+        setExtensionData(null);
+        return;
+      }
+
+      try {
+        const startDateStr = selectedRange.startDate.toISOString().split('T')[0];
+        const endDateStr = selectedRange.endDate.toISOString().split('T')[0];
+        
+        console.log('Loading extension data for date range:', startDateStr, 'to', endDateStr);
+        const data = await loadDateRangeData(startDateStr, endDateStr);
+        console.log('Loaded extension data:', data);
+        setExtensionData(data);
+      } catch (error) {
+        console.error('Failed to load extension date range data:', error);
+        setExtensionData(null);
+      }
+    };
+
+    loadExtensionDateData();
+  }, [selectedRange, loadDateRangeData]);
+
+  // Filter dailyUsage based on selected date range
+  const filteredDailyUsage = useMemo(() => {
+    // Use extension data if available, otherwise fall back to store data
+    if (extensionData) {
+      return extensionData.dailyUsage;
+    }
+    
+    if (selectedRange.rangeType === 'all time') {
+      return dailyUsage;
+    }
+    return dailyUsage.filter(day => isDateInRange(day.date));
+  }, [extensionData, dailyUsage, selectedRange]);
+
+  // Filter and recalculate site usage based on date range
+  const filteredSiteUsage = useMemo(() => {
+    // Use extension data if available, otherwise fall back to store data
+    if (extensionData) {
+      return extensionData.siteUsage;
+    }
+    
+    if (selectedRange.rangeType === 'all time') {
+      return siteUsage;
+    }
+
+    // For now, we'll apply a simple time-based filter
+    // In a real app, you'd have date-specific site usage data
+    // This is a placeholder logic that maintains data proportions
+    const filteredSites = siteUsage.map(site => ({
+      ...site,
+      // Reduce time proportionally based on filtered days vs total days
+      timeSpent: Math.round(site.timeSpent * (filteredDailyUsage.length / dailyUsage.length)),
+      sessions: Math.round(site.sessions * (filteredDailyUsage.length / dailyUsage.length))
+    }));
+
+    // Recalculate percentages based on new totals
+    const totalTime = filteredSites.reduce((sum, site) => sum + site.timeSpent, 0);
+    return filteredSites.map(site => ({
+      ...site,
+      percentage: totalTime > 0 ? (site.timeSpent / totalTime) * 100 : 0
+    })).filter(site => site.timeSpent > 0); // Only show sites with time
+  }, [extensionData, siteUsage, filteredDailyUsage, dailyUsage]);
+
+  // Filter work sessions based on date range (EXACT same logic as Dashboard)
+  const filteredWorkSessions = useMemo(() => {
+    // For 'all time' range, show all work sessions without filtering
+    if (selectedRange.rangeType === 'all time') {
+      return workSessions;
+    }
+    
+    // For all other cases, use the selected range if available
+    if (!selectedRange.startDate || !selectedRange.endDate) {
+      return workSessions;
+    }
+    
+    const startDate = new Date(selectedRange.startDate);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(selectedRange.endDate);
+    endDate.setHours(23, 59, 59, 999);
+    
+    return workSessions.filter(session => {
+      const sessionDate = new Date(session.date);
+      return sessionDate >= startDate && sessionDate <= endDate;
+    });
+  }, [workSessions, selectedRange]);
+
+  // Filter and recalculate time metrics based on date range
+  const filteredTimeMetrics = useMemo(() => {
+    // Use extension data if available, otherwise fall back to store data
+    if (extensionData) {
+      return extensionData.timeMetrics;
+    }
+
+    const workSessionsForCalculation = filteredWorkSessions
+      .filter(session => session.sessionType === 'pomodoro' || session.sessionType === 'manual');
+    
+    const totalWorkingTime = workSessionsForCalculation
+      .reduce((total, session) => total + (session.duration || 0), 0);
+
+    console.log('Deep Focus Page - Working Time Calculation:', {
+      totalWorkSessions: workSessions.length,
+      filteredWorkSessions: filteredWorkSessions.length,
+      workSessionsForCalculation: workSessionsForCalculation.length,
+      totalWorkingTime,
+      selectedRange: selectedRange.rangeType,
+      dateRange: {
+        start: selectedRange.startDate?.toISOString(),
+        end: selectedRange.endDate?.toISOString()
+      }
+    });
+
+    if (selectedRange.rangeType === 'all time') {
+      return {
+        onScreenTime: timeMetrics.onScreenTime,
+        workingTime: totalWorkingTime, // Use work sessions data
+        deepFocusTime: totalSessionsCount, // Use session count instead of time
+        overrideTime: Math.round(timeMetrics.onScreenTime * 0.1)
+      };
+    }
+
+    // Calculate totals from filtered daily usage for other metrics
+    const totalOnScreenTime = filteredDailyUsage.reduce((sum, day) => sum + day.onScreenTime, 0);
+
+    return {
+      onScreenTime: totalOnScreenTime,
+      workingTime: totalWorkingTime, // Use work sessions data
+      deepFocusTime: totalSessionsCount, // Use session count instead of time
+      overrideTime: Math.round(totalOnScreenTime * 0.1) // Estimate override time
+    };
+  }, [extensionData, timeMetrics, filteredDailyUsage, selectedRange, filteredWorkSessions, totalSessionsCount]);
 
   // Load extension data on component mount
   useEffect(() => {
@@ -103,6 +276,30 @@ const DeepFocusPage: React.FC = () => {
     window.addEventListener('message', debugHandler);
   }, [loadExtensionData]);
 
+  // Load Deep Focus sessions when user is available
+  useEffect(() => {
+    if (user?.uid) {
+      console.log('Loading Deep Focus sessions for user:', user.uid);
+      console.log('Current totalSessionsCount before loading:', totalSessionsCount);
+      console.log('User object:', user);
+      loadDeepFocusSessions(user.uid);
+      subscribeToSessions(user.uid);
+    } else {
+      console.log('No user available, user object:', user);
+    }
+    
+    // Cleanup function
+    return () => {
+      console.log('DeepFocusPage: Cleaning up session subscription');
+      unsubscribeFromSessions();
+    };
+  }, [user?.uid, loadDeepFocusSessions, subscribeToSessions, unsubscribeFromSessions]);
+
+  // Debug: Log when totalSessionsCount changes
+  useEffect(() => {
+    console.log('Deep Focus totalSessionsCount updated:', totalSessionsCount);
+  }, [totalSessionsCount]);
+
   // Preload favicons for better UX
   useEffect(() => {
     const preloadFavicons = async () => {
@@ -110,7 +307,7 @@ const DeepFocusPage: React.FC = () => {
         // Collect all domains from blocked sites and site usage
         const domains = [
           ...blockedSites.map(site => site.url),
-          ...siteUsage.map(site => site.url)
+          ...filteredSiteUsage.map(site => site.url)
         ];
         
         // Preload favicons for different sizes used in the UI
@@ -125,10 +322,10 @@ const DeepFocusPage: React.FC = () => {
       }
     };
 
-    if (blockedSites.length > 0 || siteUsage.length > 0) {
+    if (blockedSites.length > 0 || filteredSiteUsage.length > 0) {
       preloadFavicons();
     }
-  }, [blockedSites, siteUsage]);
+  }, [blockedSites, filteredSiteUsage]);
 
   // Close date filter when clicking outside
   useEffect(() => {
@@ -308,7 +505,11 @@ const DeepFocusPage: React.FC = () => {
       
       // Clean up date picker
       if (datePickerRef.current) {
-        datePickerRef.current.destroy();
+        try {
+          datePickerRef.current.destroy();
+        } catch (error) {
+          console.warn('Error destroying date picker:', error);
+        }
         datePickerRef.current = null;
       }
     }
@@ -360,6 +561,10 @@ const DeepFocusPage: React.FC = () => {
             }`}>
               Deep Focus
             </div>
+            {/* Debug: Show session count in header */}
+            <div className="ml-4 text-sm text-gray-500">
+              Sessions: {totalSessionsCount} | User: {user?.uid?.slice(-6) || 'none'}
+            </div>
             <div className="ml-4 flex items-center">
               <label className="relative inline-flex items-center cursor-pointer group">
                 <input 
@@ -410,7 +615,11 @@ const DeepFocusPage: React.FC = () => {
                     
                     // Clean up date picker
                     if (datePickerRef.current) {
-                      datePickerRef.current.destroy();
+                      try {
+                        datePickerRef.current.destroy();
+                      } catch (error) {
+                        console.warn('Error destroying date picker:', error);
+                      }
                       datePickerRef.current = null;
                     }
                   }
@@ -470,7 +679,11 @@ const DeepFocusPage: React.FC = () => {
                         
                         // Clean up date picker
                         if (datePickerRef.current) {
-                          datePickerRef.current.destroy();
+                          try {
+                            datePickerRef.current.destroy();
+                          } catch (error) {
+                            console.warn('Error destroying date picker:', error);
+                          }
                           datePickerRef.current = null;
                         }
                       }}
@@ -584,27 +797,80 @@ const DeepFocusPage: React.FC = () => {
         </div>
 
         {/* Main Content */}
-        <main className="flex-1 p-6 flex gap-6 overflow-y-auto">
+        <main className="flex-1 p-6 flex gap-6 overflow-y-auto relative">
+          {/* Loading Indicator for Date Range Data */}
+          {dateRangeLoading && (
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-20">
+              <div className="flex items-center space-x-3 bg-white rounded-lg shadow-lg px-6 py-4">
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
+                <span className="text-sm font-medium text-gray-700">Loading data for selected date range...</span>
+              </div>
+            </div>
+          )}
+          
           {/* Left Column */}
           <div className="w-2/3 space-y-6">
             {/* Metrics Cards */}
             <div className="grid grid-cols-4 gap-4">
               {[
-                { label: 'Onscreen Time', value: timeMetrics.onScreenTime, change: '+22%' },
-                { label: 'Working Time', value: timeMetrics.workingTime, change: '+22%' },
-                { label: 'Deep Focus Time', value: timeMetrics.deepFocusTime, change: '+22%' },
-                { label: 'Override Time', value: timeMetrics.overrideTime, change: '+22%' }
+                { 
+                  label: 'On Screen Time', 
+                  value: filteredTimeMetrics.onScreenTime, 
+                  change: '+2.4% from yesterday',
+                  icon: 'computer-line',
+                  iconColor: 'text-blue-500',
+                  iconBg: 'bg-blue-50',
+                  valueColor: 'text-blue-500',
+                  hoverBorder: 'hover:border-blue-100'
+                },
+                { 
+                  label: 'Working Time', 
+                  value: filteredTimeMetrics.workingTime, 
+                  change: '+2.4% from yesterday',
+                  icon: 'timer-line',
+                  iconColor: 'text-green-500',
+                  iconBg: 'bg-green-50',
+                  valueColor: 'text-green-500',
+                  hoverBorder: 'hover:border-green-100'
+                },
+                { 
+                  label: 'Deep Focus Sessions', 
+                  value: filteredTimeMetrics.deepFocusTime, 
+                  change: '+2.4% from yesterday',
+                  icon: 'focus-3-line',
+                  iconColor: 'text-red-500',
+                  iconBg: 'bg-red-50',
+                  valueColor: 'text-red-500',
+                  hoverBorder: 'hover:border-red-100',
+                  isSessionCount: true
+                },
+                { 
+                  label: 'Override Time', 
+                  value: filteredTimeMetrics.overrideTime, 
+                  change: '+2.4% from yesterday',
+                  icon: 'time-line',
+                  iconColor: 'text-orange-500',
+                  iconBg: 'bg-orange-50',
+                  valueColor: 'text-orange-500',
+                  hoverBorder: 'hover:border-orange-100'
+                }
               ].map((metric, index) => (
-                <div key={index} className="bg-gray-50 p-4 rounded-lg hover:bg-gray-100 transition-colors duration-200">
-                  <div className="flex justify-between items-center mb-1">
-                    <h3 className="text-sm text-gray-600 font-medium">{metric.label}</h3>
-                    <button className="text-gray-400 hover:text-gray-600 transition-colors duration-200">
-                      <Icon name="information-line" className="w-4 h-4" />
+                <div key={index} className={`bg-white p-6 rounded-lg border border-gray-100 ${metric.hoverBorder} transition-all duration-300 group`}>
+                  <div className="flex justify-between items-center mb-3">
+                    <div className={`w-10 h-10 ${metric.iconBg} rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
+                      <i className={`ri-${metric.icon} text-xl ${metric.iconColor}`}></i>
+                    </div>
+                    <button className="text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <div className="w-4 h-4 flex items-center justify-center">
+                        <i className="ri-information-line"></i>
+                      </div>
                     </button>
                   </div>
-                  <div className="text-lg font-semibold text-gray-900">{formatMinutesToHours(metric.value)}</div>
-                  <div className="flex items-center mt-1 text-green-500 text-xs font-medium">
-                    <Icon name="arrow-up-s-line" className="w-3 h-3 mr-1" />
+                  <h3 className="text-sm text-gray-500 mb-1">{metric.label}</h3>
+                  <div className={`text-2xl font-semibold ${metric.valueColor}`}>
+                    {(metric as any).isSessionCount ? totalSessionsCount.toString() : formatMinutesToHours(metric.value)}
+                  </div>
+                  <div className="flex items-center mt-3 text-green-500 text-xs font-medium">
                     <span>{metric.change}</span>
                   </div>
                 </div>
@@ -622,7 +888,7 @@ const DeepFocusPage: React.FC = () => {
                 </div>
               </div>
               <div className="w-full h-72">
-                <UsageLineChart data={dailyUsage} />
+                <UsageLineChart data={filteredDailyUsage} />
               </div>
             </div>
 
@@ -680,12 +946,12 @@ const DeepFocusPage: React.FC = () => {
             <div className="bg-white rounded-lg p-6">
               <h2 className="text-lg font-medium mb-6">Your Usage</h2>
               <div className="w-full h-48 mb-4">
-                <UsagePieChart data={siteUsage} />
+                <UsagePieChart data={filteredSiteUsage} />
               </div>
               
               {/* Site Usage List */}
               <div className="space-y-4">
-                {siteUsage.map((site, index) => {
+                {filteredSiteUsage.map((site, index) => {
                   // Define the same default colors as used in the pie chart
                   const defaultColors = [
                     '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de'
@@ -695,7 +961,7 @@ const DeepFocusPage: React.FC = () => {
                   const progressBarColor = index < 5 ? defaultColors[index] : '#9CA3AF';
                   
                   // Calculate percentage based on actual time data (same as pie chart)
-                  const totalTimeSpent = siteUsage.reduce((sum, s) => sum + s.timeSpent, 0);
+                  const totalTimeSpent = filteredSiteUsage.reduce((sum, s) => sum + s.timeSpent, 0);
                   const calculatedPercentage = totalTimeSpent > 0 ? (site.timeSpent / totalTimeSpent) * 100 : 0;
                   
                   return (

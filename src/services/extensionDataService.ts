@@ -1,9 +1,4 @@
 // Chrome Extension types
-declare global {
-  interface Window {
-    chrome?: any;
-  }
-}
 
 interface ExtensionTimeData {
   totalTime: number;
@@ -156,6 +151,13 @@ class ExtensionDataService {
 
   static async getTodayStats(): Promise<ExtensionResponse<ExtensionTimeData>> {
     return await this.sendMessage({ type: 'GET_TODAY_STATS' });
+  }
+
+  static async getTimeDataRange(startDate: string, endDate: string): Promise<ExtensionResponse<Record<string, ExtensionTimeData>>> {
+    return await this.sendMessage({ 
+      type: 'GET_TIME_DATA_RANGE', 
+      payload: { startDate, endDate } 
+    });
   }
 
   static async getSettings(): Promise<ExtensionSettings> {
