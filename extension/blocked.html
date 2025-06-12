@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none';">
+  <title>Site Blocked - Focus Time Tracker</title>
+  <style>
+    :root {
+      --primary-color: #6366f1;
+      --secondary-color: #f43f5e;
+      --background-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --text-primary: #1f2937;
+      --text-secondary: #6b7280;
+      --white: #ffffff;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --border-radius: 16px;
+      --shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--background-gradient);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .blocked-container {
+      background: var(--white);
+      border-radius: var(--border-radius);
+      box-shadow: var(--shadow);
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+      padding: 48px 32px;
+      animation: slideIn 0.6s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .blocked-icon {
+      width: 80px;
+      height: 80px;
+      background: var(--secondary-color);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.05);
+      }
+    }
+
+    .blocked-icon svg {
+      width: 40px;
+      height: 40px;
+      fill: var(--white);
+    }
+
+    .blocked-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 12px;
+    }
+
+    .blocked-message {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+
+    .blocked-site {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--primary-color);
+      margin-bottom: 32px;
+      padding: 12px 20px;
+      background: var(--gray-100);
+      border-radius: 8px;
+      display: inline-block;
+    }
+
+    .debug-info {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      padding: 8px 12px;
+      background: var(--gray-100);
+      border-radius: 4px;
+      text-align: left;
+      font-family: monospace;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--primary-color);
+      color: var(--white);
+    }
+
+    .btn-primary:hover {
+      background: #5855eb;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--gray-200);
+      color: var(--text-primary);
+    }
+
+    .btn-secondary:hover {
+      background: #d1d5db;
+      transform: translateY(-1px);
+    }
+
+    .btn-danger {
+      background: var(--secondary-color);
+      color: var(--white);
+    }
+
+    .btn-danger:hover {
+      background: #e11d48;
+      transform: translateY(-1px);
+    }
+
+    .focus-stats {
+      background: var(--gray-100);
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 24px;
+    }
+
+    .stats-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 12px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--primary-color);
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .timer {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--secondary-color);
+      margin-top: 16px;
+    }
+
+    @media (max-width: 480px) {
+      .blocked-container {
+        padding: 32px 24px;
+      }
+      
+      .action-buttons {
+        flex-direction: column;
+      }
+      
+      .btn {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="blocked-container">
+    <div class="blocked-icon">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/>
+      </svg>
+    </div>
+    
+    <h1 class="blocked-title">Website Blocked</h1>
+    <p class="blocked-message">This site is currently blocked during your focus session.</p>
+    <div class="blocked-site" id="blockedSite">Loading...</div>
+    
+    <div class="debug-info" id="debugInfo" style="display: none;">
+      <strong>Debug Info:</strong><br>
+      URL: <span id="debugUrl">-</span><br>
+      Focus Mode: <span id="debugFocusMode">-</span><br>
+      Blocked Sites Count: <span id="debugBlockedCount">-</span><br>
+      Blocked Sites: <span id="debugBlockedSites">-</span>
+    </div>
+    
+    <div class="action-buttons">
+      <button class="btn btn-primary" id="backBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.42-1.41L7.83 13H20v-2z"/>
+        </svg>
+        Go Back
+      </button>
+      
+      <button class="btn btn-secondary" id="openPopupBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        </svg>
+        View Progress
+      </button>
+      
+      <button class="btn btn-danger" id="overrideBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM12 17c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+        </svg>
+        Override (5 min)
+      </button>
+      
+      <button class="btn btn-secondary" id="debugBtn">🐛 Debug</button>
+    </div>
+
+    <div class="focus-stats">
+      <div class="stats-title">Today's Focus Session</div>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-value" id="focusTime">0m</div>
+          <div class="stat-label">Focus Time</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="blockedAttempts">0</div>
+          <div class="stat-label">Sites Blocked</div>
+        </div>
+      </div>
+      <div class="timer" id="sessionTimer">Focus session: 00:00</div>
+    </div>
+  </div>
+
+  <script src="blocked.js"></script>
+</body>
+</html> 
