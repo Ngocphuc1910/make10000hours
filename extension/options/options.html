@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Focus Time Tracker - Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎯 Focus Time Tracker Settings</h1>
+      <p>Configure your time tracking and blocking preferences</p>
+    </header>
+
+    <main>
+      <!-- Blocked Sites Management Section -->
+      <section class="settings-section">
+        <h2>📝 Blocked Sites Management</h2>
+        <p>Manage your list of blocked websites for focus mode.</p>
+        
+        <div class="blocked-sites-container">
+          <div class="add-site-form">
+            <h3>Add New Blocked Site</h3>
+            <div class="input-group">
+              <input type="text" id="new-site-input" placeholder="Enter domain (e.g., facebook.com)" />
+              <button id="add-site-btn" class="btn primary">Add Site</button>
+            </div>
+            <p class="help-text">Enter the domain without http:// or www. (e.g., "twitter.com")</p>
+          </div>
+
+          <div class="blocked-sites-list">
+            <h3>Currently Blocked Sites (<span id="blocked-count">0</span>)</h3>
+            <div class="search-filter">
+              <input type="text" id="search-sites" placeholder="Search blocked sites..." />
+            </div>
+            <div id="sites-container" class="sites-grid">
+              <!-- Blocked sites will be populated here -->
+            </div>
+            <div id="empty-state" class="empty-state" style="display: none;">
+              <div class="empty-icon">🚫</div>
+              <h4>No blocked sites yet</h4>
+              <p>Add some sites above to start blocking them during focus mode.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Focus Mode Status Section -->
+      <section class="settings-section">
+        <h2>🎯 Focus Mode Status</h2>
+        <div class="focus-status-container">
+          <div class="status-card" id="focus-status-card">
+            <div class="status-indicator" id="focus-indicator">
+              <span class="status-dot"></span>
+              <span id="focus-status-text">Loading...</span>
+            </div>
+            <div class="focus-stats">
+              <div class="stat-item">
+                <span class="stat-label">Session Time:</span>
+                <span id="session-time">--</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Blocked Attempts:</span>
+                <span id="blocked-attempts">--</span>
+              </div>
+            </div>
+            <button id="toggle-focus-btn" class="btn secondary">Toggle Focus Mode</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Quick Actions Section -->
+      <section class="settings-section">
+        <h2>⚡ Quick Actions</h2>
+        <div class="quick-actions">
+          <button id="clear-all-sites-btn" class="btn danger">Clear All Blocked Sites</button>
+          <button id="export-sites-btn" class="btn secondary">Export Blocked Sites</button>
+          <button id="import-sites-btn" class="btn secondary">Import Blocked Sites</button>
+        </div>
+      </section>
+
+      <!-- Coming Soon Section -->
+      <section class="settings-section coming-soon">
+        <h2>⚙️ Coming in Phase 3</h2>
+        <p>Additional settings will be available in future updates.</p>
+        
+        <div class="feature-preview">
+          <h3>Planned Features:</h3>
+          <ul>
+            <li>⏰ Time Tracking Preferences</li>
+            <li>🔔 Notification Settings</li>
+            <li>📊 Advanced Analytics</li>
+            <li>🔗 Pomodoro App Integration</li>
+            <li>🎨 Theme Customization</li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>Focus Time Tracker v2.0.0 - Phase 2 with Blocked Sites Management</p>
+    </footer>
+  </div>
+
+  <!-- Hidden file input for import -->
+  <input type="file" id="import-file-input" accept=".json,.txt" style="display: none;" />
+
+  <!-- Notification Toast -->
+  <div id="toast" class="toast"></div>
+
+  <script src="options.js"></script>
+</body>
+</html> 

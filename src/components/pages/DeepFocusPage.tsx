@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import Sidebar from '../layout/Sidebar';
 import { useDeepFocusStore } from '../../store/deepFocusStore';
+import { useExtensionSync } from '../../hooks/useExtensionSync';
 import { Icon } from '../ui/Icon';
 import { Tooltip } from '../ui/Tooltip';
 import Button from '../ui/Button';
@@ -33,11 +34,27 @@ interface DateRange {
 }
 
 const DeepFocusPage: React.FC = () => {
-  const { timeMetrics, siteUsage, blockedSites, dailyUsage, toggleBlockedSite, removeBlockedSite, addBlockedSite } = useDeepFocusStore();
+  const { 
+    timeMetrics, 
+    siteUsage, 
+    blockedSites, 
+    dailyUsage, 
+    isExtensionConnected,
+    isDeepFocusActive,
+    toggleBlockedSite, 
+    removeBlockedSite, 
+    addBlockedSite,
+    loadExtensionData,
+    blockSiteInExtension,
+    unblockSiteInExtension,
+    enableDeepFocus,
+    disableDeepFocus,
+    toggleDeepFocus,
+    loadFocusStatus
+  } = useDeepFocusStore();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [isDeepFocusActive, setIsDeepFocusActive] = useState(false);
   const [selectedRange, setSelectedRange] = useState<DateRange>({
     startDate: null,
     endDate: null,
@@ -55,6 +72,34 @@ const DeepFocusPage: React.FC = () => {
   const dateFilterRef = useRef<HTMLDivElement>(null);
   const dateRangeInputRef = useRef<HTMLInputElement>(null);
   const datePickerRef = useRef<FlatpickrInstance | null>(null);
+
+  // Extension sync hook
+  const { refreshData } = useExtensionSync();
+
+  // Load extension data on component mount
+  useEffect(() => {
+    loadExtensionData();
+    loadFocusStatus();
+    
+    // Debug: Log chrome availability
+    console.log('Chrome available:', typeof window !== 'undefined' && (window as any).chrome);
+    console.log('Chrome runtime:', typeof window !== 'undefined' && (window as any).chrome?.runtime);
+    
+    // Additional debug: Test postMessage communication
+    window.postMessage({
+      type: 'EXTENSION_REQUEST',
+      messageId: 'debug-test',
+      payload: { type: 'GET_TODAY_STATS' }
+    }, '*');
+    
+    const debugHandler = (event: MessageEvent) => {
+      if (event.data?.extensionResponseId === 'debug-test') {
+        console.log('Debug: Extension communication via postMessage works!', event.data.response);
+        window.removeEventListener('message', debugHandler);
+      }
+    };
+    window.addEventListener('message', debugHandler);
+  }, [loadExtensionData, loadFocusStatus]);
 
   // Close date filter when clicking outside
   useEffect(() => {
@@ -124,6 +169,52 @@ const DeepFocusPage: React.FC = () => {
       }
     };
   }, [showDatePicker, isInitializing]);
+
+  // Enhanced handlers that sync with extension
+  const handleToggleBlockedSite = async (id: string) => {
+    const site = blockedSites.find(s => s.id === id);
+    if (!site) return;
+
+    toggleBlockedSite(id);
+    
+    // Sync with extension
+    try {
+      if (site.isActive) {
+        await unblockSiteInExtension(site.url);
+      } else {
+        await blockSiteInExtension(site.url);
+      }
+    } catch (error) {
+      console.error('Failed to sync with extension:', error);
+    }
+  };
+
+  const handleRemoveBlockedSite = async (id: string) => {
+    const site = blockedSites.find(s => s.id === id);
+    if (!site) return;
+
+    removeBlockedSite(id);
+    
+    // Unblock in extension
+    try {
+      await unblockSiteInExtension(site.url);
+    } catch (error) {
+      console.error('Failed to unblock site in extension:', error);
+    }
+  };
+
+  const handleAddBlockedSites = async (sites: Array<Omit<import('../../types/deepFocus').BlockedSite, 'id'>>) => {
+    sites.forEach(async (site) => {
+      addBlockedSite(site);
+      
+      // Block in extension
+      try {
+        await blockSiteInExtension(site.url);
+      } catch (error) {
+        console.error('Failed to block site in extension:', error);
+      }
+    });
+  };
 
   // Format date for display
   const formatDate = (date: Date) => {
@@ -239,7 +330,13 @@ const DeepFocusPage: React.FC = () => {
                   type="checkbox" 
                   className="sr-only peer" 
                   checked={isDeepFocusActive}
-                  onChange={(e) => setIsDeepFocusActive(e.target.checked)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      enableDeepFocus();
+                    } else {
+                      disableDeepFocus();
+                    }
+                  }}
                 />
                 <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${
                   isDeepFocusActive 
@@ -481,7 +578,32 @@ const DeepFocusPage: React.FC = () => {
             {/* Blocked Sites */}
             <div className="bg-white rounded-lg p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-medium">BLOCKED</h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-lg font-medium">BLOCKED</h2>
+                  <div className="flex items-center gap-2">
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                      isExtensionConnected 
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      <div className={`w-2 h-2 rounded-full ${
+                        isExtensionConnected ? 'bg-green-500' : 'bg-yellow-500'
+                      }`} />
+                      {isExtensionConnected ? 'Extension Connected' : 'Extension Offline'}
+                    </div>
+                    <button
+                      onClick={() => {
+                        loadExtensionData();
+                        loadFocusStatus();
+                        refreshData();
+                      }}
+                      className="p-1 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                      title="Refresh extension data"
+                    >
+                      <Icon name="refresh-line" className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
                 <button 
                   onClick={() => setIsAddModalOpen(true)}
                   className="p-2 bg-[#BB5F5A] text-white rounded-full hover:bg-opacity-90 transition-all duration-200 hover:scale-105"
@@ -494,8 +616,8 @@ const DeepFocusPage: React.FC = () => {
                   <AnimatedSiteCard
                     key={site.id}
                     site={site}
-                    onToggle={() => toggleBlockedSite(site.id)}
-                    onRemove={() => removeBlockedSite(site.id)}
+                    onToggle={() => handleToggleBlockedSite(site.id)}
+                    onRemove={() => handleRemoveBlockedSite(site.id)}
                   />
                 ))}
               </div>
@@ -530,9 +652,7 @@ const DeepFocusPage: React.FC = () => {
       <AddSiteModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onAddSites={(sites) => {
-          sites.forEach(site => addBlockedSite(site));
-        }}
+        onAddSites={handleAddBlockedSites}
       />
     </div>
   );
