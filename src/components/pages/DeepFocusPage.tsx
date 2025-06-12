@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import Sidebar from '../layout/Sidebar';
 import { useDeepFocusStore } from '../../store/deepFocusStore';
 import { useExtensionSync } from '../../hooks/useExtensionSync';
+import { useDeepFocusSync } from '../../hooks/useDeepFocusSync';
 import { Icon } from '../ui/Icon';
 import { Tooltip } from '../ui/Tooltip';
 import Button from '../ui/Button';
@@ -73,13 +74,13 @@ const DeepFocusPage: React.FC = () => {
   const dateRangeInputRef = useRef<HTMLInputElement>(null);
   const datePickerRef = useRef<FlatpickrInstance | null>(null);
 
-  // Extension sync hook
+  // Extension sync hooks
   const { refreshData } = useExtensionSync();
+  useDeepFocusSync(); // Sync Deep Focus state across pages
 
   // Load extension data on component mount
   useEffect(() => {
     loadExtensionData();
-    loadFocusStatus();
     
     // Debug: Log chrome availability
     console.log('Chrome available:', typeof window !== 'undefined' && (window as any).chrome);
@@ -99,7 +100,7 @@ const DeepFocusPage: React.FC = () => {
       }
     };
     window.addEventListener('message', debugHandler);
-  }, [loadExtensionData, loadFocusStatus]);
+  }, [loadExtensionData]);
 
   // Close date filter when clicking outside
   useEffect(() => {
@@ -317,13 +318,15 @@ const DeepFocusPage: React.FC = () => {
       
       <div className="flex-1 flex flex-col">
         {/* Header - Productivity Insights Style */}
-        <div className={`h-16 border-b border-gray-200 flex items-center justify-between px-6 bg-white transition-all duration-500 relative ${
-          isDeepFocusActive 
-            ? 'bg-gradient-to-r from-[rgba(187,95,90,0.35)] via-[rgba(236,72,153,0.3)] to-[rgba(251,146,60,0.25)] backdrop-blur-sm border-white/25 shadow-[0_4px_24px_-4px_rgba(187,95,90,0.25)]' 
-            : ''
-        }`}>
+        <div className={`h-16 border-b border-gray-200 flex items-center justify-between px-6 bg-white transition-all duration-500 relative`}>
           <div className="flex items-center">
-            <div className="text-lg font-semibold text-gray-800">Deep Focus</div>
+            <div className={`text-lg font-semibold transition-all duration-500 ${
+              isDeepFocusActive 
+                ? 'bg-gradient-to-r from-[rgb(187,95,90)] via-[rgb(236,72,153)] to-[rgb(251,146,60)] bg-clip-text text-transparent font-bold' 
+                : 'text-gray-800'
+            }`}>
+              Deep Focus
+            </div>
             <div className="ml-4 flex items-center">
               <label className="relative inline-flex items-center cursor-pointer group">
                 <input 
@@ -478,7 +481,11 @@ const DeepFocusPage: React.FC = () => {
                 aria-label="Go to Pomodoro Timer"
               >
                 <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon name="timer-line" size={20} />
+                  <Icon 
+                    name="timer-line" 
+                    size={20} 
+                    className={isDeepFocusActive ? 'text-[rgb(187,95,90)]' : ''}
+                  />
                 </span>
               </button>
             </Tooltip>
@@ -490,7 +497,11 @@ const DeepFocusPage: React.FC = () => {
                 aria-label="Go to Task Management"
               >
                 <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon name="task-line" size={20} />
+                  <Icon 
+                    name="task-line" 
+                    size={20} 
+                    className={isDeepFocusActive ? 'text-[rgb(187,95,90)]' : ''}
+                  />
                 </span>
               </button>
             </Tooltip>
@@ -502,7 +513,11 @@ const DeepFocusPage: React.FC = () => {
                 aria-label="Go to Productivity Insights"
               >
                 <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon name="dashboard-line" size={20} />
+                  <Icon 
+                    name="dashboard-line" 
+                    size={20} 
+                    className={isDeepFocusActive ? 'text-[rgb(187,95,90)]' : ''}
+                  />
                 </span>
               </button>
             </Tooltip>
@@ -514,7 +529,11 @@ const DeepFocusPage: React.FC = () => {
                 aria-label="Go to Calendar"
               >
                 <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon name="calendar-line" size={20} />
+                  <Icon 
+                    name="calendar-line" 
+                    size={20} 
+                    className={isDeepFocusActive ? 'text-[rgb(187,95,90)]' : ''}
+                  />
                 </span>
               </button>
             </Tooltip>
@@ -525,7 +544,11 @@ const DeepFocusPage: React.FC = () => {
                 aria-label="Current page: Deep Focus"
               >
                 <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon name="brain-line" size={20} />
+                  <Icon 
+                    name="brain-line" 
+                    size={20} 
+                    className={isDeepFocusActive ? 'text-[rgb(187,95,90)]' : ''}
+                  />
                 </span>
               </button>
             </Tooltip>
@@ -594,7 +617,6 @@ const DeepFocusPage: React.FC = () => {
                     <button
                       onClick={() => {
                         loadExtensionData();
-                        loadFocusStatus();
                         refreshData();
                       }}
                       className="p-1 text-gray-400 hover:text-gray-600 transition-colors duration-200"
