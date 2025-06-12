@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Icon } from './Icon';
 import CustomSwitch from './CustomSwitch';
+import FaviconImage from './FaviconImage';
 import { BlockedSite } from '../../types/deepFocus';
 
 interface AnimatedSiteCardProps {
@@ -27,16 +28,13 @@ const AnimatedSiteCard: React.FC<AnimatedSiteCardProps> = ({ site, onToggle, onR
         ${!site.isActive ? 'opacity-60' : ''}`}
     >
       <div className="flex items-center">
-        <div 
-          className="w-10 h-10 rounded-lg flex items-center justify-center mr-4 transition-all duration-200"
-          style={{ 
-            backgroundColor: site.backgroundColor === '#E4405F' ? 'rgba(244, 63, 94, 0.1)' : 
-                             site.backgroundColor === '#0A66C2' ? 'rgba(59, 130, 246, 0.1)' : 
-                             'rgba(59, 130, 246, 0.1)',
-            color: site.backgroundColor
-          }}
-        >
-          <Icon name={site.icon} className="text-xl" />
+        <div className="mr-4 transition-all duration-200">
+          <FaviconImage 
+            domain={site.url} 
+            size={40}
+            className="shadow-sm border border-gray-200"
+            fallbackIcon={site.icon}
+          />
         </div>
         <span className="font-medium">{site.name}</span>
       </div>
