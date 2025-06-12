@@ -9,6 +9,8 @@ import DayView from './DayView';
 import MonthView from './MonthView';
 import Icon from '../../components/ui/Icon';
 import { Tooltip } from '../../components/ui/Tooltip';
+import { useDeepFocusStore } from '../../store/deepFocusStore';
+import { useDeepFocusSync } from '../../hooks/useDeepFocusSync';
 // EventDialog import removed - using TaskForm for all calendar interactions
 
 import { useTaskStore } from '../../store/taskStore';
@@ -47,6 +49,13 @@ export const Calendar: React.FC = () => {
   }, [calendarEvents, tasks, projects]);
 
   const navigate = useNavigate();
+
+  const { 
+    isDeepFocusActive, 
+    enableDeepFocus, 
+    disableDeepFocus 
+  } = useDeepFocusStore();
+  useDeepFocusSync(); // Sync Deep Focus state across pages
 
   // Keyboard shortcuts for view switching
   useEffect(() => {
@@ -269,250 +278,294 @@ export const Calendar: React.FC = () => {
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="flex flex-col h-full bg-white">
-      {/* Calendar Controls */}
-      <div className="h-16 border-b border-gray-200 px-6 flex items-center justify-between bg-white">
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => handleNavigate('today')}
-            className="px-4 py-1.5 text-sm font-medium bg-white border border-gray-300 rounded-button text-gray-700 hover:bg-gray-50"
-          >
-            Today
-          </button>
-          <div className="flex items-center">
-            <button
-              onClick={() => handleNavigate('prev')}
-              className="p-1.5 rounded-full hover:bg-gray-100"
-            >
-              <div className="w-5 h-5 flex items-center justify-center text-gray-600">
-                <i className="ri-arrow-left-s-line" />
-              </div>
-            </button>
-            <button
-              onClick={() => handleNavigate('next')}
-              className="p-1.5 rounded-full hover:bg-gray-100"
-            >
-              <div className="w-5 h-5 flex items-center justify-center text-gray-600">
-                <i className="ri-arrow-right-s-line" />
-              </div>
-            </button>
+        {/* Calendar Controls */}
+        <div className="h-16 border-b border-gray-200 px-6 flex items-center justify-between bg-white">
+          {/* Left Section - Month/Year and Navigation */}
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center">
+              <button
+                onClick={() => handleNavigate('prev')}
+                className="p-1.5 rounded-full hover:bg-gray-100"
+              >
+                <div className="w-5 h-5 flex items-center justify-center text-gray-600">
+                  <i className="ri-arrow-left-s-line" />
+                </div>
+              </button>
+              <button
+                onClick={() => handleNavigate('next')}
+                className="p-1.5 rounded-full hover:bg-gray-100"
+              >
+                <div className="w-5 h-5 flex items-center justify-center text-gray-600">
+                  <i className="ri-arrow-right-s-line" />
+                </div>
+              </button>
+            </div>
+            <h2 className={`text-lg font-semibold transition-all duration-500 ${
+              isDeepFocusActive 
+                ? 'bg-gradient-to-r from-[rgb(187,95,90)] via-[rgb(236,72,153)] to-[rgb(251,146,60)] bg-clip-text text-transparent font-bold' 
+                : 'text-gray-800'
+            }`}>
+              {format(currentDate, 'MMMM yyyy')}
+            </h2>
+            
+            {/* Deep Focus Switch */}
+            <div className="ml-4 flex items-center">
+              <label className="relative inline-flex items-center cursor-pointer group">
+                <input 
+                  type="checkbox" 
+                  className="sr-only peer" 
+                  checked={isDeepFocusActive}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      enableDeepFocus();
+                    } else {
+                      disableDeepFocus();
+                    }
+                  }}
+                />
+                <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${
+                  isDeepFocusActive 
+                    ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]' 
+                    : 'bg-gray-100/80 backdrop-blur-sm justify-end pr-[10.5px]'
+                }`}>
+                  <span className={`text-sm font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${
+                    isDeepFocusActive 
+                      ? 'text-white font-semibold [text-shadow:0_0_12px_rgba(255,255,255,0.5)]' 
+                      : 'text-gray-500'
+                  }`}>
+                    {isDeepFocusActive ? 'Deep Focus' : 'Focus Off'}
+                  </span>
+                </div>
+                <div className={`absolute w-6 h-6 bg-white rounded-full shadow-lg transition-all duration-500 ${
+                  isDeepFocusActive 
+                    ? 'left-[calc(100%-27px)] shadow-[0_6px_20px_rgba(187,95,90,0.2)]' 
+                    : 'left-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.1)]'
+                }`}></div>
+              </label>
+            </div>
           </div>
-          <h2 className="text-lg font-medium text-gray-800">
-            {format(currentDate, 'MMMM yyyy')}
-          </h2>
+
+          {/* Right Section - View Controls and Navigation Icons */}
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => handleNavigate('today')}
+              className="px-4 py-1.5 text-sm font-medium bg-white border border-gray-300 rounded-button text-gray-700 hover:bg-gray-50"
+            >
+              Today
+            </button>
+
+            <div className="flex bg-gray-100 p-1 rounded-full">
+              <button
+                onClick={() => setCurrentView('day')}
+                className={`px-3 py-1 text-sm rounded-full ${
+                  currentView === 'day'
+                    ? 'bg-primary text-white'
+                    : 'text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Day
+              </button>
+              <button
+                onClick={() => setCurrentView('week')}
+                className={`px-3 py-1 text-sm rounded-full ${
+                  currentView === 'week'
+                    ? 'bg-primary text-white'
+                    : 'text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Week
+              </button>
+              <button
+                onClick={() => setCurrentView('month')}
+                className={`px-3 py-1 text-sm rounded-full ${
+                  currentView === 'month'
+                    ? 'bg-primary text-white'
+                    : 'text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Month
+              </button>
+            </div>
+
+            {/* Navigation Icons */}
+            <Tooltip text="Pomodoro Timer">
+              <button 
+                className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+                onClick={() => navigate('/pomodoro')}
+                aria-label="Go to Pomodoro Timer"
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  <Icon name="timer-line" size={20} />
+                </span>
+              </button>
+            </Tooltip>
+            
+            <Tooltip text="Task management">
+              <button 
+                className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+                onClick={() => navigate('/projects')}
+                aria-label="Go to Task Management"
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  <Icon name="task-line" size={20} />
+                </span>
+              </button>
+            </Tooltip>
+            
+            <Tooltip text="Productivity Insights">
+              <button 
+                className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+                onClick={() => navigate('/dashboard')}
+                aria-label="Go to Productivity Insights"
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  <Icon name="dashboard-line" size={20} />
+                </span>
+              </button>
+            </Tooltip>
+            
+            <Tooltip text="Calendar">
+              <button 
+                className="p-2 rounded-full bg-gray-100 !rounded-button whitespace-nowrap"
+                aria-label="Current page: Calendar"
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  <Icon name="calendar-line" size={20} />
+                </span>
+              </button>
+            </Tooltip>
+            
+            <Tooltip text="Deep Focus">
+              <button 
+                className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+                onClick={() => navigate('/deep-focus')}
+                aria-label="Go to Deep Focus"
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  <Icon name="brain-line" size={20} />
+                </span>
+              </button>
+            </Tooltip>
+          </div>
         </div>
 
-        <div className="flex items-center space-x-4">
-          <div className="flex bg-gray-100 p-1 rounded-full">
-            <button
-              onClick={() => setCurrentView('day')}
-              className={`px-3 py-1 text-sm rounded-full ${
-                currentView === 'day'
-                  ? 'bg-primary text-white'
-                  : 'text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Day
-            </button>
-            <button
-              onClick={() => setCurrentView('week')}
-              className={`px-3 py-1 text-sm rounded-full ${
-                currentView === 'week'
-                  ? 'bg-primary text-white'
-                  : 'text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Week
-            </button>
-            <button
-              onClick={() => setCurrentView('month')}
-              className={`px-3 py-1 text-sm rounded-full ${
-                currentView === 'month'
-                  ? 'bg-primary text-white'
-                  : 'text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Month
-            </button>
-          </div>
-
-          <Tooltip text="Pomodoro Timer">
-            <button 
-              className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
-              onClick={() => navigate('/pomodoro')}
-              aria-label="Go to Pomodoro Timer"
-            >
-              <span className="w-5 h-5 flex items-center justify-center">
-                <Icon name="timer-line" size={20} />
-              </span>
-            </button>
-          </Tooltip>
+        {/* Calendar Content */}
+        <div className="flex-1 overflow-auto custom-scrollbar">
+          {currentView === 'week' && (
+            <WeekView
+              currentDate={currentDate}
+              events={allEvents}
+              onEventClick={handleEventClick}
+              onTimeSlotClick={handleTimeSlotClick}
+              onAllDayClick={handleAllDayClick}
+              onDragCreate={handleDragCreate}
+              onEventDrop={handleEventDrop}
+              clearDragIndicator={clearDragIndicator}
+            />
+          )}
           
-          <Tooltip text="Task management">
-            <button 
-              className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
-              onClick={() => navigate('/projects')}
-              aria-label="Go to Task Management"
-            >
-              <span className="w-5 h-5 flex items-center justify-center">
-                <Icon name="task-line" size={20} />
-              </span>
-            </button>
-          </Tooltip>
-          
-          <Tooltip text="Productivity Insights">
-            <button 
-              className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
-              onClick={() => navigate('/dashboard')}
-              aria-label="Go to Productivity Insights"
-            >
-              <span className="w-5 h-5 flex items-center justify-center">
-                <Icon name="dashboard-line" size={20} />
-              </span>
-            </button>
-          </Tooltip>
-          
-          <Tooltip text="Calendar">
-            <button 
-              className="p-2 rounded-full bg-gray-100 !rounded-button whitespace-nowrap"
-              aria-label="Current page: Calendar"
-            >
-              <span className="w-5 h-5 flex items-center justify-center">
-                <Icon name="calendar-line" size={20} />
-              </span>
-            </button>
-          </Tooltip>
-          
-          <Tooltip text="Deep Focus">
-            <button 
-              className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
-              onClick={() => navigate('/deep-focus')}
-              aria-label="Go to Deep Focus"
-            >
-              <span className="w-5 h-5 flex items-center justify-center">
-                <Icon name="brain-line" size={20} />
-              </span>
-            </button>
-          </Tooltip>
-        </div>
-      </div>
+          {currentView === 'day' && (
+            <DayView
+              currentDate={currentDate}
+              events={allEvents}
+              onEventClick={handleEventClick}
+              onTimeSlotClick={handleTimeSlotClick}
+              onAllDayClick={handleAllDayClick}
+              onDragCreate={handleDragCreate}
+              onEventDrop={handleEventDrop}
+              clearDragIndicator={clearDragIndicator}
+            />
+          )}
 
-      {/* Calendar Content */}
-      <div className="flex-1 overflow-auto custom-scrollbar">
-        {currentView === 'week' && (
-          <WeekView
-            currentDate={currentDate}
-            events={allEvents}
-            onEventClick={handleEventClick}
-            onTimeSlotClick={handleTimeSlotClick}
-            onAllDayClick={handleAllDayClick}
-            onDragCreate={handleDragCreate}
-            onEventDrop={handleEventDrop}
-            clearDragIndicator={clearDragIndicator}
-          />
-        )}
-        
-        {currentView === 'day' && (
-          <DayView
-            currentDate={currentDate}
-            events={allEvents}
-            onEventClick={handleEventClick}
-            onTimeSlotClick={handleTimeSlotClick}
-            onAllDayClick={handleAllDayClick}
-            onDragCreate={handleDragCreate}
-            onEventDrop={handleEventDrop}
-            clearDragIndicator={clearDragIndicator}
-          />
-        )}
-
-        {currentView === 'month' && (
-          <MonthView
-            currentDate={currentDate}
-            events={allEvents}
-            onEventClick={handleEventClick}
-            onDateClick={handleTimeSlotClick}
-            onEventDrop={handleEventDrop}
-            onDayViewClick={(date) => {
-              setCurrentDate(date);
-              setCurrentView('day');
-            }}
-          />
-        )}
-      </div>
-
-      {/* EventDialog removed - using TaskForm for all calendar interactions */}
-
-      {/* Task Form Overlay for editing tasks */}
-      {editingTaskId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <TaskForm
-              task={editingTaskId === 'new' ? undefined : tasks.find(t => t.id === editingTaskId)}
-              onCancel={() => {
-                setEditingTaskId(null);
-                setStoreEditingTaskId(null);
-                setClearDragIndicator(true);
-                setTimeout(() => setClearDragIndicator(false), 100);
-              }}
-              onSave={() => {
-                setEditingTaskId(null);
-                setStoreEditingTaskId(null);
-                setClearDragIndicator(true);
-                setTimeout(() => setClearDragIndicator(false), 100);
+          {currentView === 'month' && (
+            <MonthView
+              currentDate={currentDate}
+              events={allEvents}
+              onEventClick={handleEventClick}
+              onDateClick={handleTimeSlotClick}
+              onEventDrop={handleEventDrop}
+              onDayViewClick={(date) => {
+                setCurrentDate(date);
+                setCurrentView('day');
               }}
             />
-          </div>
+          )}
         </div>
-      )}
 
-      {/* Task Form Overlay for drag-create */}
-      {isDragCreateTaskOpen && dragCreateData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <TaskForm
-              initialStartTime={dragCreateData.startTime}
-              initialEndTime={dragCreateData.endTime}
-              status={dragCreateData.status}
-              onCancel={() => {
-                setIsDragCreateTaskOpen(false);
-                setDragCreateData(null);
-                setClearDragIndicator(true);
-                setTimeout(() => setClearDragIndicator(false), 100);
-              }}
-              onSave={() => {
-                setIsDragCreateTaskOpen(false);
-                setDragCreateData(null);
-                setClearDragIndicator(true);
-                setTimeout(() => setClearDragIndicator(false), 100);
-              }}
-            />
-          </div>
-        </div>
-      )}
+        {/* EventDialog removed - using TaskForm for all calendar interactions */}
 
-      {/* Task Form Overlay for time slot clicks */}
-      {isTimeSlotTaskOpen && timeSlotData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <TaskForm
-              initialStartTime={timeSlotData.startTime}
-              initialEndTime={timeSlotData.endTime}
-              status={timeSlotData.status}
-              onCancel={() => {
-                setIsTimeSlotTaskOpen(false);
-                setTimeSlotData(null);
-                setClearDragIndicator(true);
-                setTimeout(() => setClearDragIndicator(false), 100);
-              }}
-              onSave={() => {
-                setIsTimeSlotTaskOpen(false);
-                setTimeSlotData(null);
-                setClearDragIndicator(true);
-                setTimeout(() => setClearDragIndicator(false), 100);
-              }}
-            />
+        {/* Task Form Overlay for editing tasks */}
+        {editingTaskId && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+              <TaskForm
+                task={editingTaskId === 'new' ? undefined : tasks.find(t => t.id === editingTaskId)}
+                onCancel={() => {
+                  setEditingTaskId(null);
+                  setStoreEditingTaskId(null);
+                  setClearDragIndicator(true);
+                  setTimeout(() => setClearDragIndicator(false), 100);
+                }}
+                onSave={() => {
+                  setEditingTaskId(null);
+                  setStoreEditingTaskId(null);
+                  setClearDragIndicator(true);
+                  setTimeout(() => setClearDragIndicator(false), 100);
+                }}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Task Form Overlay for drag-create */}
+        {isDragCreateTaskOpen && dragCreateData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+              <TaskForm
+                initialStartTime={dragCreateData.startTime}
+                initialEndTime={dragCreateData.endTime}
+                status={dragCreateData.status}
+                onCancel={() => {
+                  setIsDragCreateTaskOpen(false);
+                  setDragCreateData(null);
+                  setClearDragIndicator(true);
+                  setTimeout(() => setClearDragIndicator(false), 100);
+                }}
+                onSave={() => {
+                  setIsDragCreateTaskOpen(false);
+                  setDragCreateData(null);
+                  setClearDragIndicator(true);
+                  setTimeout(() => setClearDragIndicator(false), 100);
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Task Form Overlay for time slot clicks */}
+        {isTimeSlotTaskOpen && timeSlotData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+              <TaskForm
+                initialStartTime={timeSlotData.startTime}
+                initialEndTime={timeSlotData.endTime}
+                status={timeSlotData.status}
+                onCancel={() => {
+                  setIsTimeSlotTaskOpen(false);
+                  setTimeSlotData(null);
+                  setClearDragIndicator(true);
+                  setTimeout(() => setClearDragIndicator(false), 100);
+                }}
+                onSave={() => {
+                  setIsTimeSlotTaskOpen(false);
+                  setTimeSlotData(null);
+                  setClearDragIndicator(true);
+                  setTimeout(() => setClearDragIndicator(false), 100);
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </DndProvider>
   );
