@@ -105,3 +105,15 @@ export interface ActiveSession {
   lastUpdateTime: Date;
   status: 'active' | 'paused';
 }
+
+// Deep Focus session tracking
+export interface DeepFocusSession {
+  id: string;
+  userId: string;
+  startTime: Date;
+  endTime?: Date;
+  duration?: number; // in minutes, calculated when session ends
+  status: 'active' | 'completed';
+  createdAt: Date;
+  updatedAt: Date;
+}

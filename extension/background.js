@@ -134,6 +134,30 @@ class StorageManager {
     };
   }
 
+  async getTimeData(startDate, endDate = null) {
+    if (!endDate) {
+      endDate = startDate;
+    }
+    
+    try {
+      const storage = await chrome.storage.local.get(['stats']);
+      const allStats = storage.stats || {};
+      const result = {};
+      
+      // Filter stats by date range
+      Object.keys(allStats).forEach(date => {
+        if (date >= startDate && date <= endDate) {
+          result[date] = allStats[date];
+        }
+      });
+      
+      return result;
+    } catch (error) {
+      console.error('Failed to get time data:', error);
+      throw error;
+    }
+  }
+
   async getTopSites(limit = 5) {
     const stats = await this.getTodayStats();
     if (!stats.sites) return [];
@@ -1128,6 +1152,17 @@ class FocusTimeTracker {
         case 'GET_TODAY_STATS':
           const stats = await this.storageManager.getTodayStats();
           sendResponse({ success: true, data: stats });
+          break;
+
+        case 'GET_TIME_DATA_RANGE':
+          try {
+            const { startDate, endDate } = message.payload;
+            const timeData = await this.storageManager.getTimeData(startDate, endDate);
+            sendResponse({ success: true, data: timeData });
+          } catch (error) {
+            console.error('Error getting time data range:', error);
+            sendResponse({ success: false, error: error.message });
+          }
           break;
 
         case 'GET_SETTINGS':
