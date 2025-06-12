@@ -10,38 +10,93 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
 
+  // Helper function to format time
+  const formatTime = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    
+    if (hours === 0) {
+      return `${mins}m`;
+    } else if (mins === 0) {
+      return `${hours}h`;
+    } else {
+      return `${hours}h ${mins}m`;
+    }
+  };
+
   useEffect(() => {
     if (!chartRef.current) return;
 
     // Initialize chart
     chartInstance.current = echarts.init(chartRef.current);
 
-    // Prepare data for ECharts format - only top 4 sites plus "Others"
-    const topSites = data.slice(0, 4);
-    const othersPercentage = data.slice(4).reduce((sum, site) => sum + site.percentage, 0);
+    // Default EChart colors for top 5 sites
+    const defaultColors = [
+      '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de'
+    ];
+
+    // Prepare data for ECharts format - only top 5 sites plus "Others"
+    const topSites = data.slice(0, 5);
+    const otherSites = data.slice(5);
+    const othersTimeSpent = otherSites.reduce((sum, site) => sum + site.timeSpent, 0);
+    const othersSessions = otherSites.reduce((sum, site) => sum + site.sessions, 0);
     
     const chartData = [
-      ...topSites.map(site => ({
-        value: site.percentage,
+      ...topSites.map((site, index) => ({
+        value: site.timeSpent,
         name: site.name,
-        itemStyle: { color: site.backgroundColor }
-      })),
-      {
-        value: othersPercentage,
-        name: 'Others',
-        itemStyle: { color: '#E5E7EB' }
-      }
+        timeSpent: site.timeSpent,
+        sessions: site.sessions,
+        itemStyle: { color: defaultColors[index] }
+      }))
     ];
+
+    // Only add "Others" if there are sites beyond the top 5
+    if (data.length > 5 && othersTimeSpent > 0) {
+      chartData.push({
+        value: othersTimeSpent,
+        name: 'Others',
+        timeSpent: othersTimeSpent,
+        sessions: othersSessions,
+        itemStyle: { color: '#9CA3AF' }
+      });
+    }
 
     const option = {
       animation: false,
       tooltip: {
         trigger: 'item',
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-        borderColor: '#eee',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderColor: '#e2e8f0',
         borderWidth: 1,
+        borderRadius: 8,
+        padding: [12, 16],
         textStyle: {
-          color: '#1f2937'
+          color: '#1f2937',
+          fontSize: 13
+        },
+        formatter: function(params: any) {
+          const data = params.data;
+          const percentage = params.percent;
+          return `
+            <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: #111827;">
+              ${data.name}
+            </div>
+            <div style="line-height: 1.5;">
+              <div style="margin-bottom: 4px;">
+                <span style="color: #6b7280;">Total time visited:</span>
+                <span style="float: right; font-weight: 500;">${formatTime(data.timeSpent)}</span>
+              </div>
+              <div style="margin-bottom: 4px;">
+                <span style="color: #6b7280;">Total sessions:</span>
+                <span style="float: right; font-weight: 500;">${data.sessions}</span>
+              </div>
+              <div>
+                <span style="color: #6b7280;">Percentage:</span>
+                <span style="float: right; font-weight: 500;">${percentage.toFixed(1)}%</span>
+              </div>
+            </div>
+          `;
         }
       },
       series: [
