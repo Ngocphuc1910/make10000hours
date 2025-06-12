@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { DeepFocusData, SiteUsage, BlockedSite } from '../types/deepFocus';
+import ExtensionDataService from '../services/extensionDataService';
 
 // Mock data with exact colors from AI design
 const mockSiteUsage: SiteUsage[] = [
@@ -115,12 +116,21 @@ const mockBlockedSites: BlockedSite[] = [
 ];
 
 interface DeepFocusStore extends DeepFocusData {
+  isExtensionConnected: boolean;
+  isDeepFocusActive: boolean;
   toggleBlockedSite: (id: string) => void;
   removeBlockedSite: (id: string) => void;
   addBlockedSite: (site: Omit<BlockedSite, 'id'>) => void;
+  loadExtensionData: () => Promise<void>;
+  blockSiteInExtension: (domain: string) => Promise<void>;
+  unblockSiteInExtension: (domain: string) => Promise<void>;
+  enableDeepFocus: () => Promise<void>;
+  disableDeepFocus: () => Promise<void>;
+  toggleDeepFocus: () => Promise<void>;
+  loadFocusStatus: () => Promise<void>;
 }
 
-export const useDeepFocusStore = create<DeepFocusStore>((set) => ({
+export const useDeepFocusStore = create<DeepFocusStore>((set, get) => ({
   timeMetrics: {
     onScreenTime: 770, // 12h 50m
     workingTime: 770,
@@ -138,6 +148,67 @@ export const useDeepFocusStore = create<DeepFocusStore>((set) => ({
   ],
   siteUsage: mockSiteUsage,
   blockedSites: mockBlockedSites,
+  isExtensionConnected: false,
+  isDeepFocusActive: false,
+
+  loadExtensionData: async () => {
+    try {
+      if (!ExtensionDataService.isExtensionInstalled()) {
+        console.log('Chrome extension API not available, using mock data');
+        set({ isExtensionConnected: false });
+        return;
+      }
+
+      // Test connection first
+      const isConnected = await ExtensionDataService.testConnection();
+      if (!isConnected) {
+        console.log('Extension not responding, using mock data');
+        set({ isExtensionConnected: false });
+        return;
+      }
+
+      const extensionResponse = await ExtensionDataService.getTodayStats();
+      console.log('Extension response received:', extensionResponse);
+      
+      if (extensionResponse.success === false) {
+        throw new Error(extensionResponse.error || 'Extension returned error');
+      }
+
+      const extensionData = extensionResponse.data || extensionResponse;
+      const mappedData = ExtensionDataService.mapExtensionDataToWebApp(extensionData as any);
+      
+      set({
+        timeMetrics: mappedData.timeMetrics,
+        siteUsage: mappedData.siteUsage,
+        isExtensionConnected: true
+      });
+
+      console.log('Extension data successfully loaded and mapped');
+    } catch (error) {
+      console.error('Failed to load extension data:', error);
+      set({ isExtensionConnected: false });
+    }
+  },
+
+  blockSiteInExtension: async (domain: string) => {
+    try {
+      if (ExtensionDataService.isExtensionInstalled()) {
+        await ExtensionDataService.blockSite(domain);
+      }
+    } catch (error) {
+      console.error('Failed to block site in extension:', error);
+    }
+  },
+
+  unblockSiteInExtension: async (domain: string) => {
+    try {
+      if (ExtensionDataService.isExtensionInstalled()) {
+        await ExtensionDataService.unblockSite(domain);
+      }
+    } catch (error) {
+      console.error('Failed to unblock site in extension:', error);
+    }
+  },
 
   toggleBlockedSite: (id) =>
     set((state) => ({
@@ -157,5 +228,87 @@ export const useDeepFocusStore = create<DeepFocusStore>((set) => ({
         ...state.blockedSites,
         { ...site, id: Date.now().toString() + Math.random().toString(36).substr(2, 9) }
       ]
-    }))
+    })),
+
+  loadFocusStatus: async () => {
+    try {
+      if (!ExtensionDataService.isExtensionInstalled()) {
+        return;
+      }
+
+      const isConnected = await ExtensionDataService.testConnection();
+      if (!isConnected) {
+        return;
+      }
+
+      const focusStatus = await ExtensionDataService.getFocusStatus();
+      set({ isDeepFocusActive: focusStatus.focusMode });
+    } catch (error) {
+      console.error('Failed to load focus status:', error);
+    }
+  },
+
+  enableDeepFocus: async () => {
+    const state = get();
+    
+    try {
+      // Enable focus mode in extension
+      if (ExtensionDataService.isExtensionInstalled()) {
+        await ExtensionDataService.enableFocusMode();
+      }
+
+      // Enable all blocked sites and block them in extension
+      const updatedSites = state.blockedSites.map(site => ({ ...site, isActive: true }));
+      
+      for (const site of updatedSites) {
+        await state.blockSiteInExtension(site.url);
+      }
+
+      set({ 
+        isDeepFocusActive: true,
+        blockedSites: updatedSites
+      });
+      console.log('Deep Focus enabled successfully - all sites are now blocked');
+    } catch (error) {
+      console.error('Failed to enable Deep Focus:', error);
+      throw error;
+    }
+  },
+
+  disableDeepFocus: async () => {
+    const state = get();
+    
+    try {
+      // Disable focus mode in extension
+      if (ExtensionDataService.isExtensionInstalled()) {
+        await ExtensionDataService.disableFocusMode();
+      }
+
+      // Disable all blocked sites and unblock them in extension
+      const updatedSites = state.blockedSites.map(site => ({ ...site, isActive: false }));
+      
+      for (const site of updatedSites) {
+        await state.unblockSiteInExtension(site.url);
+      }
+
+      set({ 
+        isDeepFocusActive: false,
+        blockedSites: updatedSites
+      });
+      console.log('Deep Focus disabled successfully - all sites are now unblocked');
+    } catch (error) {
+      console.error('Failed to disable Deep Focus:', error);
+      throw error;
+    }
+  },
+
+  toggleDeepFocus: async () => {
+    const state = get();
+    
+    if (state.isDeepFocusActive) {
+      await state.disableDeepFocus();
+    } else {
+      await state.enableDeepFocus();
+    }
+  }
 })); 
