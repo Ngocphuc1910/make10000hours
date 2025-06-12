@@ -1,0 +1,54 @@
+/* Favicon Image Styles for Sharp Rendering */
+.favicon-image {
+  /* Enable sharp image rendering for better quality when scaling */
+  image-rendering: -webkit-optimize-contrast; /* Safari */
+  image-rendering: -webkit-crisp-edges; /* Safari */
+  image-rendering: -moz-crisp-edges; /* Firefox */
+  image-rendering: -o-crisp-edges; /* Opera */
+  image-rendering: pixelated; /* Chrome */
+  image-rendering: crisp-edges; /* Standard */
+  
+  /* Prevent image smoothing for better sharpness */
+  -ms-interpolation-mode: nearest-neighbor; /* IE */
+  
+  /* Additional optimizations */
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  
+  /* Smooth transitions for loading states */
+  transition: opacity 0.2s ease-in-out;
+}
+
+.favicon-image:not([src]),
+.favicon-image[src=""] {
+  opacity: 0;
+}
+
+/* Loading animation for favicon placeholders */
+@keyframes favicon-pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.favicon-loading {
+  animation: favicon-pulse 1.5s ease-in-out infinite;
+}
+
+/* Ensure retina display optimization */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .favicon-image {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* High DPI display optimization */
+@media (-webkit-min-device-pixel-ratio: 3), (min-resolution: 288dpi) {
+  .favicon-image {
+    image-rendering: pixelated;
+  }
+} 

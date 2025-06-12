@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Icon } from './Icon';
 import CustomCheckbox from './CustomCheckbox';
+import FaviconImage from './FaviconImage';
 import { BlockedSite } from '../../types/deepFocus';
 
 interface AddSiteModalProps {
@@ -221,11 +222,13 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
                     onChange={() => handleSiteToggle(site.url)}
                   />
                   <div className="flex items-center gap-3 flex-1">
-                    <div 
-                      className="w-10 h-10 rounded-lg flex items-center justify-center text-white shadow-sm transform transition-transform duration-200 hover:scale-105"
-                      style={{ backgroundColor: site.backgroundColor }}
-                    >
-                      <Icon name={site.icon} className="text-xl" />
+                    <div className="transform transition-transform duration-200 hover:scale-105">
+                      <FaviconImage 
+                        domain={site.url} 
+                        size={40}
+                        className="shadow-sm border border-gray-200"
+                        fallbackIcon={site.icon}
+                      />
                     </div>
                     <div className="flex-1">
                       <div className="font-medium">{site.name}</div>
