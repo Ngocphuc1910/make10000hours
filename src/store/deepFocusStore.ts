@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DeepFocusData, SiteUsage, BlockedSite } from '../types/deepFocus';
+import { DeepFocusSession } from '../types/models';
 import ExtensionDataService from '../services/extensionDataService';
+import { deepFocusSessionService } from '../api/deepFocusSessionService';
 
 // Mock data with exact colors from AI design
 const mockSiteUsage: SiteUsage[] = [
@@ -119,6 +121,10 @@ const mockBlockedSites: BlockedSite[] = [
 interface DeepFocusStore extends DeepFocusData {
   isExtensionConnected: boolean;
   isDeepFocusActive: boolean;
+  currentSessionId: string | null;
+  deepFocusSessions: DeepFocusSession[];
+  totalSessionsCount: number;
+  unsubscribe: (() => void) | null;
   toggleBlockedSite: (id: string) => void;
   removeBlockedSite: (id: string) => void;
   addBlockedSite: (site: Omit<BlockedSite, 'id'>) => void;
@@ -131,6 +137,9 @@ interface DeepFocusStore extends DeepFocusData {
   loadFocusStatus: () => Promise<void>;
   syncFocusStatus: (isActive: boolean) => void;
   initializeFocusSync: () => Promise<void>;
+  loadDeepFocusSessions: (userId: string) => Promise<void>;
+  subscribeToSessions: (userId: string) => void;
+  unsubscribeFromSessions: () => void;
 }
 
 export const useDeepFocusStore = create<DeepFocusStore>()(
@@ -155,6 +164,10 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
   blockedSites: mockBlockedSites,
   isExtensionConnected: false,
   isDeepFocusActive: false,
+  currentSessionId: null,
+  deepFocusSessions: [],
+  totalSessionsCount: 0,
+  unsubscribe: null,
 
   loadExtensionData: async () => {
     try {
@@ -332,6 +345,20 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
     const state = get();
     
     try {
+      // Start a new Deep Focus session if we have user data
+      let sessionId = null;
+      try {
+        // Import and get user from user store
+        const { useUserStore } = await import('./userStore');
+        const user = useUserStore.getState().user;
+        if (user?.uid) {
+          sessionId = await deepFocusSessionService.startSession(user.uid);
+          console.log('Started Deep Focus session:', sessionId);
+        }
+      } catch (error) {
+        console.error('Failed to start Deep Focus session:', error);
+      }
+
       // Enable focus mode in extension
       if (ExtensionDataService.isExtensionInstalled()) {
         await ExtensionDataService.enableFocusMode();
@@ -346,6 +373,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
 
       set({ 
         isDeepFocusActive: true,
+        currentSessionId: sessionId,
         blockedSites: updatedSites
       });
 
@@ -354,7 +382,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         detail: { isActive: true } 
       }));
 
-      console.log('Deep Focus enabled successfully - all sites are now blocked');
+      console.log('Deep Focus enabled successfully - all sites are now blocked', sessionId ? `Session ID: ${sessionId}` : '');
     } catch (error) {
       console.error('Failed to enable Deep Focus:', error);
       throw error;
@@ -365,6 +393,16 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
     const state = get();
     
     try {
+      // End the current Deep Focus session if active
+      if (state.currentSessionId) {
+        try {
+          await deepFocusSessionService.endSession(state.currentSessionId);
+          console.log('Deep Focus session ended:', state.currentSessionId);
+        } catch (error) {
+          console.error('Failed to end Deep Focus session:', error);
+        }
+      }
+
       // Disable focus mode in extension
       if (ExtensionDataService.isExtensionInstalled()) {
         await ExtensionDataService.disableFocusMode();
@@ -379,6 +417,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
 
       set({ 
         isDeepFocusActive: false,
+        currentSessionId: null,
         blockedSites: updatedSites
       });
 
@@ -401,6 +440,46 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       await state.disableDeepFocus();
     } else {
       await state.enableDeepFocus();
+    }
+  },
+
+  loadDeepFocusSessions: async (userId: string) => {
+    try {
+      console.log('DeepFocusStore: Loading sessions for userId:', userId);
+      const sessions = await deepFocusSessionService.getUserSessions(userId);
+      console.log('DeepFocusStore: Loaded sessions:', sessions);
+      const completedCount = sessions.filter(s => s.status === 'completed').length;
+      console.log('DeepFocusStore: Completed sessions count:', completedCount);
+      set({ 
+        deepFocusSessions: sessions,
+        totalSessionsCount: completedCount
+      });
+    } catch (error) {
+      console.error('Failed to load Deep Focus sessions:', error);
+    }
+  },
+
+  subscribeToSessions: (userId: string) => {
+    console.log('DeepFocusStore: Subscribing to sessions for userId:', userId);
+    const unsubscribe = deepFocusSessionService.subscribeToUserSessions(userId, (sessions) => {
+      console.log('DeepFocusStore: Subscription received sessions:', sessions);
+      const completedCount = sessions.filter(s => s.status === 'completed').length;
+      console.log('DeepFocusStore: Subscription completed count:', completedCount);
+      set({ 
+        deepFocusSessions: sessions,
+        totalSessionsCount: completedCount
+      });
+    });
+    
+    // Store unsubscribe function for cleanup
+    set({ unsubscribe });
+  },
+
+  unsubscribeFromSessions: () => {
+    const state = get();
+    if (state.unsubscribe) {
+      state.unsubscribe();
+      set({ unsubscribe: null });
     }
   }
 }),
