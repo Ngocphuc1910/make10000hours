@@ -56,7 +56,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
   return (
     <div className="status-section flex flex-col">
       {/* Status Section Header */}
-      <div className="status-section-header px-4 py-3 border-b border-gray-100 sticky top-0 bg-white z-5">
+      <div className="status-section-header px-4 py-3 border-b border-border sticky top-0 bg-background-primary z-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <span className={`status-badge ${
@@ -64,16 +64,16 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
               status === 'todo' ? 'todo-badge' :
               status === 'completed' ? 'completed-badge' : ''
             }`}></span>
-            <h3 className="font-medium text-gray-900">{title}</h3>
-            <span className="ml-2 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+            <h3 className="font-medium text-text-primary">{title}</h3>
+            <span className="ml-2 text-xs font-medium text-text-secondary bg-background-primary px-2 py-0.5 rounded-full">
               {tasks.length}
             </span>
           </div>
-          <button 
-            className="p-1 rounded-full hover:bg-gray-200"
+                      <button 
+            className="p-1 rounded-full hover:bg-background-container"
             onClick={() => setIsAddingTask(true)}
           >
-            <div className="w-5 h-5 flex items-center justify-center text-gray-500">
+            <div className="w-5 h-5 flex items-center justify-center text-text-secondary">
               <Icon name="add-line" />
             </div>
           </button>

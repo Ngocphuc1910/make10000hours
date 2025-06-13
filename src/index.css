@@ -16,13 +16,13 @@
   -webkit-appearance: none;
   width: 18px;
   height: 18px;
-  border: 2px solid #d1d5db;
+  border: 2px solid var(--checkbox-border);
   border-radius: 4px;
   outline: none;
   cursor: pointer;
   position: relative;
   transition: all 0.2s;
-  background-color: white;
+  background-color: var(--checkbox-bg);
 }
 
 .custom-checkbox:checked {
@@ -113,12 +113,12 @@ input[type="number"] {
 }
 
 .scrollbar-thumb-gray-300::-webkit-scrollbar-thumb {
-  background-color: #d1d5db;
+  background-color: var(--border-color);
   border-radius: 4px;
 }
 
 .scrollbar-track-gray-100::-webkit-scrollbar-track {
-  background-color: #f3f4f6;
+  background-color: var(--bg-primary);
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -126,12 +126,12 @@ input[type="number"] {
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: #d1d5db;
+  background-color: var(--border-color);
   border-radius: 4px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-track {
-  background-color: #f3f4f6;
+  background-color: var(--bg-primary);
 }
 
 :where([class^="ri-"])::before {
@@ -145,7 +145,9 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f9fafb;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 code {
@@ -155,6 +157,54 @@ code {
 
 :root {
   --primary-color: #BB5F5A;
+  
+  /* Light theme variables */
+  --bg-primary: #ffffff;
+  --bg-secondary: #ffffff;
+  --bg-container: #F9FAFB;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --border-color: #e5e7eb;
+  
+  /* Task card colors - Light mode - Pure white */
+  --task-todo-bg: #ffffff;
+  --task-todo-border: #e5e7eb;
+  --task-pomodoro-bg: #ffffff;
+  --task-pomodoro-border: #e5e7eb;
+  --task-completed-bg: #ffffff;
+  --task-completed-border: #e5e7eb;
+  
+  /* Checkbox colors - Light mode */
+  --checkbox-bg: #ffffff;
+  --checkbox-border: #d1d5db;
+  
+  /* Progress bar colors - Light mode */
+  --progress-bg: #e5e7eb;
+}
+
+[data-theme="dark"] {
+  /* Dark theme variables - Custom dark gray */
+  --bg-primary: #191919;
+  --bg-secondary: #191919;
+  --bg-container: #2a2a2a;
+  --text-primary: #ffffff;
+  --text-secondary: #888888;
+  --border-color: #2a2a2a;
+  
+  /* Task card colors - Dark mode - Subtle greys */
+  --task-todo-bg: #1e1e1e;
+  --task-todo-border: #333333;
+  --task-pomodoro-bg: #1e1e1e;
+  --task-pomodoro-border: #404040;
+  --task-completed-bg: #1a1a1a;
+  --task-completed-border: #555555;
+  
+  /* Checkbox colors - Dark mode */
+  --checkbox-bg: #1e1e1e;
+  --checkbox-border: #888888;
+  
+  /* Progress bar colors - Dark mode */
+  --progress-bg: #404040;
 }
 
 /* Custom scrollbar */
@@ -194,7 +244,7 @@ code {
   flex: 1;
   overflow-y: auto;
   padding: 1.5rem;
-  background-color: #ffffff;
+  background-color: var(--bg-primary);
 }
 
 /* Animations and styles for the "By Project" view */
@@ -367,12 +417,12 @@ code {
 }
 
 .overflow-x-auto::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
+  background-color: var(--border-color);
   border-radius: 3px;
 }
 
 .overflow-x-auto::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8;
+  background-color: var(--text-secondary);
 }
 
 #sidebar {
@@ -396,13 +446,13 @@ code {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: #f3f4f6;
+  background: var(--border-color);
 }
 
 .status-section-header {
   position: sticky;
   top: 0;
-  background-color: #fff;
+  background-color: var(--bg-secondary);
   z-index: 5;
 }
 
@@ -436,11 +486,11 @@ code {
 }
 
 .task-list-container:hover::-webkit-scrollbar-thumb {
-  background-color: #cbd5e180;
+  background-color: var(--border-color);
 }
 
 .task-list-container::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8;
+  background-color: var(--text-secondary);
 }
 
 /* Status Badge Colors */
@@ -493,28 +543,28 @@ code {
 
 .time-slot {
   height: 60px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--border-color);
   position: relative;
   display: flex;
   align-items: start;
   justify-content: center;
   padding-top: 8px;
-  background-color: white;
+  background-color: var(--bg-primary);
 }
 
 .time-label {
   position: absolute;
   top: -10px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .day-column {
-  border-left: 1px solid #f3f4f6;
-  border-bottom: 1px solid #f3f4f6;
+  border-left: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
   position: relative;
   min-height: 60px;
-  background-color: white;
+  background-color: var(--bg-primary);
   cursor: cell;
 }
 
@@ -592,15 +642,15 @@ code {
 
 .day-header {
   height: 60px;
-  border-bottom: 1px solid #f3f4f6;
-  border-left: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--border-color);
+  border-left: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   position: sticky;
   top: 0;
-  background: white;
+  background: var(--bg-primary);
   z-index: 21;
 }
 
@@ -610,7 +660,7 @@ code {
 
 .day-name {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
   margin-bottom: 4px;
 }
 
@@ -625,11 +675,11 @@ code {
 
 .time-column-header {
   height: 60px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--border-color);
   position: sticky;
   left: 0;
   top: 0;
-  background: white;
+  background: var(--bg-primary);
   z-index: 22;
 }
 
@@ -637,9 +687,9 @@ code {
   padding: 8px;
   text-align: center;
   font-size: 12px;
-  color: #6b7280;
-  background-color: white;
-  border-bottom: 1px solid #f3f4f6;
+  color: var(--text-secondary);
+  background-color: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
   position: sticky;
   left: 0;
   top: 60px;
@@ -647,8 +697,8 @@ code {
 }
 
 .all-day-row {
-  background-color: white;
-  border-bottom: 1px solid #f3f4f6;
+  background-color: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
   min-height: 40px;
   position: sticky;
   top: 60px;
@@ -659,7 +709,7 @@ code {
 .time-slot {
   position: sticky;
   left: 0;
-  background: white;
+  background: var(--bg-primary);
   z-index: 20;
 }
 
@@ -670,7 +720,7 @@ code {
   right: 0;
   bottom: 0;
   width: 1px;
-  background: #f3f4f6;
+  background: var(--border-color);
 }
 
 /* DatePicker Animations */
@@ -710,6 +760,165 @@ code {
   backdrop-filter: blur(8px);
 }
 
+/* Flatpickr Dark Mode Overrides */
+.flatpickr-calendar {
+  background: var(--bg-container) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+}
+
+.flatpickr-calendar::before,
+.flatpickr-calendar::after {
+  border-bottom-color: var(--border-color) !important;
+}
+
+.flatpickr-months {
+  background: var(--bg-container) !important;
+}
+
+.flatpickr-months .flatpickr-month {
+  background: transparent !important;
+  color: var(--text-primary) !important;
+}
+
+.flatpickr-months .flatpickr-prev-month,
+.flatpickr-months .flatpickr-next-month {
+  color: var(--text-secondary) !important;
+  fill: var(--text-secondary) !important;
+}
+
+.flatpickr-months .flatpickr-prev-month:hover,
+.flatpickr-months .flatpickr-next-month:hover {
+  color: var(--text-primary) !important;
+  fill: var(--text-primary) !important;
+}
+
+.flatpickr-current-month {
+  color: var(--text-primary) !important;
+}
+
+.flatpickr-current-month .flatpickr-monthDropdown-months {
+  background: var(--bg-container) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.flatpickr-current-month .flatpickr-monthDropdown-months .flatpickr-monthDropdown-month {
+  background: var(--bg-container) !important;
+  color: var(--text-primary) !important;
+}
+
+.flatpickr-current-month .flatpickr-monthDropdown-months .flatpickr-monthDropdown-month:hover {
+  background: var(--bg-primary) !important;
+}
+
+.flatpickr-current-month input.cur-year {
+  background: transparent !important;
+  color: var(--text-primary) !important;
+}
+
+.flatpickr-weekdays {
+  background: var(--bg-container) !important;
+}
+
+.flatpickr-weekdaycontainer {
+  background: var(--bg-container) !important;
+}
+
+.flatpickr-weekday {
+  background: var(--bg-container) !important;
+  color: var(--text-secondary) !important;
+}
+
+.flatpickr-days {
+  background: var(--bg-container) !important;
+}
+
+.flatpickr-day {
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  border: 1px solid transparent !important;
+}
+
+.flatpickr-day:hover {
+  background: var(--bg-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+.flatpickr-day.selected {
+  background: #BB5F5A !important;
+  border-color: #BB5F5A !important;
+  color: white !important;
+}
+
+.flatpickr-day.selected:hover {
+  background: #BB5F5A !important;
+  border-color: #BB5F5A !important;
+}
+
+.flatpickr-day.inRange {
+  background: rgba(187, 95, 90, 0.1) !important;
+  border-color: rgba(187, 95, 90, 0.2) !important;
+  color: var(--text-primary) !important;
+}
+
+.flatpickr-day.startRange,
+.flatpickr-day.endRange {
+  background: #BB5F5A !important;
+  border-color: #BB5F5A !important;
+  color: white !important;
+}
+
+.flatpickr-day.today {
+  border-color: #BB5F5A !important;
+  color: #BB5F5A !important;
+}
+
+.flatpickr-day.today:hover {
+  background: rgba(187, 95, 90, 0.1) !important;
+  border-color: #BB5F5A !important;
+}
+
+.flatpickr-day.prevMonthDay,
+.flatpickr-day.nextMonthDay {
+  color: var(--text-secondary) !important;
+  opacity: 0.6;
+}
+
+.flatpickr-day.disabled {
+  color: var(--text-secondary) !important;
+  opacity: 0.3;
+}
+
+.flatpickr-time {
+  background: var(--bg-container) !important;
+  border-top: 1px solid var(--border-color) !important;
+}
+
+.flatpickr-time input {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.flatpickr-time input:focus {
+  border-color: #BB5F5A !important;
+}
+
+.flatpickr-time .flatpickr-time-separator {
+  color: var(--text-secondary) !important;
+}
+
+.flatpickr-time .arrowUp,
+.flatpickr-time .arrowDown {
+  color: var(--text-secondary) !important;
+}
+
+.flatpickr-time .arrowUp:hover,
+.flatpickr-time .arrowDown:hover {
+  color: var(--text-primary) !important;
+}
+
 /* Month view event override - use relative positioning instead of absolute */
 .month-view-event.task-item {
   position: relative !important;
@@ -746,6 +955,49 @@ code {
   min-width: 0;
   overflow: hidden;
   box-sizing: border-box;
+}
+
+/* Month View Calendar Grid Improvements */
+.month-view-calendar-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.month-view-calendar-grid .calendar-day-cell {
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.month-view-calendar-grid .calendar-day-cell:last-child {
+  border-right: none;
+}
+
+.month-view-calendar-grid .calendar-day-cell:nth-last-child(-n+7) {
+  border-bottom: none;
+}
+
+/* Improved month view event styling */
+.month-view-event {
+  transition: all 0.15s ease-in-out;
+}
+
+.month-view-event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Previous/Next month date styling improvements */
+.calendar-day-prev-next-month {
+  position: relative;
+}
+
+.calendar-day-prev-next-month::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg-container);
+  opacity: 0.3;
+  pointer-events: none;
 }
 
 

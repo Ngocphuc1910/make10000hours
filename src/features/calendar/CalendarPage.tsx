@@ -7,7 +7,7 @@ const CalendarPage: React.FC = () => {
   const { isLeftSidebarOpen } = useUIStore();
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-white">
+    <div className="flex h-screen w-screen overflow-hidden bg-background-primary">
       {/* Left Sidebar - Navigation */}
       <Sidebar />
       

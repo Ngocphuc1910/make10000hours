@@ -88,7 +88,7 @@ export const AverageFocusTime: React.FC = () => {
     return (
       <Card title="Average Focus Time">
         <div className="flex items-center justify-center h-40">
-          <div className="text-gray-500">Loading focus statistics...</div>
+          <div className="text-text-secondary">Loading focus statistics...</div>
         </div>
       </Card>
     );
@@ -98,16 +98,16 @@ export const AverageFocusTime: React.FC = () => {
     <Card title="Average Focus Time">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <div className="text-3xl font-bold text-gray-900">
+          <div className="text-3xl font-bold text-text-primary">
             {stats.dailyAverage.hours}h {stats.dailyAverage.minutes}m
           </div>
-          <p className="text-sm text-gray-500 mt-2">Daily average</p>
+          <p className="text-sm text-text-secondary mt-2">Daily average</p>
         </div>
         <div>
-          <div className="text-3xl font-bold text-gray-900">
+          <div className="text-3xl font-bold text-text-primary">
             {stats.totalFocus.hours}h {stats.totalFocus.minutes}m
           </div>
-          <p className="text-sm text-gray-500 mt-2">Total focus time</p>
+          <p className="text-sm text-text-secondary mt-2">Total focus time</p>
         </div>
       </div>
 
@@ -115,12 +115,12 @@ export const AverageFocusTime: React.FC = () => {
         {/* Weekly Goal Progress */}
         <div>
           <div className="flex items-center justify-between text-sm mb-1">
-            <span className="text-gray-600">Weekly goal (25h)</span>
-            <span className="font-medium text-gray-700">
+            <span className="text-text-secondary">Weekly goal (25h)</span>
+            <span className="font-medium text-text-primary">
               {stats.weeklyGoal.current}h / {stats.weeklyGoal.target}h
             </span>
           </div>
-          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div className="w-full h-2 bg-background-container rounded-full overflow-hidden">
             <div 
               className="h-full bg-primary rounded-full" 
               style={{ width: `${stats.weeklyGoal.progress}%` }}
@@ -131,12 +131,12 @@ export const AverageFocusTime: React.FC = () => {
         {/* Journey Progress */}
         <div>
           <div className="flex items-center justify-between text-sm mb-1">
-            <span className="text-gray-600">Journey to 10,000 hours</span>
-            <span className="font-medium text-gray-700">
+            <span className="text-text-secondary">Journey to 10,000 hours</span>
+            <span className="font-medium text-text-primary">
               {stats.journey.current}h / {stats.journey.target}h
             </span>
           </div>
-          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div className="w-full h-2 bg-background-container rounded-full overflow-hidden">
             <div 
               className="h-full bg-primary rounded-full" 
               style={{ width: `${stats.journey.progress}%` }}
