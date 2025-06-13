@@ -19,6 +19,9 @@ export interface UserState {
   // Authentication status
   isAuthenticated: boolean;
   
+  // New: Initialization state
+  isInitialized: boolean;
+  
   // Actions
   initialize: () => void;
   createUserDataIfNotExists: (uid: string, userProfile?: any) => Promise<UserData>;
@@ -29,52 +32,83 @@ export interface UserState {
   setLoading: (isLoading: boolean) => void;
 }
 
+// Global flag to prevent double initialization in React.StrictMode
+let isInitializing = false;
+
 const usersCollection = collection(db, 'users');
 
 export const useUserStore = create<UserState>((set, get) => {
   return {
-    // Initial state
+    // Initial state - CRITICAL: Don't set isAuthenticated to false until we know for sure
     user: null,
     isLoading: true,
     error: null,
     isAuthenticated: false,
+    isInitialized: false,
     
     // Actions
     initialize: () => {
+      // Prevent double initialization from React.StrictMode
+      if (isInitializing) {
+        console.log('User store already initializing, skipping...');
+        return;
+      }
+      
+      isInitializing = true;
+      console.log('🔐 Initializing user store authentication...');
       
       // Set up the auth state listener
       const unsubscribe = onAuthStateChanged(
         auth,
         async (userProfile) => {
-          console.log('Auth state changed from userStore:', userProfile);
+          console.log('🔐 Auth state changed from userStore:', userProfile ? 'User found' : 'No user');
+          
           if (userProfile) {
-            set({ isLoading: true });
-            const userData = await get().createUserDataIfNotExists(userProfile.uid, userProfile);
-            const user: User = {
-              ...userProfile,
-              ...userData
-            };
+            try {
+              set({ isLoading: true });
+              const userData = await get().createUserDataIfNotExists(userProfile.uid, userProfile);
+              const user: User = {
+                ...userProfile,
+                ...userData
+              };
 
-            set({ 
-              user, 
-              isAuthenticated: true, 
-              isLoading: false,
-              error: null
-            });
+              set({ 
+                user, 
+                isAuthenticated: true, 
+                isLoading: false,
+                isInitialized: true,
+                error: null
+              });
+              
+              console.log('✅ User authentication restored successfully');
+            } catch (error) {
+              console.error('❌ Error creating user data:', error);
+              set({ 
+                error: error as Error, 
+                isLoading: false,
+                isAuthenticated: false,
+                isInitialized: true
+              });
+            }
           } else {
+            // Only set to not authenticated after we've confirmed no user exists
             set({ 
               user: null, 
               isAuthenticated: false, 
               isLoading: false,
+              isInitialized: true,
               error: null
             });
+            console.log('🔐 No authenticated user found');
           }
         },
         (error) => {
+          console.error('❌ Firebase Auth error:', error);
           set({ 
             error: error as Error, 
             isLoading: false,
-            isAuthenticated: false 
+            isAuthenticated: false,
+            isInitialized: true
           });
         }
       );
@@ -84,7 +118,6 @@ export const useUserStore = create<UserState>((set, get) => {
     },
 
     createUserDataIfNotExists: async (uid: string, userProfile?: any) => {
-      
       try {
         // Generate userName from Firebase Auth data or default
         const generateUserName = () => {
@@ -135,7 +168,6 @@ export const useUserStore = create<UserState>((set, get) => {
     },
 
     updateUserData: async (userData: UserData) => {
-      
       try {
         const userDocRef = doc(usersCollection, userData.uid);
         await setDoc(userDocRef, userData, { merge: true });
@@ -152,13 +184,13 @@ export const useUserStore = create<UserState>((set, get) => {
     },
     
     signOut: async () => {
-      
       try {
         set({ isLoading: true });
         await firebaseSignOut(auth);
         set({ 
           user: null,
           isAuthenticated: false,
+          isInitialized: true,
           error: null,
           isLoading: false
         });

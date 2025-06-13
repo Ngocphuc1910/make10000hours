@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useDeepFocusStore } from '../store/deepFocusStore';
+import { useUserStore } from '../store/userStore';
 import { useActivityDetection } from './useActivityDetection';
 
 export const useEnhancedDeepFocusSync = () => {
@@ -12,6 +13,9 @@ export const useEnhancedDeepFocusSync = () => {
     resumeSessionOnActivity,
     isSessionPaused
   } = useDeepFocusStore();
+
+  // Get user auth state to prevent interference during auth initialization
+  const { isInitialized: isUserInitialized } = useUserStore();
 
   // Configure activity detection with session management integration
   const { 
@@ -74,6 +78,13 @@ export const useEnhancedDeepFocusSync = () => {
   });
 
   useEffect(() => {
+    // CRITICAL: Don't run sync operations until user auth is initialized
+    // This prevents interference during Firebase auth restoration on page reload
+    if (!isUserInitialized) {
+      console.log('🔐 Enhanced sync waiting for user authentication to initialize...');
+      return;
+    }
+
     // Listen for focus changes from other components (preserve existing behavior)
     const handleFocusChange = (event: CustomEvent) => {
       const { isActive } = event.detail;
@@ -106,6 +117,8 @@ export const useEnhancedDeepFocusSync = () => {
     window.addEventListener('deepFocusChanged', handleFocusChange as EventListener);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    console.log('✅ Enhanced sync initialized after user authentication');
+
     // Cleanup
     return () => {
       window.removeEventListener('deepFocusChanged', handleFocusChange as EventListener);
@@ -117,7 +130,8 @@ export const useEnhancedDeepFocusSync = () => {
     autoSessionManagement, 
     isDeepFocusActive, 
     isSessionPaused,
-    resumeSessionOnActivity
+    resumeSessionOnActivity,
+    isUserInitialized // Add this dependency to wait for auth initialization
   ]);
 
   // Return activity state for optional use by components

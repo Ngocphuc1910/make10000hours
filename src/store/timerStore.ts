@@ -659,8 +659,23 @@ export const useTimerStore = create<TimerState>((set, get) => {
 useUserStore.subscribe(async (state) => {
   const timerStore = useTimerStore.getState();
   
+  // CRITICAL: Only react to auth changes after user store is initialized
+  // This prevents cleanup during Firebase auth restoration on page reload
+  if (!state.isInitialized) {
+    console.log('TimerStore - User store not initialized yet, waiting...');
+    return;
+  }
+  
+  console.log('TimerStore - User state changed:', {
+    isAuthenticated: state.isAuthenticated,
+    hasUser: !!state.user,
+    isLoading: state.isLoading,
+    isInitialized: state.isInitialized
+  });
+  
   if (state.isAuthenticated && state.user && !state.isLoading) {
     // User logged in, initialize timer store with persistence
+    console.log('TimerStore - User authenticated, initializing persistence...');
     try {
       // Initialize persistence FIRST to load existing timer state
       await timerStore.initializePersistence(state.user.uid);
@@ -672,6 +687,7 @@ useUserStore.subscribe(async (state) => {
     }
   } else {
     // User logged out, cleanup and reset
+    console.log('TimerStore - User not authenticated, cleaning up...');
     timerStore.cleanupPersistence();
     timerStore.resetTimerState();
   }

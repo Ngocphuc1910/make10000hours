@@ -23,10 +23,12 @@ import { trackPageView, setAnalyticsUserId } from './utils/analytics';
 import { verifyAnalyticsSetup } from './utils/verifyAnalytics';
 import CalendarPage from './features/calendar/CalendarPage';
 import DeepFocusPage from './components/pages/DeepFocusPage';
+import { LoadingScreen } from './components/ui/LoadingScreen';
 
 // Import test utilities in development mode
 if (process.env.NODE_ENV === 'development') {
   import('./utils/testTaskDeletion');
+  import('./utils/authDebug'); // Import auth debugging utilities
 }
 
 // Import cleanup utility for orphaned sessions
@@ -92,10 +94,10 @@ const SupportPage = () => (
   </div>
 );
 
-const App = (): React.JSX.Element => {
-  const { initialize } = useUserStore();
+const App: React.FC = () => {
+  const { initialize, user, isLoading, isInitialized } = useUserStore();
   const setIsAddingTask = useTaskStore(state => state.setIsAddingTask);
-  const { isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar } = useUIStore();
+  const { isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar, isLeftSidebarOpen } = useUIStore();
 
   // Global timer interval - runs regardless of current page
   useEffect(() => {
@@ -140,6 +142,7 @@ const App = (): React.JSX.Element => {
     };
   }, []); 
 
+  // Initialize user store on app start
   useEffect(() => {
     // TODO: fix the problem that this runs twice on initial load. Check for React.StrictMode
     initialize();
@@ -249,6 +252,12 @@ const App = (): React.JSX.Element => {
       <ProjectsPage />
     </ProjectsLayout>
   );
+
+  // CRITICAL: Don't render main app until user authentication is initialized
+  // This prevents the brief "logged out" flash during Firebase auth restoration
+  if (!isInitialized) {
+    return <LoadingScreen title="Make10000hours" subtitle="Setting up your workspace..." />;
+  }
 
   return (
     <Router>

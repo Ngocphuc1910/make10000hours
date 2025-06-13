@@ -71,10 +71,18 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
 useUserStore.subscribe((state) => {
   const dashboardStore = useDashboardStore.getState();
   
+  // CRITICAL: Only react to auth changes after user store is initialized
+  // This prevents cleanup during Firebase auth restoration on page reload
+  if (!state.isInitialized) {
+    console.log('DashboardStore - User store not initialized yet, waiting...');
+    return;
+  }
+  
   console.log('DashboardStore - User state changed:', {
     isAuthenticated: state.isAuthenticated,
     hasUser: !!state.user,
-    userId: state.user?.uid
+    userId: state.user?.uid,
+    isInitialized: state.isInitialized
   });
   
   if (state.isAuthenticated && state.user) {
