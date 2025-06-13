@@ -47,10 +47,10 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
                 }
               }}
             />
-            <div className={`w-[150px] h-[50px] flex flex-col items-center justify-center rounded-full transition-all duration-500 relative ${
+            <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${
               isDeepFocusActive 
-                ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20' 
-                : 'bg-gray-100/80 backdrop-blur-sm'
+                ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]' 
+                : 'bg-gray-100/80 backdrop-blur-sm justify-end pr-[10.5px]'
             }`}>
               <span className={`text-sm font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${
                 isDeepFocusActive 
@@ -59,16 +59,11 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
               }`}>
                 {isDeepFocusActive ? 'Deep Focus' : 'Focus Off'}
               </span>
-              {isDeepFocusActive && activeSessionId && (
-                <span className="text-xs text-white/90 font-mono [text-shadow:0_0_8px_rgba(255,255,255,0.3)]">
-                  {formatElapsedTime(activeSessionElapsedSeconds)}
-                </span>
-              )}
             </div>
             <div className={`absolute w-6 h-6 bg-white rounded-full shadow-lg transition-all duration-500 ${
               isDeepFocusActive 
-                ? 'right-2 shadow-[0_6px_20px_rgba(187,95,90,0.2)]' 
-                : 'left-2 shadow-[0_2px_8px_rgba(0,0,0,0.1)]'
+                ? 'left-[calc(100%-27px)] shadow-[0_6px_20px_rgba(187,95,90,0.2)]' 
+                : 'left-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.1)]'
             }`}></div>
           </label>
         </div>
