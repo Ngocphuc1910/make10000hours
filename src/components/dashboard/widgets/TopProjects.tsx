@@ -115,14 +115,14 @@ export const TopProjects: React.FC = () => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-sm">
-          <p className="font-medium text-gray-900 mb-1">{data.fullName}</p>
+        <div className="bg-background-secondary border border-border rounded-lg shadow-lg p-3">
+          <p className="text-text-primary font-medium text-sm mb-1">{data.fullName}</p>
           <div className="flex items-center">
             <div 
               className="w-2 h-2 rounded-full mr-2"
               style={{ backgroundColor: data.color }}
             />
-            <span className="text-gray-600 text-sm">
+            <span className="text-text-secondary text-sm">
               {formatMinutesToHoursAndMinutes(data.value)}
             </span>
           </div>
@@ -143,7 +143,7 @@ export const TopProjects: React.FC = () => {
               style={{ backgroundColor: entry.color }}
             />
             <span 
-              className="text-xs text-gray-600 overflow-hidden text-ellipsis whitespace-nowrap flex-1"
+              className="text-xs text-text-secondary overflow-hidden text-ellipsis whitespace-nowrap flex-1"
               title={entry.fullName}
             >
               {entry.fullName}
@@ -170,7 +170,7 @@ export const TopProjects: React.FC = () => {
       <text
         x={x + width / 2}
         y={y - 8}
-        fill="#6b7280"
+        fill="var(--text-secondary)"
         textAnchor="middle"
         fontSize="11"
         fontWeight="500"
@@ -194,10 +194,10 @@ export const TopProjects: React.FC = () => {
       >
         <div className="flex items-center justify-center h-[360px]">
           <div className="text-center">
-            <div className="w-12 h-12 mx-auto mb-4 text-gray-400 flex items-center justify-center">
+            <div className="w-12 h-12 mx-auto mb-4 text-text-secondary flex items-center justify-center">
               <i className="ri-folder-line ri-2x"></i>
             </div>
-            <p className="text-gray-500 text-sm">No projects with focus time found</p>
+            <p className="text-text-secondary text-sm">No projects with focus time found</p>
           </div>
         </div>
       </Card>
@@ -231,7 +231,7 @@ export const TopProjects: React.FC = () => {
                 y={20}
                 textAnchor="middle"
                 dominantBaseline="hanging"
-                className="fill-gray-700 text-sm font-medium"
+                className="fill-text-primary text-sm font-medium"
                 style={{
                   transform: 'translateY(-5px)'
                 }}
@@ -241,7 +241,7 @@ export const TopProjects: React.FC = () => {
               <CartesianGrid
                 strokeDasharray="3 3"
                 vertical={false}
-                stroke="#f3f4f6"
+                stroke="var(--border-color)"
                 strokeWidth={1}
               />
               <XAxis
@@ -250,7 +250,7 @@ export const TopProjects: React.FC = () => {
                 tick={false} // Hide the x-axis ticks completely
                 tickLine={false}
                 axisLine={{
-                  stroke: '#e5e7eb',
+                  stroke: 'var(--border-color)',
                   strokeWidth: 1
                 }}
                 dy={8}
@@ -265,13 +265,13 @@ export const TopProjects: React.FC = () => {
                   return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
                 }}
                 tick={{
-                  fill: '#6b7280',
+                  fill: 'var(--text-secondary)',
                   fontSize: 11,
                   fontWeight: 500
                 }}
                 tickLine={false}
                 axisLine={{
-                  stroke: '#e5e7eb',
+                  stroke: 'var(--border-color)',
                   strokeWidth: 1
                 }}
                 width={45}

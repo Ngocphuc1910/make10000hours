@@ -121,6 +121,24 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
     setIsExpanded(!isExpanded);
   };
 
+  // Get task card colors based on status
+  const getTaskCardClasses = () => {
+    if (task.completed) {
+      return 'bg-task-completed-bg border-task-completed-border';
+    }
+    
+    switch (task.status) {
+      case 'todo':
+        return 'bg-task-todo-bg border-task-todo-border';
+      case 'pomodoro':
+        return 'bg-task-pomodoro-bg border-task-pomodoro-border';
+      case 'completed':
+        return 'bg-task-completed-bg border-task-completed-border';
+      default:
+        return 'bg-background-secondary border-border';
+    }
+  };
+
   if (isEditing) {
     return <TaskForm task={task} onCancel={() => setIsEditing(false)} />;
   }
@@ -137,8 +155,8 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
       
       <div
         ref={cardRef}
-        className={`task-card flex items-start p-3 bg-white border border-gray-200 
-        ${task.completed ? 'opacity-70 text-gray-500' : ''}
+        className={`task-card flex items-start p-3 ${getTaskCardClasses()}
+        ${task.completed ? 'opacity-70 text-text-secondary' : ''}
         ${isDragOver ? 'drag-over' : ''}
         rounded-md hover:shadow-sm cursor-pointer transition-all duration-200`}
         draggable
@@ -164,35 +182,35 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
           <div className="flex-1 min-w-0 mr-2">
             <h4 
               className={`text-sm font-medium text-left whitespace-pre-wrap break-words
-              ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}
+              ${task.completed ? 'text-text-secondary line-through' : 'text-text-primary'}`}
             >
               {task.title}
             </h4>
             <div className="flex items-center mt-0.5 text-xs text-left">
               <div className="flex items-center">
                 {getStatusIndicator()}
-                <span className={`${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
+                <span className={`${task.completed ? 'text-text-secondary' : 'text-text-secondary'}`}>
                   {project?.name || 'Unknown project'}
                 </span>
               </div>
-              <span className="mx-2 text-gray-300">•</span>
-              <span className={`flex items-center ${task.completed ? 'text-gray-500' : 'text-gray-600'}`}>
+              <span className="mx-2 text-border">•</span>
+              <span className={`flex items-center ${task.completed ? 'text-text-secondary' : 'text-text-secondary'}`}>
                 <i className="ri-time-line mr-1"></i>
                 {task.timeSpent}/{task.timeEstimated}m
               </span>
             </div>
             {isExpanded && task.description && (
               <div className="task-description mt-2">
-                <p className="text-sm text-gray-600 mb-2 whitespace-pre-wrap break-words">{task.description}</p>
+                <p className="text-sm text-text-secondary mb-2 whitespace-pre-wrap break-words">{task.description}</p>
               </div>
             )}
           </div>
           {task.description && (
             <button 
-              className="expand-button p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
+              className="expand-button p-1 rounded-full hover:bg-background-container flex-shrink-0"
               onClick={handleExpandClick}
             >
-              <div className="w-5 h-5 flex items-center justify-center text-gray-400">
+              <div className="w-5 h-5 flex items-center justify-center text-text-secondary">
                 <i className={`ri-arrow-${isExpanded ? 'up' : 'down'}-s-line`}></i>
               </div>
             </button>
@@ -202,10 +220,10 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
 
       <div className="task-menu ml-4 flex items-start">
         <button 
-          className="edit-task-btn p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
+          className="edit-task-btn p-1 rounded-full hover:bg-background-primary flex-shrink-0"
           onClick={handleEditClick}
         >
-          <div className="w-5 h-5 flex items-center justify-center text-gray-400">
+          <div className="w-5 h-5 flex items-center justify-center text-text-secondary">
             <i className="ri-edit-line"></i>
           </div>
         </button>

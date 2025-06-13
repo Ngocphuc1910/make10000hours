@@ -101,34 +101,34 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
       <div 
         ref={modalRef}
-        className="bg-white rounded-lg shadow-lg p-6 w-96 max-w-[90vw]"
+        className="bg-background-secondary rounded-lg shadow-lg p-6 w-96 max-w-[90vw]"
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-gray-900">Change Project Color</h3>
+          <h3 className="text-lg font-semibold text-text-primary">Change Project Color</h3>
           <button 
             onClick={onClose}
-            className="p-1 rounded-md hover:bg-gray-100 transition-colors duration-200"
+            className="p-1 rounded-md hover:bg-background-container transition-colors duration-200"
           >
-            <Icon name="close-line" size={20} className="text-gray-400" />
+            <Icon name="close-line" size={20} className="text-text-secondary" />
           </button>
         </div>
 
         {/* Current Color Preview */}
         <div className="mb-6">
-          <div className="text-sm text-gray-600 mb-2">Current Color</div>
+          <div className="text-sm text-text-secondary mb-2">Current Color</div>
           <div className="flex items-center space-x-3">
             <div 
-              className="w-8 h-8 rounded-md border border-gray-200"
+              className="w-8 h-8 rounded-md border border-border"
               style={{ backgroundColor: inputColor }}
             />
-            <span className="text-sm font-medium text-gray-700">{inputColor}</span>
+            <span className="text-sm font-medium text-text-primary">{inputColor}</span>
           </div>
         </div>
 
         {/* Color Input */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-text-primary mb-2">
             Hex Color Code
           </label>
           <input
@@ -138,9 +138,9 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="#BB5F5A"
-            className={`w-full px-3 py-2 border rounded-md text-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary ${
+            className={`w-full px-3 py-2 border rounded-md text-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary bg-background-primary text-text-primary ${
               isValidColor 
-                ? 'border-gray-300 focus:border-primary' 
+                ? 'border-border focus:border-primary' 
                 : 'border-red-300 focus:border-red-500 focus:ring-red-500'
             }`}
           />
@@ -153,7 +153,7 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
 
         {/* Preset Colors */}
         <div className="mb-6">
-          <div className="text-sm font-medium text-gray-700 mb-3">Preset Colors</div>
+          <div className="text-sm font-medium text-text-primary mb-3">Preset Colors</div>
           <div className="grid grid-cols-6 gap-2">
             {presetColors.map((color) => (
               <button
@@ -161,8 +161,8 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
                 onClick={() => handlePresetColorClick(color)}
                 className={`w-8 h-8 rounded-md border-2 transition-all duration-200 hover:scale-110 ${
                   inputColor === color 
-                    ? 'border-gray-400 ring-2 ring-primary ring-offset-1' 
-                    : 'border-gray-200 hover:border-gray-300'
+                    ? 'border-text-secondary ring-2 ring-primary ring-offset-1' 
+                    : 'border-border hover:border-text-secondary'
                 }`}
                 style={{ backgroundColor: color }}
                 title={color}
@@ -175,7 +175,7 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
         <div className="flex items-center justify-end space-x-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors duration-200"
+            className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors duration-200"
           >
             Cancel
           </button>
@@ -185,7 +185,7 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200 ${
               isValidColor
                 ? 'bg-primary text-white hover:bg-primary/90'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-background-container text-text-secondary cursor-not-allowed'
             }`}
           >
             Save Color

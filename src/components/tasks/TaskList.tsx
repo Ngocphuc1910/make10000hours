@@ -89,39 +89,39 @@ export const TaskList: React.FC<TaskListProps> = ({
   
   return (
     <div className={`h-full flex flex-col ${className}`}>
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 border-b border-border">
         <div className="flex justify-between items-center">
-          <h2 className="font-semibold text-gray-800 text-left">Tasks In Pomodoro</h2>
+          <h2 className="font-semibold text-text-primary text-left">Tasks In Pomodoro</h2>
           <div className="relative details-menu">
             <button 
               onClick={(e) => {
                 e.stopPropagation();
                 setShowDetailsMenu(!showDetailsMenu);
               }}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded-md"
+              className="p-2 text-text-secondary hover:bg-background-primary rounded-md"
             >
               <i className="ri-more-2-fill w-5 h-5"></i>
             </button>
             {showDetailsMenu && (
-              <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+              <div className="absolute right-0 mt-2 w-64 bg-background-secondary border border-border rounded-lg shadow-lg z-10">
                 <div className="py-1">
                   <button 
                     onClick={handleMoveCompletedDown}
-                    className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left flex items-center whitespace-nowrap"
+                    className="w-full px-4 py-2 text-sm text-text-primary hover:bg-background-primary text-left flex items-center whitespace-nowrap"
                   >
                     <i className="ri-arrow-down-line w-5 h-5 mr-2 flex-shrink-0"></i>
                     Move down completed tasks
                   </button>
                   <button 
                     onClick={handleArchiveCompleted}
-                    className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left flex items-center whitespace-nowrap"
+                    className="w-full px-4 py-2 text-sm text-text-primary hover:bg-background-primary text-left flex items-center whitespace-nowrap"
                   >
                     <i className="ri-archive-line w-5 h-5 mr-2 flex-shrink-0"></i>
                     Archive completed tasks
                   </button>
                   <button 
                     onClick={handleTaskManagement}
-                    className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left flex items-center whitespace-nowrap"
+                    className="w-full px-4 py-2 text-sm text-text-primary hover:bg-background-primary text-left flex items-center whitespace-nowrap"
                   >
                     <i className="ri-task-line w-5 h-5 mr-2 flex-shrink-0"></i>
                     Task management
@@ -152,7 +152,7 @@ export const TaskList: React.FC<TaskListProps> = ({
             {!isAddingTask && !editingTaskId && (
               <button
                 onClick={handleAddTask}
-                className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-600 transition-colors duration-200 text-left"
+                className="w-full p-4 border-2 border-dashed border-border rounded-lg text-text-secondary hover:border-text-secondary hover:text-text-primary transition-colors duration-200 text-left"
               >
                 + Add new task
               </button>

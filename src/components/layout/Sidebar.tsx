@@ -4,6 +4,7 @@ import { useUIStore } from '../../store/uiStore';
 import { useUserStore } from '../../store/userStore';
 import UserSection from '../auth/UserSection';
 import { Icon } from '../ui/Icon';
+import { ThemeSwitcher } from '../ui/ThemeSwitcher';
 
 interface SidebarProps {
   className?: string;
@@ -92,18 +93,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
     <>
       <aside
         id="sidebar"
-        className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-300
+        className={`bg-background-secondary border-r border-border flex flex-col transition-all duration-300
         ${isLeftSidebarOpen ? 'w-64' : 'w-0'} ${className}`}
         style={{ zIndex: 40 }}
       >
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+        <div className="p-4 border-b border-border flex items-center justify-between">
           <h1 className="text-xl font-['Pacifico'] text-primary">Make10000hours</h1>
           <button
             id="toggle-sidebar"
             onClick={handleToggleSidebar}
-            className="p-1 hover:bg-gray-100 rounded-md"
+            className="p-1 hover:bg-background-primary rounded-md"
           >
-            <div className="w-5 h-5 flex items-center justify-center text-gray-500">
+            <div className="w-5 h-5 flex items-center justify-center text-text-secondary">
               <Icon name="arrow-left-s-line" size={20} />
             </div>
           </button>
@@ -125,8 +126,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
                     }}
                     className={`flex items-center px-3 py-2 text-sm font-medium rounded-md text-left
                     ${isActive
-                        ? 'text-primary bg-indigo-50'
-                        : 'text-gray-600 hover:bg-gray-50'
+                        ? 'text-primary bg-indigo-50 dark:bg-primary/10'
+                        : 'text-text-secondary hover:bg-background-primary'
                       }`}
                   >
                     <div className="w-5 h-5 flex items-center justify-center mr-3">
@@ -140,14 +141,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
           </ul>
         </nav>
 
-        <div className="p-4 border-t border-gray-200">
+        <ThemeSwitcher />
+
+        <div className="p-4 border-t border-border">
           <Link
             to="/support"
             onClick={(e) => {
               e.preventDefault();
               handleNavClick('/support');
             }}
-            className="flex items-center px-3 py-2 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-50"
+            className="flex items-center px-3 py-2 text-sm font-medium text-text-secondary rounded-md hover:bg-background-secondary"
           >
             <div className="w-5 h-5 flex items-center justify-center mr-3">
               <Icon name="question-line" size={20} />
@@ -162,10 +165,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
         <button
           id="show-sidebar"
           onClick={handleToggleSidebar}
-          className="fixed left-4 top-4 z-50 p-2 rounded-lg bg-white shadow-md hover:bg-gray-100"
+          className="fixed left-4 top-4 z-50 p-2 rounded-lg bg-background-secondary shadow-md hover:bg-background-primary border border-border"
           aria-label="Show Sidebar"
         >
-          <div className="w-5 h-5 flex items-center justify-center text-gray-700">
+          <div className="w-5 h-5 flex items-center justify-center text-text-primary">
             <Icon name="menu-line" size={20} />
           </div>
         </button>

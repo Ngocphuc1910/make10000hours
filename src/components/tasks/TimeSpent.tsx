@@ -45,9 +45,9 @@ export const TimeSpent: React.FC = () => {
   const timeRemaining = Math.max(0, pomodoroTimeEstimated - pomodoroTimeSpent);
 
   return (
-    <div className="text-sm text-gray-500">
+    <div className="text-sm text-text-secondary">
       <span>Total time spent: </span>
-      <span className="font-medium text-gray-700">
+      <span className="font-medium text-text-primary">
         {formatMinutesToHoursAndMinutes(totalTimeSpent)}
       </span>
       {totalTimeEstimated > 0 && (

@@ -29,28 +29,28 @@ export const Sidebar: React.FC = () => {
   return (
     <aside 
       className={clsx(
-        'bg-white border-r border-gray-200 flex flex-col transition-all duration-300',
+        'bg-background-secondary border-r border-border flex flex-col transition-all duration-300',
         isCollapsed ? 'w-0 overflow-hidden' : 'w-64'
       )}
     >
       {/* Logo */}
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+      <div className="p-4 border-b border-border flex items-center justify-between">
         <h1 className="text-xl font-pacifico text-primary">logo</h1>
         <button 
           onClick={toggleSidebar}
-          className="p-1 hover:bg-gray-100 rounded"
+          className="p-1 hover:bg-background-container rounded"
         >
-          <Icon name="arrow-left-s-line" className="text-gray-500" />
+          <Icon name="arrow-left-s-line" className="text-text-secondary" />
         </button>
       </div>
 
       {/* User Profile */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 border-b border-border">
         <div className="flex items-center">
           <Avatar initials="JD" bgColor="bg-primary" />
           <div className="ml-3">
-            <p className="text-sm font-medium text-gray-900">John Doe</p>
-            <p className="text-xs text-gray-500">Product Manager</p>
+            <p className="text-sm font-medium text-text-primary">John Doe</p>
+            <p className="text-xs text-text-secondary">Product Manager</p>
           </div>
         </div>
       </div>
@@ -66,8 +66,8 @@ export const Sidebar: React.FC = () => {
                   'flex items-center px-3 py-2 text-sm font-medium rounded-md',
                   (location.pathname === item.path || 
                    (item.path === '/pomodoro' && location.pathname === '/pomodoro'))
-                    ? 'text-primary bg-indigo-50'
-                    : 'text-gray-600 hover:bg-gray-50'
+                    ? 'text-primary bg-background-container'
+                    : 'text-text-secondary hover:bg-background-container'
                 )}
               >
                 <Icon name={item.icon} className="mr-3" />
@@ -79,10 +79,10 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       {/* Help & Support */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-4 border-t border-border">
         <Link
           to="/dashboard/support"
-          className="flex items-center px-3 py-2 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-50"
+          className="flex items-center px-3 py-2 text-sm font-medium text-text-secondary rounded-md hover:bg-background-container"
         >
           <Icon name="question-line" className="mr-3" />
           Help & Support

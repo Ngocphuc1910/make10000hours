@@ -398,15 +398,15 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
 
   if (isNewProject) {
     return (
-      <div className="project-container bg-white border border-gray-200 rounded-lg shadow-sm w-[600px] min-w-[600px] animate-fade-in">
-        <div className="project-header flex items-center justify-between px-4 py-3 bg-gray-50 rounded-t-lg">
+      <div className="project-container bg-background-primary border border-border rounded-lg shadow-sm w-[600px] min-w-[600px] animate-fade-in">
+        <div className="project-header flex items-center justify-between px-4 py-3 bg-background-container rounded-t-lg">
           <div className="flex items-center flex-1 mr-4">
-            <div className="w-5 h-5 flex items-center justify-center mr-2 text-gray-500">
+            <div className="w-5 h-5 flex items-center justify-center mr-2 text-text-secondary">
               <Icon name="arrow-down-s-line" />
             </div>
             <input 
               type="text" 
-              className="flex-1 font-medium text-gray-900 bg-transparent border-none focus:ring-2 focus:ring-primary rounded-md px-3 py-1.5" 
+              className="flex-1 font-medium text-text-primary bg-transparent border-none focus:ring-2 focus:ring-primary rounded-md px-3 py-1.5" 
               placeholder="Enter project name"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
@@ -416,11 +416,11 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
           </div>
           <div className="flex items-center space-x-4">
             <div className="flex items-center">
-              <div className="text-xs text-gray-500 mr-2">Progress:</div>
-              <div className="w-32 h-2 bg-gray-200 rounded-full">
+              <div className="text-xs text-text-secondary mr-2">Progress:</div>
+              <div className="w-32 h-2 bg-progress-bg rounded-full">
                 <div className="h-2 bg-primary rounded-full" style={{ width: '0%' }}></div>
               </div>
-              <div className="ml-2 text-xs font-medium text-gray-700">0%</div>
+              <div className="ml-2 text-xs font-medium text-text-primary">0%</div>
             </div>
             <div className="flex items-center space-x-2">
               <button 
@@ -434,10 +434,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               </button>
               <button 
                 onClick={onCancel}
-                className="p-1.5 rounded-md hover:bg-gray-100 transition-colors duration-200" 
+                className="p-1.5 rounded-md hover:bg-background-container transition-colors duration-200" 
                 title="Cancel"
               >
-                <div className="w-5 h-5 flex items-center justify-center text-gray-400">
+                <div className="w-5 h-5 flex items-center justify-center text-text-secondary">
                   <Icon name="close-line" />
                 </div>
               </button>
@@ -451,20 +451,20 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   if (!project) return null;
 
   return (
-    <div className="project-container bg-white border border-gray-200 rounded-lg shadow-sm w-[600px] min-w-[600px]">
+    <div className="project-container bg-background-primary border border-border rounded-lg shadow-sm w-[600px] min-w-[600px]">
       <div 
-        className={`project-header flex items-center justify-between px-4 py-3 bg-gray-50 rounded-t-lg ${isEditingName ? 'cursor-default' : 'cursor-pointer'}`}
+        className={`project-header flex items-center justify-between px-4 py-3 bg-background-container rounded-t-lg ${isEditingName ? 'cursor-default' : 'cursor-pointer'}`}
         onClick={!isEditingName ? toggleCollapsed : undefined}
       >
         <div className="flex items-center flex-1">
-          <div className="w-5 h-5 flex items-center justify-center mr-2 text-gray-500">
+          <div className="w-5 h-5 flex items-center justify-center mr-2 text-text-secondary">
             <Icon name={isCollapsed ? "arrow-right-s-line" : "arrow-down-s-line"} />
           </div>
           {isEditingName ? (
             <div className="flex items-center flex-1 mr-4">
               <input 
                 type="text" 
-                className="flex-1 font-medium text-gray-900 bg-transparent border border-red-300 focus:border-red-500 focus:outline-none rounded-md px-3 py-1.5" 
+                className="flex-1 font-medium text-text-primary bg-transparent border border-red-300 focus:border-red-500 focus:outline-none rounded-md px-3 py-1.5" 
                 value={editingName}
                 onChange={(e) => setEditingName(e.target.value)}
                 onKeyDown={handleNameKeyPress}
@@ -472,7 +472,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               />
               <button 
                 onClick={handleSaveNameEdit}
-                className="p-1.5 ml-2 rounded-md hover:bg-gray-100 transition-colors duration-200" 
+                className="p-1.5 ml-2 rounded-md hover:bg-background-container transition-colors duration-200" 
                 title="Save"
               >
                 <div className="w-4 h-4 flex items-center justify-center text-green-600">
@@ -481,22 +481,22 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               </button>
               <button 
                 onClick={handleCancelNameEdit}
-                className="p-1.5 rounded-md hover:bg-gray-100 transition-colors duration-200" 
+                className="p-1.5 rounded-md hover:bg-background-container transition-colors duration-200" 
                 title="Cancel"
               >
-                <div className="w-4 h-4 flex items-center justify-center text-gray-400">
+                <div className="w-4 h-4 flex items-center justify-center text-text-secondary">
                   <Icon name="close-line" />
                 </div>
               </button>
             </div>
           ) : (
-            <h3 className="font-medium text-gray-900">{project.name}</h3>
+            <h3 className="font-medium text-text-primary">{project.name}</h3>
           )}
         </div>
         <div className="flex items-center space-x-4">
           <div className="flex items-center">
-            <div className="text-xs text-gray-500 mr-2">Progress:</div>
-            <div className="w-32 h-2 bg-gray-200 rounded-full">
+            <div className="text-xs text-text-secondary mr-2">Progress:</div>
+            <div className="w-32 h-2 bg-progress-bg rounded-full">
               <div 
                 className="h-2 rounded-full progress-bar-animation" 
                 style={{ 
@@ -505,30 +505,30 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                 }}
               ></div>
             </div>
-            <div className="ml-2 text-xs font-medium text-gray-700">{progressPercentage}%</div>
+            <div className="ml-2 text-xs font-medium text-text-primary">{progressPercentage}%</div>
           </div>
           <div className="project-menu relative project-dropdown">
             <button 
-              className="p-1 rounded-full hover:bg-gray-200"
+              className="p-1 rounded-full hover:bg-background-container"
               onClick={(e) => {
                 e.stopPropagation();
                 setShowDropdown(!showDropdown);
               }}
             >
-              <div className="w-5 h-5 flex items-center justify-center text-gray-500">
+              <div className="w-5 h-5 flex items-center justify-center text-text-secondary">
                 <Icon name="more-2-fill" />
               </div>
             </button>
             
             {showDropdown && (
-              <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10 overflow-hidden">
+              <div className="absolute right-0 mt-2 w-48 bg-background-secondary border border-border rounded-lg shadow-lg z-10 overflow-hidden">
                 <div className="py-1 px-2">
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
                       handleChangeColor();
                     }}
-                    className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left flex items-center transition-colors duration-200 rounded-md"
+                    className="w-full px-3 py-2 text-sm text-text-primary hover:bg-background-container text-left flex items-center transition-colors duration-200 rounded-md"
                   >
                     <Icon name="palette-line" size={16} className="mr-2" />
                     Update color
@@ -538,7 +538,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                       e.stopPropagation();
                       handleEditName();
                     }}
-                    className="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left flex items-center transition-colors duration-200 rounded-md"
+                    className="w-full px-3 py-2 text-sm text-text-primary hover:bg-background-container text-left flex items-center transition-colors duration-200 rounded-md"
                   >
                     <Icon name="edit-line" size={16} className="mr-2" />
                     Edit project name
@@ -548,7 +548,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                       e.stopPropagation();
                       handleDeleteProject();
                     }}
-                    className="w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left flex items-center transition-colors duration-200 rounded-md"
+                    className="w-full px-3 py-2 text-sm text-red-600 hover:bg-red-500/10 text-left flex items-center transition-colors duration-200 rounded-md"
                   >
                     <Icon name="delete-bin-line" size={16} className="mr-2" />
                     Delete project
@@ -561,14 +561,14 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       </div>
       {!isCollapsed && (
         <div className="project-tasks px-4 py-2">
-          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+          <div className="flex items-center justify-between py-2 border-b border-border">
             <div className="flex items-center space-x-3 task-filters">
               {/* To do list */}
               <button 
                 className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full whitespace-nowrap ${
                   activeFilter === 'todo'
                     ? 'bg-primary/10 text-primary hover:bg-primary/20'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    : 'text-text-secondary hover:bg-background-container'
                 } ${draggedOverFilter === 'todo' ? 'drag-over' : ''}`}
                 onClick={() => setActiveFilter(activeFilter === 'todo' ? null : 'todo')}
                 onDragOver={(e) => handleFilterDragOver(e, 'todo')}
@@ -585,7 +585,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                 className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full whitespace-nowrap ${
                   activeFilter === 'pomodoro'
                     ? 'bg-primary/10 text-primary hover:bg-primary/20'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    : 'text-text-secondary hover:bg-background-container'
                 } ${draggedOverFilter === 'pomodoro' ? 'drag-over' : ''}`}
                 onClick={() => setActiveFilter(activeFilter === 'pomodoro' ? null : 'pomodoro')}
                 onDragOver={(e) => handleFilterDragOver(e, 'pomodoro')}
@@ -602,7 +602,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                 className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full whitespace-nowrap ${
                   activeFilter === 'completed'
                     ? 'bg-primary/10 text-primary hover:bg-primary/20'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    : 'text-text-secondary hover:bg-background-container'
                 } ${draggedOverFilter === 'completed' ? 'drag-over' : ''}`}
                 onClick={() => setActiveFilter(activeFilter === 'completed' ? null : 'completed')}
                 onDragOver={(e) => handleFilterDragOver(e, 'completed')}
@@ -618,7 +618,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             </div>
             <button 
               onClick={handleAddTask}
-              className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md text-primary hover:bg-indigo-50 whitespace-nowrap"
+              className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md text-primary hover:bg-primary/10 whitespace-nowrap"
             >
               <div className="w-4 h-4 flex items-center justify-center mr-1">
                 <Icon name="add-line" />
@@ -653,7 +653,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             {/* Empty state when no tasks match filter */}
             {filteredTasks.length === 0 && !isAddingTask && (
               <div 
-                className="p-4 text-center text-gray-500 text-sm italic"
+                className="p-4 text-center text-text-secondary text-sm italic"
                 onDragOver={handleTaskListDragOver}
                 onDrop={handleTaskListDrop}
               >

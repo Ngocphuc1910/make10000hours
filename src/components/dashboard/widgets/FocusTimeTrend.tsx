@@ -3,7 +3,7 @@ import Card from '../../ui/Card';
 import { useDashboardStore } from '../../../store/useDashboardStore';
 import type { TimeUnit } from '../../../types';
 import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 type ChartDataPoint = {
   date: string;
@@ -15,9 +15,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     const value = payload[0].value;
     return (
-      <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-        <p className="font-medium text-gray-900">{label}</p>
-        <p className="text-sm text-gray-600">
+      <div className="bg-background-secondary p-3 border border-border rounded-lg shadow-lg">
+        <p className="font-medium text-text-primary">{label}</p>
+        <p className="text-sm text-text-secondary">
           <span className="inline-block w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
           Focus Time: {formatMinutesToHoursAndMinutes(value)}
         </p>
@@ -573,13 +573,13 @@ export const FocusTimeTrend: React.FC = () => {
       <div className="flex items-center justify-between mb-6">
         <div></div>
         <div className="flex items-center space-x-2">
-          <div className="inline-flex rounded-full bg-gray-100 p-1">
+          <div className="inline-flex rounded-full bg-background-container p-1">
             <button 
               type="button" 
               className={`px-4 py-1.5 text-sm font-medium rounded-full ${
                 focusTimeView === 'daily' 
-                  ? 'bg-white text-gray-900 shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-background-primary text-text-primary shadow-sm' 
+                  : 'text-text-secondary hover:text-text-primary'
               }`}
               onClick={() => handleTimeUnitChange('daily')}
             >
@@ -589,8 +589,8 @@ export const FocusTimeTrend: React.FC = () => {
               type="button" 
               className={`px-4 py-1.5 text-sm font-medium rounded-full ${
                 focusTimeView === 'weekly' 
-                  ? 'bg-white text-gray-900 shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-background-primary text-text-primary shadow-sm' 
+                  : 'text-text-secondary hover:text-text-primary'
               }`}
               onClick={() => handleTimeUnitChange('weekly')}
             >
@@ -600,8 +600,8 @@ export const FocusTimeTrend: React.FC = () => {
               type="button" 
               className={`px-4 py-1.5 text-sm font-medium rounded-full ${
                 focusTimeView === 'monthly' 
-                  ? 'bg-white text-gray-900 shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-background-primary text-text-primary shadow-sm' 
+                  : 'text-text-secondary hover:text-text-primary'
               }`}
               onClick={() => handleTimeUnitChange('monthly')}
             >
@@ -614,7 +614,7 @@ export const FocusTimeTrend: React.FC = () => {
       <div className="h-[28rem]">
         {chartData.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center text-gray-500">
+            <div className="text-center text-text-secondary">
               <p className="text-lg font-medium mb-2">No focus time data available</p>
               <p className="text-sm">Start a timer to see your trends!</p>
             </div>
@@ -630,12 +630,12 @@ export const FocusTimeTrend: React.FC = () => {
                 bottom: getBottomMargin(),
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
               <XAxis 
                 dataKey="date" 
-                axisLine={{ stroke: '#e5e7eb' }}
-                tickLine={{ stroke: '#e5e7eb' }}
-                tick={{ fill: '#6b7280', fontSize: 12 }}
+                axisLine={{ stroke: 'var(--border-color)' }}
+                tickLine={{ stroke: 'var(--border-color)' }}
+                tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                 interval={getLabelInterval()}
                 angle={0}
                 textAnchor="middle"
@@ -644,27 +644,50 @@ export const FocusTimeTrend: React.FC = () => {
               <YAxis 
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: '#6b7280', fontSize: 12 }}
+                tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
                 tickFormatter={(value) => {
                   if (value < 60) return `${value}m`;
                   return `${Math.floor(value / 60)}h`;
                 }}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip
+                content={<CustomTooltip />}
+                cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }}
+                wrapperStyle={{ outline: 'none' }}
+              />
               <Bar 
                 dataKey="value" 
-                fill="#57B5E7" 
                 radius={[6, 6, 0, 0]}
                 minPointSize={2}
                 barSize={getBarWidth()}
                 label={{
                   position: 'top',
-                  fill: '#6b7280',
+                  fill: 'var(--text-secondary)',
                   fontSize: 12,
                   fontWeight: 500,
                   formatter: formatBarLabel
                 }}
-              />
+              >
+                {chartData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill="#57B5E7"
+                    style={{ filter: 'brightness(1)', transition: 'filter 0.2s' }}
+                    onMouseEnter={(e: React.MouseEvent<SVGElement>) => {
+                      const cell = document.querySelector(`[name="Bar-${index}"]`);
+                      if (cell) {
+                        (cell as HTMLElement).style.filter = 'brightness(0.9)';
+                      }
+                    }}
+                    onMouseLeave={(e: React.MouseEvent<SVGElement>) => {
+                      const cell = document.querySelector(`[name="Bar-${index}"]`);
+                      if (cell) {
+                        (cell as HTMLElement).style.filter = 'brightness(1)';
+                      }
+                    }}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         )}

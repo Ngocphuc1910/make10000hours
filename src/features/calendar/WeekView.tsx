@@ -282,23 +282,23 @@ export const WeekView: React.FC<WeekViewProps> = ({
   }, [clearDragIndicator]);
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-background-primary">
       {/* Unified Grid Container */}
       <div className="grid grid-cols-8 flex-1" style={{ 
         gridTemplateColumns: `${TIME_COLUMN_WIDTH}px repeat(7, minmax(0, 1fr))`
       }}>
         
         {/* Fixed Date Headers Row */}
-        <div className="col-span-8 grid grid-cols-subgrid bg-white border-b border-gray-200 sticky top-0 z-30" style={{ height: '80px' }}>
+        <div className="col-span-8 grid grid-cols-subgrid bg-background-primary border-b border-border sticky top-0 z-30" style={{ height: '80px' }}>
           {/* GMT header */}
-          <div className="border-r border-gray-200 flex items-center justify-center text-xs text-gray-500 bg-white">
+          <div className="border-r border-border flex items-center justify-center text-xs text-text-secondary bg-background-primary">
             GMT+07
           </div>
           {/* Day headers */}
           {weekDays.map((day, dayIndex) => (
-            <div key={dayIndex} className={`flex flex-col items-center justify-center py-3 bg-white min-w-0 ${dayIndex < 6 ? 'border-r border-gray-200' : ''} ${isToday(day) ? 'bg-blue-50' : ''}`}>
-              <div className="text-xs text-gray-500 font-medium mb-1">{format(day, 'EEE').toUpperCase()}</div>
-              <div className={`text-lg font-medium ${isToday(day) ? 'text-primary bg-primary text-white rounded-full w-8 h-8 flex items-center justify-center' : 'text-gray-800'}`}>
+            <div key={dayIndex} className={`flex flex-col items-center justify-center py-3 bg-background-primary min-w-0 ${dayIndex < 6 ? 'border-r border-border' : ''} ${isToday(day) ? 'bg-primary bg-opacity-5' : ''}`}>
+              <div className="text-xs text-text-secondary font-medium mb-1">{format(day, 'EEE').toUpperCase()}</div>
+              <div className={`text-lg font-medium ${isToday(day) ? 'text-primary bg-primary text-white rounded-full w-8 h-8 flex items-center justify-center' : 'text-text-primary'}`}>
                 {format(day, 'd')}
               </div>
             </div>
@@ -306,23 +306,23 @@ export const WeekView: React.FC<WeekViewProps> = ({
         </div>
 
         {/* All Day Events Row */}
-        <div className="col-span-8 grid grid-cols-subgrid bg-white border-b border-gray-200 sticky z-30" 
+        <div className="col-span-8 grid grid-cols-subgrid bg-background-primary border-b border-border sticky z-30" 
              style={{ 
                height: `${getAllDayRowHeight()}px`,
                top: '80px'
              }}>
           {/* All day label */}
-          <div className="border-r border-b border-gray-200 flex items-center justify-center text-xs text-gray-500 bg-white">
+          <div className="border-r border-b border-border flex items-center justify-center text-xs text-text-secondary bg-background-primary">
             All day
           </div>
           {/* All day events */}
           {weekDays.map((day, dayIndex) => (
-            <div key={dayIndex} className={`relative min-w-0 ${dayIndex < 6 ? 'border-r border-gray-200' : ''}`}>
+            <div key={dayIndex} className={`relative min-w-0 ${dayIndex < 6 ? 'border-r border-border' : ''}`}>
               <DroppableTimeSlot
                 date={day}
                 isAllDay={true}
                 onDrop={onEventDrop!}
-                className="h-full cursor-pointer hover:bg-gray-50 transition-colors relative"
+                className="h-full cursor-pointer hover:bg-background-container transition-colors relative"
               >
                 <div 
                   className="w-full h-full flex flex-col items-center justify-start px-1 pt-1 pb-2 overflow-hidden"
@@ -368,10 +368,10 @@ export const WeekView: React.FC<WeekViewProps> = ({
         {/* Scrollable Content Area */}
         <div className="col-span-8 grid grid-cols-subgrid overflow-auto" ref={scrollableRef}>
           {/* Time Column for all hours */}
-          <div className="bg-white border-r border-gray-200">
+          <div className="bg-background-primary border-r border-border">
             {HOURS.map(hour => (
-              <div key={hour} className="h-[60px] border-b border-gray-200 flex items-start justify-center pt-1">
-                <span className="text-xs text-gray-500">{format(new Date().setHours(hour, 0), 'HH:mm')}</span>
+              <div key={hour} className="h-[60px] border-b border-border flex items-start justify-center pt-1">
+                <span className="text-xs text-text-secondary">{format(new Date().setHours(hour, 0), 'HH:mm')}</span>
               </div>
             ))}
           </div>
@@ -379,7 +379,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
           {/* Day Columns */}
           <div className="contents" ref={weekGridRef}>
             {weekDays.map((day, dayIndex) => (
-              <div key={dayIndex} className={`relative day-column min-w-0 ${dayIndex < 6 ? 'border-r border-gray-200' : ''}`}>
+              <div key={dayIndex} className={`relative day-column min-w-0 ${dayIndex < 6 ? 'border-r border-border' : ''}`}>
               {/* Time slots grid */}
               {HOURS.map(hour => (
                 <DroppableTimeSlot
@@ -387,7 +387,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                   date={day}
                   hour={hour}
                   onDrop={onEventDrop!}
-                  className="h-[60px] border-b border-gray-200 cursor-cell hover:bg-gray-50 hover:bg-opacity-50 relative"
+                  className="h-[60px] border-b border-border cursor-cell hover:bg-background-container hover:bg-opacity-50 relative"
                 >
                   <div
                     className="w-full h-full"

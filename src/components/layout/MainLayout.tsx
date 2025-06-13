@@ -32,9 +32,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
       return (
         <div className="p-4 space-y-4">
           {/* Task List */}
-          <div className="bg-white rounded-lg border border-gray-200">
+          <div className="bg-background-primary rounded-lg border border-border">
             <div className="p-4">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Tasks</h3>
+              <h3 className="text-lg font-semibold text-text-primary mb-4">Tasks</h3>
               <TaskList />
             </div>
           </div>
@@ -134,7 +134,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const actualSidebarContent = rightSidebarContent || getSidebarContent();
   
   return (
-    <div className={`flex h-screen overflow-hidden bg-white ${className}`}>
+    <div className={`flex h-screen overflow-hidden bg-background-primary ${className}`}>
       {/* Left Sidebar - Navigation */}
       <Sidebar />
       
@@ -148,7 +148,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           {/* Timer Section */}
           <div 
             ref={timerSectionRef}
-            className="flex-1 flex flex-col items-center justify-center p-6 bg-white relative min-w-[300px]" 
+            className="flex-1 flex flex-col items-center justify-center p-6 bg-background-primary relative min-w-[300px]" 
             id="timerSection" 
             style={
               // When both sidebars are hidden, remove width constraints for perfect centering
@@ -166,13 +166,13 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           {isRightSidebarOpen && (
             <div 
               id="resizeDivider" 
-              className="w-[1px] bg-gray-200/20 cursor-col-resize hover:bg-primary/20 flex items-center justify-center group"
+              className="w-[1px] bg-border/20 cursor-col-resize hover:bg-primary/20 flex items-center justify-center group"
               onMouseDown={handleResizeStart}
             >
               <div className="w-4 h-full opacity-0"></div>
               <Tooltip text="Hide task list (Cmd + \)" placement="bottom" offset={32}>
                 <button 
-                  className="absolute w-6 h-12 bg-white border border-gray-200 rounded-l-md flex items-center justify-center shadow-sm hover:shadow-md -right-0 top-1/2 transform -translate-y-1/2 transition-all duration-200 hover:bg-gray-50 group-hover:border-primary/30 sidebar-edge-toggle"
+                  className="absolute w-6 h-12 bg-background-secondary border border-border rounded-l-md flex items-center justify-center shadow-sm hover:shadow-md -right-0 top-1/2 transform -translate-y-1/2 transition-all duration-200 hover:bg-background-primary group-hover:border-primary/30 sidebar-edge-toggle"
                   onClick={(e) => {
                     e.stopPropagation();
                     useUIStore.getState().toggleRightSidebar();
@@ -192,7 +192,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             <div 
               ref={rightSidebarRef}
               id="rightSidebar" 
-              className="border-l border-gray-200 flex flex-col bg-white min-w-[280px]"
+              className="border-l border-border flex flex-col bg-background-primary min-w-[280px]"
               style={{ 
                 width: `${currentWidth}px`,
                 flexShrink: 0
@@ -208,11 +208,11 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           {!isRightSidebarOpen && (
             <Tooltip text="Show task list (Cmd + \)" placement="left" offset={24}>
               <button 
-                className="fixed right-0 top-1/2 transform -translate-y-1/2 z-[100] w-6 h-12 bg-white border border-gray-200 border-r-0 rounded-l-md shadow-md hover:shadow-lg transition-all duration-200 hover:bg-gray-50 hover:border-primary/30 group sidebar-edge-toggle sidebar-toggle-show"
+                className="fixed right-0 top-1/2 transform -translate-y-1/2 z-[100] w-6 h-12 bg-background-secondary border border-border border-r-0 rounded-l-md shadow-md hover:shadow-lg transition-all duration-200 hover:bg-background-primary hover:border-primary/30 group sidebar-edge-toggle sidebar-toggle-show"
                 onClick={() => useUIStore.getState().toggleRightSidebar()}
                 aria-label="Show task list (Cmd + \)"
               >
-                <div className="w-4 h-4 flex items-center justify-center text-gray-600 group-hover:text-primary transition-colors">
+                <div className="w-4 h-4 flex items-center justify-center text-text-secondary group-hover:text-primary transition-colors">
                   <Icon name="arrow-left-s-line" size={14} />
                 </div>
               </button>

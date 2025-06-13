@@ -72,19 +72,19 @@ export const ProjectsPage: React.FC = () => {
 
   return (
     <div 
-      className="h-full flex flex-col bg-white" 
+      className="h-full flex flex-col bg-background-primary" 
       onClick={handleClickOutside}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
       {/* Header */}
-      <div className={`h-16 border-b border-gray-200 flex items-center justify-between px-6 bg-white transition-all duration-500 relative`}>
+      <div className={`h-16 border-b border-border flex items-center justify-between px-6 bg-background-primary transition-all duration-500 relative`}>
         {/* Left Section - Title & Deep Focus Switch */}
         <div className="flex items-center">
           <div className={`text-lg font-semibold transition-all duration-500 ${
             isDeepFocusActive 
               ? 'bg-gradient-to-r from-[rgb(187,95,90)] via-[rgb(236,72,153)] to-[rgb(251,146,60)] bg-clip-text text-transparent font-bold' 
-              : 'text-gray-800'
+              : 'text-text-primary'
           }`}>
             Task Management
           </div>
@@ -102,15 +102,15 @@ export const ProjectsPage: React.FC = () => {
                   }
                 }}
               />
-              <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${
-                isDeepFocusActive 
-                  ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]' 
-                  : 'bg-gray-100/80 backdrop-blur-sm justify-end pr-[10.5px]'
-              }`}>
+                          <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${
+              isDeepFocusActive 
+                ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]' 
+                : 'bg-background-container/80 backdrop-blur-sm border border-border justify-end pr-[10.5px]'
+            }`}>
                 <span className={`text-sm font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${
                   isDeepFocusActive 
                     ? 'text-white font-semibold [text-shadow:0_0_12px_rgba(255,255,255,0.5)]' 
-                    : 'text-gray-500'
+                    : 'text-text-secondary'
                 }`}>
                   {isDeepFocusActive ? 'Deep Focus' : 'Focus Off'}
                 </span>
@@ -127,13 +127,13 @@ export const ProjectsPage: React.FC = () => {
         {/* Right Section - View Controls & Navigation Icons */}
         <div className="flex items-center space-x-4">
           {/* View Type Switch */}
-          <div className="inline-flex rounded-full bg-gray-100 p-1">
+          <div className="inline-flex rounded-full bg-background-container p-1">
             <button 
               type="button"
               className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${
                 viewType === 'status'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-background-primary text-text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary'
               }`}
               onClick={() => setViewType('status')}
             >
@@ -146,8 +146,8 @@ export const ProjectsPage: React.FC = () => {
               type="button"
               className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${
                 viewType === 'project'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-background-primary text-text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary'
               }`}
               onClick={() => setViewType('project')}
             >
@@ -161,7 +161,7 @@ export const ProjectsPage: React.FC = () => {
           {/* Navigation Icons */}
           <Tooltip text="Pomodoro Timer">
             <button 
-              className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+              className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
               onClick={() => navigate('/pomodoro')}
               aria-label="Go to Pomodoro Timer"
             >
@@ -176,7 +176,7 @@ export const ProjectsPage: React.FC = () => {
           
           <Tooltip text="Task management">
             <button 
-              className="p-2 rounded-full bg-gray-100 !rounded-button whitespace-nowrap"
+              className="p-2 rounded-full bg-background-container !rounded-button whitespace-nowrap text-text-secondary"
               aria-label="Current page: Task Management"
             >
               <span className="w-5 h-5 flex items-center justify-center">
@@ -190,7 +190,7 @@ export const ProjectsPage: React.FC = () => {
           
           <Tooltip text="Productivity Insights">
             <button 
-              className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+              className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
               onClick={() => navigate('/dashboard')}
               aria-label="Go to Dashboard"
             >
@@ -205,7 +205,7 @@ export const ProjectsPage: React.FC = () => {
           
           <Tooltip text="Calendar">
             <button 
-              className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+              className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
               onClick={() => navigate('/calendar')}
               aria-label="Go to Calendar"
             >
@@ -220,7 +220,7 @@ export const ProjectsPage: React.FC = () => {
           
           <Tooltip text="Deep Focus">
             <button 
-              className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+              className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
               onClick={() => navigate('/deep-focus')}
               aria-label="Go to Deep Focus"
             >

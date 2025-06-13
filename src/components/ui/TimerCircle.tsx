@@ -17,7 +17,7 @@ export const TimerCircle: React.FC<TimerCircleProps> = ({
   size = 300,
   strokeWidth = 12,
   color = '#BB5F5A',
-  bgColor = '#e5e7eb',
+  bgColor = 'var(--border-color)',
   children,
   className = ''
 }) => {
