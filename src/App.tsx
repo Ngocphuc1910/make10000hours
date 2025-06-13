@@ -17,6 +17,7 @@ import { auth } from './api/firebase';
 import { useUserStore } from './store/userStore';
 import { useTaskStore } from './store/taskStore';
 import { useUIStore } from './store/uiStore';
+import { useThemeStore } from './store/themeStore';
 import SettingsPage from './components/pages/SettingsPage';
 import { formatTime } from './utils/timeUtils';
 import { trackPageView, setAnalyticsUserId } from './utils/analytics';
@@ -98,6 +99,7 @@ const App: React.FC = () => {
   const { initialize, user, isLoading, isInitialized } = useUserStore();
   const setIsAddingTask = useTaskStore(state => state.setIsAddingTask);
   const { isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar, isLeftSidebarOpen } = useUIStore();
+  const { initializeTheme } = useThemeStore();
 
   // Global timer interval - runs regardless of current page
   useEffect(() => {
@@ -146,6 +148,7 @@ const App: React.FC = () => {
   useEffect(() => {
     // TODO: fix the problem that this runs twice on initial load. Check for React.StrictMode
     initialize();
+    initializeTheme();
 
     // Verify Analytics setup
     setTimeout(() => {

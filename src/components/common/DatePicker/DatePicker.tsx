@@ -156,7 +156,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
 
   // Get dynamic classes based on placement
   const getPlacementClasses = () => {
-    const baseClasses = 'bg-white rounded-lg shadow-lg border border-gray-200 w-[300px] fixed transition-all duration-200 ease-out z-50';
+    const baseClasses = 'bg-background-secondary rounded-lg shadow-lg border border-border w-[300px] fixed transition-all duration-200 ease-out z-50';
     const visibilityClass = position.isReady ? 'opacity-100' : 'opacity-0 pointer-events-none';
     
     switch (position.placement) {
@@ -183,17 +183,17 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           {/* Month Navigation */}
           <div className="flex items-center justify-between mb-3">
             <button 
-              className="p-1.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"
+              className="p-1.5 hover:bg-background-container rounded-full text-text-secondary hover:text-text-primary transition-colors"
               onClick={handlePrevMonth}
               type="button"
             >
               <i className="ri-arrow-left-s-line text-base"></i>
             </button>
-            <h3 className="text-sm font-medium text-gray-800">
+            <h3 className="text-sm font-medium text-text-primary">
               {format(currentMonth, 'MMMM yyyy')}
             </h3>
             <button 
-              className="p-1.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"
+              className="p-1.5 hover:bg-background-container rounded-full text-text-secondary hover:text-text-primary transition-colors"
               onClick={handleNextMonth}
               type="button"
             >
@@ -204,7 +204,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           {/* Weekday Headers */}
           <div className="grid grid-cols-7 gap-1 mb-2">
             {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-              <div key={day} className="h-6 flex items-center justify-center text-xs font-medium text-gray-500">
+              <div key={day} className="h-6 flex items-center justify-center text-xs font-medium text-text-secondary">
                 {day}
               </div>
             ))}
@@ -225,8 +225,8 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                   disabled={isDisabled}
                   className={`
                     h-7 w-7 flex items-center justify-center text-xs rounded-full transition-colors
-                    ${isDisabled ? 'text-gray-300 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-100'}
-                    ${!isCurrentMonth ? 'text-gray-400' : ''}
+                    ${isDisabled ? 'text-text-secondary opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-background-container'}
+                    ${!isCurrentMonth ? 'text-text-secondary opacity-60' : 'text-text-primary'}
                     ${isSelected ? 'text-white font-medium' : ''}
                     ${!isSelected && isCurrentDay ? 'text-[#BB5F5A] font-medium' : ''}
                   `}
@@ -241,7 +241,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           {/* Time Selection Toggle */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-600">Include time</span>
+              <span className="text-xs text-text-secondary">Include time</span>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
@@ -250,7 +250,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                   className="sr-only"
                 />
                 <div 
-                  className={`relative w-9 h-5 rounded-full transition-colors ${showTimeSelector ? '' : 'bg-gray-200'}`}
+                  className={`relative w-9 h-5 rounded-full transition-colors ${showTimeSelector ? '' : 'bg-background-container'}`}
                   style={showTimeSelector ? { backgroundColor: '#BB5F5A' } : {}}
                 >
                   <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${showTimeSelector ? 'translate-x-4' : 'translate-x-0'}`}></div>
@@ -270,10 +270,10 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+          <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
             <button
               onClick={handleClear}
-              className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800 transition-colors"
+              className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
             >
               Clear
             </button>

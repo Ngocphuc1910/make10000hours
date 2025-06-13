@@ -445,14 +445,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       <div 
         key={task?.id || 'new-task'}
         ref={formRef}
-        className="task-card p-6 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 animate-fade-in relative"
+        className="task-card p-6 bg-task-todo-bg border border-task-todo-border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 animate-fade-in relative"
         style={{ zIndex: showDatePicker ? 1000 : 'auto' }}
       >
         <div className="flex-1 min-w-0">
           <textarea
             autoFocus
             ref={titleInputRef}
-            className={`w-full text-lg font-medium text-gray-900 px-0 py-1 bg-transparent focus:outline-none border-none resize-none overflow-hidden ${titleError ? 'ring-2 ring-red-200' : ''}`}
+            className={`w-full text-lg font-medium text-text-primary px-0 py-1 bg-transparent focus:outline-none border-none resize-none overflow-hidden ${titleError ? 'ring-2 ring-red-200' : ''}`}
             placeholder="Task name"
             value={title}
             onChange={(e) => {
@@ -469,7 +469,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
           
           <textarea
             ref={descriptionRef}
-            className="w-full text-sm text-gray-500 px-0 py-2 bg-transparent border-none focus:outline-none resize-none"
+            className="w-full text-sm text-text-secondary px-0 py-2 bg-transparent border-none focus:outline-none resize-none"
             placeholder="Description"
             value={description}
             onChange={(e) => {
@@ -487,7 +487,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
               <div className="relative">
                 {isCreatingNewProject ? (
                   <div className="flex items-center gap-1.5">
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-background-secondary border border-border hover:border-text-secondary rounded text-xs text-text-secondary">
                       <div className="w-3.5 h-3.5 flex items-center justify-center">
                         <Icon name="folder-line" className="w-3.5 h-3.5" />
                       </div>
@@ -505,11 +505,11 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                       />
                     </div>
                     <button
-                      className="p-1 rounded hover:bg-gray-100 transition-colors duration-200"
+                      className="p-1 rounded hover:bg-background-primary transition-colors duration-200"
                       onClick={handleCancelNewProject}
                       type="button"
                     >
-                      <Icon name="close-line" className="w-3.5 h-3.5 text-gray-400" />
+                      <Icon name="close-line" className="w-3.5 h-3.5 text-text-secondary" />
                     </button>
                   </div>
                 ) : (
@@ -533,14 +533,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                     </select>
                     <button
                       type="button"
-                      className={`flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600 hover:bg-gray-50 min-w-0 ${projectError ? 'ring-2 ring-red-200' : ''}`}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 bg-background-secondary border border-border hover:border-text-secondary rounded text-xs text-text-secondary hover:bg-background-primary min-w-0 ${projectError ? 'ring-2 ring-red-200' : ''}`}
                       onClick={handleProjectFocus}
                     >
                       <div className="w-3.5 h-3.5 flex items-center justify-center flex-shrink-0">
                         <Icon name="folder-line" className="w-3.5 h-3.5" />
                       </div>
                       <span className="truncate max-w-[8rem]">{getSelectedProjectName()}</span>
-                      <div className="w-3.5 h-3.5 flex items-center justify-center text-gray-400 flex-shrink-0">
+                      <div className="w-3.5 h-3.5 flex items-center justify-center text-text-secondary flex-shrink-0">
                         <Icon name="arrow-down-s-line" className="w-3.5 h-3.5" />
                       </div>
                     </button>
@@ -549,7 +549,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
               </div>
 
               {/* Time Estimation */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600 flex-shrink-0">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-background-secondary border border-border hover:border-text-secondary rounded text-xs text-text-secondary flex-shrink-0">
                 <div className="w-3.5 h-3.5 flex items-center justify-center">
                   <Icon name="time-line" className="w-3.5 h-3.5" />
                 </div>
@@ -563,7 +563,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                       value={timeSpent}
                       onChange={(e) => setTimeSpent(e.target.value)}
                     />
-                    <span className="text-gray-400">/</span>
+                    <span className="text-text-secondary">/</span>
                   </>
                 )}
                 {!task && <span className="whitespace-nowrap">Est.</span>}
@@ -577,7 +577,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                   onChange={(e) => setTimeEstimated(e.target.value)}
                   onKeyDown={handleTimeEstimatedKeyDown}
                 />
-                <span className="text-gray-500 whitespace-nowrap">m</span>
+                <span className="text-text-secondary whitespace-nowrap">m</span>
               </div>
 
               {/* Calendar */}
@@ -585,7 +585,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                 <button
                   ref={calendarInputRef}
                   id="datePickerBtn"
-                  className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded text-xs text-gray-600 hover:bg-gray-50 min-w-0 flex-shrink-0"
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-background-secondary border border-border hover:border-text-secondary rounded text-xs text-text-secondary hover:bg-background-primary min-w-0 flex-shrink-0"
                   onClick={handleCalendarClick}
                 >
                   <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
@@ -643,18 +643,18 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
             
             <div className="flex items-center gap-3">
               <button
-                className="w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors duration-200"
+                className="w-10 h-10 rounded-full hover:bg-background-primary flex items-center justify-center transition-colors duration-200"
                 onClick={onCancel}
               >
-                <div className="w-5 h-5 flex items-center justify-center text-[#909399]">
+                <div className="w-5 h-5 flex items-center justify-center text-text-secondary">
                   <Icon name="close-line" className="w-5 h-5" />
                 </div>
               </button>
               <button
-                className="w-10 h-10 rounded-full bg-[#F6FFED] hover:bg-[#E6FFD4] flex items-center justify-center transition-colors duration-200"
+                className="w-10 h-10 rounded-full bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40 flex items-center justify-center transition-colors duration-200"
                 onClick={handleSave}
               >
-                <div className="w-5 h-5 flex items-center justify-center text-[#52C41A]">
+                <div className="w-5 h-5 flex items-center justify-center text-green-600 dark:text-green-400">
                   <Icon name="check-line" className="w-5 h-5" />
                 </div>
               </button>

@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Button from '../../ui/Button';
 import { Icon } from '../../ui/Icon';
 import { Tooltip } from '../../ui/Tooltip';
 import { RangeType, useDashboardStore } from '../../../store/useDashboardStore';
@@ -203,12 +202,12 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <div className={`h-16 border-b border-gray-200 flex items-center justify-between px-6 bg-white transition-all duration-500 relative`}>
+    <div className={`h-16 border-b border-border flex items-center justify-between px-6 bg-background-secondary transition-all duration-500 relative`}>
       <div className="flex items-center">
         <div className={`text-lg font-semibold transition-all duration-500 ${
           isDeepFocusActive 
             ? 'bg-gradient-to-r from-[rgb(187,95,90)] via-[rgb(236,72,153)] to-[rgb(251,146,60)] bg-clip-text text-transparent font-bold' 
-            : 'text-gray-800'
+            : 'text-text-primary'
         }`}>
           Productivity Insights
         </div>
@@ -229,12 +228,12 @@ export const Header: React.FC = () => {
             <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${
               isDeepFocusActive 
                 ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]' 
-                : 'bg-gray-100/80 backdrop-blur-sm justify-end pr-[10.5px]'
+                : 'bg-background-primary/80 backdrop-blur-sm border border-border justify-end pr-[10.5px]'
             }`}>
               <span className={`text-sm font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${
                 isDeepFocusActive 
                   ? 'text-white font-semibold [text-shadow:0_0_12px_rgba(255,255,255,0.5)]' 
-                  : 'text-gray-500'
+                  : 'text-text-secondary'
               }`}>
                 {isDeepFocusActive ? 'Deep Focus' : 'Focus Off'}
               </span>
@@ -251,10 +250,8 @@ export const Header: React.FC = () => {
       <div className="flex items-center space-x-4">
         {/* Date Range Filter */}
         <div className="relative" ref={dateFilterRef}>
-          <Button
-            variant="outline"
-            size="sm"
-            iconRight="arrow-down-s-line"
+          <button
+            className="px-4 py-1.5 text-sm font-medium bg-background-secondary border border-border rounded-button text-text-primary hover:bg-background-container flex items-center space-x-2"
             onClick={() => {
               setShowDateFilter(!showDateFilter);
               if (showDatePicker) {
@@ -269,31 +266,34 @@ export const Header: React.FC = () => {
             }}
           >
             <span>{getLabel()}</span>
-          </Button>
+            <div className="w-4 h-4 flex items-center justify-center">
+              <i className="ri-arrow-down-s-line"></i>
+            </div>
+          </button>
           
           {/* Date Range Dropdown */}
           {showDateFilter && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10">
+            <div className="absolute right-0 mt-2 w-56 bg-background-secondary rounded-lg shadow-lg border border-border py-2 z-10">
               <button 
-                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50" 
+                className="w-full px-4 py-2 text-left text-sm text-text-primary hover:bg-background-container" 
                 onClick={() => handleDateRangeSelect('Today')}
               >
                 Today
               </button>
               <button 
-                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50" 
+                className="w-full px-4 py-2 text-left text-sm text-text-primary hover:bg-background-container" 
                 onClick={() => handleDateRangeSelect('Last 7 Days')}
               >
                 Last 7 days
               </button>
               <button 
-                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50" 
+                className="w-full px-4 py-2 text-left text-sm text-text-primary hover:bg-background-container" 
                 onClick={() => handleDateRangeSelect('Last 30 Days')}
               >
                 Last 30 days
               </button>
               <button 
-                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between" 
+                className="w-full px-4 py-2 text-left text-sm text-text-primary hover:bg-background-container flex items-center justify-between" 
                 onClick={() => handleDateRangeSelect('Custom Range')}
               >
                 <span>Time range</span>
@@ -302,7 +302,7 @@ export const Header: React.FC = () => {
                 </div>
               </button>
               <button 
-                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50" 
+                className="w-full px-4 py-2 text-left text-sm text-text-primary hover:bg-background-container" 
                 onClick={() => handleDateRangeSelect('All time')}
               >
                 All time
@@ -312,11 +312,11 @@ export const Header: React.FC = () => {
           
           {/* Custom Date Range Picker */}
           {showDatePicker && (
-            <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-gray-200 p-4 z-10">
+            <div className="absolute right-0 mt-2 w-72 bg-background-secondary rounded-lg shadow-lg border border-border p-4 z-10">
               <div className="flex items-center justify-between mb-4">
-                <div className="text-sm font-medium text-gray-700">Select date range</div>
+                <div className="text-sm font-medium text-text-primary">Select date range</div>
                 <button
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-text-secondary hover:text-text-primary"
                   onClick={() => {
                     setShowDatePicker(false);
                     
@@ -336,23 +336,22 @@ export const Header: React.FC = () => {
                 <input
                   ref={dateRangeInputRef}
                   type="text"
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-button focus:outline-none focus:border-primary"
+                  className="w-full px-3 py-1.5 text-sm border border-border rounded-button focus:outline-none focus:border-primary bg-background-primary text-text-primary"
                   placeholder="Select date range"
                   readOnly
                 />
               </div>
-              <div className="mt-2 text-xs text-gray-500">
+              <div className="mt-2 text-xs text-text-secondary">
                 {startDate && !endDate ? 'Select end date' : !startDate ? 'Select start date' : ''}
               </div>
               <div className="mt-4 flex justify-end">
-                <Button
-                  variant="primary"
-                  size="sm"
+                <button
+                  className="px-4 py-1.5 text-sm font-medium bg-primary border border-primary rounded-button text-white hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={applyCustomDateRange}
                   disabled={!startDate || !endDate}
                 >
                   Apply
-                </Button>
+                </button>
               </div>
             </div>
           )}
@@ -361,7 +360,7 @@ export const Header: React.FC = () => {
         {/* Navigation Icons */}
         <Tooltip text="Pomodoro Timer">
           <button 
-            className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+            className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
             onClick={() => navigate('/pomodoro')}
             aria-label="Go to Pomodoro Timer"
           >
@@ -376,7 +375,7 @@ export const Header: React.FC = () => {
         
         <Tooltip text="Task management">
           <button 
-            className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+            className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
             onClick={() => navigate('/projects')}
             aria-label="Go to Task Management"
           >
@@ -391,7 +390,7 @@ export const Header: React.FC = () => {
         
         <Tooltip text="Productivity Insights">
           <button 
-            className="p-2 rounded-full bg-gray-100 !rounded-button whitespace-nowrap"
+            className="p-2 rounded-full bg-background-container !rounded-button whitespace-nowrap text-text-secondary"
             aria-label="Current page: Productivity Insights"
           >
             <span className="w-5 h-5 flex items-center justify-center">
@@ -405,7 +404,7 @@ export const Header: React.FC = () => {
         
         <Tooltip text="Calendar">
           <button 
-            className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+            className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
             onClick={() => navigate('/calendar')}
             aria-label="Go to Calendar"
           >
@@ -420,7 +419,7 @@ export const Header: React.FC = () => {
         
         <Tooltip text="Deep Focus">
           <button 
-            className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+            className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
             onClick={() => navigate('/deep-focus')}
             aria-label="Go to Deep Focus"
           >

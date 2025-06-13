@@ -21,14 +21,14 @@ export const Card: React.FC<CardProps> = ({
   return (
     <div 
       className={clsx(
-        'bg-white rounded-lg shadow-sm border border-gray-100',
+        'bg-background-secondary rounded-lg shadow-sm border border-border',
         fullHeight ? 'h-full' : '',
         className
       )}
     >
       {title && (
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h3 className="text-lg font-medium text-gray-800">{title}</h3>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h3 className="text-lg font-medium text-text-primary">{title}</h3>
           {action && (
             <div className="flex items-center">
               {action}

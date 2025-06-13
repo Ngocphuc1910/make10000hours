@@ -16,6 +16,9 @@ const UsageLineChart: React.FC<UsageLineChartProps> = ({ data }) => {
     // Initialize chart
     chartInstance.current = echarts.init(chartRef.current);
 
+    // Detect dark mode by checking CSS variable
+    const isDarkMode = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim() === '#191919';
+
     // Prepare data for ECharts format
     const dates = data.map(item => item.date);
     const onScreenData = data.map(item => item.onScreenTime);
@@ -26,11 +29,12 @@ const UsageLineChart: React.FC<UsageLineChartProps> = ({ data }) => {
       animation: false,
       tooltip: {
         trigger: 'axis',
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-        borderColor: '#eee',
+        backgroundColor: isDarkMode ? 'rgba(42, 42, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+        borderColor: isDarkMode ? '#404040' : '#e2e8f0',
         borderWidth: 1,
+        borderRadius: 8,
         textStyle: {
-          color: '#1f2937'
+          color: isDarkMode ? '#ffffff' : '#1f2937'
         }
       },
       legend: {
@@ -40,7 +44,7 @@ const UsageLineChart: React.FC<UsageLineChartProps> = ({ data }) => {
         itemWidth: 8,
         itemHeight: 8,
         textStyle: {
-          color: '#666',
+          color: isDarkMode ? '#a1a1aa' : '#666',
           fontSize: 12
         }
       },
@@ -57,11 +61,11 @@ const UsageLineChart: React.FC<UsageLineChartProps> = ({ data }) => {
         data: dates,
         axisLine: {
           lineStyle: {
-            color: '#eee'
+            color: isDarkMode ? '#404040' : '#eee'
           }
         },
         axisLabel: {
-          color: '#666'
+          color: isDarkMode ? '#a1a1aa' : '#666'
         }
       },
       yAxis: {
@@ -74,11 +78,11 @@ const UsageLineChart: React.FC<UsageLineChartProps> = ({ data }) => {
         },
         splitLine: {
           lineStyle: {
-            color: '#f0f0f0'
+            color: isDarkMode ? '#404040' : '#f0f0f0'
           }
         },
         axisLabel: {
-          color: '#666'
+          color: isDarkMode ? '#a1a1aa' : '#666'
         }
       },
       series: [

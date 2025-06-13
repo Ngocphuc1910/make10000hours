@@ -25,7 +25,7 @@ const CustomCheckbox: React.FC<CustomCheckboxProps> = ({
         disabled={disabled}
         className="sr-only peer"
       />
-      <div className="w-[18px] h-[18px] border-2 border-gray-300 rounded-[4px] bg-white transition-all duration-200 peer-checked:bg-[#BB5F5A] peer-checked:border-[#BB5F5A] peer-disabled:opacity-50 relative">
+      <div className="w-[18px] h-[18px] border-2 border-border rounded-[4px] bg-background-primary transition-all duration-200 peer-checked:bg-[#BB5F5A] peer-checked:border-[#BB5F5A] peer-disabled:opacity-50 relative">
         <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${checked ? 'opacity-100' : 'opacity-0'}`}>
           <svg width="10" height="8" viewBox="0 0 10 8" fill="none" className="text-white">
             <path 

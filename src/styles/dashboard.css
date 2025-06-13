@@ -10,7 +10,7 @@
 
 body {
   font-family: 'Inter', sans-serif;
-  background-color: #f9fafb;
+  background-color: var(--bg-primary);
 }
 
 #sidebar {
@@ -25,11 +25,12 @@ body {
   appearance: none;
   width: 18px;
   height: 18px;
-  border: 2px solid #d1d5db;
+  border: 2px solid var(--border-color);
   border-radius: 4px;
   position: relative;
   cursor: pointer;
   transition: all 0.2s;
+  background-color: var(--bg-primary);
 }
 
 .custom-checkbox:checked {
@@ -69,7 +70,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #e5e7eb;
+  background-color: var(--bg-container);
   transition: .4s;
   border-radius: 20px;
 }
@@ -81,7 +82,7 @@ body {
   width: 16px;
   left: 2px;
   bottom: 2px;
-  background-color: white;
+  background-color: var(--bg-primary);
   transition: .4s;
   border-radius: 50%;
 }
@@ -139,21 +140,41 @@ input[type="number"]::-webkit-outer-spin-button {
   -webkit-line-clamp: 2;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar - theme aware */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--bg-container);
   border-radius: 10px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--border-color);
   border-radius: 10px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: var(--text-secondary);
+}
+
+/* Dashboard layout */
+.dashboard-layout {
+  display: flex;
+  height: 100vh;
+  background-color: var(--bg-primary);
+}
+
+.dashboard-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+}
+
+.dashboard-content {
+  flex: 1;
+  padding: 1.5rem;
+  background-color: var(--bg-primary);
 } 

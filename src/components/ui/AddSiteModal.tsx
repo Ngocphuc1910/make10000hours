@@ -129,17 +129,17 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
       }}
     >
       <div 
-        className={`bg-white rounded-2xl p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col shadow-2xl transition-all duration-300 ${
+        className={`bg-background-secondary rounded-2xl p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col shadow-2xl border border-border transition-all duration-300 ${
           isOpen 
             ? 'scale-100 opacity-100 translate-y-0' 
             : 'scale-95 opacity-0 translate-y-4'
         }`}
       >
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold">Add Site to Block</h2>
+          <h2 className="text-2xl font-bold text-text-primary">Add Site to Block</h2>
           <button 
             onClick={onClose} 
-            className="text-gray-400 hover:text-gray-600 transition-colors duration-200 p-1 rounded-full hover:bg-gray-100"
+            className="text-text-secondary hover:text-text-primary transition-colors duration-200 p-1 rounded-full hover:bg-background-container"
           >
             <Icon name="close-line" className="w-6 h-6" />
           </button>
@@ -159,14 +159,14 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
             <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
               method === 'visited' 
                 ? 'border-[#BB5F5A] scale-110' 
-                : 'border-gray-300 group-hover:border-gray-400'
+                : 'border-border group-hover:border-text-secondary'
             }`}>
               <div className={`w-2.5 h-2.5 rounded-full bg-[#BB5F5A] transition-all duration-200 ${
                 method === 'visited' ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
               }`}></div>
             </div>
             <span className={`text-base transition-colors duration-200 ${
-              method === 'visited' ? 'text-gray-900 font-medium' : 'text-gray-600'
+              method === 'visited' ? 'text-text-primary font-medium' : 'text-text-secondary'
             }`}>Select visited sites</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer group">
@@ -181,14 +181,14 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
             <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
               method === 'manual' 
                 ? 'border-[#BB5F5A] scale-110' 
-                : 'border-gray-300 group-hover:border-gray-400'
+                : 'border-border group-hover:border-text-secondary'
             }`}>
               <div className={`w-2.5 h-2.5 rounded-full bg-[#BB5F5A] transition-all duration-200 ${
                 method === 'manual' ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
               }`}></div>
             </div>
             <span className={`text-base transition-colors duration-200 ${
-              method === 'manual' ? 'text-gray-900 font-medium' : 'text-gray-600'
+              method === 'manual' ? 'text-text-primary font-medium' : 'text-text-secondary'
             }`}>Input site URL</span>
           </label>
         </div>
@@ -196,23 +196,23 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
         {/* Content with smooth transitions */}
         <div className="flex-1 overflow-hidden">
           <div className={`transition-all duration-300 ${method === 'visited' ? 'opacity-100 transform-none' : 'opacity-0 -translate-x-4 pointer-events-none absolute'}`}>
-            <div className="flex items-center gap-3 mb-4 pb-4 border-b border-gray-100">
+            <div className="flex items-center gap-3 mb-4 pb-4 border-b border-border">
               <CustomCheckbox
                 checked={selectAll}
                 onChange={handleSelectAll}
               />
-              <span className="text-base font-medium">Select all sites</span>
+              <span className="text-base font-medium text-text-primary">Select all sites</span>
               {selectedSites.size > 0 && (
                 <span className="text-sm text-[#BB5F5A] font-medium animate-pulse">
                   {selectedSites.size} selected
                 </span>
               )}
             </div>
-            <div className="space-y-4 max-h-[320px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+            <div className="space-y-4 max-h-[320px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-background-container">
               {availableSites.map((site, index) => (
                 <div 
                   key={site.url} 
-                  className={`flex items-center gap-3 p-2 rounded-lg transition-all duration-200 hover:bg-gray-50 ${
+                  className={`flex items-center gap-3 p-2 rounded-lg transition-all duration-200 hover:bg-background-container ${
                     selectedSites.has(site.url) ? 'bg-[#BB5F5A]/5 ring-1 ring-[#BB5F5A]/20' : ''
                   }`}
                   style={{ animationDelay: `${index * 50}ms` }}
@@ -226,15 +226,15 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
                       <FaviconImage 
                         domain={site.url} 
                         size={40}
-                        className="shadow-sm border border-gray-200"
+                        className="shadow-sm border border-border"
                         fallbackIcon={site.icon}
                       />
                     </div>
                     <div className="flex-1">
-                      <div className="font-medium">{site.name}</div>
-                      <div className="text-sm text-gray-500">{site.url}</div>
+                      <div className="font-medium text-text-primary">{site.name}</div>
+                      <div className="text-sm text-text-secondary">{site.url}</div>
                     </div>
-                    <div className="text-sm text-gray-500 font-medium">{site.timeSpent}</div>
+                    <div className="text-sm text-text-secondary font-medium">{site.timeSpent}</div>
                   </div>
                 </div>
               ))}
@@ -247,7 +247,7 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
                 type="text"
                 value={manualUrl}
                 onChange={(e) => setManualUrl(e.target.value)}
-                className="w-full px-4 py-3 text-base border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#BB5F5A] focus:border-transparent transition-all duration-200 hover:border-gray-300"
+                className="w-full px-4 py-3 text-base border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#BB5F5A] focus:border-transparent transition-all duration-200 hover:border-text-secondary bg-background-primary text-text-primary"
                 placeholder="https://www.facebook.com/"
               />
               {manualUrl && (
@@ -257,13 +257,13 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
               )}
             </div>
             {urlPreview && (
-              <div className="mt-4 flex items-center gap-3 p-3 bg-gray-50 rounded-lg transition-all duration-300 hover:bg-gray-100">
-                <div className="w-10 h-10 bg-gray-500 rounded-lg flex items-center justify-center text-white">
+              <div className="mt-4 flex items-center gap-3 p-3 bg-background-container rounded-lg transition-all duration-300 hover:bg-background-primary">
+                <div className="w-10 h-10 bg-text-secondary rounded-lg flex items-center justify-center text-white">
                   <Icon name="ri-global-line" className="text-xl" />
                 </div>
                 <div>
-                  <div className="font-medium">{urlPreview.name}</div>
-                  <div className="text-sm text-gray-500">{urlPreview.domain}</div>
+                  <div className="font-medium text-text-primary">{urlPreview.name}</div>
+                  <div className="text-sm text-text-secondary">{urlPreview.domain}</div>
                 </div>
               </div>
             )}
@@ -271,10 +271,10 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
         </div>
 
         {/* Actions with improved styling */}
-        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-border">
           <button
             onClick={onClose}
-            className="px-6 py-2 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-all duration-200 hover:border-gray-300 active:scale-95"
+            className="px-6 py-2 border border-border rounded-lg text-text-primary hover:bg-background-container font-medium transition-all duration-200 hover:border-text-secondary active:scale-95"
           >
             Cancel
           </button>
@@ -284,7 +284,7 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
             className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 active:scale-95 ${
               selectedCount > 0
                 ? 'bg-[#BB5F5A] text-white hover:bg-[#BB5F5A]/90 shadow-lg hover:shadow-xl'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-background-container text-text-secondary cursor-not-allowed'
             }`}
           >
             Add Site ({selectedCount})

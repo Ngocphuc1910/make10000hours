@@ -23,7 +23,7 @@ const AnimatedSiteCard: React.FC<AnimatedSiteCardProps> = ({ site, onToggle, onR
 
   return (
     <div 
-      className={`flex items-center justify-between p-4 bg-gray-50 rounded-lg transition-all duration-300 ease-in-out
+      className={`flex items-center justify-between p-4 bg-background-container rounded-lg transition-all duration-300 ease-in-out border border-border
         ${isRemoving ? 'opacity-0 scale-95 h-0 py-0 my-0 overflow-hidden' : 'opacity-100 scale-100'}
         ${!site.isActive ? 'opacity-60' : ''}`}
     >
@@ -32,22 +32,22 @@ const AnimatedSiteCard: React.FC<AnimatedSiteCardProps> = ({ site, onToggle, onR
           <FaviconImage 
             domain={site.url} 
             size={40}
-            className="shadow-sm border border-gray-200"
+            className="shadow-sm border border-border"
             fallbackIcon={site.icon}
           />
         </div>
-        <span className="font-medium">{site.name}</span>
+        <span className="font-medium text-text-primary">{site.name}</span>
       </div>
       <div className="flex items-center space-x-3">
         <button 
-          className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+          className="p-1.5 text-text-secondary hover:text-text-primary transition-colors duration-200"
           title="Edit site"
         >
           <Icon name="edit-line" className="w-5 h-5" />
         </button>
         <button 
           onClick={handleRemove}
-          className="p-1.5 text-gray-400 hover:text-red-600 transition-colors duration-200"
+          className="p-1.5 text-text-secondary hover:text-red-500 transition-colors duration-200"
           title="Remove site"
         >
           <Icon name="delete-bin-line" className="w-5 h-5" />
