@@ -275,6 +275,42 @@ class DeepFocusSessionService {
   }
 
   /**
+   * Suspend an active session (for inactivity/sleep)
+   */
+  async suspendSession(sessionId: string): Promise<void> {
+    try {
+      const sessionRef = doc(db, this.collectionName, sessionId);
+      await updateDoc(sessionRef, {
+        status: 'suspended',
+        suspendedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      console.log('Deep Focus session suspended:', sessionId);
+    } catch (error) {
+      console.error('Error suspending Deep Focus session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Resume a suspended session
+   */
+  async resumeSession(sessionId: string): Promise<void> {
+    try {
+      const sessionRef = doc(db, this.collectionName, sessionId);
+      await updateDoc(sessionRef, {
+        status: 'active',
+        resumedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      console.log('Deep Focus session resumed:', sessionId);
+    } catch (error) {
+      console.error('Error resuming Deep Focus session:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Clean up any orphaned active sessions for a user (sessions that were never properly ended)
    * This is useful for handling page reloads or unexpected app closures
    */

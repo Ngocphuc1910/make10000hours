@@ -990,6 +990,14 @@ class FocusTimeTracker {
     };
     this.saveInterval = null;
     
+    // Enhanced activity management
+    this.isSessionPaused = false;
+    this.pausedAt = null;
+    this.totalPausedTime = 0;
+    this.inactivityThreshold = 300000; // 5 minutes
+    this.lastActivityTime = Date.now();
+    this.autoManagementEnabled = true;
+    
     this.initialize();
   }
 
@@ -1183,6 +1191,27 @@ class FocusTimeTracker {
         case 'ACTIVITY_DETECTED':
           await this.handleActivityDetected(sender.tab?.id);
           sendResponse({ success: true });
+          break;
+
+        case 'ENHANCED_ACTIVITY_DETECTED':
+          await this.handleEnhancedActivityDetected(message.payload);
+          sendResponse({ success: true });
+          break;
+
+        case 'ACTIVITY_HEARTBEAT':
+          this.updateActivity(message.payload);
+          sendResponse({ success: true });
+          break;
+
+        case 'GET_ACTIVITY_STATE':
+          const activityState = this.getActivityState();
+          sendResponse({ success: true, data: activityState });
+          break;
+
+        case 'TOGGLE_AUTO_MANAGEMENT':
+          const enabled = message.payload?.enabled ?? true;
+          await this.setAutoManagement(enabled);
+          sendResponse({ success: true, enabled });
           break;
 
         // Blocking system messages
@@ -1551,13 +1580,25 @@ class FocusTimeTracker {
   }
 
   /**
-   * Save current session progress
+   * Save current session progress (enhanced with pause tracking)
    */
   async saveCurrentSession() {
     try {
-      if (this.currentSession.isActive && this.currentSession.startTime) {
-        const timeSpent = Date.now() - this.currentSession.startTime;
-        await this.storageManager.saveTimeEntry(this.currentSession.domain, timeSpent, 0);
+      if (this.currentSession.isActive && this.currentSession.startTime && !this.isSessionPaused) {
+        const now = Date.now();
+        const grossTimeSpent = now - this.currentSession.startTime;
+        const netTimeSpent = grossTimeSpent - this.totalPausedTime;
+        
+        // Only save positive net time
+        if (netTimeSpent > 1000) {
+          await this.storageManager.saveTimeEntry(this.currentSession.domain, netTimeSpent, 0);
+          console.log('💾 Session saved:', {
+            domain: this.currentSession.domain,
+            grossTime: this.storageManager.formatTime(grossTimeSpent),
+            pausedTime: this.storageManager.formatTime(this.totalPausedTime),
+            netTime: this.storageManager.formatTime(netTimeSpent)
+          });
+        }
       }
     } catch (error) {
       console.error('Error saving session:', error);
@@ -1621,6 +1662,123 @@ class FocusTimeTracker {
       }
     } catch (error) {
       console.error('❌ Error getting current tab:', error);
+    }
+  }
+
+  /**
+   * Enhanced activity detection handler
+   */
+  async handleEnhancedActivityDetected(activityData) {
+    try {
+      console.log('🎯 Enhanced activity detected:', {
+        isActive: activityData.isActive,
+        timeSinceActivity: Math.round(activityData.timeSinceLastActivity / 1000) + 's',
+        isVisible: activityData.isVisible,
+        eventType: activityData.eventType
+      });
+
+      this.updateActivity(activityData);
+
+      // Handle inactivity-based auto-pause
+      if (!activityData.isActive && this.autoManagementEnabled && !this.isSessionPaused) {
+        if (activityData.timeSinceLastActivity > this.inactivityThreshold) {
+          await this.pauseSession(activityData.timeSinceLastActivity);
+        }
+      }
+      
+      // Handle activity-based auto-resume
+      if (activityData.isActive && this.isSessionPaused && this.autoManagementEnabled) {
+        await this.resumeSession();
+      }
+    } catch (error) {
+      console.error('Error handling enhanced activity:', error);
+    }
+  }
+
+  /**
+   * Update activity timestamp and state
+   */
+  updateActivity(activityData = {}) {
+    this.lastActivityTime = Date.now();
+    
+    if (activityData.isActive) {
+      // Resume session if it was paused and activity is detected
+      if (this.isSessionPaused && this.autoManagementEnabled) {
+        this.resumeSession();
+      }
+    }
+  }
+
+  /**
+   * Pause session due to inactivity
+   */
+  async pauseSession(inactivityDuration = 0) {
+    if (this.isSessionPaused || !this.currentSession.isActive) {
+      return;
+    }
+
+    console.log(`🛑 Pausing session due to inactivity: ${Math.round(inactivityDuration / 1000)}s`);
+    
+    // Save current progress before pausing
+    await this.saveCurrentSession();
+    
+    this.isSessionPaused = true;
+    this.pausedAt = Date.now();
+    
+    // Reset total paused time for new session
+    this.totalPausedTime = 0;
+  }
+
+  /**
+   * Resume session after activity detected
+   */
+  async resumeSession() {
+    if (!this.isSessionPaused) {
+      return;
+    }
+
+    const pausedDuration = this.pausedAt ? Date.now() - this.pausedAt : 0;
+    this.totalPausedTime += pausedDuration;
+    
+    console.log(`▶️ Resuming session, paused for: ${Math.round(pausedDuration / 1000)}s`);
+    
+    this.isSessionPaused = false;
+    this.pausedAt = null;
+    this.lastActivityTime = Date.now();
+  }
+
+  /**
+   * Get current activity state
+   */
+  getActivityState() {
+    return {
+      isUserActive: Date.now() - this.lastActivityTime < this.inactivityThreshold,
+      lastActivity: new Date(this.lastActivityTime),
+      inactivityDuration: Math.round((Date.now() - this.lastActivityTime) / 1000),
+      isSessionPaused: this.isSessionPaused,
+      pausedAt: this.pausedAt ? new Date(this.pausedAt) : null,
+      totalPausedTime: this.totalPausedTime,
+      autoManagementEnabled: this.autoManagementEnabled,
+      inactivityThreshold: this.inactivityThreshold
+    };
+  }
+
+  /**
+   * Toggle auto-management of sessions
+   */
+  async setAutoManagement(enabled) {
+    this.autoManagementEnabled = enabled;
+    
+    // Save setting to storage
+    const settings = await this.storageManager.getSettings();
+    settings.autoSessionManagement = enabled;
+    await this.storageManager.saveSettings(settings);
+    
+    console.log('🔧 Auto-management:', enabled ? 'enabled' : 'disabled');
+    
+    // If disabled and session is paused, resume it
+    if (!enabled && this.isSessionPaused) {
+      await this.resumeSession();
     }
   }
 }

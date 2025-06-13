@@ -91,6 +91,18 @@
               </div>
             </div>
           </div>
+
+          <!-- Activity Status -->
+          <div id="activity-status" class="activity-status">
+            <div class="activity-indicator">
+              <span id="activity-dot" class="activity-dot active"></span>
+              <span id="activity-text" class="activity-text">Active</span>
+            </div>
+            <div id="pause-info" class="pause-info hidden">
+              <span class="pause-icon">⏸️</span>
+              <span id="pause-duration" class="pause-duration">Paused for 0s</span>
+            </div>
+          </div>
         </section>
 
         <!-- Top Sites Today -->
@@ -136,15 +148,26 @@
       </div>
       
       <div class="secondary-actions">
-        <button id="settings-btn" class="secondary-btn">
-          <span class="btn-icon">⚙️</span>
-          Settings
-        </button>
-        
-        <button id="export-data-btn" class="secondary-btn">
-          <span class="btn-icon">📤</span>
-          Export Data
-        </button>
+        <!-- Auto-Management Toggle -->
+        <div class="toggle-container">
+          <label class="toggle-label">
+            <input type="checkbox" id="auto-management-toggle" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-text">Auto-pause on inactivity</span>
+          </label>
+        </div>
+
+        <div class="actions-row">
+          <button id="settings-btn" class="secondary-btn">
+            <span class="btn-icon">⚙️</span>
+            Settings
+          </button>
+          
+          <button id="export-data-btn" class="secondary-btn">
+            <span class="btn-icon">📤</span>
+            Export Data
+          </button>
+        </div>
       </div>
     </section>
 
