@@ -15,7 +15,7 @@ import { formatTime } from '../../utils/timeUtils';
 import { formatElapsedTime } from '../../utils/timeFormat';
 import { debugDeepFocus } from '../../utils/debugUtils';
 import { FaviconService } from '../../utils/faviconUtils';
-import { cleanupAllOrphanedSessions } from '../../utils/cleanupSessions';
+
 import UsageLineChart from '../charts/UsageLineChart';
 import UsagePieChart from '../charts/UsagePieChart';
 import AddSiteModal from '../ui/AddSiteModal';
@@ -328,10 +328,7 @@ const DeepFocusPage: React.FC = () => {
     };
   }, [user?.uid, selectedRange, loadDeepFocusSessions, subscribeToSessions, unsubscribeFromSessions]);
 
-  // Debug: Log when totalSessionsCount changes
-  useEffect(() => {
-    console.log('Deep Focus totalSessionsCount updated:', totalSessionsCount);
-  }, [totalSessionsCount]);
+
 
   // Preload favicons for better UX
   useEffect(() => {
@@ -594,10 +591,7 @@ const DeepFocusPage: React.FC = () => {
             }`}>
               Deep Focus
             </div>
-            {/* Debug: Show session count in header */}
-            <div className="ml-4 text-sm text-gray-500">
-              Sessions: {totalSessionsCount} | User: {user?.uid?.slice(-6) || 'none'}
-            </div>
+
             <div className="ml-4 flex items-center">
               <label className="relative inline-flex items-center cursor-pointer group">
                 <input 
@@ -613,10 +607,10 @@ const DeepFocusPage: React.FC = () => {
                     }
                   }}
                 />
-                <div className={`w-[150px] h-[50px] flex flex-col items-center justify-center rounded-full transition-all duration-500 relative ${
+                <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${
                   isDeepFocusActive 
-                    ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20' 
-                    : 'bg-gray-100/80 backdrop-blur-sm'
+                    ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]' 
+                    : 'bg-gray-100/80 backdrop-blur-sm justify-end pr-[10.5px]'
                 }`}>
                   <span className={`text-sm font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${
                     isDeepFocusActive 
@@ -625,41 +619,17 @@ const DeepFocusPage: React.FC = () => {
                   }`}>
                     {isDeepFocusActive ? 'Deep Focus' : 'Focus Off'}
                   </span>
-                  {isDeepFocusActive && activeSessionId && (
-                    <span className="text-xs text-white/90 font-mono [text-shadow:0_0_8px_rgba(255,255,255,0.3)]">
-                      {formatElapsedTime(activeSessionElapsedSeconds)}
-                    </span>
-                  )}
                 </div>
                 <div className={`absolute w-6 h-6 bg-white rounded-full shadow-lg transition-all duration-500 ${
                   isDeepFocusActive 
-                    ? 'right-2 shadow-[0_6px_20px_rgba(187,95,90,0.2)]' 
-                    : 'left-2 shadow-[0_2px_8px_rgba(0,0,0,0.1)]'
+                    ? 'left-[calc(100%-27px)] shadow-[0_6px_20px_rgba(187,95,90,0.2)]' 
+                    : 'left-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.1)]'
                 }`}></div>
               </label>
             </div>
           </div>
           
           <div className="flex items-center space-x-4">
-            {/* Cleanup Button (Temporary) */}
-            <Tooltip text="Clean up orphaned sessions">
-              <button 
-                className="p-2 rounded-full hover:bg-red-50 text-red-500 hover:text-red-600 transition-colors duration-200"
-                onClick={async () => {
-                  console.log('🧹 Manual cleanup triggered...');
-                  await cleanupAllOrphanedSessions();
-                }}
-                aria-label="Clean up orphaned sessions"
-              >
-                <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon 
-                    name="delete-bin-line" 
-                    size={20}
-                  />
-                </span>
-              </button>
-            </Tooltip>
-            
             {/* Date Range Filter */}
             <div className="relative" ref={dateFilterRef}>
               <Button
