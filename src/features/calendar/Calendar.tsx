@@ -10,7 +10,8 @@ import MonthView from './MonthView';
 import Icon from '../../components/ui/Icon';
 import { Tooltip } from '../../components/ui/Tooltip';
 import { useDeepFocusStore } from '../../store/deepFocusStore';
-import { useDeepFocusSync } from '../../hooks/useDeepFocusSync';
+import { useEnhancedDeepFocusSync } from '../../hooks/useEnhancedDeepFocusSync';
+import { useExtensionSync } from '../../hooks/useExtensionSync';
 // EventDialog import removed - using TaskForm for all calendar interactions
 
 import { useTaskStore } from '../../store/taskStore';
@@ -55,7 +56,8 @@ export const Calendar: React.FC = () => {
     enableDeepFocus, 
     disableDeepFocus 
   } = useDeepFocusStore();
-  useDeepFocusSync(); // Sync Deep Focus state across pages
+  useEnhancedDeepFocusSync(); // Enhanced sync with activity detection and extension sync
+  useExtensionSync(); // Bidirectional extension sync
 
   // Keyboard shortcuts for view switching
   useEffect(() => {
