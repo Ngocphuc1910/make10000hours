@@ -124,6 +124,7 @@ interface DeepFocusStore extends DeepFocusData {
   currentSessionId: string | null;
   deepFocusSessions: DeepFocusSession[];
   totalSessionsCount: number;
+  totalFocusTime: number; // in minutes
   unsubscribe: (() => void) | null;
   toggleBlockedSite: (id: string) => void;
   removeBlockedSite: (id: string) => void;
@@ -137,9 +138,15 @@ interface DeepFocusStore extends DeepFocusData {
   loadFocusStatus: () => Promise<void>;
   syncFocusStatus: (isActive: boolean) => void;
   initializeFocusSync: () => Promise<void>;
-  loadDeepFocusSessions: (userId: string) => Promise<void>;
+  loadDeepFocusSessions: (userId: string, startDate?: Date, endDate?: Date) => Promise<void>;
   subscribeToSessions: (userId: string) => void;
   unsubscribeFromSessions: () => void;
+  activeSessionId: string | null;
+  activeSessionStartTime: Date | null;
+  activeSessionDuration: number;
+  activeSessionElapsedSeconds: number;
+  timer: NodeJS.Timeout | null;
+  secondTimer: NodeJS.Timeout | null;
 }
 
 export const useDeepFocusStore = create<DeepFocusStore>()(
@@ -167,7 +174,14 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
   currentSessionId: null,
   deepFocusSessions: [],
   totalSessionsCount: 0,
+  totalFocusTime: 0,
   unsubscribe: null,
+  activeSessionId: null,
+  activeSessionStartTime: null,
+  activeSessionDuration: 0,
+  activeSessionElapsedSeconds: 0,
+  timer: null,
+  secondTimer: null,
 
   loadExtensionData: async () => {
     try {
@@ -262,6 +276,53 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       const focusStatus = await ExtensionDataService.getFocusStatus();
       const currentLocalState = get().isDeepFocusActive;
       
+      // Handle active session recovery/restart on page reload
+      if (currentLocalState && !get().activeSessionId) {
+        try {
+          const { useUserStore } = await import('./userStore');
+          const user = useUserStore.getState().user;
+          if (user?.uid) {
+            // First, clean up any orphaned sessions (sessions that were never properly ended)
+            console.log('🧹 Cleaning up any orphaned sessions...');
+            const cleanedCount = await deepFocusSessionService.cleanupOrphanedSessions(user.uid);
+            
+            if (cleanedCount > 0) {
+              console.log(`✅ Cleaned up ${cleanedCount} orphaned session(s)`);
+            }
+            
+            // Now start a fresh new session
+            console.log('🆕 Starting fresh session after page reload...');
+            const newSessionId = await deepFocusSessionService.startSession(user.uid);
+            const startTime = new Date();
+            
+            set({ 
+              activeSessionId: newSessionId, 
+              activeSessionStartTime: startTime, 
+              activeSessionDuration: 0,
+              activeSessionElapsedSeconds: 0
+            });
+            
+            // Start timers for new session
+            const secondTimer = setInterval(() => {
+              const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000);
+              set({ activeSessionElapsedSeconds: elapsed });
+            }, 1000);
+            
+            const timer = setInterval(async () => {
+              const newDuration = Math.floor((Date.now() - startTime.getTime()) / 60000);
+              set({ activeSessionDuration: newDuration });
+              await deepFocusSessionService.updateSessionDuration(newSessionId, newDuration);
+            }, 60000);
+            
+            set({ timer, secondTimer });
+            
+            console.log('✅ Started fresh deep focus session:', newSessionId);
+          }
+        } catch (error) {
+          console.error('❌ Failed to handle session recovery/restart:', error);
+        }
+      }
+      
       // Only update local state if extension state differs AND we don't have a persisted state
       // This prevents overriding user's persisted preference
       if (focusStatus.focusMode !== currentLocalState) {
@@ -343,17 +404,36 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
 
   enableDeepFocus: async () => {
     const state = get();
+    console.log('enableDeepFocus called. State:', state);
     
     try {
       // Start a new Deep Focus session if we have user data
-      let sessionId = null;
+      let sessionId: string | null = null;
+      let startTime = new Date();
       try {
-        // Import and get user from user store
         const { useUserStore } = await import('./userStore');
         const user = useUserStore.getState().user;
         if (user?.uid) {
           sessionId = await deepFocusSessionService.startSession(user.uid);
-          console.log('Started Deep Focus session:', sessionId);
+          startTime = new Date();
+          set({ activeSessionId: sessionId, activeSessionStartTime: startTime, activeSessionDuration: 0, activeSessionElapsedSeconds: 0 });
+          
+          // Start second timer for real-time display
+          const secondTimer = setInterval(() => {
+            const elapsedSeconds = Math.floor((Date.now() - startTime.getTime()) / 1000);
+            set({ activeSessionElapsedSeconds: elapsedSeconds });
+          }, 1000);
+          
+          // Start minute timer for database updates
+          const timer = setInterval(async () => {
+            const duration = Math.floor((Date.now() - startTime.getTime()) / 60000);
+            set({ activeSessionDuration: duration });
+            if (sessionId) {
+              await deepFocusSessionService.updateSessionDuration(sessionId, duration);
+            }
+          }, 60000);
+          
+          set({ timer, secondTimer });
         }
       } catch (error) {
         console.error('Failed to start Deep Focus session:', error);
@@ -391,13 +471,14 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
 
   disableDeepFocus: async () => {
     const state = get();
+    console.log('disableDeepFocus called. State:', state);
     
     try {
       // End the current Deep Focus session if active
-      if (state.currentSessionId) {
+      if (state.activeSessionId) {
         try {
-          await deepFocusSessionService.endSession(state.currentSessionId);
-          console.log('Deep Focus session ended:', state.currentSessionId);
+          await deepFocusSessionService.endSession(state.activeSessionId);
+          console.log('Deep Focus session ended:', state.activeSessionId);
         } catch (error) {
           console.error('Failed to end Deep Focus session:', error);
         }
@@ -415,10 +496,23 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         await state.unblockSiteInExtension(site.url);
       }
 
+      // Clear timers
+      if (state.timer) {
+        clearInterval(state.timer);
+      }
+      if (state.secondTimer) {
+        clearInterval(state.secondTimer);
+      }
+      set({ timer: null, secondTimer: null });
+
       set({ 
         isDeepFocusActive: false,
         currentSessionId: null,
-        blockedSites: updatedSites
+        blockedSites: updatedSites,
+        activeSessionId: null,
+        activeSessionStartTime: null,
+        activeSessionDuration: 0,
+        activeSessionElapsedSeconds: 0
       });
 
       // Notify all subscribers that focus mode is now inactive
@@ -443,19 +537,32 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
     }
   },
 
-  loadDeepFocusSessions: async (userId: string) => {
+  loadDeepFocusSessions: async (userId: string, startDate?: Date, endDate?: Date) => {
     try {
-      console.log('DeepFocusStore: Loading sessions for userId:', userId);
-      const sessions = await deepFocusSessionService.getUserSessions(userId);
-      console.log('DeepFocusStore: Loaded sessions:', sessions);
+      console.log('🔍 DeepFocusStore: Loading sessions for userId:', userId);
+      console.log('🔍 DeepFocusStore: Date filters:', { startDate, endDate });
+      const sessions = await deepFocusSessionService.getUserSessions(userId, startDate, endDate);
+      console.log('📊 DeepFocusStore: Loaded sessions:', sessions.length, 'sessions');
+      console.log('📊 DeepFocusStore: Session details:', sessions.map(s => ({
+        id: s.id,
+        status: s.status,
+        duration: s.duration,
+        createdAt: s.createdAt,
+        userId: s.userId
+      })));
       const completedCount = sessions.filter(s => s.status === 'completed').length;
-      console.log('DeepFocusStore: Completed sessions count:', completedCount);
+      const completedWithDuration = sessions.filter(s => s.status === 'completed' && s.duration);
+      const totalTime = completedWithDuration.reduce((total, s) => total + (s.duration || 0), 0);
+      console.log('📊 DeepFocusStore: Completed sessions count:', completedCount);
+      console.log('📊 DeepFocusStore: Completed with duration:', completedWithDuration.length);
+      console.log('📊 DeepFocusStore: Total time:', totalTime, 'minutes');
       set({ 
         deepFocusSessions: sessions,
-        totalSessionsCount: completedCount
+        totalSessionsCount: completedCount,
+        totalFocusTime: totalTime
       });
     } catch (error) {
-      console.error('Failed to load Deep Focus sessions:', error);
+      console.error('❌ Failed to load Deep Focus sessions:', error);
     }
   },
 
@@ -464,10 +571,14 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
     const unsubscribe = deepFocusSessionService.subscribeToUserSessions(userId, (sessions) => {
       console.log('DeepFocusStore: Subscription received sessions:', sessions);
       const completedCount = sessions.filter(s => s.status === 'completed').length;
-      console.log('DeepFocusStore: Subscription completed count:', completedCount);
+      const totalTime = sessions
+        .filter(s => s.status === 'completed' && s.duration)
+        .reduce((total, s) => total + (s.duration || 0), 0);
+      console.log('DeepFocusStore: Subscription completed count:', completedCount, 'Total time:', totalTime);
       set({ 
         deepFocusSessions: sessions,
-        totalSessionsCount: completedCount
+        totalSessionsCount: completedCount,
+        totalFocusTime: totalTime
       });
     });
     
