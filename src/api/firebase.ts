@@ -1,5 +1,5 @@
 import { FirebaseOptions, initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getAnalytics, Analytics } from "firebase/analytics";
 
@@ -18,10 +18,26 @@ const firebaseConfig: FirebaseOptions = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+
+// CRITICAL: Explicitly set auth persistence to LOCAL to ensure 
+// user stays logged in across page reloads and browser sessions
+setPersistence(auth, browserLocalPersistence)
+  .then(() => {
+    console.log('🔐 Firebase Auth persistence set to LOCAL');
+  })
+  .catch((error) => {
+    console.error('❌ Failed to set Firebase Auth persistence:', error);
+  });
+
 export const db = getFirestore(app);
 
-// Initialize Analytics (only in browser environment)
-export let analytics: Analytics | null = null;
-if (typeof window !== 'undefined') {
+// Initialize Analytics
+let analytics: Analytics | undefined;
+try {
   analytics = getAnalytics(app);
+  console.log('📊 Firebase Analytics initialized');
+} catch (error) {
+  console.warn('⚠️ Firebase Analytics not available:', error);
 }
+
+export { analytics };
