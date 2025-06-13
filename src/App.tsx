@@ -29,6 +29,9 @@ if (process.env.NODE_ENV === 'development') {
   import('./utils/testTaskDeletion');
 }
 
+// Import cleanup utility for orphaned sessions
+import('./utils/cleanupSessions');
+
 // Global tab title component - isolated to prevent parent re-renders
 const GlobalTabTitleUpdater: React.FC = () => {
   const isRunning = useTimerStore(state => state.isRunning);
