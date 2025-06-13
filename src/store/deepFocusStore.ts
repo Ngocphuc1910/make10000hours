@@ -161,6 +161,14 @@ interface DeepFocusStore extends DeepFocusData {
   isBackingUp: boolean;
   lastBackupTime: Date | null;
   backupError: string | null;
+  // Activity detection and auto-session management
+  isSessionPaused: boolean;
+  pausedAt: Date | null;
+  totalPausedTime: number; // in seconds
+  autoSessionManagement: boolean;
+  pauseSessionOnInactivity: (inactivityDuration: number) => Promise<void>;
+  resumeSessionOnActivity: () => Promise<void>;
+  setAutoSessionManagement: (enabled: boolean) => void;
 }
 
 export const useDeepFocusStore = create<DeepFocusStore>()(
@@ -200,6 +208,12 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
   isBackingUp: false,
   lastBackupTime: null,
   backupError: null,
+  
+  // Activity detection and auto-session management state
+  isSessionPaused: false,
+  pausedAt: null,
+  totalPausedTime: 0,
+  autoSessionManagement: true, // enabled by default
 
   loadExtensionData: async () => {
     try {
@@ -530,7 +544,11 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         activeSessionId: null,
         activeSessionStartTime: null,
         activeSessionDuration: 0,
-        activeSessionElapsedSeconds: 0
+        activeSessionElapsedSeconds: 0,
+        // Reset pause state
+        isSessionPaused: false,
+        pausedAt: null,
+        totalPausedTime: 0
       });
 
       // Notify all subscribers that focus mode is now inactive
@@ -610,6 +628,99 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         state.unsubscribe();
         set({ unsubscribe: null });
       }
+    },
+
+    // Activity detection and auto-session management methods
+    pauseSessionOnInactivity: async (inactivityDuration: number) => {
+      const state = get();
+      
+      // Only pause if deep focus is active, not already paused, and auto-management is enabled
+      if (!state.isDeepFocusActive || state.isSessionPaused || !state.autoSessionManagement) {
+        return;
+      }
+
+      console.log('🛑 Pausing deep focus session due to inactivity:', inactivityDuration, 'seconds');
+      
+      try {
+        // Pause the timers but don't end the session
+        if (state.timer) {
+          clearInterval(state.timer);
+        }
+        if (state.secondTimer) {
+          clearInterval(state.secondTimer);
+        }
+
+        // Mark session as paused
+        set({
+          isSessionPaused: true,
+          pausedAt: new Date(),
+          timer: null,
+          secondTimer: null
+        });
+
+        console.log('✅ Deep focus session paused due to inactivity');
+      } catch (error) {
+        console.error('❌ Failed to pause deep focus session:', error);
+      }
+    },
+
+    resumeSessionOnActivity: async () => {
+      const state = get();
+      
+      // Only resume if deep focus is active, currently paused, and auto-management is enabled
+      if (!state.isDeepFocusActive || !state.isSessionPaused || !state.autoSessionManagement) {
+        return;
+      }
+
+      console.log('▶️ Resuming deep focus session after activity detected');
+      
+      try {
+        // Calculate total paused time
+        const pausedDuration = state.pausedAt 
+          ? Math.floor((Date.now() - state.pausedAt.getTime()) / 1000)
+          : 0;
+
+        // Add to total paused time
+        const newTotalPausedTime = state.totalPausedTime + pausedDuration;
+
+        // Resume timers if we have an active session
+        let timer: NodeJS.Timeout | null = null;
+        let secondTimer: NodeJS.Timeout | null = null;
+
+        if (state.activeSessionId && state.activeSessionStartTime) {
+          // Resume second timer for real-time display
+          secondTimer = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - state.activeSessionStartTime!.getTime()) / 1000) - get().totalPausedTime;
+            set({ activeSessionElapsedSeconds: Math.max(0, elapsed) });
+          }, 1000);
+          
+          // Resume minute timer for database updates
+          timer = setInterval(async () => {
+            const totalElapsed = Math.floor((Date.now() - state.activeSessionStartTime!.getTime()) / 60000);
+            const activeDuration = Math.max(0, totalElapsed - Math.floor(get().totalPausedTime / 60));
+            set({ activeSessionDuration: activeDuration });
+            await deepFocusSessionService.updateSessionDuration(state.activeSessionId!, activeDuration);
+          }, 60000);
+        }
+
+        // Mark session as resumed
+        set({
+          isSessionPaused: false,
+          pausedAt: null,
+          totalPausedTime: newTotalPausedTime,
+          timer,
+          secondTimer
+        });
+
+        console.log('✅ Deep focus session resumed, total paused time:', newTotalPausedTime, 'seconds');
+      } catch (error) {
+        console.error('❌ Failed to resume deep focus session:', error);
+      }
+    },
+
+    setAutoSessionManagement: (enabled: boolean) => {
+      set({ autoSessionManagement: enabled });
+      console.log('🔧 Auto session management:', enabled ? 'enabled' : 'disabled');
     },
 
     // Site usage backup methods
@@ -809,7 +920,8 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
   name: 'deep-focus-storage',
   partialize: (state) => ({
     isDeepFocusActive: state.isDeepFocusActive,
-    blockedSites: state.blockedSites
+    blockedSites: state.blockedSites,
+    autoSessionManagement: state.autoSessionManagement
   })
 }
 )
