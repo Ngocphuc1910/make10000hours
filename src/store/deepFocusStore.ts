@@ -140,6 +140,7 @@ interface DeepFocusStore extends DeepFocusData {
   loadFocusStatus: () => Promise<void>;
   syncFocusStatus: (isActive: boolean) => void;
   initializeFocusSync: () => Promise<void>;
+  syncWithExtension: (isActive: boolean) => Promise<void>;
   loadDeepFocusSessions: (userId: string, startDate?: Date, endDate?: Date) => Promise<void>;
   subscribeToSessions: (userId: string) => void;
   unsubscribeFromSessions: () => void;
@@ -494,6 +495,9 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         detail: { isActive: true } 
       }));
 
+      // Notify extension of state change
+      await get().syncWithExtension(true);
+
       console.log('Deep Focus enabled successfully - all sites are now blocked', sessionId ? `Session ID: ${sessionId}` : '');
     } catch (error) {
       console.error('Failed to enable Deep Focus:', error);
@@ -556,6 +560,9 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         detail: { isActive: false } 
       }));
 
+      // Notify extension of state change
+      await get().syncWithExtension(false);
+
       console.log('Deep Focus disabled successfully - all sites are now unblocked');
     } catch (error) {
       console.error('Failed to disable Deep Focus:', error);
@@ -570,6 +577,24 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       await state.disableDeepFocus();
     } else {
       await state.enableDeepFocus();
+    }
+  },
+
+  // Sync focus state with extension
+  syncWithExtension: async (isActive: boolean) => {
+    try {
+      if (!ExtensionDataService.isExtensionInstalled()) {
+        return;
+      }
+      
+      // Use specific enable/disable messages for clearer intent
+      if (isActive) {
+        await ExtensionDataService.enableFocusMode();
+      } else {
+        await ExtensionDataService.disableFocusMode();
+      }
+    } catch (error) {
+      console.error('Failed to sync with extension:', error);
     }
   },
 

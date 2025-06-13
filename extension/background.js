@@ -998,6 +998,9 @@ class FocusTimeTracker {
     this.lastActivityTime = Date.now();
     this.autoManagementEnabled = true;
     
+    // Focus state tracking
+    this.latestFocusState = false;
+    
     this.initialize();
   }
 
@@ -1221,6 +1224,8 @@ class FocusTimeTracker {
             type: 'FOCUS_MODE_CHANGED',
             payload: { focusMode: toggleResult.focusMode }
           });
+          // Broadcast state change to all listeners
+          this.broadcastFocusStateChange(toggleResult.focusMode);
           sendResponse(toggleResult);
           break;
 
@@ -1391,13 +1396,15 @@ class FocusTimeTracker {
 
         case 'ENABLE_FOCUS_MODE':
           try {
-            const settings = await this.storageManager.getSettings();
-            if (!settings.focusMode) {
+            // Enable focus mode if not already enabled
+            if (!this.blockingManager.focusMode) {
               const result = await this.blockingManager.toggleFocusMode();
               await this.stateManager.dispatch({
                 type: 'FOCUS_MODE_CHANGED',
                 payload: { focusMode: true }
               });
+              // Broadcast state change to all listeners
+              this.broadcastFocusStateChange(true);
               sendResponse({ success: true, data: { focusMode: true } });
             } else {
               sendResponse({ success: true, data: { focusMode: true } });
@@ -1410,13 +1417,15 @@ class FocusTimeTracker {
 
         case 'DISABLE_FOCUS_MODE':
           try {
-            const settings = await this.storageManager.getSettings();
-            if (settings.focusMode) {
+            // Disable focus mode if currently enabled
+            if (this.blockingManager.focusMode) {
               const result = await this.blockingManager.toggleFocusMode();
               await this.stateManager.dispatch({
                 type: 'FOCUS_MODE_CHANGED',
                 payload: { focusMode: false }
               });
+              // Broadcast state change to all listeners
+              this.broadcastFocusStateChange(false);
               sendResponse({ success: true, data: { focusMode: false } });
             } else {
               sendResponse({ success: true, data: { focusMode: false } });
@@ -1427,10 +1436,26 @@ class FocusTimeTracker {
           }
           break;
 
+        case 'GET_FOCUS_STATE':
+          try {
+            // Get focus mode from BlockingManager (authoritative source)
+            const focusStats = this.blockingManager.getFocusStats();
+            sendResponse({ 
+              success: true, 
+              data: { 
+                focusMode: this.blockingManager.focusMode,
+                ...focusStats 
+              } 
+            });
+          } catch (error) {
+            console.error('Error getting focus state:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
         case 'GET_FOCUS_STATUS':
           try {
-            const settings = await this.storageManager.getSettings();
-            sendResponse({ success: true, data: { focusMode: settings.focusMode } });
+            sendResponse({ success: true, data: { focusMode: this.blockingManager.focusMode } });
           } catch (error) {
             console.error('Error getting focus status:', error);
             sendResponse({ success: false, error: error.message });
@@ -1780,6 +1805,30 @@ class FocusTimeTracker {
     if (!enabled && this.isSessionPaused) {
       await this.resumeSession();
     }
+  }
+
+  /**
+   * Broadcast focus state changes to all listeners
+   */
+  broadcastFocusStateChange(isActive) {
+    console.log(`🔄 Broadcasting focus state change: ${isActive}`);
+    
+    // Send to all tabs with content scripts
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        if (tab.id && this.isTrackableUrl(tab.url)) {
+          chrome.tabs.sendMessage(tab.id, {
+            type: 'FOCUS_STATE_CHANGED',
+            payload: { isActive }
+          }).catch(() => {
+            // Ignore errors for tabs without content scripts
+          });
+        }
+      });
+    });
+
+    // Store the latest focus state for popup to query when it opens
+    this.latestFocusState = isActive;
   }
 }
 

@@ -31,10 +31,11 @@ class PopupManager {
         console.warn('⚠️ Analytics UI component not available - analytics features will be disabled');
       }
 
-      // Get initial state and stats
-      const [stateResponse, statsResponse] = await Promise.all([
+      // Get initial state and stats - always get fresh focus state
+      const [stateResponse, statsResponse, focusStateResponse] = await Promise.all([
         this.sendMessage('GET_CURRENT_STATE'),
-        this.sendMessage('GET_TODAY_STATS')
+        this.sendMessage('GET_TODAY_STATS'),
+        this.sendMessage('GET_FOCUS_STATE')
       ]);
 
       if (stateResponse?.success) {
@@ -43,6 +44,15 @@ class PopupManager {
 
       if (statsResponse?.success) {
         this.todayStats = statsResponse.data;
+      }
+
+      // Always use the latest focus state to ensure sync
+      if (focusStateResponse?.success) {
+        if (!this.currentState.focusStats) {
+          this.currentState.focusStats = {};
+        }
+        this.currentState.focusStats.focusMode = focusStateResponse.data.focusMode;
+        console.log('🔄 Popup initialized with fresh focus state:', focusStateResponse.data.focusMode);
       }
 
       // Update UI with initial data
@@ -55,15 +65,22 @@ class PopupManager {
       // Set up periodic updates
       this.updateInterval = setInterval(() => {
         this.refreshState();
-      }, 1000);
+        // Also refresh focus state specifically to catch changes from web app
+        this.refreshFocusState();
+      }, 2000); // Check every 2 seconds
 
       // Set up event listeners
       this.setupEventListeners();
 
-      // Listen for stats updates from background
+      // Listen for updates from background
       chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.type === 'STATS_UPDATED') {
           this.todayStats = message.payload;
+          this.updateUI();
+        } else if (message.type === 'FOCUS_STATE_CHANGED') {
+          console.log('🔄 Focus state changed externally:', message.payload.isActive);
+          // Update local state and UI without triggering another toggle
+          this.currentState.focusStats.focusMode = message.payload.isActive;
           this.updateUI();
         }
         sendResponse({ success: true });
@@ -285,6 +302,34 @@ class PopupManager {
       }
     } catch (error) {
       console.error('Error refreshing state:', error);
+    }
+  }
+
+  /**
+   * Refresh focus state specifically to catch changes from web app
+   */
+  async refreshFocusState() {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'GET_FOCUS_STATE'
+      });
+
+      if (response?.success) {
+        const currentFocusMode = this.currentState?.focusStats?.focusMode || false;
+        const newFocusMode = response.data.focusMode;
+        
+        // Only update if state actually changed to avoid unnecessary UI updates
+        if (currentFocusMode !== newFocusMode) {
+          console.log('🔄 Focus state changed, updating popup UI:', newFocusMode);
+          if (!this.currentState.focusStats) {
+            this.currentState.focusStats = {};
+          }
+          this.currentState.focusStats.focusMode = newFocusMode;
+          this.updateUI();
+        }
+      }
+    } catch (error) {
+      console.debug('Could not refresh focus state:', error);
     }
   }
 

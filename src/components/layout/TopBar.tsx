@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
 import { useDeepFocusStore } from '../../store/deepFocusStore';
 import { useEnhancedDeepFocusSync } from '../../hooks/useEnhancedDeepFocusSync';
+import { useExtensionSync } from '../../hooks/useExtensionSync';
 import { formatElapsedTime } from '../../utils/timeFormat';
 import { Icon } from '../ui/Icon';
 import { Tooltip } from '../ui/Tooltip';
@@ -22,6 +23,7 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
     activeSessionElapsedSeconds
   } = useDeepFocusStore();
   useEnhancedDeepFocusSync(); // Enhanced sync with activity detection
+  useExtensionSync(); // Bidirectional extension sync
   
   return (
     <div className={`h-16 border-b border-gray-200 flex items-center justify-between px-6 bg-white transition-all duration-500 relative ${className}`}>
