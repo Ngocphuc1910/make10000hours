@@ -182,6 +182,13 @@ const App: React.FC = () => {
   // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Check if user is typing in a form element
+      const target = event.target as HTMLElement;
+      const isTypingInFormElement = target.tagName === 'INPUT' || 
+                                   target.tagName === 'TEXTAREA' || 
+                                   target.isContentEditable ||
+                                   target.getAttribute('role') === 'textbox';
+      
       // Debug logging for Alt key combinations
       if (event.altKey) {
         console.log('Alt key pressed with:', {
@@ -195,8 +202,8 @@ const App: React.FC = () => {
         });
       }
       
-      // Check for Shift + N to create new task
-      if (event.shiftKey && event.key === 'N') {
+      // Check for Shift + N to create new task (only if not typing in form elements)
+      if (event.shiftKey && event.key === 'N' && !isTypingInFormElement) {
         event.preventDefault();
         
         // Ensure the right sidebar is open to show tasks
@@ -208,8 +215,8 @@ const App: React.FC = () => {
         setIsAddingTask(true);
       }
       
-      // Check for Shift + \ to toggle right sidebar
-      if (event.shiftKey && (event.key === '\\' || event.key === '|')) {
+      // Check for Cmd + \ to toggle right sidebar
+      if (event.metaKey && (event.key === '\\' || event.key === '|')) {
         event.preventDefault();
         toggleRightSidebar();
       }

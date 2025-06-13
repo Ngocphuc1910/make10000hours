@@ -170,14 +170,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
               onMouseDown={handleResizeStart}
             >
               <div className="w-4 h-full opacity-0"></div>
-              <Tooltip text="Hide task list (Shift + \)" placement="bottom" offset={32}>
+              <Tooltip text="Hide task list (Cmd + \)" placement="bottom" offset={32}>
                 <button 
                   className="absolute w-6 h-12 bg-white border border-gray-200 rounded-l-md flex items-center justify-center shadow-sm hover:shadow-md -right-0 top-1/2 transform -translate-y-1/2 transition-all duration-200 hover:bg-gray-50 group-hover:border-primary/30 sidebar-edge-toggle"
                   onClick={(e) => {
                     e.stopPropagation();
                     useUIStore.getState().toggleRightSidebar();
                   }}
-                  aria-label="Hide task list (Shift + \)"
+                  aria-label="Hide task list (Cmd + \)"
                 >
                   <div className="flex items-center justify-center">
                     <Icon name="arrow-right-s-line" size={14} className="text-gray-500 transition-colors group-hover:text-primary" />
@@ -206,11 +206,11 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           
           {/* Right sidebar show button - displayed when sidebar is hidden */}
           {!isRightSidebarOpen && (
-            <Tooltip text="Show task list (Shift + \)" placement="left" offset={24}>
+            <Tooltip text="Show task list (Cmd + \)" placement="left" offset={24}>
               <button 
                 className="fixed right-0 top-1/2 transform -translate-y-1/2 z-[100] w-6 h-12 bg-white border border-gray-200 border-r-0 rounded-l-md shadow-md hover:shadow-lg transition-all duration-200 hover:bg-gray-50 hover:border-primary/30 group sidebar-edge-toggle sidebar-toggle-show"
                 onClick={() => useUIStore.getState().toggleRightSidebar()}
-                aria-label="Show task list (Shift + \)"
+                aria-label="Show task list (Cmd + \)"
               >
                 <div className="w-4 h-4 flex items-center justify-center text-gray-600 group-hover:text-primary transition-colors">
                   <Icon name="arrow-left-s-line" size={14} />
