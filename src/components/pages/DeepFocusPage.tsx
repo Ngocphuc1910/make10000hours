@@ -12,7 +12,10 @@ import { Icon } from '../ui/Icon';
 import { Tooltip } from '../ui/Tooltip';
 import Button from '../ui/Button';
 import { formatTime } from '../../utils/timeUtils';
+import { formatElapsedTime } from '../../utils/timeFormat';
+import { debugDeepFocus } from '../../utils/debugUtils';
 import { FaviconService } from '../../utils/faviconUtils';
+import { cleanupAllOrphanedSessions } from '../../utils/cleanupSessions';
 import UsageLineChart from '../charts/UsageLineChart';
 import UsagePieChart from '../charts/UsagePieChart';
 import AddSiteModal from '../ui/AddSiteModal';
@@ -47,6 +50,7 @@ const DeepFocusPage: React.FC = () => {
     isExtensionConnected,
     isDeepFocusActive,
     totalSessionsCount,
+    deepFocusSessions,
     loadDeepFocusSessions,
     subscribeToSessions,
     unsubscribeFromSessions,
@@ -59,7 +63,10 @@ const DeepFocusPage: React.FC = () => {
     enableDeepFocus,
     disableDeepFocus,
     toggleDeepFocus,
-    loadFocusStatus
+    loadFocusStatus,
+    activeSessionId,
+    activeSessionDuration,
+    activeSessionElapsedSeconds
   } = useDeepFocusStore();
   
   const { workSessions } = useDashboardStore();
@@ -207,13 +214,42 @@ const DeepFocusPage: React.FC = () => {
     });
   }, [workSessions, selectedRange]);
 
+  // Calculate filtered deep focus sessions based on date range
+  const filteredDeepFocusSessions = useMemo(() => {
+    if (selectedRange.rangeType === 'all time') {
+      return deepFocusSessions;
+    }
+    
+    if (!selectedRange.startDate || !selectedRange.endDate) {
+      return deepFocusSessions;
+    }
+    
+    const startDate = new Date(selectedRange.startDate);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(selectedRange.endDate);
+    endDate.setHours(23, 59, 59, 999);
+    
+    return deepFocusSessions.filter(session => {
+      const sessionDate = new Date(session.createdAt);
+      return sessionDate >= startDate && sessionDate <= endDate;
+    });
+  }, [deepFocusSessions, selectedRange]);
+
+  // Calculate total deep focus time from filtered sessions
+  const filteredDeepFocusTime = useMemo(() => {
+    const totalTime = filteredDeepFocusSessions
+      .filter(session => session.status === 'completed' && session.duration)
+      .reduce((total, session) => total + (session.duration || 0), 0);
+    
+    // Debug logging
+    debugDeepFocus.logCurrentState(filteredDeepFocusSessions, selectedRange);
+    console.log('🎯 Filtered Deep Focus Time:', totalTime, 'minutes');
+    
+    return totalTime;
+  }, [filteredDeepFocusSessions, selectedRange]);
+
   // Filter and recalculate time metrics based on date range
   const filteredTimeMetrics = useMemo(() => {
-    // Use extension data if available, otherwise fall back to store data
-    if (extensionData) {
-      return extensionData.timeMetrics;
-    }
-
     const workSessionsForCalculation = filteredWorkSessions
       .filter(session => session.sessionType === 'pomodoro' || session.sessionType === 'manual');
     
@@ -225,6 +261,7 @@ const DeepFocusPage: React.FC = () => {
       filteredWorkSessions: filteredWorkSessions.length,
       workSessionsForCalculation: workSessionsForCalculation.length,
       totalWorkingTime,
+      filteredDeepFocusTime,
       selectedRange: selectedRange.rangeType,
       dateRange: {
         start: selectedRange.startDate?.toISOString(),
@@ -232,25 +269,19 @@ const DeepFocusPage: React.FC = () => {
       }
     });
 
-    if (selectedRange.rangeType === 'all time') {
-      return {
-        onScreenTime: timeMetrics.onScreenTime,
-        workingTime: totalWorkingTime, // Use work sessions data
-        deepFocusTime: totalSessionsCount, // Use session count instead of time
-        overrideTime: Math.round(timeMetrics.onScreenTime * 0.1)
-      };
-    }
-
-    // Calculate totals from filtered daily usage for other metrics
-    const totalOnScreenTime = filteredDailyUsage.reduce((sum, day) => sum + day.onScreenTime, 0);
+    // Use extension data for screen time metrics but ALWAYS use session data for deep focus time
+    const baseMetrics = extensionData ? extensionData.timeMetrics : timeMetrics;
+    const totalOnScreenTime = selectedRange.rangeType === 'all time' 
+      ? baseMetrics.onScreenTime 
+      : filteredDailyUsage.reduce((sum, day) => sum + day.onScreenTime, 0);
 
     return {
       onScreenTime: totalOnScreenTime,
       workingTime: totalWorkingTime, // Use work sessions data
-      deepFocusTime: totalSessionsCount, // Use session count instead of time
+      deepFocusTime: filteredDeepFocusTime, // ALWAYS use filtered session data
       overrideTime: Math.round(totalOnScreenTime * 0.1) // Estimate override time
     };
-  }, [extensionData, timeMetrics, filteredDailyUsage, selectedRange, filteredWorkSessions, totalSessionsCount]);
+  }, [extensionData, timeMetrics, filteredDailyUsage, selectedRange, filteredWorkSessions, filteredDeepFocusTime]);
 
   // Load extension data on component mount
   useEffect(() => {
@@ -276,16 +307,18 @@ const DeepFocusPage: React.FC = () => {
     window.addEventListener('message', debugHandler);
   }, [loadExtensionData]);
 
-  // Load Deep Focus sessions when user is available
+  // Load Deep Focus sessions when user is available or date range changes
   useEffect(() => {
     if (user?.uid) {
-      console.log('Loading Deep Focus sessions for user:', user.uid);
-      console.log('Current totalSessionsCount before loading:', totalSessionsCount);
-      console.log('User object:', user);
-      loadDeepFocusSessions(user.uid);
+      console.log('🔍 Loading Deep Focus sessions for user:', user.uid);
+      console.log('🔍 Selected range:', selectedRange);
+      const startDate = selectedRange.rangeType === 'all time' ? undefined : selectedRange.startDate || undefined;
+      const endDate = selectedRange.rangeType === 'all time' ? undefined : selectedRange.endDate || undefined;
+      console.log('🔍 Date filters:', { startDate, endDate });
+      loadDeepFocusSessions(user.uid, startDate, endDate);
       subscribeToSessions(user.uid);
     } else {
-      console.log('No user available, user object:', user);
+      console.log('❌ No user available, user object:', user);
     }
     
     // Cleanup function
@@ -293,7 +326,7 @@ const DeepFocusPage: React.FC = () => {
       console.log('DeepFocusPage: Cleaning up session subscription');
       unsubscribeFromSessions();
     };
-  }, [user?.uid, loadDeepFocusSessions, subscribeToSessions, unsubscribeFromSessions]);
+  }, [user?.uid, selectedRange, loadDeepFocusSessions, subscribeToSessions, unsubscribeFromSessions]);
 
   // Debug: Log when totalSessionsCount changes
   useEffect(() => {
@@ -572,6 +605,7 @@ const DeepFocusPage: React.FC = () => {
                   className="sr-only peer" 
                   checked={isDeepFocusActive}
                   onChange={(e) => {
+                    console.log('Deep Focus switch toggled:', e.target.checked, 'User:', user);
                     if (e.target.checked) {
                       enableDeepFocus();
                     } else {
@@ -579,10 +613,10 @@ const DeepFocusPage: React.FC = () => {
                     }
                   }}
                 />
-                <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${
+                <div className={`w-[150px] h-[50px] flex flex-col items-center justify-center rounded-full transition-all duration-500 relative ${
                   isDeepFocusActive 
-                    ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]' 
-                    : 'bg-gray-100/80 backdrop-blur-sm justify-end pr-[10.5px]'
+                    ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20' 
+                    : 'bg-gray-100/80 backdrop-blur-sm'
                 }`}>
                   <span className={`text-sm font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${
                     isDeepFocusActive 
@@ -591,17 +625,41 @@ const DeepFocusPage: React.FC = () => {
                   }`}>
                     {isDeepFocusActive ? 'Deep Focus' : 'Focus Off'}
                   </span>
+                  {isDeepFocusActive && activeSessionId && (
+                    <span className="text-xs text-white/90 font-mono [text-shadow:0_0_8px_rgba(255,255,255,0.3)]">
+                      {formatElapsedTime(activeSessionElapsedSeconds)}
+                    </span>
+                  )}
                 </div>
                 <div className={`absolute w-6 h-6 bg-white rounded-full shadow-lg transition-all duration-500 ${
                   isDeepFocusActive 
-                    ? 'left-[calc(100%-27px)] shadow-[0_6px_20px_rgba(187,95,90,0.2)]' 
-                    : 'left-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.1)]'
+                    ? 'right-2 shadow-[0_6px_20px_rgba(187,95,90,0.2)]' 
+                    : 'left-2 shadow-[0_2px_8px_rgba(0,0,0,0.1)]'
                 }`}></div>
               </label>
             </div>
           </div>
           
           <div className="flex items-center space-x-4">
+            {/* Cleanup Button (Temporary) */}
+            <Tooltip text="Clean up orphaned sessions">
+              <button 
+                className="p-2 rounded-full hover:bg-red-50 text-red-500 hover:text-red-600 transition-colors duration-200"
+                onClick={async () => {
+                  console.log('🧹 Manual cleanup triggered...');
+                  await cleanupAllOrphanedSessions();
+                }}
+                aria-label="Clean up orphaned sessions"
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  <Icon 
+                    name="delete-bin-line" 
+                    size={20}
+                  />
+                </span>
+              </button>
+            </Tooltip>
+            
             {/* Date Range Filter */}
             <div className="relative" ref={dateFilterRef}>
               <Button
@@ -834,7 +892,7 @@ const DeepFocusPage: React.FC = () => {
                   hoverBorder: 'hover:border-green-100'
                 },
                 { 
-                  label: 'Deep Focus Sessions', 
+                  label: 'Deep Focus Time', 
                   value: filteredTimeMetrics.deepFocusTime, 
                   change: '+2.4% from yesterday',
                   icon: 'focus-3-line',
@@ -842,7 +900,7 @@ const DeepFocusPage: React.FC = () => {
                   iconBg: 'bg-red-50',
                   valueColor: 'text-red-500',
                   hoverBorder: 'hover:border-red-100',
-                  isSessionCount: true
+                  isDeepFocusTime: true
                 },
                 { 
                   label: 'Override Time', 
@@ -868,7 +926,12 @@ const DeepFocusPage: React.FC = () => {
                   </div>
                   <h3 className="text-sm text-gray-500 mb-1">{metric.label}</h3>
                   <div className={`text-2xl font-semibold ${metric.valueColor}`}>
-                    {(metric as any).isSessionCount ? totalSessionsCount.toString() : formatMinutesToHours(metric.value)}
+                    {(metric as any).isDeepFocusTime
+                      ? (() => {
+                          console.log('🎯 Deep Focus Time Display:', metric.value, 'minutes');
+                          return formatMinutesToHours(metric.value);
+                        })()
+                      : formatMinutesToHours(metric.value)}
                   </div>
                   <div className="flex items-center mt-3 text-green-500 text-xs font-medium">
                     <span>{metric.change}</span>

@@ -88,18 +88,24 @@ class DeepFocusSessionService {
   }
 
   /**
-   * Get all deep focus sessions for a user
+   * Get all deep focus sessions for a user with optional date filtering
    */
-  async getUserSessions(userId: string): Promise<DeepFocusSession[]> {
+  async getUserSessions(userId: string, startDate?: Date, endDate?: Date): Promise<DeepFocusSession[]> {
     try {
-      const q = query(
+      console.log('🔍 DeepFocusSessionService: getUserSessions called', { userId, startDate, endDate });
+      
+      // Simple query without orderBy to avoid index requirement
+      let q = query(
         collection(db, this.collectionName),
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc')
+        where('userId', '==', userId)
       );
+
+      console.log('🔍 DeepFocusSessionService: Base query created (without orderBy to avoid index)');
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => {
+      console.log('🔍 DeepFocusSessionService: Query executed, found', querySnapshot.size, 'documents');
+      
+      let sessions = querySnapshot.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -112,8 +118,41 @@ class DeepFocusSessionService {
           updatedAt: data.updatedAt?.toDate() || new Date()
         };
       });
+
+      console.log('🔍 DeepFocusSessionService: Mapped sessions:', sessions.length);
+      console.log('🔍 DeepFocusSessionService: Session details:', sessions.map(s => ({
+        id: s.id,
+        status: s.status,
+        duration: s.duration,
+        createdAt: s.createdAt.toISOString()
+      })));
+
+      // Apply date filtering in JavaScript if provided
+      if (startDate && endDate) {
+        console.log('🔍 DeepFocusSessionService: Applying date filter', { startDate, endDate });
+        const originalCount = sessions.length;
+        sessions = sessions.filter(session => {
+          const sessionDate = session.createdAt;
+          const isInRange = sessionDate >= startDate && sessionDate <= endDate;
+          console.log('🔍 Session date check:', {
+            sessionId: session.id,
+            sessionDate: sessionDate.toISOString(),
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+            isInRange
+          });
+          return isInRange;
+        });
+        console.log('🔍 DeepFocusSessionService: Date filtering:', originalCount, '→', sessions.length, 'sessions');
+      }
+      
+      // Sort by createdAt in JavaScript (newest first)
+      sessions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      
+      console.log('🔍 DeepFocusSessionService: Final sessions:', sessions.length);
+      return sessions;
     } catch (error) {
-      console.error('Error fetching user Deep Focus sessions:', error);
+      console.error('❌ Error fetching user Deep Focus sessions:', error);
       throw error;
     }
   }
@@ -158,14 +197,14 @@ class DeepFocusSessionService {
    * Subscribe to user's deep focus sessions
    */
   subscribeToUserSessions(userId: string, callback: (sessions: DeepFocusSession[]) => void): () => void {
+    // Simple query without orderBy to avoid index requirement
     const q = query(
       collection(db, this.collectionName),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', userId)
     );
 
     return onSnapshot(q, (querySnapshot) => {
-      const sessions = querySnapshot.docs.map(doc => {
+      let sessions = querySnapshot.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -178,6 +217,10 @@ class DeepFocusSessionService {
           updatedAt: data.updatedAt?.toDate() || new Date()
         };
       });
+      
+      // Sort by createdAt in JavaScript (newest first)
+      sessions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      
       callback(sessions);
     });
   }
@@ -212,6 +255,65 @@ class DeepFocusSessionService {
         .reduce((total, session) => total + (session.duration || 0), 0);
     } catch (error) {
       console.error('Error calculating total focus time:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Update the duration of an active deep focus session
+   */
+  async updateSessionDuration(sessionId: string, duration: number): Promise<void> {
+    try {
+      const sessionRef = doc(db, this.collectionName, sessionId);
+      await updateDoc(sessionRef, {
+        duration: duration,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating Deep Focus session duration:', error);
+    }
+  }
+
+  /**
+   * Clean up any orphaned active sessions for a user (sessions that were never properly ended)
+   * This is useful for handling page reloads or unexpected app closures
+   */
+  async cleanupOrphanedSessions(userId: string): Promise<number> {
+    try {
+      const q = query(
+        collection(db, this.collectionName),
+        where('userId', '==', userId),
+        where('status', '==', 'active')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      let cleanedCount = 0;
+      
+      for (const docSnapshot of querySnapshot.docs) {
+        const data = docSnapshot.data();
+        const startTime = data.startTime?.toDate() || new Date();
+        const now = new Date();
+        const duration = Math.round((now.getTime() - startTime.getTime()) / (1000 * 60)); // minutes
+        
+        // End the orphaned session
+        await updateDoc(doc(db, this.collectionName, docSnapshot.id), {
+          endTime: serverTimestamp(),
+          duration: duration,
+          status: 'completed',
+          updatedAt: serverTimestamp()
+        });
+        
+        cleanedCount++;
+        console.log('🧹 Cleaned up orphaned session:', docSnapshot.id, 'Duration:', duration, 'minutes');
+      }
+      
+      if (cleanedCount > 0) {
+        console.log('✅ Cleaned up', cleanedCount, 'orphaned sessions');
+      }
+      
+      return cleanedCount;
+    } catch (error) {
+      console.error('❌ Error cleaning up orphaned sessions:', error);
       return 0;
     }
   }
