@@ -122,6 +122,12 @@ class PopupManager {
       exportBtn.addEventListener('click', () => this.exportData());
     }
 
+    // Auto-management toggle
+    const autoMgmtToggle = document.getElementById('auto-management-toggle');
+    if (autoMgmtToggle) {
+      autoMgmtToggle.addEventListener('change', (e) => this.toggleAutoManagement(e.target.checked));
+    }
+
     // View all sites
     const viewAllBtn = document.getElementById('view-all-btn');
     if (viewAllBtn) {
@@ -289,6 +295,7 @@ class PopupManager {
     this.updateHeader();
     this.updateStatsOverview();
     this.updateCurrentSession();
+    this.updateActivityStatus();
     this.updateTopSites();
     this.updateActionButtons();
   }
@@ -1039,6 +1046,103 @@ class PopupManager {
     }
     if (this.sessionTimer) {
       clearInterval(this.sessionTimer);
+    }
+  }
+
+  /**
+   * Update activity status display
+   */
+  async updateActivityStatus() {
+    try {
+      const response = await this.sendMessage('GET_ACTIVITY_STATE');
+      if (response?.success) {
+        const activityState = response.data;
+        
+        // Update activity indicator
+        const activityDot = document.getElementById('activity-dot');
+        const activityText = document.getElementById('activity-text');
+        const pauseInfo = document.getElementById('pause-info');
+        const pauseDuration = document.getElementById('pause-duration');
+        
+        if (activityDot && activityText) {
+          if (activityState.isSessionPaused) {
+            activityDot.className = 'activity-dot paused';
+            activityText.textContent = 'Paused';
+            
+            if (pauseInfo && pauseDuration) {
+              const pausedFor = activityState.pausedAt ? 
+                Math.round((Date.now() - new Date(activityState.pausedAt).getTime()) / 1000) : 0;
+              pauseDuration.textContent = `Paused for ${this.formatDuration(pausedFor)}`;
+              pauseInfo.classList.remove('hidden');
+            }
+          } else if (activityState.isUserActive) {
+            activityDot.className = 'activity-dot active';
+            activityText.textContent = 'Active';
+            if (pauseInfo) pauseInfo.classList.add('hidden');
+          } else {
+            activityDot.className = 'activity-dot inactive';
+            activityText.textContent = `Idle ${this.formatDuration(activityState.inactivityDuration)}`;
+            if (pauseInfo) pauseInfo.classList.add('hidden');
+          }
+        }
+
+        // Update auto-management toggle
+        const autoMgmtToggle = document.getElementById('auto-management-toggle');
+        if (autoMgmtToggle) {
+          autoMgmtToggle.checked = activityState.autoManagementEnabled;
+        }
+      }
+    } catch (error) {
+      console.error('Error updating activity status:', error);
+    }
+  }
+
+  /**
+   * Toggle auto-management setting
+   */
+  async toggleAutoManagement(enabled) {
+    try {
+      console.log('🔧 Toggling auto-management:', enabled);
+      
+      const response = await this.sendMessage('TOGGLE_AUTO_MANAGEMENT', { enabled });
+      
+      if (response?.success) {
+        console.log('✅ Auto-management toggled successfully');
+        this.showNotification(
+          enabled ? 'Auto-pause enabled' : 'Auto-pause disabled',
+          'success'
+        );
+      } else {
+        console.error('❌ Failed to toggle auto-management:', response?.error);
+        this.showNotification('Failed to update setting', 'error');
+        
+        // Revert toggle state
+        const toggle = document.getElementById('auto-management-toggle');
+        if (toggle) toggle.checked = !enabled;
+      }
+    } catch (error) {
+      console.error('Error toggling auto-management:', error);
+      this.showNotification('Error updating setting', 'error');
+      
+      // Revert toggle state
+      const toggle = document.getElementById('auto-management-toggle');
+      if (toggle) toggle.checked = !enabled;
+    }
+  }
+
+  /**
+   * Format duration in seconds to human readable format
+   */
+  formatDuration(seconds) {
+    if (seconds < 60) {
+      return `${seconds}s`;
+    } else if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      return `${minutes}m`;
+    } else {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      return `${hours}h ${minutes}m`;
     }
   }
 

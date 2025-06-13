@@ -113,7 +113,7 @@ export interface DeepFocusSession {
   startTime: Date;
   endTime?: Date;
   duration?: number; // in minutes, calculated when session ends
-  status: 'active' | 'completed';
+  status: 'active' | 'completed' | 'suspended';
   createdAt: Date;
   updatedAt: Date;
 }

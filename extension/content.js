@@ -7,9 +7,15 @@ class ActivityDetector {
   constructor() {
     this.isActive = true;
     this.lastActivity = Date.now();
-    this.activityThreshold = 5000; // 5 seconds
+    this.activityThreshold = 30000; // 30 seconds (enhanced from 5 seconds)
     this.reportInterval = null;
     this.focusMode = false;
+    
+    // Enhanced tracking
+    this.isPageVisible = !document.hidden;
+    this.isWindowFocused = document.hasFocus();
+    this.lastReportTime = Date.now();
+    this.reportFrequency = 10000; // Report every 10 seconds
     
     this.initialize();
   }
@@ -84,19 +90,39 @@ class ActivityDetector {
       }, { passive: true });
     });
 
-    // Page visibility change
+    // Enhanced page visibility change
     document.addEventListener('visibilitychange', () => {
-      this.handleVisibilityChange();
+      this.handleEnhancedVisibilityChange();
     });
 
-    // Focus/blur events
+    // Enhanced focus/blur events
     window.addEventListener('focus', () => {
-      this.handleWindowFocus();
+      this.handleEnhancedWindowFocus();
     });
 
     window.addEventListener('blur', () => {
-      this.handleWindowBlur();
+      this.handleEnhancedWindowBlur();
     });
+
+    // Page lifecycle events for sleep detection
+    window.addEventListener('beforeunload', () => {
+      this.handlePageUnload();
+    });
+
+    // Page freeze/resume for system sleep detection
+    if ('onfreeze' in window) {
+      window.addEventListener('freeze', () => {
+        console.log('🧊 Page freeze detected - system likely sleeping');
+        this.handlePageFreeze();
+      });
+    }
+
+    if ('onresume' in window) {
+      window.addEventListener('resume', () => {
+        console.log('🌅 Page resume detected - system likely waking');
+        this.handlePageResume();
+      });
+    }
 
     // Beforeunload to report final activity
     window.addEventListener('beforeunload', () => {
@@ -124,34 +150,85 @@ class ActivityDetector {
   }
 
   /**
-   * Handle page visibility changes
+   * Enhanced visibility change handling
    */
-  handleVisibilityChange() {
-    if (document.hidden) {
-      this.isActive = false;
-      this.reportActivity();
-    } else {
-      this.isActive = true;
-      this.lastActivity = Date.now();
-      this.reportActivity();
+  handleEnhancedVisibilityChange() {
+    const wasVisible = this.isPageVisible;
+    this.isPageVisible = !document.hidden;
+    
+    console.log(`👁️ Visibility: ${wasVisible ? 'visible' : 'hidden'} → ${this.isPageVisible ? 'visible' : 'hidden'}`);
+    
+    if (this.isPageVisible && !wasVisible) {
+      this.handleUserReturn();
+    } else if (!this.isPageVisible && wasVisible) {
+      this.handleUserAway();
     }
+    
+    this.reportEnhancedActivity('visibility');
   }
 
   /**
-   * Handle window focus
+   * Enhanced window focus handling
    */
-  handleWindowFocus() {
-    this.isActive = true;
+  handleEnhancedWindowFocus() {
+    console.log('🎯 Window gained focus');
+    this.isWindowFocused = true;
+    this.handleUserReturn();
+  }
+
+  /**
+   * Enhanced window blur handling
+   */
+  handleEnhancedWindowBlur() {
+    console.log('😴 Window lost focus');
+    this.isWindowFocused = false;
+    this.handleUserAway();
+  }
+
+  /**
+   * Handle user returning (focus/visibility)
+   */
+  handleUserReturn() {
+    console.log('👋 User returned');
     this.lastActivity = Date.now();
-    this.reportActivity();
+    this.isActive = true;
+    this.reportEnhancedActivity('return');
   }
 
   /**
-   * Handle window blur
+   * Handle user going away (blur/hidden)
    */
-  handleWindowBlur() {
+  handleUserAway() {
+    console.log('💤 User went away');
+    this.checkActiveStatus();
+    this.reportEnhancedActivity('away');
+  }
+
+  /**
+   * Handle page freeze (system sleep)
+   */
+  handlePageFreeze() {
+    console.log('🧊 Page freeze - system likely sleeping');
     this.isActive = false;
-    this.reportActivity();
+    this.reportEnhancedActivity('freeze');
+  }
+
+  /**
+   * Handle page resume (system wake)
+   */
+  handlePageResume() {
+    console.log('🌅 Page resume - system likely waking');
+    this.lastActivity = Date.now();
+    this.isActive = true;
+    this.reportEnhancedActivity('resume');
+  }
+
+  /**
+   * Handle page unload
+   */
+  handlePageUnload() {
+    console.log('👋 Page unloading');
+    this.reportEnhancedActivity('unload');
   }
 
   /**
@@ -166,45 +243,75 @@ class ActivityDetector {
   }
 
   /**
-   * Check if user is still active
+   * Enhanced activity status check
    */
   checkActiveStatus() {
-    const timeSinceLastActivity = Date.now() - this.lastActivity;
+    const now = Date.now();
+    const timeSinceLastActivity = now - this.lastActivity;
     
-    if (timeSinceLastActivity > this.activityThreshold) {
-      this.isActive = false;
+    // More strict activity checking
+    const wasActive = this.isActive;
+    this.isActive = timeSinceLastActivity < this.activityThreshold && 
+                   this.isPageVisible && 
+                   this.isWindowFocused;
+    
+    if (wasActive !== this.isActive) {
+      console.log(`🔄 Activity status: ${wasActive ? 'active' : 'inactive'} → ${this.isActive ? 'active' : 'inactive'}`);
+      console.log(`⏰ Time since activity: ${Math.round(timeSinceLastActivity / 1000)}s`);
     }
   }
 
   /**
-   * Report activity to background script
+   * Enhanced activity reporting
    */
-  async reportActivity(isUnloading = false) {
+  async reportEnhancedActivity(eventType = 'periodic') {
     try {
+      const now = Date.now();
+      const timeSinceLastActivity = now - this.lastActivity;
+      
       const activityData = {
         isActive: this.isActive,
         lastActivity: this.lastActivity,
+        timeSinceLastActivity: timeSinceLastActivity,
+        isVisible: this.isPageVisible,
+        isWindowFocused: this.isWindowFocused,
         url: window.location.href,
         domain: window.location.hostname,
-        timestamp: Date.now(),
-        isUnloading: isUnloading
+        timestamp: now,
+        eventType: eventType,
+        activityThreshold: this.activityThreshold
       };
 
-      // Send message to background script
+      // Send enhanced message to background script
       if (chrome.runtime && chrome.runtime.sendMessage) {
         const response = await chrome.runtime.sendMessage({
-          type: 'ACTIVITY_DETECTED',
+          type: 'ENHANCED_ACTIVITY_DETECTED',
           payload: activityData
         });
 
-        if (!response?.success) {
-          console.warn('Failed to report activity:', response?.error);
+        if (response?.success) {
+          this.lastReportTime = now;
+          console.log(`📊 Enhanced activity reported (${eventType}):`, {
+            isActive: this.isActive,
+            timeSinceActivity: Math.round(timeSinceLastActivity / 1000) + 's',
+            isVisible: this.isPageVisible,
+            isFocused: this.isWindowFocused
+          });
+        } else {
+          console.warn('⚠️ Failed to report enhanced activity:', response?.error);
         }
       }
     } catch (error) {
-      // Extension might be reloading or unavailable
-      console.debug('Could not report activity:', error);
+      console.debug('Could not report enhanced activity:', error);
     }
+  }
+
+  /**
+   * Legacy activity reporting (for compatibility)
+   */
+  async reportActivity(isUnloading = false) {
+    // Use enhanced reporting instead
+    await this.reportEnhancedActivity(isUnloading ? 'unload' : 'legacy');
   }
 
   /**

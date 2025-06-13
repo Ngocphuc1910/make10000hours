@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import Sidebar from '../layout/Sidebar';
 import { useDeepFocusStore } from '../../store/deepFocusStore';
 import { useExtensionSync } from '../../hooks/useExtensionSync';
-import { useDeepFocusSync } from '../../hooks/useDeepFocusSync';
+import { useEnhancedDeepFocusSync } from '../../hooks/useEnhancedDeepFocusSync';
 import { useExtensionDateRange } from '../../hooks/useExtensionDateRange';
 import { useDashboardStore } from '../../store/useDashboardStore';
 import { useUserStore } from '../../store/userStore';
@@ -73,7 +73,10 @@ const DeepFocusPage: React.FC = () => {
     lastBackupTime,
     backupError,
     backupTodayData,
-    loadHybridTimeRangeData
+    loadHybridTimeRangeData,
+    isSessionPaused,
+    autoSessionManagement,
+    setAutoSessionManagement
   } = useDeepFocusStore();
   
   const { workSessions } = useDashboardStore();
@@ -101,7 +104,7 @@ const DeepFocusPage: React.FC = () => {
 
   // Extension sync hooks
   const { refreshData } = useExtensionSync();
-  useDeepFocusSync(); // Sync Deep Focus state across pages
+  const enhancedSync = useEnhancedDeepFocusSync(); // Enhanced sync with activity detection
   const { loadDateRangeData, isLoading: dateRangeLoading } = useExtensionDateRange();
 
   // State for extension-loaded data
@@ -620,40 +623,46 @@ const DeepFocusPage: React.FC = () => {
               Deep Focus
             </div>
 
-            <div className="ml-4 flex items-center">
-              <label className="relative inline-flex items-center cursor-pointer group">
-                <input 
-                  type="checkbox" 
-                  className="sr-only peer" 
-                  checked={isDeepFocusActive}
-                  onChange={(e) => {
-                    console.log('Deep Focus switch toggled:', e.target.checked, 'User:', user);
-                    if (e.target.checked) {
-                      enableDeepFocus();
-                    } else {
-                      disableDeepFocus();
-                    }
-                  }}
-                />
-                <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${
-                  isDeepFocusActive 
-                    ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]' 
-                    : 'bg-gray-100/80 backdrop-blur-sm justify-end pr-[10.5px]'
-                }`}>
-                  <span className={`text-sm font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${
+            <div className="ml-4 flex items-center gap-4">
+              <div className="flex flex-col">
+                <label className="relative inline-flex items-center cursor-pointer group">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer" 
+                    checked={isDeepFocusActive}
+                    onChange={(e) => {
+                      console.log('Deep Focus switch toggled:', e.target.checked, 'User:', user);
+                      if (e.target.checked) {
+                        enableDeepFocus();
+                      } else {
+                        disableDeepFocus();
+                      }
+                    }}
+                  />
+                  <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${
                     isDeepFocusActive 
-                      ? 'text-white font-semibold [text-shadow:0_0_12px_rgba(255,255,255,0.5)]' 
-                      : 'text-gray-500'
+                      ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]' 
+                      : 'bg-gray-100/80 backdrop-blur-sm justify-end pr-[10.5px]'
                   }`}>
-                    {isDeepFocusActive ? 'Deep Focus' : 'Focus Off'}
-                  </span>
-                </div>
-                <div className={`absolute w-6 h-6 bg-white rounded-full shadow-lg transition-all duration-500 ${
-                  isDeepFocusActive 
-                    ? 'left-[calc(100%-27px)] shadow-[0_6px_20px_rgba(187,95,90,0.2)]' 
-                    : 'left-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.1)]'
-                }`}></div>
-              </label>
+                    <span className={`text-sm font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${
+                      isDeepFocusActive 
+                        ? 'text-white font-semibold [text-shadow:0_0_12px_rgba(255,255,255,0.5)]' 
+                        : 'text-gray-500'
+                    }`}>
+                      {isDeepFocusActive ? 'Deep Focus' : 'Focus Off'}
+                    </span>
+                  </div>
+                  <div className={`absolute w-6 h-6 bg-white rounded-full shadow-lg transition-all duration-500 ${
+                    isDeepFocusActive 
+                      ? 'left-[calc(100%-27px)] shadow-[0_6px_20px_rgba(187,95,90,0.2)]' 
+                      : 'left-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.1)]'
+                  }`}></div>
+                </label>
+                
+                {/* Session Status Indicator - Hidden when switch is on */}
+              </div>
+              
+              {/* Auto Session Management Toggle - Hidden when switch is on */}
             </div>
           </div>
           
