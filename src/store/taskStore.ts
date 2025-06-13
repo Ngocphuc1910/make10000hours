@@ -676,11 +676,26 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 useUserStore.subscribe((state) => {
   const taskStore = useTaskStore.getState();
   
+  // CRITICAL: Only react to auth changes after user store is initialized
+  // This prevents cleanup during Firebase auth restoration on page reload
+  if (!state.isInitialized) {
+    console.log('TaskStore - User store not initialized yet, waiting...');
+    return;
+  }
+  
+  console.log('TaskStore - User state changed:', {
+    isAuthenticated: state.isAuthenticated,
+    hasUser: !!state.user,
+    isInitialized: state.isInitialized
+  });
+  
   if (state.isAuthenticated && state.user) {
     // User logged in, initialize task store
+    console.log('TaskStore - User authenticated, initializing...');
     taskStore.initializeStore();
   } else {
     // User logged out, cleanup and reset
+    console.log('TaskStore - User not authenticated, cleaning up...');
     taskStore.cleanupListeners();
   }
 });

@@ -866,9 +866,16 @@ const DeepFocusPage: React.FC = () => {
           {/* Loading Indicator for Date Range Data */}
           {dateRangeLoading && (
             <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-20">
-              <div className="flex items-center space-x-3 bg-white rounded-lg shadow-lg px-6 py-4">
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
-                <span className="text-sm font-medium text-gray-700">Loading data for selected date range...</span>
+              <div className="bg-white rounded-xl shadow-lg px-8 py-6 max-w-sm w-full mx-4">
+                <div className="flex items-center justify-center space-x-4">
+                  <div className="w-8 h-8">
+                    <div className="w-full h-full border-4 border-gray-100 border-t-primary rounded-full animate-spin"></div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-gray-800">Loading data</div>
+                    <div className="text-xs text-gray-500 mt-1">Analyzing your focus metrics...</div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
