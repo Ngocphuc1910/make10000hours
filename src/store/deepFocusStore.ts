@@ -4,6 +4,8 @@ import { DeepFocusData, SiteUsage, BlockedSite } from '../types/deepFocus';
 import { DeepFocusSession } from '../types/models';
 import ExtensionDataService from '../services/extensionDataService';
 import { deepFocusSessionService } from '../api/deepFocusSessionService';
+import { siteUsageService } from '../api/siteUsageService';
+import HybridDataService from '../api/hybridDataService';
 
 // Mock data with exact colors from AI design
 const mockSiteUsage: SiteUsage[] = [
@@ -147,6 +149,18 @@ interface DeepFocusStore extends DeepFocusData {
   activeSessionElapsedSeconds: number;
   timer: NodeJS.Timeout | null;
   secondTimer: NodeJS.Timeout | null;
+  // Site usage backup methods
+  backupTodayData: () => Promise<void>;
+  performDailyBackup: () => Promise<void>;
+  initializeDailyBackup: () => void;
+  restoreFromBackup: (date: string) => Promise<void>;
+  getBackupStatus: () => Promise<{ lastSyncDate: string | null; totalDays: number }>;
+  // Hybrid data fetching for date ranges
+  loadHybridTimeRangeData: (startDate: string, endDate: string) => Promise<any>;
+  // Internal sync state
+  isBackingUp: boolean;
+  lastBackupTime: Date | null;
+  backupError: string | null;
 }
 
 export const useDeepFocusStore = create<DeepFocusStore>()(
@@ -182,6 +196,10 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
   activeSessionElapsedSeconds: 0,
   timer: null,
   secondTimer: null,
+  // Backup state
+  isBackingUp: false,
+  lastBackupTime: null,
+  backupError: null,
 
   loadExtensionData: async () => {
     try {
@@ -586,13 +604,206 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
     set({ unsubscribe });
   },
 
-  unsubscribeFromSessions: () => {
-    const state = get();
-    if (state.unsubscribe) {
-      state.unsubscribe();
-      set({ unsubscribe: null });
+      unsubscribeFromSessions: () => {
+      const state = get();
+      if (state.unsubscribe) {
+        state.unsubscribe();
+        set({ unsubscribe: null });
+      }
+    },
+
+    // Site usage backup methods
+    backupTodayData: async () => {
+      const state = get();
+      if (state.isBackingUp) return; // Prevent concurrent backups
+      
+      try {
+        set({ isBackingUp: true, backupError: null });
+        
+        const { useUserStore } = await import('./userStore');
+        const user = useUserStore.getState().user;
+        if (!user?.uid) {
+          throw new Error('User not authenticated');
+        }
+
+        // Get today's data from extension
+        if (!ExtensionDataService.isExtensionInstalled()) {
+          console.log('Extension not available, skipping backup');
+          return;
+        }
+
+        const extensionResponse = await ExtensionDataService.getTodayStats();
+        if (extensionResponse.success === false) {
+          throw new Error(extensionResponse.error || 'Failed to get extension data');
+        }
+
+        const today = new Date().toISOString().split('T')[0];
+        await siteUsageService.backupDayData(user.uid, today, extensionResponse.data || extensionResponse);
+        
+        set({ lastBackupTime: new Date() });
+        console.log('✅ Successfully backed up today\'s site usage data');
+      } catch (error) {
+        console.error('❌ Failed to backup today\'s data:', error);
+        set({ backupError: error instanceof Error ? error.message : 'Unknown error' });
+      } finally {
+        set({ isBackingUp: false });
+      }
+    },
+
+    performDailyBackup: async () => {
+      const state = get();
+      if (state.isBackingUp) return;
+      
+      try {
+        set({ isBackingUp: true, backupError: null });
+        
+        const { useUserStore } = await import('./userStore');
+        const user = useUserStore.getState().user;
+        if (!user?.uid) {
+          throw new Error('User not authenticated');
+        }
+
+        if (!ExtensionDataService.isExtensionInstalled()) {
+          console.log('Extension not available, skipping daily backup');
+          return;
+        }
+
+        // Get last 7 days of data to catch any missed days
+        const endDate = new Date().toISOString().split('T')[0];
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 7);
+        const startDateStr = startDate.toISOString().split('T')[0];
+
+        const response = await ExtensionDataService.getTimeDataRange(startDateStr, endDate);
+        if (response.success === false) {
+          throw new Error(response.error || 'Failed to get extension data range');
+        }
+
+        const dataMap = response.data as Record<string, any>;
+        await siteUsageService.batchBackupData(user.uid, dataMap);
+        
+        // Also clean up old data (keep last 90 days)
+        await siteUsageService.cleanupOldData(user.uid, 90);
+        
+        set({ lastBackupTime: new Date() });
+        console.log('✅ Successfully performed daily backup');
+      } catch (error) {
+        console.error('❌ Failed to perform daily backup:', error);
+        set({ backupError: error instanceof Error ? error.message : 'Daily backup failed' });
+      } finally {
+        set({ isBackingUp: false });
+      }
+    },
+
+    initializeDailyBackup: () => {
+      // Run backup every 4 hours
+      setInterval(() => {
+        get().backupTodayData();
+      }, 4 * 60 * 60 * 1000);
+
+      // Run full daily backup at 2 AM
+      const scheduleNextDailyBackup = () => {
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(2, 0, 0, 0); // 2 AM tomorrow
+        
+        const msUntilTomorrow = tomorrow.getTime() - now.getTime();
+        
+        setTimeout(() => {
+          get().performDailyBackup();
+          // Schedule the next one
+          setInterval(() => {
+            get().performDailyBackup();
+          }, 24 * 60 * 60 * 1000); // Every 24 hours
+        }, msUntilTomorrow);
+      };
+
+      scheduleNextDailyBackup();
+
+      // Initial backup on app start (but wait a bit for extension to be ready)
+      setTimeout(() => {
+        get().backupTodayData();
+      }, 5000);
+    },
+
+    restoreFromBackup: async (date: string) => {
+      try {
+        const { useUserStore } = await import('./userStore');
+        const user = useUserStore.getState().user;
+        if (!user?.uid) {
+          throw new Error('User not authenticated');
+        }
+
+        const restoredData = await siteUsageService.restoreToExtension(user.uid, date);
+        console.log(`✅ Restored data for ${date}:`, restoredData);
+        
+        // Could also update local state here if needed
+        return restoredData;
+      } catch (error) {
+        console.error(`❌ Failed to restore data for ${date}:`, error);
+        throw error;
+      }
+    },
+
+    getBackupStatus: async () => {
+      try {
+        const { useUserStore } = await import('./userStore');
+        const user = useUserStore.getState().user;
+        if (!user?.uid) {
+          return { lastSyncDate: null, totalDays: 0 };
+        }
+
+        return await siteUsageService.getLastSyncInfo(user.uid);
+      } catch (error) {
+        console.error('❌ Failed to get backup status:', error);
+        return { lastSyncDate: null, totalDays: 0 };
+      }
+    },
+
+    // Hybrid data fetching for date ranges (Firebase + Extension)
+    loadHybridTimeRangeData: async (startDate: string, endDate: string) => {
+      try {
+        const { useUserStore } = await import('./userStore');
+        const user = useUserStore.getState().user;
+        if (!user?.uid) {
+          throw new Error('User not authenticated');
+        }
+
+        console.log('🔄 Loading hybrid data for range:', { startDate, endDate });
+        
+        const response = await HybridDataService.getTimeRangeData(user.uid, startDate, endDate);
+        
+        if (!response.success) {
+          throw new Error('Failed to fetch hybrid data');
+        }
+
+        // Convert aggregated data to web app format
+        const webAppData = HybridDataService.convertToWebAppFormat({
+          totalTime: response.aggregated.totalTime,
+          sitesVisited: response.aggregated.sitesVisited,
+          productivityScore: response.aggregated.avgProductivityScore,
+          sites: response.aggregated.sites
+        });
+
+        console.log('✅ Hybrid data loaded successfully:', {
+          dateRange: response.aggregated.dateRange,
+          totalSites: Object.keys(response.aggregated.sites).length,
+          totalTime: Math.round(response.aggregated.totalTime / (1000 * 60)), // minutes
+        });
+
+        return {
+          timeMetrics: webAppData.timeMetrics,
+          siteUsage: webAppData.siteUsage,
+          productivityScore: webAppData.productivityScore,
+          aggregated: response.aggregated,
+          dailyData: response.data
+        };
+      } catch (error) {
+        console.error('❌ Failed to load hybrid time range data:', error);
+        throw error;
+      }
     }
-  }
 }),
 {
   name: 'deep-focus-storage',
