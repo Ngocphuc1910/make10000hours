@@ -449,6 +449,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true });
       break;
       
+    case 'FOCUS_STATE_CHANGED':
+      // Update local state and forward to web app if present
+      activityDetector.focusMode = message.payload.isActive;
+      if (message.payload.isActive) {
+        activityDetector.showFocusIndicator();
+      } else {
+        activityDetector.hideFocusIndicator();
+      }
+      
+      // Forward to web app
+      window.postMessage({
+        type: 'EXTENSION_FOCUS_STATE_CHANGED',
+        payload: { isActive: message.payload.isActive }
+      }, '*');
+      
+      sendResponse({ success: true });
+      break;
+      
     case 'PING':
       sendResponse({ success: true, pong: true });
       break;

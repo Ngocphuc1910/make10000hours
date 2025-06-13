@@ -6,7 +6,8 @@ import { Tooltip } from '../../ui/Tooltip';
 import { RangeType, useDashboardStore } from '../../../store/useDashboardStore';
 import { useUIStore } from '../../../store/uiStore';
 import { useDeepFocusStore } from '../../../store/deepFocusStore';
-import { useDeepFocusSync } from '../../../hooks/useDeepFocusSync';
+import { useEnhancedDeepFocusSync } from '../../../hooks/useEnhancedDeepFocusSync';
+import { useExtensionSync } from '../../../hooks/useExtensionSync';
 import flatpickr from 'flatpickr';
 import 'flatpickr/dist/flatpickr.min.css';
 
@@ -30,7 +31,8 @@ export const Header: React.FC = () => {
     enableDeepFocus, 
     disableDeepFocus 
   } = useDeepFocusStore();
-  useDeepFocusSync(); // Sync Deep Focus state across pages
+  useEnhancedDeepFocusSync(); // Enhanced sync with activity detection and extension sync
+  useExtensionSync(); // Bidirectional extension sync
   const dateFilterRef = useRef<HTMLDivElement>(null);
   const dateRangeInputRef = useRef<HTMLInputElement>(null);
   const datePickerRef = useRef<FlatpickrInstance | null>(null);
@@ -42,7 +44,7 @@ export const Header: React.FC = () => {
   // Flag to prevent automatic closing
   const [isInitializing, setIsInitializing] = useState(false);
 
-  // Focus status is now handled by useDeepFocusSync hook
+  // Focus status is now handled by useEnhancedDeepFocusSync hook
 
   // Close date filter when clicking outside
   useEffect(() => {

@@ -8,7 +8,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import ProjectView from './views/ProjectView';
 import { Tooltip } from '../ui/Tooltip';
 import { useDeepFocusStore } from '../../store/deepFocusStore';
-import { useDeepFocusSync } from '../../hooks/useDeepFocusSync';
+import { useEnhancedDeepFocusSync } from '../../hooks/useEnhancedDeepFocusSync';
+import { useExtensionSync } from '../../hooks/useExtensionSync';
 
 type ViewType = 'project' | 'status';
 
@@ -30,7 +31,8 @@ export const ProjectsPage: React.FC = () => {
     enableDeepFocus, 
     disableDeepFocus 
   } = useDeepFocusStore();
-  useDeepFocusSync(); // Sync Deep Focus state across pages
+  useEnhancedDeepFocusSync(); // Enhanced sync with activity detection and extension sync
+  useExtensionSync(); // Bidirectional extension sync
 
   // Save view type to localStorage whenever it changes
   useEffect(() => {

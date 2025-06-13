@@ -184,7 +184,7 @@ class ExtensionDataService {
   }
 
   static async getFocusStatus(): Promise<{ focusMode: boolean }> {
-    const response = await this.sendMessage({ type: 'GET_FOCUS_STATUS' });
+    const response = await this.sendMessage({ type: 'GET_FOCUS_STATE' });
     if (!response?.success && response?.error) {
       throw new Error(response.error);
     }

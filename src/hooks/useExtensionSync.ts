@@ -53,6 +53,21 @@ export const useExtensionSync = () => {
     return () => window.removeEventListener('focus', handleFocus);
   }, [loadExtensionData]);
 
+  // Listen for focus state changes from extension via content script
+  useEffect(() => {
+    const handleExtensionMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'EXTENSION_FOCUS_STATE_CHANGED') {
+        console.log('🔄 Received focus state change from extension:', event.data.payload.isActive);
+        // Update local state without triggering extension sync
+        const { syncFocusStatus } = useDeepFocusStore.getState();
+        syncFocusStatus(event.data.payload.isActive);
+      }
+    };
+
+    window.addEventListener('message', handleExtensionMessage);
+    return () => window.removeEventListener('message', handleExtensionMessage);
+  }, []);
+
   // Manual refresh function
   const refreshData = useCallback(() => {
     loadExtensionData();
