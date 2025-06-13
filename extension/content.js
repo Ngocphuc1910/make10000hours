@@ -333,54 +333,15 @@ class ActivityDetector {
   }
 
   /**
-   * Show focus mode indicator on page
+   * Show focus mode indicator on page - VISUAL BUBBLE DISABLED
    */
   showFocusIndicator() {
-    // Create a subtle focus mode indicator
-    const indicator = document.createElement('div');
-    indicator.id = 'focus-time-tracker-indicator';
-    indicator.innerHTML = `
-      <div style="
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 8px 12px;
-        border-radius: 6px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        font-size: 12px;
-        font-weight: 500;
-        z-index: 10000;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-        opacity: 0.9;
-        cursor: pointer;
-      ">
-        🎯 Focus Mode
-      </div>
-    `;
-
-    // Add click handler to toggle focus mode
-    indicator.addEventListener('click', async () => {
-      try {
-        await chrome.runtime.sendMessage({
-          type: 'TOGGLE_FOCUS_MODE'
-        });
-        this.hideFocusIndicator();
-      } catch (error) {
-        console.error('Error toggling focus mode:', error);
-      }
-    });
-
-    document.body.appendChild(indicator);
-
-    // Auto-hide after 5 seconds
-    setTimeout(() => {
-      const elem = document.getElementById('focus-time-tracker-indicator');
-      if (elem) {
-        elem.style.opacity = '0.3';
-      }
-    }, 5000);
+    // Remove existing indicator (cleanup)
+    this.hideFocusIndicator();
+    
+    // Keep all the important logic but remove the visual bubble
+    // The focus mode state is still tracked, just no bubble shown
+    console.log('Focus mode enabled - bubble display disabled');
   }
 
   /**
