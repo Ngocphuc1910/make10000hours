@@ -137,18 +137,18 @@ export const FocusStreak: React.FC = () => {
     
     if (isToday(day.date)) {
       // Current day: red stroke (border)
-      return `${baseClasses} bg-white border-2 border-primary border-dashed text-gray-700 font-medium`;
+      return `${baseClasses} bg-background-primary border-2 border-primary border-dashed text-text-primary font-medium`;
     } else if (isPastDay(day.date)) {
       if (day.hasFocused) {
         // Past day with work: red background
         return `${baseClasses} bg-primary text-white hover:bg-opacity-90 font-medium`;
       } else {
         // Past day without work: gray
-        return `${baseClasses} bg-white border border-gray-200 text-gray-400 hover:bg-gray-50`;
+        return `${baseClasses} bg-background-primary border border-border text-text-secondary hover:bg-background-container`;
       }
     } else {
       // Future day: light gray
-      return `${baseClasses} bg-white border border-gray-200 text-gray-300`;
+      return `${baseClasses} bg-background-primary border border-border text-text-secondary opacity-50`;
     }
   };
 
@@ -186,18 +186,18 @@ export const FocusStreak: React.FC = () => {
           
           <button 
             onClick={prevMonth}
-            className="p-1.5 rounded-full hover:bg-gray-100"
+            className="p-1.5 rounded-full hover:bg-background-container"
           >
-            <div className="w-4 h-4 flex items-center justify-center text-gray-600">
+            <div className="w-4 h-4 flex items-center justify-center text-text-secondary">
               <i className="ri-arrow-left-s-line"></i>
             </div>
           </button>
-          <span className="text-sm font-medium text-gray-700">{monthName}</span>
+          <span className="text-sm font-medium text-text-primary">{monthName}</span>
           <button
             onClick={nextMonth}
-            className="p-1.5 rounded-full hover:bg-gray-100"
+            className="p-1.5 rounded-full hover:bg-background-container"
           >
-            <div className="w-4 h-4 flex items-center justify-center text-gray-600">
+            <div className="w-4 h-4 flex items-center justify-center text-text-secondary">
               <i className="ri-arrow-right-s-line"></i>
             </div>
           </button>
@@ -207,7 +207,7 @@ export const FocusStreak: React.FC = () => {
       {/* Day labels */}
       <div className="grid grid-cols-7 gap-2 mb-4">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day: string) => (
-          <div key={day} className="text-center text-xs font-medium text-gray-500 py-1">
+          <div key={day} className="text-center text-xs font-medium text-text-secondary py-1">
             {day}
           </div>
         ))}

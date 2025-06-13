@@ -49,7 +49,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ className = '' }) => {
         <div className="flex items-start min-w-[300px]">
           <button 
             onClick={handleAddProject}
-            className="inline-flex items-center px-4 py-2 border border-dashed border-gray-300 text-sm font-medium rounded-lg text-gray-600 bg-white hover:bg-gray-50 whitespace-nowrap h-[120px] w-full justify-center"
+            className="inline-flex items-center px-4 py-2 border border-dashed border-border text-sm font-medium rounded-lg text-text-secondary bg-background-primary hover:bg-background-container whitespace-nowrap h-[120px] w-full justify-center"
           >
             <Icon name="add-line" className="mr-2" />
             Add New Project

@@ -279,25 +279,25 @@ export const Calendar: React.FC = () => {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="flex flex-col h-full bg-white">
+      <div className="flex flex-col h-full bg-background-primary">
         {/* Calendar Controls */}
-        <div className="h-16 border-b border-gray-200 px-6 flex items-center justify-between bg-white">
+        <div className="h-16 border-b border-border px-6 flex items-center justify-between bg-background-secondary">
           {/* Left Section - Month/Year and Navigation */}
           <div className="flex items-center space-x-4">
             <div className="flex items-center">
               <button
                 onClick={() => handleNavigate('prev')}
-                className="p-1.5 rounded-full hover:bg-gray-100"
+                className="p-1.5 rounded-full hover:bg-background-container text-text-secondary hover:text-text-primary"
               >
-                <div className="w-5 h-5 flex items-center justify-center text-gray-600">
+                <div className="w-5 h-5 flex items-center justify-center">
                   <i className="ri-arrow-left-s-line" />
                 </div>
               </button>
               <button
                 onClick={() => handleNavigate('next')}
-                className="p-1.5 rounded-full hover:bg-gray-100"
+                className="p-1.5 rounded-full hover:bg-background-container text-text-secondary hover:text-text-primary"
               >
-                <div className="w-5 h-5 flex items-center justify-center text-gray-600">
+                <div className="w-5 h-5 flex items-center justify-center">
                   <i className="ri-arrow-right-s-line" />
                 </div>
               </button>
@@ -305,7 +305,7 @@ export const Calendar: React.FC = () => {
             <h2 className={`text-lg font-semibold transition-all duration-500 ${
               isDeepFocusActive 
                 ? 'bg-gradient-to-r from-[rgb(187,95,90)] via-[rgb(236,72,153)] to-[rgb(251,146,60)] bg-clip-text text-transparent font-bold' 
-                : 'text-gray-800'
+                : 'text-text-primary'
             }`}>
               {format(currentDate, 'MMMM yyyy')}
             </h2>
@@ -328,12 +328,12 @@ export const Calendar: React.FC = () => {
                 <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${
                   isDeepFocusActive 
                     ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]' 
-                    : 'bg-gray-100/80 backdrop-blur-sm justify-end pr-[10.5px]'
+                    : 'bg-background-primary/80 backdrop-blur-sm border border-border justify-end pr-[10.5px]'
                 }`}>
                   <span className={`text-sm font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${
                     isDeepFocusActive 
                       ? 'text-white font-semibold [text-shadow:0_0_12px_rgba(255,255,255,0.5)]' 
-                      : 'text-gray-500'
+                      : 'text-text-secondary'
                   }`}>
                     {isDeepFocusActive ? 'Deep Focus' : 'Focus Off'}
                   </span>
@@ -351,18 +351,18 @@ export const Calendar: React.FC = () => {
           <div className="flex items-center space-x-4">
             <button
               onClick={() => handleNavigate('today')}
-              className="px-4 py-1.5 text-sm font-medium bg-white border border-gray-300 rounded-button text-gray-700 hover:bg-gray-50"
+              className="px-4 py-1.5 text-sm font-medium bg-background-secondary border border-border rounded-button text-text-primary hover:bg-background-container"
             >
               Today
             </button>
 
-            <div className="flex bg-gray-100 p-1 rounded-full">
+            <div className="flex bg-background-container p-1 rounded-full">
               <button
                 onClick={() => setCurrentView('day')}
                 className={`px-3 py-1 text-sm rounded-full ${
                   currentView === 'day'
                     ? 'bg-primary text-white'
-                    : 'text-gray-700 hover:bg-gray-200'
+                    : 'text-text-primary hover:bg-background-secondary'
                 }`}
               >
                 Day
@@ -372,7 +372,7 @@ export const Calendar: React.FC = () => {
                 className={`px-3 py-1 text-sm rounded-full ${
                   currentView === 'week'
                     ? 'bg-primary text-white'
-                    : 'text-gray-700 hover:bg-gray-200'
+                    : 'text-text-primary hover:bg-background-secondary'
                 }`}
               >
                 Week
@@ -382,7 +382,7 @@ export const Calendar: React.FC = () => {
                 className={`px-3 py-1 text-sm rounded-full ${
                   currentView === 'month'
                     ? 'bg-primary text-white'
-                    : 'text-gray-700 hover:bg-gray-200'
+                    : 'text-text-primary hover:bg-background-secondary'
                 }`}
               >
                 Month
@@ -392,7 +392,7 @@ export const Calendar: React.FC = () => {
             {/* Navigation Icons */}
             <Tooltip text="Pomodoro Timer">
               <button 
-                className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+                className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
                 onClick={() => navigate('/pomodoro')}
                 aria-label="Go to Pomodoro Timer"
               >
@@ -404,7 +404,7 @@ export const Calendar: React.FC = () => {
             
             <Tooltip text="Task management">
               <button 
-                className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+                className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
                 onClick={() => navigate('/projects')}
                 aria-label="Go to Task Management"
               >
@@ -416,7 +416,7 @@ export const Calendar: React.FC = () => {
             
             <Tooltip text="Productivity Insights">
               <button 
-                className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+                className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
                 onClick={() => navigate('/dashboard')}
                 aria-label="Go to Productivity Insights"
               >
@@ -428,7 +428,7 @@ export const Calendar: React.FC = () => {
             
             <Tooltip text="Calendar">
               <button 
-                className="p-2 rounded-full bg-gray-100 !rounded-button whitespace-nowrap"
+                className="p-2 rounded-full bg-background-container !rounded-button whitespace-nowrap text-text-secondary"
                 aria-label="Current page: Calendar"
               >
                 <span className="w-5 h-5 flex items-center justify-center">
@@ -439,7 +439,7 @@ export const Calendar: React.FC = () => {
             
             <Tooltip text="Deep Focus">
               <button 
-                className="p-2 rounded-full hover:bg-gray-100 !rounded-button whitespace-nowrap"
+                className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
                 onClick={() => navigate('/deep-focus')}
                 aria-label="Go to Deep Focus"
               >
@@ -522,7 +522,7 @@ export const Calendar: React.FC = () => {
         {/* Task Form Overlay for drag-create */}
         {isDragCreateTaskOpen && dragCreateData && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="bg-background-secondary rounded-lg shadow-xl max-w-md w-full mx-4">
               <TaskForm
                 initialStartTime={dragCreateData.startTime}
                 initialEndTime={dragCreateData.endTime}
@@ -547,7 +547,7 @@ export const Calendar: React.FC = () => {
         {/* Task Form Overlay for time slot clicks */}
         {isTimeSlotTaskOpen && timeSlotData && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="bg-background-secondary rounded-lg shadow-xl max-w-md w-full mx-4">
               <TaskForm
                 initialStartTime={timeSlotData.startTime}
                 initialEndTime={timeSlotData.endTime}
@@ -555,14 +555,10 @@ export const Calendar: React.FC = () => {
                 onCancel={() => {
                   setIsTimeSlotTaskOpen(false);
                   setTimeSlotData(null);
-                  setClearDragIndicator(true);
-                  setTimeout(() => setClearDragIndicator(false), 100);
                 }}
                 onSave={() => {
                   setIsTimeSlotTaskOpen(false);
                   setTimeSlotData(null);
-                  setClearDragIndicator(true);
-                  setTimeout(() => setClearDragIndicator(false), 100);
                 }}
               />
             </div>

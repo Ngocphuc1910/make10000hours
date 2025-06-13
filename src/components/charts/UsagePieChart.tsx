@@ -30,6 +30,9 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
     // Initialize chart
     chartInstance.current = echarts.init(chartRef.current);
 
+    // Detect dark mode by checking CSS variable
+    const isDarkMode = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim() === '#191919';
+
     // Default EChart colors for top 5 sites
     const defaultColors = [
       '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de'
@@ -66,33 +69,35 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
       animation: false,
       tooltip: {
         trigger: 'item',
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderColor: '#e2e8f0',
+        backgroundColor: isDarkMode ? 'rgba(42, 42, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+        borderColor: isDarkMode ? '#404040' : '#e2e8f0',
         borderWidth: 1,
         borderRadius: 8,
         padding: [12, 16],
         textStyle: {
-          color: '#1f2937',
+          color: isDarkMode ? '#ffffff' : '#1f2937',
           fontSize: 13
         },
         formatter: function(params: any) {
           const data = params.data;
           const percentage = params.percent;
+          const labelColor = isDarkMode ? '#a1a1aa' : '#6b7280';
+          const titleColor = isDarkMode ? '#ffffff' : '#111827';
           return `
-            <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: #111827;">
+            <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: ${titleColor};">
               ${data.name}
             </div>
             <div style="line-height: 1.5;">
               <div style="margin-bottom: 4px;">
-                <span style="color: #6b7280;">Total time visited:</span>
+                <span style="color: ${labelColor};">Total time visited:</span>
                 <span style="float: right; font-weight: 500;">${formatTime(data.timeSpent)}</span>
               </div>
               <div style="margin-bottom: 4px;">
-                <span style="color: #6b7280;">Total sessions:</span>
+                <span style="color: ${labelColor};">Total sessions:</span>
                 <span style="float: right; font-weight: 500;">${data.sessions}</span>
               </div>
               <div>
-                <span style="color: #6b7280;">Percentage:</span>
+                <span style="color: ${labelColor};">Percentage:</span>
                 <span style="float: right; font-weight: 500;">${percentage.toFixed(1)}%</span>
               </div>
             </div>
@@ -107,7 +112,7 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
           avoidLabelOverlap: false,
           itemStyle: {
             borderRadius: 4,
-            borderColor: '#fff',
+            borderColor: isDarkMode ? '#2a2a2a' : '#fff',
             borderWidth: 2
           },
           label: {

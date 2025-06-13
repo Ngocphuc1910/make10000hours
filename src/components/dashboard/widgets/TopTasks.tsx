@@ -82,14 +82,14 @@ export const TopTasks: React.FC = () => {
       <Card 
         title="Top Tasks" 
         action={
-          <button className="flex items-center text-sm text-gray-600">
+          <button className="flex items-center text-sm text-text-secondary">
             <span>Loading...</span>
           </button>
         }
       >
         <div className="flex items-center justify-center h-[360px]">
           <div className="text-center">
-            <p className="text-gray-500 text-sm">Loading tasks...</p>
+            <p className="text-text-secondary text-sm">Loading tasks...</p>
           </div>
         </div>
       </Card>
@@ -108,10 +108,10 @@ export const TopTasks: React.FC = () => {
       >
         <div className="flex items-center justify-center h-[360px]">
           <div className="text-center">
-            <div className="w-12 h-12 mx-auto mb-4 text-gray-400 flex items-center justify-center">
+            <div className="w-12 h-12 mx-auto mb-4 text-text-secondary flex items-center justify-center">
               <i className="ri-calendar-event-line ri-2x"></i>
             </div>
-            <p className="text-gray-500 text-sm">No tasks with focus time found</p>
+            <p className="text-text-secondary text-sm">No tasks with focus time found</p>
           </div>
         </div>
       </Card>
@@ -152,15 +152,15 @@ export const TopTasks: React.FC = () => {
           const formattedTime = formatMinutesToHoursAndMinutes(task.totalFocusTime);
           
           return (
-            <div key={task.id} className="flex items-center justify-between py-2 border-b border-gray-100">
+            <div key={task.id} className="flex items-center justify-between py-2 border-b border-border">
               <div className="flex items-center">
-                <div className="w-5 h-5 flex items-center justify-center text-gray-500 mr-3">
+                <div className="w-5 h-5 flex items-center justify-center text-text-secondary mr-3">
                   {index + 1}.
                 </div>
                 <div>
-                  <h4 className="text-sm font-medium text-gray-800">{task.name}</h4>
+                  <h4 className="text-sm font-medium text-text-primary">{task.name}</h4>
                   <div className="flex items-center mt-0.5">
-                    <span className="text-xs text-gray-500">{project.name} • {formattedTime}</span>
+                    <span className="text-xs text-text-secondary">{project.name} • {formattedTime}</span>
                   </div>
                 </div>
               </div>

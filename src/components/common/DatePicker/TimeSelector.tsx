@@ -66,17 +66,17 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
   }, [initialTime, updateSelectedTime, startTime, endTime]);
 
   return (
-    <div className="space-y-3 border-t border-gray-100 pt-3">
+    <div className="space-y-3 border-t border-border pt-3">
       {/* Time Settings */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-600">Time format</span>
-          <span className="text-xs text-gray-600">{is24Hour ? '24 hour' : '12 hour'}</span>
+          <span className="text-xs text-text-secondary">Time format</span>
+          <span className="text-xs text-text-secondary">{is24Hour ? '24 hour' : '12 hour'}</span>
         </div>
         {showTimezone && (
           <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-600">Timezone</span>
-            <span className="text-xs text-gray-600">{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
+            <span className="text-xs text-text-secondary">Timezone</span>
+            <span className="text-xs text-text-secondary">{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
           </div>
         )}
       </div>
@@ -84,33 +84,33 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
       {/* Time Input Fields */}
       <div className="flex items-center gap-2">
         <div className="flex-1">
-          <div className="text-xs text-gray-600 mb-1">Start time</div>
+          <div className="text-xs text-text-secondary mb-1">Start time</div>
           <div className="relative">
             <input
               type="time"
               value={startTime}
               onChange={(e) => handleStartTimeChange(e.target.value)}
-              className="w-full pl-6 pr-2 py-1.5 border border-gray-200 rounded-md text-xs text-gray-700 focus:outline-none"
+              className="w-full pl-6 pr-2 py-1.5 border border-border rounded-md text-xs text-text-primary bg-background-primary focus:outline-none"
               onFocus={(e) => e.target.style.borderColor = '#BB5F5A'}
-              onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+              onBlur={(e) => e.target.style.borderColor = 'var(--border-color)'}
             />
-            <div className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 flex items-center justify-center text-gray-400">
+            <div className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 flex items-center justify-center text-text-secondary">
               <i className="ri-time-line text-xs"></i>
             </div>
           </div>
         </div>
         <div className="flex-1">
-          <div className="text-xs text-gray-600 mb-1">End time</div>
+          <div className="text-xs text-text-secondary mb-1">End time</div>
           <div className="relative">
             <input
               type="time"
               value={endTime}
               onChange={(e) => handleEndTimeChange(e.target.value)}
-              className="w-full pl-6 pr-2 py-1.5 border border-gray-200 rounded-md text-xs text-gray-700 focus:outline-none"
+              className="w-full pl-6 pr-2 py-1.5 border border-border rounded-md text-xs text-text-primary bg-background-primary focus:outline-none"
               onFocus={(e) => e.target.style.borderColor = '#BB5F5A'}
-              onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+              onBlur={(e) => e.target.style.borderColor = 'var(--border-color)'}
             />
-            <div className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 flex items-center justify-center text-gray-400">
+            <div className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 flex items-center justify-center text-text-secondary">
               <i className="ri-time-line text-xs"></i>
             </div>
           </div>

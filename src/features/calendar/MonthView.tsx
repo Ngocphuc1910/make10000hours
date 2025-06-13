@@ -71,13 +71,13 @@ export const MonthView: React.FC<MonthViewProps> = ({
   const numberOfRows = Math.ceil(days.length / 7);
 
   return (
-    <div className="w-full bg-white h-full flex flex-col">
+    <div className="w-full bg-background-primary h-full flex flex-col">
       {/* Week day headers */}
-      <div className="grid grid-cols-7 border-b border-gray-200">
+      <div className="grid grid-cols-7 border-b border-border">
         {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map(day => (
           <div
             key={day}
-            className="py-2 text-center text-sm font-medium text-gray-500"
+            className="py-2 text-center text-sm font-medium text-text-secondary"
           >
             {day}
           </div>
@@ -85,7 +85,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
       </div>
 
       {/* Calendar grid - dynamic rows (5 or 6) */}
-      <div className="grid grid-cols-7 flex-1 min-h-0"
+      <div className="grid grid-cols-7 flex-1 min-h-0 border-l border-t border-border"
            style={{ gridTemplateRows: `repeat(${numberOfRows}, minmax(140px, 1fr))` }}>
         {days.map((day, idx) => {
           const dayEvents = getEventsForDay(day);
@@ -101,11 +101,13 @@ export const MonthView: React.FC<MonthViewProps> = ({
               isAllDay={true}
               onDrop={onEventDrop!}
               className={`
-                border-b border-r border-gray-200 p-1 cursor-pointer
-                ${!isCurrentMonth ? 'bg-gray-50' : 'bg-white'}
-                ${isCurrentDay ? 'bg-primary bg-opacity-5' : ''}
-                ${idx % 7 === 6 ? '!border-r-0' : ''}
-                ${Math.floor(idx / 7) === numberOfRows - 1 ? '!border-b-0' : ''}
+                border-b border-r border-border p-1 cursor-pointer transition-colors
+                ${!isCurrentMonth 
+                  ? 'bg-background-secondary/30 text-text-secondary' 
+                  : isCurrentDay 
+                    ? 'bg-primary/5 text-text-primary' 
+                    : 'bg-background-primary text-text-primary hover:bg-background-container/50'
+                }
               `}
             >
               <div 
@@ -115,11 +117,15 @@ export const MonthView: React.FC<MonthViewProps> = ({
                 {/* Date number */}
                 <div className="text-sm mb-1 flex-shrink-0">
                   {isCurrentDay ? (
-                    <div className="text-primary bg-primary text-white rounded-full w-6 h-6 flex items-center justify-center font-medium">
+                    <div className="text-white bg-primary rounded-full w-6 h-6 flex items-center justify-center font-medium">
                       {format(day, 'd')}
                     </div>
                   ) : (
-                    <div className={!isCurrentMonth ? 'text-gray-400' : 'text-gray-900'}>
+                    <div className={`font-medium ${
+                      !isCurrentMonth 
+                        ? 'text-text-secondary/70' 
+                        : 'text-text-primary'
+                    }`}>
                       {format(day, 'd')}
                     </div>
                   )}
@@ -157,7 +163,9 @@ export const MonthView: React.FC<MonthViewProps> = ({
                                   event={event}
                                   onClick={onEventClick}
                                   sourceView="month"
-                                  className="month-view-event block w-full cursor-grab rounded text-xs px-2 py-1 h-5 flex items-center"
+                                  className={`month-view-event block w-full cursor-grab rounded text-xs px-2 py-1 h-5 flex items-center ${
+                                    !isCurrentMonth ? 'opacity-60' : ''
+                                  }`}
                                   style={{ 
                                     backgroundColor: event.color
                                   }}
@@ -177,10 +185,14 @@ export const MonthView: React.FC<MonthViewProps> = ({
                                   event={event}
                                   onClick={onEventClick}
                                   sourceView="month"
-                                  className="month-view-event block hover:bg-gray-50 rounded px-1 py-0.5 min-h-[16px] text-xs"
+                                  className={`month-view-event block hover:bg-background-container rounded px-1 py-0.5 min-h-[16px] text-xs ${
+                                    !isCurrentMonth ? 'opacity-60' : ''
+                                  }`}
                                   style={{ backgroundColor: 'transparent' }}
                                 >
-                                  <div className="flex items-center w-full text-gray-900 leading-tight">
+                                  <div className={`flex items-center w-full leading-tight ${
+                                    !isCurrentMonth ? 'text-text-secondary' : 'text-text-primary'
+                                  }`}>
                                     <span 
                                       className="inline-block w-1.5 h-1.5 rounded-full mr-1 flex-shrink-0" 
                                       style={{ backgroundColor: event.color }}
@@ -198,7 +210,9 @@ export const MonthView: React.FC<MonthViewProps> = ({
                         {/* Show "X more" if there are additional events */}
                         {remainingEvents > 0 && (
                           <div 
-                            className="text-xs text-gray-500 font-medium cursor-pointer hover:text-primary hover:bg-gray-50 px-1 py-0.5 rounded min-h-[16px] flex items-center mt-1"
+                            className={`text-xs font-medium cursor-pointer hover:text-primary hover:bg-background-container px-1 py-0.5 rounded min-h-[16px] flex items-center mt-1 ${
+                              !isCurrentMonth ? 'text-text-secondary/70 opacity-60' : 'text-text-secondary'
+                            }`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onDayViewClick?.(day);

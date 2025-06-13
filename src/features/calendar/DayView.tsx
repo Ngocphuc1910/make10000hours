@@ -253,17 +253,17 @@ export const DayView: React.FC<DayViewProps> = ({
       <div className="flex flex-col h-full" style={{ '--scrollbar-width': '15px' } as React.CSSProperties}>
         
         {/* Header */}
-        <div className="bg-white sticky top-0 z-20 border-b border-gray-200">
+        <div className="bg-background-primary sticky top-0 z-20 border-b border-border">
           <div className="grid" style={{ gridTemplateColumns: '64px 1fr', paddingRight: 'var(--scrollbar-width)' }}>
             {/* Time column header */}
-            <div className="flex items-center justify-center text-xs text-gray-500 py-3 border-r border-gray-200">
+            <div className="flex items-center justify-center text-xs text-text-secondary py-3 border-r border-border">
               GMT+07
             </div>
             
             {/* Day header */}
             <div className="flex flex-col items-center justify-center py-3">
-              <div className="text-xs text-gray-500 font-medium mb-1">{format(currentDate, 'EEE').toUpperCase()}</div>
-              <div className={`text-lg font-medium ${isToday(currentDate) ? 'text-primary bg-primary text-white rounded-full w-8 h-8 flex items-center justify-center' : 'text-gray-800'}`}>
+              <div className="text-xs text-text-secondary font-medium mb-1">{format(currentDate, 'EEE').toUpperCase()}</div>
+              <div className={`text-lg font-medium ${isToday(currentDate) ? 'text-primary bg-primary text-white rounded-full w-8 h-8 flex items-center justify-center' : 'text-text-primary'}`}>
                 {format(currentDate, 'd')}
               </div>
             </div>
@@ -271,10 +271,10 @@ export const DayView: React.FC<DayViewProps> = ({
         </div>
 
         {/* All Day Row */}
-        <div className="bg-white border-b border-gray-200">
+        <div className="bg-background-primary border-b border-border">
           <div className="grid" style={{ gridTemplateColumns: '64px 1fr', paddingRight: 'var(--scrollbar-width)' }}>
             <div 
-              className="flex items-center justify-center text-xs text-gray-500 border-r border-gray-200"
+              className="flex items-center justify-center text-xs text-text-secondary border-r border-border"
               style={{ height: `${getAllDayRowHeight()}px` }}
             >
               All day
@@ -283,7 +283,7 @@ export const DayView: React.FC<DayViewProps> = ({
               date={currentDate}
               isAllDay={true}
               onDrop={onEventDrop!}
-              className="cursor-pointer hover:bg-gray-50 transition-colors relative"
+              className="cursor-pointer hover:bg-background-container transition-colors relative"
               style={{ height: `${getAllDayRowHeight()}px` }}
             >
               <div 
@@ -327,13 +327,13 @@ export const DayView: React.FC<DayViewProps> = ({
         </div>
 
         {/* Calendar Grid */}
-        <div className="flex-1 overflow-auto relative bg-white">
+        <div className="flex-1 overflow-auto relative bg-background-primary">
           <div className="grid min-h-[1440px]" style={{ gridTemplateColumns: '64px 1fr' }}>
             {/* Time column */}
-            <div className="bg-white border-r border-gray-200">
+            <div className="bg-background-primary border-r border-border">
               {HOURS.map(hour => (
-                <div key={hour} className="h-[60px] border-b border-gray-200 flex items-start justify-center pt-1">
-                  <span className="text-xs text-gray-500">{format(new Date().setHours(hour, 0), 'HH:mm')}</span>
+                <div key={hour} className="h-[60px] border-b border-border flex items-start justify-center pt-1">
+                  <span className="text-xs text-text-secondary">{format(new Date().setHours(hour, 0), 'HH:mm')}</span>
                 </div>
               ))}
             </div>
@@ -347,7 +347,7 @@ export const DayView: React.FC<DayViewProps> = ({
                   date={currentDate}
                   hour={hour}
                   onDrop={onEventDrop!}
-                  className="h-[60px] border-b border-gray-200 cursor-cell hover:bg-gray-50 hover:bg-opacity-50 relative"
+                  className="h-[60px] border-b border-border cursor-cell hover:bg-background-container hover:bg-opacity-50 relative"
                 >
                   <div
                     className="w-full h-full"
