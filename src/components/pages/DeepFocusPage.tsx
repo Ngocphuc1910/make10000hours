@@ -21,6 +21,7 @@ import UsagePieChart from '../charts/UsagePieChart';
 import AddSiteModal from '../ui/AddSiteModal';
 import AnimatedSiteCard from '../ui/AnimatedSiteCard';
 import SiteUsageCard from '../ui/SiteUsageCard';
+import BackupStatusIndicator from '../ui/BackupStatusIndicator';
 import flatpickr from 'flatpickr';
 import 'flatpickr/dist/flatpickr.min.css';
 
@@ -66,7 +67,13 @@ const DeepFocusPage: React.FC = () => {
     loadFocusStatus,
     activeSessionId,
     activeSessionDuration,
-    activeSessionElapsedSeconds
+    activeSessionElapsedSeconds,
+    initializeDailyBackup,
+    isBackingUp,
+    lastBackupTime,
+    backupError,
+    backupTodayData,
+    loadHybridTimeRangeData
   } = useDeepFocusStore();
   
   const { workSessions } = useDashboardStore();
@@ -124,30 +131,48 @@ const DeepFocusPage: React.FC = () => {
     return dateToCheck >= selectedRange.startDate && dateToCheck <= selectedRange.endDate;
   };
 
-  // Load extension data when date range changes
+  // Load hybrid data (Firebase + Extension) when date range changes
   useEffect(() => {
-    const loadExtensionDateData = async () => {
+    const loadHybridDateData = async () => {
       if (selectedRange.rangeType === 'all time' || !selectedRange.startDate || !selectedRange.endDate) {
         setExtensionData(null);
         return;
       }
 
+      const startDateStr = selectedRange.startDate.toISOString().split('T')[0];
+      const endDateStr = selectedRange.endDate.toISOString().split('T')[0];
+
       try {
-        const startDateStr = selectedRange.startDate.toISOString().split('T')[0];
-        const endDateStr = selectedRange.endDate.toISOString().split('T')[0];
+        console.log('🔄 Loading hybrid data for date range:', startDateStr, 'to', endDateStr);
         
-        console.log('Loading extension data for date range:', startDateStr, 'to', endDateStr);
-        const data = await loadDateRangeData(startDateStr, endDateStr);
-        console.log('Loaded extension data:', data);
-        setExtensionData(data);
+        // Use the new hybrid data fetching approach from store
+        const hybridData = await loadHybridTimeRangeData(startDateStr, endDateStr);
+        console.log('✅ Loaded hybrid data:', hybridData);
+        
+        // Convert to the format expected by the UI
+        setExtensionData({
+          timeMetrics: hybridData.timeMetrics,
+          siteUsage: hybridData.siteUsage,
+          dailyUsage: [] // TODO: Convert daily data if needed
+        });
       } catch (error) {
-        console.error('Failed to load extension date range data:', error);
-        setExtensionData(null);
+        console.error('❌ Failed to load hybrid date range data:', error);
+        console.log('⚠️ Falling back to extension-only data...');
+        
+        // Fallback to extension-only approach
+        try {
+          const data = await loadDateRangeData(startDateStr, endDateStr);
+          console.log('📱 Loaded fallback extension data:', data);
+          setExtensionData(data);
+        } catch (fallbackError) {
+          console.error('❌ Extension fallback also failed:', fallbackError);
+          setExtensionData(null);
+        }
       }
     };
 
-    loadExtensionDateData();
-  }, [selectedRange, loadDateRangeData]);
+    loadHybridDateData();
+  }, [selectedRange, loadHybridTimeRangeData, loadDateRangeData]);
 
   // Filter dailyUsage based on selected date range
   const filteredDailyUsage = useMemo(() => {
@@ -287,6 +312,9 @@ const DeepFocusPage: React.FC = () => {
   useEffect(() => {
     loadExtensionData();
     
+    // Initialize daily backup system
+    initializeDailyBackup();
+    
     // Debug: Log chrome availability
     console.log('Chrome available:', typeof window !== 'undefined' && (window as any).chrome);
     console.log('Chrome runtime:', typeof window !== 'undefined' && (window as any).chrome?.runtime);
@@ -305,7 +333,7 @@ const DeepFocusPage: React.FC = () => {
       }
     };
     window.addEventListener('message', debugHandler);
-  }, [loadExtensionData]);
+  }, [loadExtensionData, initializeDailyBackup]);
 
   // Load Deep Focus sessions when user is available or date range changes
   useEffect(() => {
@@ -951,6 +979,16 @@ const DeepFocusPage: React.FC = () => {
                     >
                       <Icon name="refresh-line" className="w-4 h-4" />
                     </button>
+                    
+                    {/* Backup Status */}
+                    <div className="border-l border-gray-200 pl-2">
+                      <BackupStatusIndicator
+                        isBackingUp={isBackingUp}
+                        lastBackupTime={lastBackupTime}
+                        backupError={backupError}
+                        onRetryBackup={backupTodayData}
+                      />
+                    </div>
                   </div>
                 </div>
                 <button 
