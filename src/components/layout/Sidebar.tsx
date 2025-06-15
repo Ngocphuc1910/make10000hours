@@ -22,6 +22,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const navigate = useNavigate();
   const { user, signOut } = useUserStore();
 
+  // Debug logging for sidebar state changes
+  useEffect(() => {
+    console.log('🔧 Sidebar Component: State changed', { 
+      isLeftSidebarOpen, 
+      pathname: location.pathname,
+      timestamp: new Date().toISOString() 
+    });
+  }, [isLeftSidebarOpen, location.pathname]);
+
   const navItems: NavItem[] = [
     {
       icon: 'timer-line',
@@ -93,18 +102,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
     <>
       <aside
         id="sidebar"
-        className={`bg-background-secondary border-r border-border flex flex-col transition-all duration-300
+        className={`bg-background-secondary border-r border-border flex flex-col
         ${isLeftSidebarOpen ? 'w-64' : 'w-0'} ${className}`}
         style={{ zIndex: 40 }}
       >
         <div className="p-4 border-b border-border flex items-center justify-between">
           <h1 className="text-xl font-['Pacifico'] text-primary">Make10000hours</h1>
           <button
-            id="toggle-sidebar"
             onClick={handleToggleSidebar}
-            className="p-1 hover:bg-background-primary rounded-md"
+            className="p-1 hover:bg-background-primary hover:shadow-sm hover:scale-105 rounded-md transition-all duration-200 group"
           >
-            <div className="w-5 h-5 flex items-center justify-center text-text-secondary">
+            <div className="w-5 h-5 flex items-center justify-center text-text-secondary group-hover:text-text-primary transition-colors duration-200">
               <Icon name="arrow-left-s-line" size={20} />
             </div>
           </button>
@@ -159,20 +167,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
           </Link>
         </div>
       </aside>
-
-      {/* Mobile sidebar toggle button - shown when sidebar is hidden */}
-      {!isLeftSidebarOpen && (
-        <button
-          id="show-sidebar"
-          onClick={handleToggleSidebar}
-          className="fixed left-4 top-4 z-50 p-2 rounded-lg bg-background-secondary shadow-md hover:bg-background-primary border border-border"
-          aria-label="Show Sidebar"
-        >
-          <div className="w-5 h-5 flex items-center justify-center text-text-primary">
-            <Icon name="menu-line" size={20} />
-          </div>
-        </button>
-      )}
     </>
   );
 };
