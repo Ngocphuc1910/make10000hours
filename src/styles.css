@@ -228,7 +228,6 @@
 /* Sidebar transitions */
 #sidebar {
   overflow: hidden;
-  transition: width 0.3s ease;
 }
 
 /* Task status view styles */

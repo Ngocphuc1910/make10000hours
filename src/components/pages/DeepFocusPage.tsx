@@ -8,6 +8,7 @@ import { useEnhancedDeepFocusSync } from '../../hooks/useEnhancedDeepFocusSync';
 import { useExtensionDateRange } from '../../hooks/useExtensionDateRange';
 import { useDashboardStore } from '../../store/useDashboardStore';
 import { useUserStore } from '../../store/userStore';
+import { useUIStore } from '../../store/uiStore';
 import { Icon } from '../ui/Icon';
 import { Tooltip } from '../ui/Tooltip';
 import { formatTime } from '../../utils/timeUtils';
@@ -80,6 +81,7 @@ const DeepFocusPage: React.FC = () => {
   
   const { workSessions } = useDashboardStore();
   const { user } = useUserStore();
+  const { isLeftSidebarOpen, toggleLeftSidebar } = useUIStore();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -309,6 +311,42 @@ const DeepFocusPage: React.FC = () => {
       overrideTime: Math.round(totalOnScreenTime * 0.1) // Estimate override time
     };
   }, [extensionData, timeMetrics, filteredDailyUsage, selectedRange, filteredWorkSessions, filteredDeepFocusTime]);
+
+  // Ensure sidebar state is properly synchronized on mount and state changes
+  useEffect(() => {
+    // Add debug logging to track state changes
+    console.log('🔧 Deep Focus: Sidebar state changed', { 
+      isLeftSidebarOpen, 
+      timestamp: new Date().toISOString() 
+    });
+    
+    // Force re-render by triggering a layout recalculation
+    // This ensures CSS classes are properly applied after navigation
+    requestAnimationFrame(() => {
+      const sidebarElement = document.getElementById('sidebar');
+      if (sidebarElement) {
+        console.log('🔧 Deep Focus: Sidebar element found', {
+          currentWidth: sidebarElement.style.width,
+          className: sidebarElement.className,
+          isOpen: isLeftSidebarOpen
+        });
+        
+        // Force layout recalculation by briefly changing a property
+        sidebarElement.style.display = 'flex';
+        
+        // Ensure proper width based on state
+        if (isLeftSidebarOpen) {
+          sidebarElement.style.width = '16rem'; // w-64
+          sidebarElement.classList.remove('w-0');
+          sidebarElement.classList.add('w-64');
+        } else {
+          sidebarElement.style.width = '0px'; // w-0
+          sidebarElement.classList.remove('w-64');
+          sidebarElement.classList.add('w-0');
+        }
+      }
+    });
+  }, [isLeftSidebarOpen]);
 
   // Load extension data on component mount
   useEffect(() => {
@@ -607,13 +645,24 @@ const DeepFocusPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background-primary">
+    <div className="flex h-screen overflow-hidden bg-background-primary">
       <Sidebar />
       
       <div className="flex-1 flex flex-col">
         {/* Header - Productivity Insights Style */}
-        <div className={`h-16 border-b border-border flex items-center justify-between px-6 bg-background-secondary transition-all duration-500 relative`}>
+        <div className={`h-16 border-b border-border flex items-center justify-between px-4 bg-background-secondary transition-all duration-500 relative`}>
           <div className="flex items-center">
+            {!isLeftSidebarOpen && (
+              <button
+                onClick={toggleLeftSidebar}
+                className="p-2 mr-2 rounded-md hover:bg-background-primary hover:shadow-sm hover:scale-105 transition-all duration-200 group"
+                aria-label="Show Sidebar"
+              >
+                <div className="w-5 h-5 flex items-center justify-center text-text-secondary group-hover:text-text-primary transition-colors duration-200">
+                  <Icon name="menu-line" size={20} />
+                </div>
+              </button>
+            )}
             <div className={`text-lg font-semibold transition-all duration-500 ${
               isDeepFocusActive 
                 ? 'bg-gradient-to-r from-[rgb(187,95,90)] via-[rgb(236,72,153)] to-[rgb(251,146,60)] bg-clip-text text-transparent font-bold' 
