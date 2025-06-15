@@ -24,7 +24,7 @@ export const Header: React.FC = () => {
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const { selectedRange, setSelectedRange } = useDashboardStore();
-  const { toggleFocusMode } = useUIStore();
+  const { toggleFocusMode, isLeftSidebarOpen, toggleLeftSidebar } = useUIStore();
   const { 
     isDeepFocusActive, 
     enableDeepFocus, 
@@ -202,8 +202,19 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <div className={`h-16 border-b border-border flex items-center justify-between px-6 bg-background-secondary transition-all duration-500 relative`}>
+    <div className={`h-16 border-b border-border flex items-center justify-between px-4 bg-background-secondary transition-all duration-500 relative`}>
       <div className="flex items-center">
+        {!isLeftSidebarOpen && (
+          <button
+            onClick={toggleLeftSidebar}
+            className="p-2 mr-2 rounded-md hover:bg-background-primary hover:shadow-sm hover:scale-105 transition-all duration-200 group"
+            aria-label="Show Sidebar"
+          >
+            <div className="w-5 h-5 flex items-center justify-center text-text-secondary group-hover:text-text-primary transition-colors duration-200">
+              <Icon name="menu-line" size={20} />
+            </div>
+          </button>
+        )}
         <div className={`text-lg font-semibold transition-all duration-500 ${
           isDeepFocusActive 
             ? 'bg-gradient-to-r from-[rgb(187,95,90)] via-[rgb(236,72,153)] to-[rgb(251,146,60)] bg-clip-text text-transparent font-bold' 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
 import { useDeepFocusStore } from '../../store/deepFocusStore';
 import { useEnhancedDeepFocusSync } from '../../hooks/useEnhancedDeepFocusSync';
@@ -14,7 +14,8 @@ interface TopBarProps {
 
 export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
   const navigate = useNavigate();
-  const { toggleFocusMode } = useUIStore();
+  const location = useLocation();
+  const { toggleFocusMode, isLeftSidebarOpen, toggleLeftSidebar } = useUIStore();
   const { 
     isDeepFocusActive, 
     enableDeepFocus, 
@@ -25,15 +26,46 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
   useEnhancedDeepFocusSync(); // Enhanced sync with activity detection
   useExtensionSync(); // Bidirectional extension sync
   
+  // Get page title based on current route
+  const getPageTitle = () => {
+    switch (location.pathname) {
+      case '/pomodoro':
+        return 'Pomodoro Timer';
+      case '/projects':
+        return 'Task Management';
+      case '/dashboard':
+        return 'Productivity Insights';
+      case '/calendar':
+        return 'Calendar';
+      case '/deep-focus':
+        return 'Deep Focus';
+      case '/dashboard/settings':
+        return 'Settings';
+      default:
+        return 'Pomodoro Timer';
+    }
+  };
+  
   return (
-    <div className={`h-16 border-b border-border flex items-center justify-between px-6 bg-background-primary transition-all duration-500 relative ${className}`}>
+    <div className={`h-16 border-b border-border flex items-center justify-between px-4 bg-background-primary transition-all duration-500 relative ${className}`}>
       <div className="flex items-center">
+        {!isLeftSidebarOpen && (
+          <button
+            onClick={toggleLeftSidebar}
+            className="p-2 mr-2 rounded-md hover:bg-background-secondary hover:shadow-sm hover:scale-105 transition-all duration-200 group"
+            aria-label="Show Sidebar"
+          >
+            <div className="w-5 h-5 flex items-center justify-center text-text-secondary group-hover:text-text-primary transition-colors duration-200">
+              <Icon name="menu-line" size={20} />
+            </div>
+          </button>
+        )}
         <div className={`text-lg font-semibold transition-all duration-500 ${
           isDeepFocusActive 
             ? 'bg-gradient-to-r from-[rgb(187,95,90)] via-[rgb(236,72,153)] to-[rgb(251,146,60)] bg-clip-text text-transparent font-bold' 
             : 'text-text-primary'
         }`}>
-          Pomodoro Timer
+          {getPageTitle()}
         </div>
         <div className="ml-4 flex items-center">
           <label className="relative inline-flex items-center cursor-pointer group">
