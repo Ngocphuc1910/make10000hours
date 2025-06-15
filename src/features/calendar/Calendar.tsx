@@ -12,6 +12,7 @@ import { Tooltip } from '../../components/ui/Tooltip';
 import { useDeepFocusStore } from '../../store/deepFocusStore';
 import { useEnhancedDeepFocusSync } from '../../hooks/useEnhancedDeepFocusSync';
 import { useExtensionSync } from '../../hooks/useExtensionSync';
+import { useUIStore } from '../../store/uiStore';
 // EventDialog import removed - using TaskForm for all calendar interactions
 
 import { useTaskStore } from '../../store/taskStore';
@@ -50,6 +51,7 @@ export const Calendar: React.FC = () => {
   }, [calendarEvents, tasks, projects]);
 
   const navigate = useNavigate();
+  const { isLeftSidebarOpen, toggleLeftSidebar } = useUIStore();
 
   const { 
     isDeepFocusActive, 
@@ -281,9 +283,20 @@ export const Calendar: React.FC = () => {
     <DndProvider backend={HTML5Backend}>
       <div className="flex flex-col h-full bg-background-primary">
         {/* Calendar Controls */}
-        <div className="h-16 border-b border-border px-6 flex items-center justify-between bg-background-secondary">
+        <div className="h-16 border-b border-border px-4 flex items-center justify-between bg-background-secondary">
           {/* Left Section - Month/Year and Navigation */}
           <div className="flex items-center space-x-4">
+            {!isLeftSidebarOpen && (
+              <button
+                onClick={toggleLeftSidebar}
+                className="p-2 mr-2 rounded-md hover:bg-background-primary hover:shadow-sm hover:scale-105 transition-all duration-200 group"
+                aria-label="Show Sidebar"
+              >
+                <div className="w-5 h-5 flex items-center justify-center text-text-secondary group-hover:text-text-primary transition-colors duration-200">
+                  <Icon name="menu-line" size={20} />
+                </div>
+              </button>
+            )}
             <div className="flex items-center">
               <button
                 onClick={() => handleNavigate('prev')}
