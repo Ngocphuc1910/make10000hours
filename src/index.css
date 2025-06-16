@@ -33,13 +33,13 @@
 .custom-checkbox:checked::after {
   content: '';
   position: absolute;
-  top: 2px;
+  top: 40%;
   left: 5px;
   width: 5px;
   height: 10px;
   border: solid white;
   border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
+  transform: translateY(-50%) rotate(45deg);
 }
 
 .custom-switch {
@@ -201,7 +201,7 @@ code {
   
   /* Checkbox colors - Dark mode */
   --checkbox-bg: #1e1e1e;
-  --checkbox-border: #888888;
+  --checkbox-border: #999999;
   
   /* Progress bar colors - Dark mode */
   --progress-bg: #404040;
@@ -998,6 +998,383 @@ code {
   background: var(--bg-container);
   opacity: 0.3;
   pointer-events: none;
+}
+
+/* Pomodoro Timer Page Specific Overrides */
+[data-theme="dark"] .pomodoro-page-container,
+[data-theme="dark"] .pomodoro-page-container .main-layout-container,
+[data-theme="dark"] .pomodoro-page-container #timerSection,
+[data-theme="dark"] .pomodoro-page-container #rightSidebar,
+[data-theme="dark"] .pomodoro-page-container .bg-background-primary {
+  background-color: #141414 !important;
+}
+
+.dark .pomodoro-page-container,
+.dark .pomodoro-page-container .main-layout-container,
+.dark .pomodoro-page-container #timerSection,
+.dark .pomodoro-page-container #rightSidebar,
+.dark .pomodoro-page-container .bg-background-primary {
+  background-color: #141414 !important;
+}
+
+/* Pomodoro Page Left Sidebar Override */
+[data-theme="dark"] .pomodoro-page-container #sidebar,
+[data-theme="dark"] .pomodoro-sidebar {
+  background-color: #141414 !important;
+}
+
+.dark .pomodoro-page-container #sidebar,
+.dark .pomodoro-sidebar {
+  background-color: #141414 !important;
+}
+
+/* Task Management Page Specific Overrides */
+[data-theme="dark"] .projects-page-container,
+[data-theme="dark"] .projects-page-container .projects-content-container,
+[data-theme="dark"] .projects-page-container .projects-header,
+[data-theme="dark"] .projects-page-container .projects-scrollable-content,
+[data-theme="dark"] .projects-page-container .bg-background-primary {
+  background-color: #141414 !important;
+}
+
+.dark .projects-page-container,
+.dark .projects-page-container .projects-content-container,
+.dark .projects-page-container .projects-header,
+.dark .projects-page-container .projects-scrollable-content,
+.dark .projects-page-container .bg-background-primary {
+  background-color: #141414 !important;
+}
+
+/* Task Management Page Left Sidebar Override */
+[data-theme="dark"] .projects-page-container #sidebar {
+  background-color: #141414 !important;
+}
+
+.dark .projects-page-container #sidebar {
+  background-color: #141414 !important;
+}
+
+/* Productivity Insights Page Specific Overrides */
+[data-theme="dark"] .dashboard-layout,
+[data-theme="dark"] .dashboard-main,
+[data-theme="dark"] .dashboard-content,
+[data-theme="dark"] .dashboard-header,
+[data-theme="dark"] .dashboard-layout .bg-background-primary,
+[data-theme="dark"] .dashboard-layout .bg-background-secondary,
+[data-theme="dark"] .dashboard-layout .bg-background-container {
+  background-color: #141414 !important;
+}
+
+/* Exception for navigation icons in dashboard header */
+[data-theme="dark"] .dashboard-layout .dashboard-header button.bg-background-container {
+  background-color: #2a2a2a !important;
+}
+
+.dark .dashboard-layout,
+.dark .dashboard-main,
+.dark .dashboard-content,
+.dark .dashboard-header,
+.dark .dashboard-layout .bg-background-primary,
+.dark .dashboard-layout .bg-background-secondary,
+.dark .dashboard-layout .bg-background-container {
+  background-color: #141414 !important;
+}
+
+/* Exception for navigation icons in dashboard header */
+.dark .dashboard-layout .dashboard-header button.bg-background-container {
+  background-color: #2a2a2a !important;
+}
+
+/* Productivity Insights Page Left Sidebar Override */
+[data-theme="dark"] .dashboard-layout #sidebar {
+  background-color: #141414 !important;
+}
+
+.dark .dashboard-layout #sidebar {
+  background-color: #141414 !important;
+}
+
+/* Dashboard Cards and Widgets Override */
+[data-theme="dark"] .dashboard-layout .bg-background-secondary {
+  background-color: #141414 !important;
+}
+
+[data-theme="dark"] .dashboard-layout .bg-background-container {
+  background-color: #141414 !important;
+}
+
+.dark .dashboard-layout .bg-background-secondary {
+  background-color: #141414 !important;
+}
+
+.dark .dashboard-layout .bg-background-container {
+  background-color: #141414 !important;
+}
+
+/* Calendar Page Specific Overrides */
+[data-theme="dark"] .calendar-page-container,
+[data-theme="dark"] .calendar-page-container .flex-1,
+[data-theme="dark"] .calendar-page-container .calendar-main-container,
+[data-theme="dark"] .calendar-page-container .calendar-week-container,
+[data-theme="dark"] .calendar-page-container .calendar-month-container,
+[data-theme="dark"] .calendar-page-container .calendar-day-container,
+[data-theme="dark"] .calendar-page-container .bg-background-primary,
+[data-theme="dark"] .calendar-page-container .bg-background-secondary,
+[data-theme="dark"] .calendar-page-container .bg-background-container {
+  background-color: #141414 !important;
+}
+
+/* Exception for navigation icons in calendar header */
+[data-theme="dark"] .calendar-page-container .calendar-header button.bg-background-container {
+  background-color: #2a2a2a !important;
+}
+
+.dark .calendar-page-container,
+.dark .calendar-page-container .flex-1,
+.dark .calendar-page-container .calendar-main-container,
+.dark .calendar-page-container .calendar-week-container,
+.dark .calendar-page-container .calendar-month-container,
+.dark .calendar-page-container .calendar-day-container,
+.dark .calendar-page-container .bg-background-primary,
+.dark .calendar-page-container .bg-background-secondary,
+.dark .calendar-page-container .bg-background-container {
+  background-color: #141414 !important;
+}
+
+/* Exception for navigation icons in calendar header */
+.dark .calendar-page-container .calendar-header button.bg-background-container {
+  background-color: #2a2a2a !important;
+}
+
+/* Calendar Page Left Sidebar Override */
+[data-theme="dark"] .calendar-page-container #sidebar {
+  background-color: #141414 !important;
+}
+
+.dark .calendar-page-container #sidebar {
+  background-color: #141414 !important;
+}
+
+/* Week View Scrollable Grid Elements */
+[data-theme="dark"] .calendar-page-container .calendar-scrollable,
+[data-theme="dark"] .calendar-page-container .calendar-week-time-column,
+[data-theme="dark"] .calendar-page-container .calendar-week-day-column,
+[data-theme="dark"] .calendar-page-container .day-column,
+[data-theme="dark"] .calendar-page-container .overflow-auto {
+  background-color: #141414 !important;
+}
+
+.dark .calendar-page-container .calendar-scrollable,
+.dark .calendar-page-container .calendar-week-time-column,
+.dark .calendar-page-container .calendar-week-day-column,
+.dark .calendar-page-container .day-column,
+.dark .calendar-page-container .overflow-auto {
+  background-color: #141414 !important;
+}
+
+/* Calendar View Switcher Buttons (Day/Week/Month) */
+[data-theme="dark"] .calendar-page-container button:not(.bg-primary):not([class*="text-white"]) {
+  background-color: #141414 !important;
+}
+
+[data-theme="dark"] .calendar-page-container button:hover:not(.bg-primary):not([class*="text-white"]) {
+  background-color: #1f1f1f !important;
+}
+
+.dark .calendar-page-container button:not(.bg-primary):not([class*="text-white"]) {
+  background-color: #141414 !important;
+}
+
+.dark .calendar-page-container button:hover:not(.bg-primary):not([class*="text-white"]) {
+  background-color: #1f1f1f !important;
+}
+
+/* Theme Switcher in Sidebar */
+[data-theme="dark"] #sidebar .bg-background-primary {
+  background-color: #141414 !important;
+}
+
+[data-theme="dark"] #sidebar button:not(.bg-primary):not([class*="text-white"]):hover {
+  background-color: #1f1f1f !important;
+}
+
+.dark #sidebar .bg-background-primary {
+  background-color: #141414 !important;
+}
+
+.dark #sidebar button:not(.bg-primary):not([class*="text-white"]):hover {
+  background-color: #1f1f1f !important;
+}
+
+/* Calendar View Switcher - Override CSS Variables to Match Task Management */
+[data-theme="dark"] .calendar-page-container {
+  --bg-container: #2a2a2a;
+}
+
+.dark .calendar-page-container {
+  --bg-container: #2a2a2a;
+}
+
+/* Calendar View Switcher Buttons - Specific Override */
+[data-theme="dark"] .calendar-page-container .inline-flex.rounded-full.bg-background-container {
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] .calendar-page-container .inline-flex.rounded-full.bg-background-container button.bg-background-primary {
+  background-color: #141414 !important;
+}
+
+.dark .calendar-page-container .inline-flex.rounded-full.bg-background-container {
+  background-color: #2a2a2a !important;
+}
+
+.dark .calendar-page-container .inline-flex.rounded-full.bg-background-container button.bg-background-primary {
+  background-color: #141414 !important;
+}
+
+/* Force Calendar View Switcher Colors - Very Specific */
+[data-theme="dark"] .calendar-page-container div.inline-flex.rounded-full button[type="button"]:not(.text-text-secondary) {
+  background-color: #141414 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .calendar-page-container div.inline-flex.rounded-full button[type="button"].text-text-secondary {
+  background-color: transparent !important;
+  color: #888888 !important;
+}
+
+.dark .calendar-page-container div.inline-flex.rounded-full button[type="button"]:not(.text-text-secondary) {
+  background-color: #141414 !important;
+  color: #ffffff !important;
+}
+
+.dark .calendar-page-container div.inline-flex.rounded-full button[type="button"].text-text-secondary {
+  background-color: transparent !important;
+  color: #888888 !important;
+}
+
+/* Deep Focus Page Specific Overrides */
+[data-theme="dark"] .deep-focus-page-container,
+[data-theme="dark"] .deep-focus-page-container .flex-1,
+[data-theme="dark"] .deep-focus-page-container .bg-background-primary:not(label div),
+[data-theme="dark"] .deep-focus-page-container .bg-background-secondary,
+[data-theme="dark"] .deep-focus-page-container .bg-background-container {
+  background-color: #141414 !important;
+}
+
+/* Exception for navigation icons in deep focus header */
+[data-theme="dark"] .deep-focus-page-container .h-16.border-b button.bg-background-container {
+  background-color: #2a2a2a !important;
+}
+
+.dark .deep-focus-page-container,
+.dark .deep-focus-page-container .flex-1,
+.dark .deep-focus-page-container .bg-background-primary:not(label div),
+.dark .deep-focus-page-container .bg-background-secondary,
+.dark .deep-focus-page-container .bg-background-container {
+  background-color: #141414 !important;
+}
+
+/* Exception for navigation icons in deep focus header */
+.dark .deep-focus-page-container .h-16.border-b button.bg-background-container {
+  background-color: #2a2a2a !important;
+}
+
+/* Deep Focus Page Left Sidebar Override */
+[data-theme="dark"] .deep-focus-page-container #sidebar {
+  background-color: #141414 !important;
+}
+
+.dark .deep-focus-page-container #sidebar {
+  background-color: #141414 !important;
+}
+
+/* Navigation Icons Selected State Override - High Priority */
+/* These rules override the page-specific background overrides for navigation buttons */
+
+/* Dashboard Page Navigation Icons */
+[data-theme="dark"] .dashboard-layout button[aria-label*="Current page"]:not(.text-white),
+[data-theme="dark"] .dashboard-layout button.bg-background-container:not(.text-white) {
+  background-color: #2a2a2a !important;
+}
+
+.dark .dashboard-layout button[aria-label*="Current page"]:not(.text-white),
+.dark .dashboard-layout button.bg-background-container:not(.text-white) {
+  background-color: #2a2a2a !important;
+}
+
+/* Calendar Page Navigation Icons */
+[data-theme="dark"] .calendar-header button[aria-label*="Current page"]:not(.text-white),
+[data-theme="dark"] .calendar-header button.bg-background-container:not(.text-white) {
+  background-color: #2a2a2a !important;
+}
+
+.dark .calendar-header button[aria-label*="Current page"]:not(.text-white),
+.dark .calendar-header button.bg-background-container:not(.text-white) {
+  background-color: #2a2a2a !important;
+}
+
+/* Deep Focus Page Navigation Icons */
+[data-theme="dark"] .deep-focus-page-container button[aria-label*="Current page"]:not(.text-white),
+[data-theme="dark"] .deep-focus-page-container button.bg-background-container:not(.text-white) {
+  background-color: #2a2a2a !important;
+}
+
+.dark .deep-focus-page-container button[aria-label*="Current page"]:not(.text-white),
+.dark .deep-focus-page-container button.bg-background-container:not(.text-white) {
+  background-color: #2a2a2a !important;
+}
+
+/* Generic override for any navigation button with selected state */
+[data-theme="dark"] button.p-2.rounded-full.bg-background-container:not(.text-white) {
+  background-color: #2a2a2a !important;
+}
+
+.dark button.p-2.rounded-full.bg-background-container:not(.text-white) {
+  background-color: #2a2a2a !important;
+}
+
+/* Focus Time Trend Switch Styling - Match Calendar Switch */
+[data-theme="dark"] .dashboard-layout .inline-flex.rounded-full.bg-background-container {
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] .dashboard-layout .inline-flex.rounded-full.bg-background-container button.bg-background-primary {
+  background-color: #141414 !important;
+}
+
+.dark .dashboard-layout .inline-flex.rounded-full.bg-background-container {
+  background-color: #2a2a2a !important;
+}
+
+.dark .dashboard-layout .inline-flex.rounded-full.bg-background-container button.bg-background-primary {
+  background-color: #141414 !important;
+}
+
+/* Deep Focus Block Switch - Red Background When Active */
+[data-theme="dark"] .deep-focus-page-container label input:checked + div {
+  background: linear-gradient(to right, rgba(187,95,90,0.9), rgba(236,72,153,0.9), rgba(251,146,60,0.9)) !important;
+  box-shadow: 0 0 15px rgba(236,72,153,0.3) !important;
+  border: 1px solid rgba(255,255,255,0.2) !important;
+}
+
+.dark .deep-focus-page-container label input:checked + div {
+  background: linear-gradient(to right, rgba(187,95,90,0.9), rgba(236,72,153,0.9), rgba(251,146,60,0.9)) !important;
+  box-shadow: 0 0 15px rgba(236,72,153,0.3) !important;
+  border: 1px solid rgba(255,255,255,0.2) !important;
+}
+
+/* Deep Focus Block Switch - Inactive State */
+[data-theme="dark"] .deep-focus-page-container label input:not(:checked) + div {
+  background: rgba(20, 20, 20, 0.8) !important;
+  backdrop-filter: blur(4px) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.dark .deep-focus-page-container label input:not(:checked) + div {
+  background: rgba(20, 20, 20, 0.8) !important;
+  backdrop-filter: blur(4px) !important;
+  border: 1px solid var(--border-color) !important;
 }
 
 

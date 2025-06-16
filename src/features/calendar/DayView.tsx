@@ -253,7 +253,7 @@ export const DayView: React.FC<DayViewProps> = ({
       <div className="flex flex-col h-full" style={{ '--scrollbar-width': '15px' } as React.CSSProperties}>
         
         {/* Header */}
-        <div className="bg-background-primary sticky top-0 z-20 border-b border-border">
+        <div className="bg-background-primary dark:bg-[#141414] sticky top-0 z-20 border-b border-border">
           <div className="grid" style={{ gridTemplateColumns: '64px 1fr', paddingRight: 'var(--scrollbar-width)' }}>
             {/* Time column header */}
             <div className="flex items-center justify-center text-xs text-text-secondary py-3 border-r border-border">
@@ -271,7 +271,7 @@ export const DayView: React.FC<DayViewProps> = ({
         </div>
 
         {/* All Day Row */}
-        <div className="bg-background-primary border-b border-border">
+        <div className="bg-background-primary dark:bg-[#141414] border-b border-border">
           <div className="grid" style={{ gridTemplateColumns: '64px 1fr', paddingRight: 'var(--scrollbar-width)' }}>
             <div 
               className="flex items-center justify-center text-xs text-text-secondary border-r border-border"
@@ -327,10 +327,10 @@ export const DayView: React.FC<DayViewProps> = ({
         </div>
 
         {/* Calendar Grid */}
-        <div className="flex-1 overflow-auto relative bg-background-primary">
+        <div className="flex-1 overflow-auto relative bg-background-primary dark:bg-[#141414]">
           <div className="grid min-h-[1440px]" style={{ gridTemplateColumns: '64px 1fr' }}>
             {/* Time column */}
-            <div className="bg-background-primary border-r border-border">
+            <div className="bg-background-primary dark:bg-[#141414] border-r border-border">
               {HOURS.map(hour => (
                 <div key={hour} className="h-[60px] border-b border-border flex items-start justify-center pt-1">
                   <span className="text-xs text-text-secondary">{format(new Date().setHours(hour, 0), 'HH:mm')}</span>

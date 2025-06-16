@@ -282,21 +282,21 @@ export const WeekView: React.FC<WeekViewProps> = ({
   }, [clearDragIndicator]);
 
   return (
-    <div className="flex flex-col h-full bg-background-primary">
+    <div className="calendar-week-container flex flex-col h-full bg-background-primary dark:bg-[#141414]">
       {/* Unified Grid Container */}
       <div className="grid grid-cols-8 flex-1" style={{ 
         gridTemplateColumns: `${TIME_COLUMN_WIDTH}px repeat(7, minmax(0, 1fr))`
       }}>
         
         {/* Fixed Date Headers Row */}
-        <div className="col-span-8 grid grid-cols-subgrid bg-background-primary border-b border-border sticky top-0 z-30" style={{ height: '80px' }}>
+        <div className="calendar-week-header col-span-8 grid grid-cols-subgrid bg-background-primary dark:bg-[#141414] border-b border-border sticky top-0 z-30" style={{ height: '80px' }}>
           {/* GMT header */}
-          <div className="border-r border-border flex items-center justify-center text-xs text-text-secondary bg-background-primary">
+          <div className="border-r border-border flex items-center justify-center text-xs text-text-secondary bg-background-primary dark:bg-[#141414]">
             GMT+07
           </div>
           {/* Day headers */}
           {weekDays.map((day, dayIndex) => (
-            <div key={dayIndex} className={`flex flex-col items-center justify-center py-3 bg-background-primary min-w-0 ${dayIndex < 6 ? 'border-r border-border' : ''} ${isToday(day) ? 'bg-primary bg-opacity-5' : ''}`}>
+            <div key={dayIndex} className={`calendar-week-day-header flex flex-col items-center justify-center py-3 bg-background-primary dark:bg-[#141414] min-w-0 ${dayIndex < 6 ? 'border-r border-border' : ''} ${isToday(day) ? 'bg-primary bg-opacity-5' : ''}`}>
               <div className="text-xs text-text-secondary font-medium mb-1">{format(day, 'EEE').toUpperCase()}</div>
               <div className={`text-lg font-medium ${isToday(day) ? 'text-primary bg-primary text-white rounded-full w-8 h-8 flex items-center justify-center' : 'text-text-primary'}`}>
                 {format(day, 'd')}
@@ -306,13 +306,13 @@ export const WeekView: React.FC<WeekViewProps> = ({
         </div>
 
         {/* All Day Events Row */}
-        <div className="col-span-8 grid grid-cols-subgrid bg-background-primary border-b border-border sticky z-30" 
+        <div className="calendar-week-allday col-span-8 grid grid-cols-subgrid bg-background-primary dark:bg-[#141414] border-b border-border sticky z-30" 
              style={{ 
                height: `${getAllDayRowHeight()}px`,
                top: '80px'
              }}>
           {/* All day label */}
-          <div className="border-r border-b border-border flex items-center justify-center text-xs text-text-secondary bg-background-primary">
+          <div className="border-r border-b border-border flex items-center justify-center text-xs text-text-secondary bg-background-primary dark:bg-[#141414]">
             All day
           </div>
           {/* All day events */}
@@ -366,9 +366,9 @@ export const WeekView: React.FC<WeekViewProps> = ({
         </div>
 
         {/* Scrollable Content Area */}
-        <div className="col-span-8 grid grid-cols-subgrid overflow-auto" ref={scrollableRef}>
+        <div className="calendar-scrollable col-span-8 grid grid-cols-subgrid overflow-auto bg-background-primary dark:bg-[#141414]" ref={scrollableRef}>
           {/* Time Column for all hours */}
-          <div className="bg-background-primary border-r border-border">
+          <div className="calendar-week-time-column bg-background-primary dark:bg-[#141414] border-r border-border">
             {HOURS.map(hour => (
               <div key={hour} className="h-[60px] border-b border-border flex items-start justify-center pt-1">
                 <span className="text-xs text-text-secondary">{format(new Date().setHours(hour, 0), 'HH:mm')}</span>
@@ -379,7 +379,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
           {/* Day Columns */}
           <div className="contents" ref={weekGridRef}>
             {weekDays.map((day, dayIndex) => (
-              <div key={dayIndex} className={`relative day-column min-w-0 ${dayIndex < 6 ? 'border-r border-border' : ''}`}>
+              <div key={dayIndex} className={`calendar-week-day-column relative day-column min-w-0 ${dayIndex < 6 ? 'border-r border-border' : ''}`}>
               {/* Time slots grid */}
               {HOURS.map(hour => (
                 <DroppableTimeSlot

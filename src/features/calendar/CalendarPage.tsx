@@ -41,7 +41,7 @@ const CalendarPage: React.FC = () => {
   }, [isLeftSidebarOpen]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background-primary">
+    <div className="calendar-page-container flex h-screen overflow-hidden bg-background-primary dark:bg-[#141414]">
       {/* Left Sidebar - Navigation */}
       <Sidebar />
       
