@@ -155,7 +155,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
       
       <div
         ref={cardRef}
-        className={`task-card flex items-start p-3 ${getTaskCardClasses()}
+        className={`task-card flex items-start p-3 border ${getTaskCardClasses()}
         ${task.completed ? 'opacity-70 text-text-secondary' : ''}
         ${isDragOver ? 'drag-over' : ''}
         rounded-md hover:shadow-sm cursor-pointer transition-all duration-200`}

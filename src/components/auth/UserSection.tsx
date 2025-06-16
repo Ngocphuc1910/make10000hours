@@ -9,12 +9,12 @@ const UserSection: React.FC<UserSectionProps> = () => {
   const [showSignOut, setShowSignOut] = useState(false);
 
   return (
-    <div className="p-4 border-b border-gray-200">
+    <div className="p-4 border-b border-border">
       <div className="flex items-center">
         {user
           ? <div className="w-full">
               <div 
-                className="flex items-center w-full cursor-pointer hover:bg-gray-100 rounded-lg p-2 -m-2"
+                className="flex items-center w-full cursor-pointer hover:bg-background-primary rounded-lg p-2 -m-2"
                 onClick={() => setShowSignOut(!showSignOut)}
               >
                 <img
@@ -28,9 +28,9 @@ const UserSection: React.FC<UserSectionProps> = () => {
                   className="w-10 h-10 rounded-full"
                 />
                 <div className="ml-3 text-left flex-1">
-                  <p className="text-sm font-medium text-gray-900">{user.displayName}</p>
+                  <p className="text-sm font-medium text-text-primary">{user.displayName}</p>
                   {user.userName && (
-                    <p className="text-xs text-gray-500">@{user.userName}</p>
+                    <p className="text-xs text-text-secondary">@{user.userName}</p>
                   )}
                 </div>
               </div>

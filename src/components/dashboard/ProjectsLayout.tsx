@@ -7,10 +7,10 @@ interface ProjectsLayoutProps {
 
 export const ProjectsLayout: React.FC<ProjectsLayoutProps> = ({ children }) => {
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="projects-page-container flex h-screen overflow-hidden">
       <Sidebar />
       
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="projects-main-container flex-1 flex flex-col overflow-hidden">
         {children}
       </main>
     </div>
