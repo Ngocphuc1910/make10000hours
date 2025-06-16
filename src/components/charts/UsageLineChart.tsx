@@ -17,7 +17,7 @@ const UsageLineChart: React.FC<UsageLineChartProps> = ({ data }) => {
     chartInstance.current = echarts.init(chartRef.current);
 
     // Detect dark mode by checking CSS variable
-    const isDarkMode = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim() === '#191919';
+    const isDarkMode = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim() === '#141414';
 
     // Prepare data for ECharts format
     const dates = data.map(item => item.date);
@@ -78,7 +78,9 @@ const UsageLineChart: React.FC<UsageLineChartProps> = ({ data }) => {
         },
         splitLine: {
           lineStyle: {
-            color: isDarkMode ? '#404040' : '#f0f0f0'
+            color: isDarkMode ? '#2a2a2a' : '#e5e7eb',
+            type: [3, 3],
+            width: 1
           }
         },
         axisLabel: {

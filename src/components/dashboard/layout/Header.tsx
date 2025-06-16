@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from '../../ui/Icon';
 import { Tooltip } from '../../ui/Tooltip';
 import { RangeType, useDashboardStore } from '../../../store/useDashboardStore';
@@ -21,6 +21,7 @@ type FlatpickrInstance = {
 
 export const Header: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const { selectedRange, setSelectedRange } = useDashboardStore();
@@ -202,7 +203,7 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <div className={`h-16 border-b border-border flex items-center justify-between px-4 bg-background-secondary transition-all duration-500 relative`}>
+    <div className={`dashboard-header h-16 border-b border-border flex items-center justify-between px-4 bg-background-secondary transition-all duration-500 relative`}>
       <div className="flex items-center">
         {!isLeftSidebarOpen && (
           <button
@@ -371,9 +372,13 @@ export const Header: React.FC = () => {
         {/* Navigation Icons */}
         <Tooltip text="Pomodoro Timer">
           <button 
-            className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
-            onClick={() => navigate('/pomodoro')}
-            aria-label="Go to Pomodoro Timer"
+            className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+              location.pathname === '/pomodoro' 
+                ? 'bg-background-container text-text-primary' 
+                : 'hover:bg-background-container hover:text-text-primary'
+            }`}
+            onClick={location.pathname === '/pomodoro' ? undefined : () => navigate('/pomodoro')}
+            aria-label={location.pathname === '/pomodoro' ? 'Current page: Pomodoro Timer' : 'Go to Pomodoro Timer'}
           >
             <span className="w-5 h-5 flex items-center justify-center">
               <Icon 
@@ -386,9 +391,13 @@ export const Header: React.FC = () => {
         
         <Tooltip text="Task management">
           <button 
-            className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
-            onClick={() => navigate('/projects')}
-            aria-label="Go to Task Management"
+            className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+              location.pathname === '/projects' 
+                ? 'bg-background-container text-text-primary' 
+                : 'hover:bg-background-container hover:text-text-primary'
+            }`}
+            onClick={location.pathname === '/projects' ? undefined : () => navigate('/projects')}
+            aria-label={location.pathname === '/projects' ? 'Current page: Task Management' : 'Go to Task Management'}
           >
             <span className="w-5 h-5 flex items-center justify-center">
               <Icon 
@@ -401,8 +410,13 @@ export const Header: React.FC = () => {
         
         <Tooltip text="Productivity Insights">
           <button 
-            className="p-2 rounded-full bg-background-container !rounded-button whitespace-nowrap text-text-secondary"
-            aria-label="Current page: Productivity Insights"
+            className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+              location.pathname === '/dashboard' 
+                ? 'bg-background-container text-text-primary' 
+                : 'hover:bg-background-container hover:text-text-primary'
+            }`}
+            onClick={location.pathname === '/dashboard' ? undefined : () => navigate('/dashboard')}
+            aria-label={location.pathname === '/dashboard' ? 'Current page: Productivity Insights' : 'Go to Productivity Insights'}
           >
             <span className="w-5 h-5 flex items-center justify-center">
               <Icon 
@@ -415,9 +429,13 @@ export const Header: React.FC = () => {
         
         <Tooltip text="Calendar">
           <button 
-            className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
-            onClick={() => navigate('/calendar')}
-            aria-label="Go to Calendar"
+            className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+              location.pathname === '/calendar' 
+                ? 'bg-background-container text-text-primary' 
+                : 'hover:bg-background-container hover:text-text-primary'
+            }`}
+            onClick={location.pathname === '/calendar' ? undefined : () => navigate('/calendar')}
+            aria-label={location.pathname === '/calendar' ? 'Current page: Calendar' : 'Go to Calendar'}
           >
             <span className="w-5 h-5 flex items-center justify-center">
               <Icon 
@@ -430,9 +448,13 @@ export const Header: React.FC = () => {
         
         <Tooltip text="Deep Focus">
           <button 
-            className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
-            onClick={() => navigate('/deep-focus')}
-            aria-label="Go to Deep Focus"
+            className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+              location.pathname === '/deep-focus' 
+                ? 'bg-background-container text-text-primary' 
+                : 'hover:bg-background-container hover:text-text-primary'
+            }`}
+            onClick={location.pathname === '/deep-focus' ? undefined : () => navigate('/deep-focus')}
+            aria-label={location.pathname === '/deep-focus' ? 'Current page: Deep Focus' : 'Go to Deep Focus'}
           >
             <span className="w-5 h-5 flex items-center justify-center">
               <Icon 

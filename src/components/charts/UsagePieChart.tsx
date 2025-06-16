@@ -30,8 +30,10 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
     // Initialize chart
     chartInstance.current = echarts.init(chartRef.current);
 
-    // Detect dark mode by checking CSS variable
-    const isDarkMode = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim() === '#191919';
+    // Detect dark mode by checking CSS variable or class
+    const rootElement = document.documentElement;
+    const bgPrimary = getComputedStyle(rootElement).getPropertyValue('--bg-primary').trim();
+    const isDarkMode = bgPrimary === '#141414' || rootElement.classList.contains('dark') || rootElement.getAttribute('data-theme') === 'dark';
 
     // Default EChart colors for top 5 sites
     const defaultColors = [
@@ -112,8 +114,8 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
           avoidLabelOverlap: false,
           itemStyle: {
             borderRadius: 4,
-            borderColor: isDarkMode ? '#2a2a2a' : '#fff',
-            borderWidth: 2
+            borderColor: isDarkMode ? 'transparent' : '#fff',
+            borderWidth: isDarkMode ? 0 : 2
           },
           label: {
             show: true,

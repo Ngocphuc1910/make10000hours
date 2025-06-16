@@ -23,21 +23,8 @@ const CustomCheckbox: React.FC<CustomCheckboxProps> = ({
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         disabled={disabled}
-        className="sr-only peer"
+        className="custom-checkbox"
       />
-      <div className="w-[18px] h-[18px] border-2 border-border rounded-[4px] bg-background-primary transition-all duration-200 peer-checked:bg-[#BB5F5A] peer-checked:border-[#BB5F5A] peer-disabled:opacity-50 relative">
-        <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${checked ? 'opacity-100' : 'opacity-0'}`}>
-          <svg width="10" height="8" viewBox="0 0 10 8" fill="none" className="text-white">
-            <path 
-              d="M1 4L3.5 6.5L9 1" 
-              stroke="currentColor" 
-              strokeWidth="2" 
-              strokeLinecap="round" 
-              strokeLinejoin="round"
-            />
-          </svg>
-        </div>
-      </div>
     </label>
   );
 };
