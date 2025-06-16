@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, isSameDay } from 'date-fns';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { CalendarEvent, CalendarView, DragItem, DropResult } from './types';
 import WeekView from './WeekView';
 import DayView from './DayView';
@@ -51,6 +51,7 @@ export const Calendar: React.FC = () => {
   }, [calendarEvents, tasks, projects]);
 
   const navigate = useNavigate();
+  const location = useLocation();
   const { isLeftSidebarOpen, toggleLeftSidebar } = useUIStore();
 
   const { 
@@ -281,9 +282,9 @@ export const Calendar: React.FC = () => {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="flex flex-col h-full bg-background-primary">
+      <div className="calendar-main-container flex flex-col h-full bg-background-primary dark:bg-[#141414]">
         {/* Calendar Controls */}
-        <div className="h-16 border-b border-border px-4 flex items-center justify-between bg-background-secondary">
+        <div className="calendar-header h-16 border-b border-border px-4 flex items-center justify-between bg-background-secondary">
           {/* Left Section - Month/Year and Navigation */}
           <div className="flex items-center space-x-4">
             {!isLeftSidebarOpen && (
@@ -369,33 +370,36 @@ export const Calendar: React.FC = () => {
               Today
             </button>
 
-            <div className="flex bg-background-container p-1 rounded-full">
+            <div className="inline-flex rounded-full bg-background-container p-1">
               <button
+                type="button"
                 onClick={() => setCurrentView('day')}
-                className={`px-3 py-1 text-sm rounded-full ${
+                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${
                   currentView === 'day'
-                    ? 'bg-primary text-white'
-                    : 'text-text-primary hover:bg-background-secondary'
+                    ? 'bg-background-primary text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
                 Day
               </button>
               <button
+                type="button"
                 onClick={() => setCurrentView('week')}
-                className={`px-3 py-1 text-sm rounded-full ${
+                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${
                   currentView === 'week'
-                    ? 'bg-primary text-white'
-                    : 'text-text-primary hover:bg-background-secondary'
+                    ? 'bg-background-primary text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
                 Week
               </button>
               <button
+                type="button"
                 onClick={() => setCurrentView('month')}
-                className={`px-3 py-1 text-sm rounded-full ${
+                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${
                   currentView === 'month'
-                    ? 'bg-primary text-white'
-                    : 'text-text-primary hover:bg-background-secondary'
+                    ? 'bg-background-primary text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
                 Month
@@ -405,9 +409,13 @@ export const Calendar: React.FC = () => {
             {/* Navigation Icons */}
             <Tooltip text="Pomodoro Timer">
               <button 
-                className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
-                onClick={() => navigate('/pomodoro')}
-                aria-label="Go to Pomodoro Timer"
+                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+                  location.pathname === '/pomodoro' 
+                    ? 'bg-background-container text-text-primary' 
+                    : 'hover:bg-background-container hover:text-text-primary'
+                }`}
+                onClick={location.pathname === '/pomodoro' ? undefined : () => navigate('/pomodoro')}
+                aria-label={location.pathname === '/pomodoro' ? 'Current page: Pomodoro Timer' : 'Go to Pomodoro Timer'}
               >
                 <span className="w-5 h-5 flex items-center justify-center">
                   <Icon name="timer-line" size={20} />
@@ -417,9 +425,13 @@ export const Calendar: React.FC = () => {
             
             <Tooltip text="Task management">
               <button 
-                className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
-                onClick={() => navigate('/projects')}
-                aria-label="Go to Task Management"
+                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+                  location.pathname === '/projects' 
+                    ? 'bg-background-container text-text-primary' 
+                    : 'hover:bg-background-container hover:text-text-primary'
+                }`}
+                onClick={location.pathname === '/projects' ? undefined : () => navigate('/projects')}
+                aria-label={location.pathname === '/projects' ? 'Current page: Task Management' : 'Go to Task Management'}
               >
                 <span className="w-5 h-5 flex items-center justify-center">
                   <Icon name="task-line" size={20} />
@@ -429,9 +441,13 @@ export const Calendar: React.FC = () => {
             
             <Tooltip text="Productivity Insights">
               <button 
-                className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
-                onClick={() => navigate('/dashboard')}
-                aria-label="Go to Productivity Insights"
+                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+                  location.pathname === '/dashboard' 
+                    ? 'bg-background-container text-text-primary' 
+                    : 'hover:bg-background-container hover:text-text-primary'
+                }`}
+                onClick={location.pathname === '/dashboard' ? undefined : () => navigate('/dashboard')}
+                aria-label={location.pathname === '/dashboard' ? 'Current page: Productivity Insights' : 'Go to Productivity Insights'}
               >
                 <span className="w-5 h-5 flex items-center justify-center">
                   <Icon name="dashboard-line" size={20} />
@@ -441,8 +457,13 @@ export const Calendar: React.FC = () => {
             
             <Tooltip text="Calendar">
               <button 
-                className="p-2 rounded-full bg-background-container !rounded-button whitespace-nowrap text-text-secondary"
-                aria-label="Current page: Calendar"
+                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+                  location.pathname === '/calendar' 
+                    ? 'bg-background-container text-text-primary' 
+                    : 'hover:bg-background-container hover:text-text-primary'
+                }`}
+                onClick={location.pathname === '/calendar' ? undefined : () => navigate('/calendar')}
+                aria-label={location.pathname === '/calendar' ? 'Current page: Calendar' : 'Go to Calendar'}
               >
                 <span className="w-5 h-5 flex items-center justify-center">
                   <Icon name="calendar-line" size={20} />
@@ -452,9 +473,13 @@ export const Calendar: React.FC = () => {
             
             <Tooltip text="Deep Focus">
               <button 
-                className="p-2 rounded-full hover:bg-background-container !rounded-button whitespace-nowrap text-text-secondary hover:text-text-primary"
-                onClick={() => navigate('/deep-focus')}
-                aria-label="Go to Deep Focus"
+                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+                  location.pathname === '/deep-focus' 
+                    ? 'bg-background-container text-text-primary' 
+                    : 'hover:bg-background-container hover:text-text-primary'
+                }`}
+                onClick={location.pathname === '/deep-focus' ? undefined : () => navigate('/deep-focus')}
+                aria-label={location.pathname === '/deep-focus' ? 'Current page: Deep Focus' : 'Go to Deep Focus'}
               >
                 <span className="w-5 h-5 flex items-center justify-center">
                   <Icon name="brain-line" size={20} />

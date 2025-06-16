@@ -134,9 +134,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const actualSidebarContent = rightSidebarContent || getSidebarContent();
   
   return (
-    <div className={`flex h-screen overflow-hidden bg-background-primary ${className}`}>
+    <div className={`main-layout-container flex h-screen overflow-hidden bg-background-primary ${location.pathname === '/pomodoro' ? 'pomodoro-page-container' : ''} ${className}`}>
       {/* Left Sidebar - Navigation */}
-      <Sidebar />
+      <Sidebar className={location.pathname === '/pomodoro' ? 'pomodoro-sidebar' : ''} />
       
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
