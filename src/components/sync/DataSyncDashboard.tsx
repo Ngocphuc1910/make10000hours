@@ -234,7 +234,7 @@ export const DataSyncDashboard: React.FC = () => {
             <div className="text-right">
               <div className="text-sm text-gray-600">
                 <div>Firebase: {syncStatus.details.testResult?.firebaseData ? 
-                  Object.values(syncStatus.details.testResult.firebaseData).reduce((a: any, b: any) => a + b, 0) : 0} items</div>
+                  Object.values(syncStatus.details.testResult.firebaseData).reduce((a: number, b: unknown) => a + (typeof b === 'number' ? b : 0), 0) : 0} items</div>
                 <div>Supabase: {syncStatus.details.testResult?.supabaseData?.documents || 0} docs</div>
                 <div>With embeddings: {syncStatus.details.testResult?.supabaseData?.withEmbeddings || 0}</div>
               </div>
