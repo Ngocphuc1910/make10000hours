@@ -12,7 +12,7 @@ export interface ProductivityChunk {
     pomodoroCount?: number;
     createdAt: string;
     chunkType: 'task' | 'note' | 'time_entry' | 'project_summary';
-    priority?: 'high' | 'medium' | 'low';a
+    priority?: 'high' | 'medium' | 'low';
     tags?: string[];
   };
   parentChunkId?: string;
