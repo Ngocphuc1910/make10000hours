@@ -4,7 +4,23 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Debug environment variables in development
+if (import.meta.env.DEV) {
+  console.log('🔍 Supabase Environment Check:');
+  console.log('VITE_SUPABASE_URL:', supabaseUrl ? '✅ Set' : '❌ Missing');
+  console.log('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? '✅ Set' : '❌ Missing');
+  console.log('All env vars:', Object.keys(import.meta.env).filter(key => key.startsWith('VITE_')));
+}
+
 if (!supabaseUrl || !supabaseAnonKey) {
+  const errorMsg = `Missing Supabase environment variables:
+    - VITE_SUPABASE_URL: ${supabaseUrl ? '✅' : '❌ Missing'}
+    - VITE_SUPABASE_ANON_KEY: ${supabaseAnonKey ? '✅' : '❌ Missing'}
+    
+    For production: Add these as GitHub repository secrets
+    For development: Create a .env file in project root with these values`;
+  
+  console.error('🚨 Supabase Configuration Error:', errorMsg);
   throw new Error('Missing Supabase environment variables');
 }
 
