@@ -548,4 +548,69 @@ export class DatabaseSetup {
     console.log('⚠️ Database needs setup. Missing components:', health.missingComponents);
     return await this.initializeDatabase();
   }
+
+  static async createTables(): Promise<void> {
+    try {
+      console.log('🔧 Setting up database tables...');
+
+      // Create user_productivity_documents table
+      const { error: tableError } = await supabase.rpc('create_user_productivity_documents_table');
+      if (tableError && !tableError.message.includes('already exists')) {
+        throw tableError;
+      }
+
+      // Create sync_trackers table for incremental sync
+      const { error: syncTrackerError } = await supabase.rpc('create_sync_trackers_table');
+      if (syncTrackerError && !syncTrackerError.message.includes('already exists')) {
+        console.log('Creating sync_trackers table manually...');
+        await this.createSyncTrackersTable();
+      }
+
+      // Create search function
+      const { error: functionError } = await supabase.rpc('create_match_documents_function');
+      if (functionError && !functionError.message.includes('already exists')) {
+        throw functionError;
+      }
+
+      console.log('✅ Database setup complete');
+    } catch (error) {
+      console.error('❌ Database setup failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create sync_trackers table manually
+   */
+  private static async createSyncTrackersTable(): Promise<void> {
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS sync_trackers (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        collection TEXT NOT NULL,
+        last_sync_time TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(user_id, collection)
+      );
+      
+      -- Enable RLS
+      ALTER TABLE sync_trackers ENABLE ROW LEVEL SECURITY;
+      
+      -- Create policy for users to only access their own sync trackers
+      CREATE POLICY "Users can only access their own sync trackers" ON sync_trackers
+        FOR ALL USING (auth.uid()::text = user_id);
+      
+      -- Create index for efficient queries
+      CREATE INDEX IF NOT EXISTS idx_sync_trackers_user_collection 
+        ON sync_trackers(user_id, collection);
+    `;
+
+    const { error } = await supabase.rpc('exec_sql', { sql: createTableSQL });
+    if (error) {
+      console.error('Failed to create sync_trackers table:', error);
+      throw error;
+    }
+    
+    console.log('✅ sync_trackers table created successfully');
+  }
 } 
