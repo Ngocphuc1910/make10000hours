@@ -1,5 +1,6 @@
 import { OpenAIService } from './openai';
 import { supabase } from './supabase';
+import { SmartSourceSelector } from './smartSourceSelector';
 import type { RAGResponse } from '../types/chat';
 
 interface DocumentChunk {
@@ -35,7 +36,7 @@ export class SimpleRAGService {
           .select('*')
           .eq('user_id', userId)
           .not('embedding', 'is', null)
-          .limit(5);
+          .limit(12); // Increased limit to allow smart selection
 
         if (error) {
           console.warn('Vector search error:', error);
@@ -55,7 +56,7 @@ export class SimpleRAGService {
           .select('*')
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
-          .limit(5);
+          .limit(10); // Increased for smart selection
 
         if (fallbackError) {
           console.error('Fallback document retrieval error:', fallbackError);
@@ -65,13 +66,31 @@ export class SimpleRAGService {
         }
       }
 
-      // Step 3: Format context from retrieved documents
-      const context = relevantDocs
+      // Step 3: Apply smart source selection for optimal performance/cost balance
+      let finalSources = relevantDocs;
+      if (relevantDocs && relevantDocs.length > 0) {
+        const sourceSelection = await SmartSourceSelector.selectOptimalSources(
+          query,
+          userId,
+          relevantDocs,
+          { 
+            prioritizeCost: true, // Simple RAG prioritizes cost efficiency
+            minQualityThreshold: 0.25, // Lower threshold for basic service
+            maxTokenBudget: 4000 
+          }
+        );
+        
+        finalSources = sourceSelection.selectedSources;
+        console.log(`📊 Simple RAG selection: ${finalSources.length}/${relevantDocs.length} sources, estimated cost: $${sourceSelection.estimatedCost.toFixed(5)}`);
+      }
+
+      // Step 4: Format context from selected documents
+      const context = finalSources
         ?.map((doc: any, index: number) => `[${index + 1}] ${doc.content}`)
         .join('\n\n') || 'No relevant documents found.';
 
-      // Step 4: Generate response using OpenAI
-      console.log('Generating chat response with context:', { query, contextLength: context.length, documentCount: relevantDocs.length });
+      // Step 5: Generate response using OpenAI
+      console.log('Generating chat response with context:', { query, contextLength: context.length, documentCount: finalSources.length });
       
       const response = await OpenAIService.generateChatResponse({
         query,
@@ -79,12 +98,15 @@ export class SimpleRAGService {
         conversationHistory
       });
 
-      console.log('Chat response generated successfully:', response.substring(0, 100) + '...');
+      // Clean response to remove ** formatting
+      const cleanedResponse = this.cleanResponse(response);
+
+      console.log('Chat response generated successfully:', cleanedResponse.substring(0, 100) + '...');
       const endTime = Date.now();
       const responseTime = endTime - startTime;
 
-      // Step 5: Format sources with metadata
-      const sources = relevantDocs?.map((doc: any, index: number) => ({
+      // Step 6: Format sources with metadata
+      const sources = finalSources?.map((doc: any, index: number) => ({
         id: `source_${index + 1}`,
         type: doc.content_type || 'document',
         contentId: doc.metadata?.documentId || doc.id,
@@ -94,14 +116,14 @@ export class SimpleRAGService {
       })) || [];
 
       return {
-        response,
+        response: cleanedResponse,
         sources,
         metadata: {
           responseTime,
           relevanceScore: sources.length > 0 ? sources[0].relevanceScore : 0,
-          tokens: OpenAIService.estimateTokens(response),
+          tokens: OpenAIService.estimateTokens(cleanedResponse),
           model: 'gpt-4o-mini',
-          retrievedDocuments: relevantDocs?.length || 0,
+          retrievedDocuments: finalSources?.length || 0,
         },
       };
 
@@ -115,6 +137,14 @@ export class SimpleRAGService {
       });
       throw new Error(`Failed to process RAG query: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  private static cleanResponse(response: string): string {
+    // Remove ** formatting but preserve content
+    return response
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .trim();
   }
 
   static async addDocumentToVectorStore(
