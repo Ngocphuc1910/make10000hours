@@ -54,6 +54,8 @@ interface TimerState {
   // Persistence actions
   initializePersistence: (userId: string) => Promise<void>;
   saveToDatabase: () => Promise<void>;
+  saveToLocalStorage: () => void;
+  loadFromLocalStorage: () => void;
   syncFromRemoteState: (remoteState: TimerStateModel) => Promise<void>;
   cleanupPersistence: () => void;
   resetTimerState: () => void;
@@ -207,47 +209,43 @@ export const useTimerStore = create<TimerState>((set, get) => {
 
       const { timeSpentIncrement } = useTaskStore.getState();
 
-      // Check if we have an active session and we've crossed a new minute boundary
-      // Only increment time spent during pomodoro sessions, not during breaks
-      if (activeSession && currentTime !== totalTime && mode === 'pomodoro') {
-        const { currentTask } = get();
-        const currentMinute = Math.floor((currentTime - 2) / 60);
+      // Handle minute boundary crossing for task time tracking
+      if (activeSession && mode === 'pomodoro') {
+        const currentMinute = Math.floor(currentTime / 60);
         
-        // Initialize lastCountedMinute if this is the first tick of the session
-        if (lastCountedMinute === null) {
-          // Set initial lastCountedMinute based on currentTime
-          // We want to count the first minute boundary we cross, not the current minute
-          set({ lastCountedMinute: currentMinute });
-        } else if (currentMinute < lastCountedMinute) {
-          // We've crossed a minute boundary! (timer counts down, so currentMinute decreases)
-          const minutesBoundariesCrossed = lastCountedMinute - currentMinute;
-          
-          console.log('Timer minute boundary crossed:', {
-            lastCountedMinute,
-            currentMinute,
-            minutesBoundariesCrossed,
-            currentTime,
-            currentTask: currentTask?.title,
-            timer_display: `${Math.floor(currentTime / 60)}:${String(currentTime % 60).padStart(2, '0')}`
+        if (lastCountedMinute !== null && lastCountedMinute !== currentMinute && currentMinute < lastCountedMinute) {
+          // We've crossed a minute boundary (time decreased from one minute to the next)
+          console.log('Minute boundary crossed:', {
+            from: lastCountedMinute,
+            to: currentMinute,
+            sessionId: activeSession.sessionId,
+            taskId: activeSession.taskId
           });
           
-          if (currentTask && minutesBoundariesCrossed > 0) {
-            // Increment time spent for each minute boundary crossed
-            timeSpentIncrement(currentTask.id, minutesBoundariesCrossed);
-            
-            // Update the last counted minute to the current minute
-            set({ lastCountedMinute: currentMinute });
-            
-            // Update active session duration
-            get().updateActiveSession();
+          // Update active session duration in database
+          get().updateActiveSession();
+          
+          // Increment task time spent locally
+          if (activeSession.taskId) {
+            timeSpentIncrement(activeSession.taskId, 1);
           }
+        }
+        
+        // Update the last counted minute
+        if (lastCountedMinute === null || lastCountedMinute !== currentMinute) {
+          set({ lastCountedMinute: currentMinute });
         }
       }
 
       if (currentTime > 0) {
         set({ currentTime: currentTime - 1 });
-        // Save immediately on every tick for real-time persistence
-        get().saveToDatabase();
+        // 🔥 COST OPTIMIZATION: Save to localStorage every second, cloud every 1 minute
+        get().saveToLocalStorage();
+        
+        // Only save to database every 60 seconds (1 minute) to reduce costs by 98.3%
+        if (currentTime % 60 === 0) {
+          get().saveToDatabase();
+        }
       } else if (currentTime === 0) {
         // Timer finished, move to next mode
         get().skip();
@@ -480,17 +478,28 @@ export const useTimerStore = create<TimerState>((set, get) => {
       try {
         set({ isLoading: true, syncError: null });
         
-        // Cleanup orphaned sessions first
+        // 🔥 COST OPTIMIZATION: Load from localStorage first for instant loading
+        get().loadFromLocalStorage();
+        
+        // Cleanup orphaned sessions
         await get().cleanupOrphanedSessions();
         
-        // Load initial state from database
-        const remoteState = await timerService.loadTimerState(userId);
+        // 🔥 COST OPTIMIZATION: Only sync from remote every 5 minutes or on app start
+        const lastRemoteSync = localStorage.getItem('lastRemoteSync');
+        const shouldSyncFromRemote = !lastRemoteSync || 
+          (Date.now() - parseInt(lastRemoteSync)) > 5 * 60 * 1000; // 5 minutes
         
-        if (remoteState) {
-          await get().syncFromRemoteState(remoteState);
+        if (shouldSyncFromRemote) {
+          console.log('Syncing from remote (periodic sync)...');
+          const remoteState = await timerService.loadTimerState(userId);
+          
+          if (remoteState) {
+            await get().syncFromRemoteState(remoteState);
+          }
+          
+          localStorage.setItem('lastRemoteSync', Date.now().toString());
         } else {
-          // No existing state, save current default state
-          await get().saveToDatabase();
+          console.log('Using local state (remote sync not needed)');
         }
         
         set({ isLoading: false });
@@ -545,6 +554,46 @@ export const useTimerStore = create<TimerState>((set, get) => {
         set({ 
           isSyncing: false, 
           syncError: 'Failed to save timer state' 
+        });
+      }
+    },
+    
+    saveToLocalStorage: () => {
+      const state = get();
+      const timerData = {
+        currentTime: state.currentTime,
+        totalTime: state.totalTime,
+        mode: state.mode,
+        sessionsCompleted: state.sessionsCompleted,
+        isRunning: state.isRunning,
+        currentTaskId: state.currentTask ? state.currentTask.id : null,
+        lastSaveTime: new Date().toISOString(),
+        activeSession: state.activeSession,
+        sessionStartTimerPosition: state.sessionStartTimerPosition,
+      };
+      
+      try {
+        localStorage.setItem('timerState', JSON.stringify(timerData));
+      } catch (error) {
+        console.error('Failed to save to localStorage:', error);
+      }
+    },
+    
+    loadFromLocalStorage: () => {
+      const state = get();
+      const timerData = localStorage.getItem('timerState');
+      
+      if (timerData) {
+        const parsedData = JSON.parse(timerData);
+        set({
+          currentTime: parsedData.currentTime,
+          totalTime: parsedData.totalTime,
+          mode: parsedData.mode,
+          sessionsCompleted: parsedData.sessionsCompleted,
+          isRunning: parsedData.isRunning,
+          currentTask: parsedData.currentTaskId ? useTaskStore.getState().tasks.find(task => task.id === parsedData.currentTaskId) || null : null,
+          activeSession: parsedData.activeSession,
+          sessionStartTimerPosition: parsedData.sessionStartTimerPosition,
         });
       }
     },

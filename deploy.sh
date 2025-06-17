@@ -15,8 +15,9 @@ if [ ! -f ".env.production" ]; then
     echo "ERROR: .env.production file not found. Creating it with default values."
     cat > .env.production << EOL
 # Supabase credentials for production
-REACT_APP_SUPABASE_URL=https://ccxhdmyfmfwincvzqjhg.supabase.co
-REACT_APP_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNjeGhkbXlmbWZ3aW5jdnpxamhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIxNDAyMzIsImV4cCI6MjA1NzcxNjIzMn0.nf8fOFwXcFayteHi-HOhcxiHw4aLE7oOtWv8HeQAYjU
+# SECURITY: Replace these with actual environment variables
+REACT_APP_SUPABASE_URL=\${REACT_APP_SUPABASE_URL}
+REACT_APP_SUPABASE_ANON_KEY=\${REACT_APP_SUPABASE_ANON_KEY}8HeQAYjU
 NODE_ENV=production
 PUBLIC_URL=https://make10000hours.com
 EOL

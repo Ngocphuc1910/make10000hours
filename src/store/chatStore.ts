@@ -5,9 +5,10 @@ import type {
   Conversation, 
   ChatMessage, 
   QuickAction, 
-  RAGResponse 
+  RAGResponse,
+  RAGConfig
 } from '../types/chat';
-import { SimpleRAGService } from '../services/simpleRAGService';
+import { EnhancedRAGService } from '../services/enhancedRAGService';
 
 interface ChatStoreState extends ChatStore {
   // Internal state
@@ -23,12 +24,21 @@ export const useChatStore = create<ChatStoreState>()(
     isLoading: false,
     error: null,
     suggestedQueries: [
-      "How productive was I last week?",
+      "What tasks are in my Learn React project?",
+      "How much time did I spend working this week?", 
+      "Show me my recent work sessions",
       "Which project am I spending the most time on?",
-      "What should I work on next?",
-      "Show me my focus time trends"
+      "What are my completed tasks today?",
+      "Show me my work patterns from last month"
     ],
     quickActions: [],
+    ragConfig: {
+      prioritizeCost: false,
+      maxSources: 8,
+      responseQuality: 'balanced',
+      includeHistoricalData: true,
+      autoOptimize: true,
+    },
     _isInitialized: false,
     _userId: null,
 
@@ -36,7 +46,12 @@ export const useChatStore = create<ChatStoreState>()(
     sendMessage: async (content: string) => {
       const { currentConversationId, _userId } = get();
       
-      console.log('sendMessage called with:', { content, _userId, currentConversationId });
+      console.log('🤖 sendMessage called with:', { content, _userId, currentConversationId });
+      console.log('🤖 Chat store state:', { 
+        isInitialized: get()._isInitialized, 
+        userId: _userId,
+        conversationCount: get().conversations.length
+      });
       
       if (!_userId) {
         console.error('Chat store not initialized - no user ID');
@@ -73,8 +88,8 @@ export const useChatStore = create<ChatStoreState>()(
           )
         }));
 
-        // RAG-powered response using Simple RAG service
-        const ragResponse = await SimpleRAGService.queryWithRAG(content, _userId);
+        // RAG-powered response using Enhanced RAG service
+        const ragResponse = await EnhancedRAGService.queryWithRAG(content, _userId);
         
         const assistantMessage: ChatMessage = {
           id: `msg_${Date.now()}_assistant`,
@@ -183,6 +198,12 @@ export const useChatStore = create<ChatStoreState>()(
       // Placeholder implementation
       set(state => ({
         quickActions: state.quickActions.filter(qa => qa.id !== action.id),
+      }));
+    },
+
+    updateRAGConfig: (config: Partial<RAGConfig>) => {
+      set(state => ({
+        ragConfig: { ...state.ragConfig, ...config }
       }));
     },
 

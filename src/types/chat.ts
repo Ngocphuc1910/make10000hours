@@ -44,6 +44,14 @@ export interface QuickAction {
   action: () => void;
 }
 
+export interface RAGConfig {
+  prioritizeCost: boolean;
+  maxSources: number;
+  responseQuality: 'fast' | 'balanced' | 'thorough';
+  includeHistoricalData: boolean;
+  autoOptimize: boolean;
+}
+
 export interface RAGResponse {
   response: string;
   sources: ChatSource[];
@@ -53,6 +61,8 @@ export interface RAGResponse {
     tokens: number;
     model: string;
     retrievedDocuments: number;
+    chunkLevelsUsed?: number[];
+    searchStrategy?: string;
   };
 }
 
@@ -64,6 +74,7 @@ export interface ChatStore {
   error: string | null;
   suggestedQueries: string[];
   quickActions: QuickAction[];
+  ragConfig: RAGConfig;
 
   // Actions
   sendMessage: (content: string) => Promise<void>;
@@ -73,6 +84,7 @@ export interface ChatStore {
   clearError: () => void;
   generateSuggestions: () => void;
   executeQuickAction: (action: QuickAction) => void;
+  updateRAGConfig: (config: Partial<RAGConfig>) => void;
 }
 
 export interface DataSyncStatus {
