@@ -784,7 +784,7 @@ export class CompleteDataSync {
       const lastSyncTimes: Record<string, Date | null> = {};
 
       if (embeddings) {
-        embeddings.forEach(emb => {
+        embeddings.forEach((emb: any) => {
           embeddingCounts[emb.content_type] = (embeddingCounts[emb.content_type] || 0) + 1;
           
           const syncTime = new Date(emb.created_at);
