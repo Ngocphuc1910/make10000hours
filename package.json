@@ -9,6 +9,7 @@
     "@radix-ui/react-scroll-area": "^1.0.5",
     "@radix-ui/react-select": "^2.2.2",
     "@radix-ui/react-slot": "^1.2.0",
+    "@supabase/supabase-js": "^2.50.0",
     "@types/cheerio": "^0.22.35",
     "@types/flatpickr": "^3.0.2",
     "autoprefixer": "^10.4.16",
