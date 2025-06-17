@@ -25,7 +25,7 @@ export async function debugDataPipeline() {
     console.log(`📝 Tasks found: ${tasksSnapshot.size}`);
     
     if (tasksSnapshot.size > 0) {
-      tasksSnapshot.docs.slice(0, 2).forEach(doc => {
+      tasksSnapshot.docs.slice(0, 2).forEach((doc: any) => {
         const data = doc.data();
         console.log(`  - Task: "${data.title}" (${data.status})`);
       });
@@ -60,7 +60,7 @@ export async function debugDataPipeline() {
     } else {
       console.log(`🎯 Documents found: ${documents?.length || 0}`);
       if (documents && documents.length > 0) {
-        documents.forEach(doc => {
+        documents.forEach((doc: any) => {
           console.log(`  - ${doc.content_type} (${doc.created_at}): ${doc.content.substring(0, 50)}...`);
         });
       } else {
