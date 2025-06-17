@@ -93,5 +93,8 @@ export async function debugDataPipeline() {
 
 // Add to window for easy testing
 if (typeof window !== 'undefined') {
-  (window as any).debugDataPipeline = debugDataPipeline;
+  interface WindowWithDebug extends Window {
+    debugDataPipeline?: typeof debugDataPipeline;
+  }
+  (window as unknown as WindowWithDebug).debugDataPipeline = debugDataPipeline;
 } 
