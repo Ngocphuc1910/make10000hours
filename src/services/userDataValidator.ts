@@ -121,21 +121,20 @@ export class UserDataValidator {
    */
   private static async collectSupabaseData(userId: string) {
     try {
-      // Get all documents for the user
       const { data: documents, error } = await supabase
         .from('user_productivity_documents')
-        .select('content_type, embedding, content, created_at')
+        .select('*')
         .eq('user_id', userId);
 
       if (error) throw error;
 
       const totalDocuments = documents?.length || 0;
-      const withEmbeddings = documents?.filter(doc => doc.embedding !== null).length || 0;
+      const withEmbeddings = documents?.filter((doc: any) => doc.embedding !== null).length || 0;
       const withoutEmbeddings = totalDocuments - withEmbeddings;
 
       // Count by content type
       const contentTypes: Record<string, number> = {};
-      documents?.forEach(doc => {
+      documents?.forEach((doc: any) => {
         const type = doc.content_type || 'unknown';
         contentTypes[type] = (contentTypes[type] || 0) + 1;
       });
@@ -196,7 +195,7 @@ export class UserDataValidator {
     const recommendations: string[] = [];
 
     // Check for missing collections
-    Object.entries(firebaseData).forEach(([collection, count]) => {
+    Object.entries(firebaseData).forEach(([collection, count]: [string, number]) => {
       if (count === 0) {
         missingCollections.push(collection);
       } else if (count < 5) {
@@ -257,7 +256,7 @@ export class UserDataValidator {
 
       // Calculate average document size
       const avgDocumentSize = documents.length > 0 
-        ? Math.round(documents.reduce((sum, doc) => sum + doc.content.length, 0) / documents.length)
+        ? Math.round(documents.reduce((sum: number, doc: any) => sum + doc.content.length, 0) / documents.length)
         : 0;
 
       // Find oldest and newest documents
@@ -365,7 +364,7 @@ export class UserDataValidator {
 
       const embeddingCount = embeddings?.length || 0;
       const lastSync = embeddings && embeddings.length > 0 
-        ? new Date(Math.max(...embeddings.map(e => new Date(e.created_at).getTime())))
+        ? new Date(Math.max(...embeddings.map((e: any) => new Date(e.created_at).getTime())))
         : null;
 
       // Determine priority and sync needs
