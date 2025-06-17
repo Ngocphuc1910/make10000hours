@@ -171,9 +171,11 @@ export class OpenAIService {
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         {
           role: 'system',
-          content: `You are a helpful AI assistant that analyzes productivity data and provides insights. 
+          content: `You are a helpful AI assistant that analyzes productivity data and provides clear, direct responses. 
           Use the provided context to answer questions about work patterns, productivity, and task management.
-          Be concise and actionable in your responses. If you can't find relevant information in the context, say so.
+          Be concise and specific in your responses. If you can't find relevant information in the context, say so clearly.
+          Avoid using asterisks (**) for formatting in your responses.
+          Only provide insights or recommendations when specifically asked for them.
           
           Context: ${request.context}`,
         },
@@ -199,8 +201,12 @@ export class OpenAIService {
       });
 
       const responseContent = response.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
-      console.log('OpenAI response generated successfully, length:', responseContent.length);
-      return responseContent;
+      
+      // Post-process response to remove ** formatting
+      const cleanedResponse = this.cleanResponse(responseContent);
+      
+      console.log('OpenAI response generated successfully, length:', cleanedResponse.length);
+      return cleanedResponse;
     } catch (error) {
       console.error('Error generating chat response:', error);
       console.error('OpenAI Error details:', {
@@ -228,9 +234,11 @@ export class OpenAIService {
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         {
           role: 'system',
-          content: `You are a helpful AI assistant that analyzes productivity data and provides insights. 
+          content: `You are a helpful AI assistant that analyzes productivity data and provides clear, direct responses. 
           Use the provided context to answer questions about work patterns, productivity, and task management.
-          Be concise and actionable in your responses. If you can't find relevant information in the context, say so.
+          Be concise and specific in your responses. If you can't find relevant information in the context, say so clearly.
+          Avoid using asterisks (**) for formatting in your responses.
+          Only provide insights or recommendations when specifically asked for them.
           
           Context: ${request.context}`,
         },
@@ -253,10 +261,21 @@ export class OpenAIService {
         stream: true,
       });
 
+      let fullResponse = '';
       for await (const chunk of stream) {
         const content = chunk.choices[0]?.delta?.content || '';
         if (content) {
+          fullResponse += content;
           onChunk(content);
+        }
+      }
+      
+      // If we have a complete response, clean it and send the cleaned version
+      if (fullResponse) {
+        const cleanedResponse = this.cleanResponse(fullResponse);
+        if (cleanedResponse !== fullResponse) {
+          // Send the cleaned version as final chunk
+          onChunk('\n\n[Response cleaned]');
         }
       }
     } catch (error) {
@@ -266,6 +285,14 @@ export class OpenAIService {
       }
       throw new Error('Failed to generate streaming chat response');
     }
+  }
+
+  private static cleanResponse(response: string): string {
+    // Remove ** formatting but preserve content
+    return response
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .trim();
   }
 
   static estimateTokens(text: string): number {

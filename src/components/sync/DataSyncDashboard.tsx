@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Database, CheckCircle, AlertTriangle, XCircle, FileText, Users, Clock, Activity, TrendingUp } from 'lucide-react';
+import { RefreshCw, Database, CheckCircle, AlertTriangle, XCircle, FileText, Users, Clock, Activity, TrendingUp, Zap } from 'lucide-react';
 import { useUserStore } from '../../store/userStore';
 import { TestUserSync } from '../../services/testUserSync';
 import { FirebaseToSupabaseEmbedder } from '../../services/firebaseToSupabaseEmbedder';
 import { UserDataValidator } from '../../services/userDataValidator';
+import { IncrementalSyncService } from '../../services/incrementalSyncService';
+import { DatabaseSetup } from '../../services/databaseSetup';
 
 interface SyncStatus {
   status: 'loading' | 'success' | 'warning' | 'error';
@@ -12,18 +14,28 @@ interface SyncStatus {
   details?: any;
 }
 
+interface IncrementalSyncStatus {
+  needed: boolean;
+  lastSyncTime: Date | null;
+  pendingChanges: number;
+}
+
 export const DataSyncDashboard: React.FC = () => {
   const { user } = useUserStore();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({ status: 'loading', message: 'Checking sync status...' });
   const [isRunningSync, setIsRunningSync] = useState(false);
   const [isRunningEmbeddings, setIsRunningEmbeddings] = useState(false);
+  const [isRunningIncremental, setIsRunningIncremental] = useState(false);
+  const [isInitializingTables, setIsInitializingTables] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; status: string } | null>(null);
   const [comprehensiveReport, setComprehensiveReport] = useState<any>(null);
   const [showReport, setShowReport] = useState(false);
+  const [incrementalStatus, setIncrementalStatus] = useState<IncrementalSyncStatus | null>(null);
 
   useEffect(() => {
     if (user?.uid) {
       checkSyncStatus();
+      checkIncrementalSyncStatus();
     }
   }, [user]);
 
@@ -66,6 +78,81 @@ export const DataSyncDashboard: React.FC = () => {
     }
   };
 
+  const checkIncrementalSyncStatus = async () => {
+    if (!user?.uid) return;
+
+    try {
+      const status = await IncrementalSyncService.isIncrementalSyncNeeded(user.uid);
+      setIncrementalStatus(status);
+    } catch (error) {
+      console.error('Error checking incremental sync status:', error);
+      setIncrementalStatus(null);
+    }
+  };
+
+  const initializeTables = async () => {
+    try {
+      setIsInitializingTables(true);
+      await DatabaseSetup.createTables();
+      setSyncStatus({
+        status: 'success',
+        message: '✅ Database tables initialized successfully',
+        lastSync: new Date()
+      });
+    } catch (error) {
+      console.error('Error initializing tables:', error);
+      setSyncStatus({
+        status: 'error',
+        message: `Failed to initialize tables: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+    } finally {
+      setIsInitializingTables(false);
+    }
+  };
+
+  const runIncrementalSync = async () => {
+    if (!user?.uid) return;
+
+    try {
+      setIsRunningIncremental(true);
+      setSyncProgress({ current: 0, total: 100, status: 'Running incremental sync...' });
+
+      const result = await IncrementalSyncService.executeIncrementalSync(user.uid);
+
+      if (result.success) {
+        setSyncStatus({
+          status: 'success',
+          message: `✅ Incremental sync complete: ${result.processedDocuments} processed, ${result.skippedDocuments} skipped`,
+          lastSync: new Date(),
+          details: result
+        });
+      } else {
+        setSyncStatus({
+          status: 'warning',
+          message: `⚠️ Incremental sync completed with ${result.errors.length} errors`,
+          lastSync: new Date(),
+          details: result
+        });
+      }
+
+      // Refresh status after sync
+      setTimeout(() => {
+        checkSyncStatus();
+        checkIncrementalSyncStatus();
+      }, 1000);
+
+    } catch (error) {
+      console.error('Error running incremental sync:', error);
+      setSyncStatus({
+        status: 'error',
+        message: `Incremental sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+    } finally {
+      setIsRunningIncremental(false);
+      setSyncProgress(null);
+    }
+  };
+
   const runComprehensiveSync = async () => {
     if (!user?.uid) return;
 
@@ -95,7 +182,10 @@ export const DataSyncDashboard: React.FC = () => {
       }
 
       // Refresh status after sync
-      setTimeout(checkSyncStatus, 1000);
+      setTimeout(() => {
+        checkSyncStatus();
+        checkIncrementalSyncStatus();
+      }, 1000);
 
     } catch (error) {
       console.error('Error running comprehensive sync:', error);
@@ -128,7 +218,10 @@ export const DataSyncDashboard: React.FC = () => {
       });
 
       // Refresh status after embedding generation
-      setTimeout(checkSyncStatus, 1000);
+      setTimeout(() => {
+        checkSyncStatus();
+        checkIncrementalSyncStatus();
+      }, 1000);
 
     } catch (error) {
       console.error('Error generating embeddings:', error);
@@ -262,20 +355,76 @@ export const DataSyncDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Incremental Sync Status */}
+      {incrementalStatus && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">Incremental Sync</h3>
+              <p className="text-sm text-gray-500">Only sync updated documents to reduce costs</p>
+            </div>
+            <div className="text-right">
+              <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                incrementalStatus.needed ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+              }`}>
+                {incrementalStatus.needed ? `${incrementalStatus.pendingChanges} pending` : 'Up to date'}
+              </div>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-gray-500">Last Sync:</span>
+              <div className="font-medium">
+                {incrementalStatus.lastSyncTime 
+                  ? incrementalStatus.lastSyncTime.toLocaleString()
+                  : 'Never'
+                }
+              </div>
+            </div>
+            <div>
+              <span className="text-gray-500">Pending Changes:</span>
+              <div className="font-medium">
+                {incrementalStatus.pendingChanges >= 0 ? incrementalStatus.pendingChanges : 'Unknown'}
+              </div>
+            </div>
+            <div>
+              <span className="text-gray-500">Status:</span>
+              <div className="font-medium">
+                {incrementalStatus.needed ? 'Sync needed' : 'Up to date'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Action Buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <button
+          onClick={runIncrementalSync}
+          disabled={isRunningIncremental || isRunningSync || isRunningEmbeddings}
+          className={`flex items-center justify-center space-x-2 p-4 rounded-lg disabled:opacity-50 ${
+            incrementalStatus?.needed 
+              ? 'bg-orange-600 text-white hover:bg-orange-700' 
+              : 'bg-gray-600 text-white hover:bg-gray-700'
+          }`}
+        >
+          <Zap className="w-5 h-5" />
+          <span>{isRunningIncremental ? 'Syncing...' : 'Smart Sync'}</span>
+        </button>
+
         <button
           onClick={runComprehensiveSync}
-          disabled={isRunningSync || isRunningEmbeddings}
+          disabled={isRunningSync || isRunningEmbeddings || isRunningIncremental}
           className="flex items-center justify-center space-x-2 p-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
         >
           <Database className="w-5 h-5" />
-          <span>{isRunningSync ? 'Syncing...' : 'Run Full Sync'}</span>
+          <span>{isRunningSync ? 'Syncing...' : 'Full Sync'}</span>
         </button>
 
         <button
           onClick={generateMissingEmbeddings}
-          disabled={isRunningSync || isRunningEmbeddings}
+          disabled={isRunningSync || isRunningEmbeddings || isRunningIncremental}
           className="flex items-center justify-center space-x-2 p-4 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
         >
           <Activity className="w-5 h-5" />
@@ -284,11 +433,30 @@ export const DataSyncDashboard: React.FC = () => {
 
         <button
           onClick={generateComprehensiveReport}
-          className="flex items-center justify-center space-x-2 p-4 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+          disabled={isRunningSync || isRunningEmbeddings || isRunningIncremental}
+          className="flex items-center justify-center space-x-2 p-4 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
         >
           <TrendingUp className="w-5 h-5" />
           <span>Full Report</span>
         </button>
+      </div>
+
+      {/* Database Setup */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-medium text-gray-900">Database Setup</h3>
+            <p className="text-sm text-gray-500">Initialize required tables for incremental sync</p>
+          </div>
+          <button
+            onClick={initializeTables}
+            disabled={isInitializingTables}
+            className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+          >
+            <Database className={`w-4 h-4 ${isInitializingTables ? 'animate-pulse' : ''}`} />
+            <span>{isInitializingTables ? 'Initializing...' : 'Setup Tables'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Quick Stats */}
