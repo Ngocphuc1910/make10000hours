@@ -37,4 +37,9 @@ mcp.json
 figma-postComment.js
 figma-update-design.js
 
+# Security: Files that may contain secrets
+temp-env-source.txt
+environment-config.md
+test-chatbot.html
+
 dist/

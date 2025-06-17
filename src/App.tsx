@@ -25,6 +25,9 @@ import { verifyAnalyticsSetup } from './utils/verifyAnalytics';
 import CalendarPage from './features/calendar/CalendarPage';
 import DeepFocusPage from './components/pages/DeepFocusPage';
 import { LoadingScreen } from './components/ui/LoadingScreen';
+import { ChatButton } from './components/chat/ChatButton';
+import DataSyncPage from './components/pages/DataSyncPage';
+import { ChatIntegrationService } from './services/chatIntegration';
 
 // Import test utilities in development mode
 if (process.env.NODE_ENV === 'development') {
@@ -141,6 +144,7 @@ const App: React.FC = () => {
         clearInterval(intervalId);
       }
       unsubscribe();
+      ChatIntegrationService.cleanup();
     };
   }, []); 
 
@@ -149,6 +153,9 @@ const App: React.FC = () => {
     // TODO: fix the problem that this runs twice on initial load. Check for React.StrictMode
     initialize();
     initializeTheme();
+    
+    // Initialize chat integration
+    ChatIntegrationService.initialize();
 
     // Verify Analytics setup
     setTimeout(() => {
@@ -263,6 +270,13 @@ const App: React.FC = () => {
     </ProjectsLayout>
   );
 
+  // Data Sync page with layout
+  const DataSyncPageWithLayout = () => (
+    <MainLayout>
+      <DataSyncPage />
+    </MainLayout>
+  );
+
   // CRITICAL: Don't render main app until user authentication is initialized
   // This prevents the brief "logged out" flash during Firebase auth restoration
   if (!isInitialized) {
@@ -283,10 +297,12 @@ const App: React.FC = () => {
           </Route>
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="deep-focus" element={<DeepFocusPage />} />
+          <Route path="data-sync" element={<DataSyncPageWithLayout />} />
           <Route path="support" element={<SupportPageWithLayout />} />
         </Routes>
       </AnalyticsWrapper>
       <ToastContainer />
+      <ChatButton />
     </Router>
   );
 }
