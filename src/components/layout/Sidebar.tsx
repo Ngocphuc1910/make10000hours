@@ -58,6 +58,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
       path: '/deep-focus'
     },
     {
+      icon: 'database-2-line',
+      label: 'Data Sync',
+      path: '/data-sync'
+    },
+    {
       icon: 'settings-line',
       label: 'Settings',
       path: '/dashboard/settings'
@@ -85,6 +90,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
       return true;
     }
     if (path === '/deep-focus' && location.pathname === '/deep-focus') {
+      return true;
+    }
+    if (path === '/data-sync' && location.pathname === '/data-sync') {
       return true;
     }
     if (path.startsWith('/dashboard/') && location.pathname.startsWith(path)) {

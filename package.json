@@ -46,7 +46,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "security-check": "node scripts/security-check.js",
+    "check-env": "node scripts/check-env.js",
+    "pre-commit": "npm run security-check"
   },
   "eslintConfig": {
     "extends": [
