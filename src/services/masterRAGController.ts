@@ -101,7 +101,7 @@ export class MasterRAGController {
           preprocessing: { normalizeWhitespace: true, expandAbbreviations: true, addContextualTerms: true },
           embedding: { batchSize: 100, rateLimitDelay: 100, qualityThreshold: 0.7 }
         },
-        (stage, progress) => {
+        (stage: string, progress: any) => {
           console.log(`   🔄 ${stage}: ${progress.progress || 0}% complete`);
         }
       );

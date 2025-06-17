@@ -343,4 +343,156 @@ export class UserDataValidator {
       };
     }
   }
+
+  /**
+   * Get quick sync status for orchestrator
+   */
+  static async getQuickSyncStatus(userId: string): Promise<{
+    priority: 'low' | 'medium' | 'high';
+    needsSync: boolean;
+    embeddingCount: number;
+    lastSync: Date | null;
+  }> {
+    try {
+      // Get basic embedding count
+      const { data: embeddings, error } = await supabase
+        .from('user_productivity_documents')
+        .select('id, created_at')
+        .eq('user_id', userId)
+        .not('embedding', 'is', null);
+
+      if (error) throw error;
+
+      const embeddingCount = embeddings?.length || 0;
+      const lastSync = embeddings && embeddings.length > 0 
+        ? new Date(Math.max(...embeddings.map(e => new Date(e.created_at).getTime())))
+        : null;
+
+      // Determine priority and sync needs
+      let priority: 'low' | 'medium' | 'high' = 'low';
+      let needsSync = false;
+
+      if (embeddingCount === 0) {
+        priority = 'high';
+        needsSync = true;
+      } else if (lastSync && (Date.now() - lastSync.getTime()) > 24 * 60 * 60 * 1000) {
+        priority = 'medium';
+        needsSync = true;
+      }
+
+      return {
+        priority,
+        needsSync,
+        embeddingCount,
+        lastSync
+      };
+
+    } catch (error) {
+      console.error('Error getting quick sync status:', error);
+      return {
+        priority: 'high',
+        needsSync: true,
+        embeddingCount: 0,
+        lastSync: null
+      };
+    }
+  }
+
+  /**
+   * Generate user data report for orchestrator
+   */
+  static async generateUserDataReport(userId: string): Promise<UserDataReport> {
+    try {
+      // Get Firebase data
+      const firebaseData = await this.collectFirebaseData(userId);
+      const totalFirebaseDocuments = Object.values(firebaseData).reduce((sum, count) => sum + count, 0);
+
+      // Get Supabase data
+      const supabaseData = await this.collectSupabaseData(userId);
+
+      // Calculate sync status
+      const syncPercentage = totalFirebaseDocuments > 0 
+        ? Math.round((supabaseData.totalDocuments / totalFirebaseDocuments) * 100)
+        : 0;
+      
+      const isComplete = syncPercentage >= 95 && supabaseData.withoutEmbeddings === 0;
+      
+      const missingEmbeddings: string[] = [];
+      if (supabaseData.withoutEmbeddings > 0) {
+        missingEmbeddings.push(`${supabaseData.withoutEmbeddings} documents without embeddings`);
+      }
+
+      const recommendations: string[] = [];
+      if (!isComplete) {
+        if (supabaseData.totalDocuments === 0) {
+          recommendations.push('Run complete data sync to migrate Firebase data');
+        } else if (supabaseData.withoutEmbeddings > 0) {
+          recommendations.push('Generate embeddings for remaining documents');
+        }
+      }
+
+      return {
+        firebase: {
+          totalDocuments: totalFirebaseDocuments,
+          ...firebaseData
+        },
+        supabase: {
+          totalEmbeddings: supabaseData.withEmbeddings,
+          ...supabaseData
+        },
+        syncStatus: {
+          isComplete,
+          syncPercentage,
+          missingEmbeddings,
+          recommendations
+        }
+      };
+
+    } catch (error) {
+      console.error('Error generating user data report:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Print report to console
+   */
+  static printReport(report: UserDataReport): void {
+    console.log('\n📊 USER DATA REPORT');
+    console.log('===================');
+    console.log(`Firebase Documents: ${report.firebase.totalDocuments}`);
+    console.log(`Supabase Documents: ${report.supabase.totalDocuments}`);
+    console.log(`With Embeddings: ${report.supabase.withEmbeddings}`);
+    console.log(`Sync Status: ${report.syncStatus.isComplete ? '✅ Complete' : '❌ Incomplete'} (${report.syncStatus.syncPercentage}%)`);
+    
+    if (report.syncStatus.recommendations.length > 0) {
+      console.log('\nRecommendations:');
+      report.syncStatus.recommendations.forEach(rec => console.log(`  • ${rec}`));
+    }
+  }
+}
+
+export interface UserDataReport {
+  firebase: {
+    totalDocuments: number;
+    tasks: number;
+    projects: number;
+    workSessions: number;
+    dailySiteUsage: number;
+    deepFocusSessions: number;
+    users: number;
+  };
+  supabase: {
+    totalEmbeddings: number;
+    totalDocuments: number;
+    withEmbeddings: number;
+    withoutEmbeddings: number;
+    contentTypes: Record<string, number>;
+  };
+  syncStatus: {
+    isComplete: boolean;
+    syncPercentage: number;
+    missingEmbeddings: string[];
+    recommendations: string[];
+  };
 }
