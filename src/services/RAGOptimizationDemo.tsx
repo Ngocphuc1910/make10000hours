@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FinalRAGDemo, type CompleteDemoResult } from '../../services/finalRAGDemo';
+import { FinalRAGDemo, type CompleteDemoResult } from './finalRAGDemo';
 
 export const RAGOptimizationDemo: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
@@ -158,14 +158,14 @@ export const RAGOptimizationDemo: React.FC = () => {
               🏆 Production Readiness: {results.productionReadiness.score}/100
             </h3>
             <div className="space-y-2">
-              {results.productionReadiness.checklist.map((item, index) => (
+              {results.productionReadiness.checklist.map((item: string, index: number) => (
                 <div key={index} className="text-sm">{item}</div>
               ))}
             </div>
             {results.productionReadiness.recommendations.length > 0 && (
               <div className="mt-3">
                 <div className="text-sm font-medium mb-1">Recommendations:</div>
-                {results.productionReadiness.recommendations.map((rec, index) => (
+                {results.productionReadiness.recommendations.map((rec: string, index: number) => (
                   <div key={index} className="text-sm text-gray-700">• {rec}</div>
                 ))}
               </div>
@@ -177,7 +177,7 @@ export const RAGOptimizationDemo: React.FC = () => {
             <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
               <h3 className="text-gray-800 font-medium mb-3">🔍 Query Test Results</h3>
               <div className="space-y-3">
-                {results.demoQueries.map((query, index) => (
+                {results.demoQueries.map((query: any, index: number) => (
                   <div key={index} className="bg-white p-3 rounded border">
                     <div className="font-medium text-sm mb-1">"{query.query}"</div>
                     <div className="flex justify-between text-xs text-gray-600">

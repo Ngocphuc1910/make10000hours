@@ -2,7 +2,8 @@ import { collection, getDocs, query, where, orderBy, onSnapshot, DocumentData } 
 import { db } from '../api/firebase';
 import { supabase } from './supabase';
 import { FirebaseToSupabaseEmbedder } from './firebaseToSupabaseEmbedder';
-import { OptimizedRAGPipeline } from './optimizedRAGPipeline';
+import { OpenAIService } from './openai';
+// import { OptimizedRAGPipeline } from './optimizedRAGPipeline'; // TODO: Implement when needed
 
 interface EmbeddableDocument {
   id: string;
@@ -571,18 +572,36 @@ export class CompleteDataSync {
         originalMetadata: doc.metadata,
       }));
 
-      // Use the optimized pipeline with quality settings
-      await OptimizedRAGPipeline.processTasksOptimized(
-        documents[0].userId,
-        {
-          chunking: { maxTokens: 300, overlapTokens: 50, preserveContext: true },
-          preprocessing: { normalizeWhitespace: true, expandAbbreviations: true, addContextualTerms: true },
-          embedding: { batchSize: 50, rateLimitDelay: 100, qualityThreshold: 0.7 }
-        },
-        (stage: string, progress: any) => {
-          console.log(`   📊 ${stage}: ${progress.progress || 0}% complete`);
+      // Process documents with embedder (optimized pipeline will be added later)
+      for (const doc of documents) {
+        try {
+          // Generate embedding using OpenAI service directly
+          const embedding = await OpenAIService.generateEmbedding({
+            content: doc.content,
+            contentType: doc.contentType
+          });
+
+          // Insert into Supabase with embedding
+          const { error } = await supabase
+            .from('user_productivity_documents')
+            .insert({
+              user_id: doc.userId,
+              content_type: doc.contentType,
+              content: doc.content,
+              embedding,
+              metadata: {
+                documentId: doc.id,
+                sourceCollection: doc.contentType,
+                originalData: doc.metadata,
+                syncedAt: new Date().toISOString()
+              }
+            });
+
+          if (error) throw error;
+        } catch (error) {
+          console.error(`Error processing document ${doc.id}:`, error);
         }
-      );
+      }
 
       console.log(`✅ Processed ${documents.length} documents of type ${documents[0].contentType}`);
 
