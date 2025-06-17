@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useUserStore } from '../../store/userStore';
 import { DEFAULT_SETTINGS, type AppSettings, type TimerSettings } from '../../types/models';
+import { OpenAISettings } from '../settings/OpenAISettings';
 
 const SettingsPage = () => {
   const { user, updateUserData } = useUserStore();
@@ -210,6 +211,9 @@ const SettingsPage = () => {
             </div>
           </div>
         </section>
+
+        {/* OpenAI Settings */}
+        <OpenAISettings />
       </div>
 
       {/* Action Buttons */}
