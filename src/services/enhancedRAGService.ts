@@ -899,7 +899,25 @@ export class EnhancedRAGService {
     // Determine if the user is asking for insights/recommendations
     const isAskingForInsights = /\b(insight|recommend|suggest|advice|improve|optimize|analysis|analyze|pattern|trend)\b/i.test(query);
 
+    // Get current date/time information
+    const now = new Date();
+    const currentDate = now.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    const currentTime = now.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    });
+
     return `You are an AI productivity assistant with comprehensive access to the user's work data from ${projectIds.length > 0 ? `${projectIds.length} different projects` : 'multiple sources'}. 
+
+CURRENT DATE & TIME: ${currentDate} at ${currentTime}
+IMPORTANT: When answering questions about "today", "now", or current time, use the above current date/time, NOT dates from the productivity data context.
+
 Answer the user's question directly using the provided context. Be specific and use actual data from the context.
 
 Context includes ${chunkTypes.join(', ')} data${hasMultipleLevels ? ' across multiple detail levels' : ''}${projectIds.length > 0 ? ` from ${projectIds.length} projects` : ''}.
