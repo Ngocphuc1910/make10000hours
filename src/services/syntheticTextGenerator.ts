@@ -137,25 +137,93 @@ export class SyntheticTextGenerator {
   // Level 3: Project-Level Summary Text
   static generateProjectSummaryText(project: ProjectData, tasks: TaskData[], sessions: SessionData[]): string {
     const totalTasks = tasks.length;
-    const completedTasks = tasks.filter(t => t.completed).length;
-    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    if (totalTasks === 0) {
+      return `Project "${project.name}" is newly created with no tasks yet.`;
+    }
+
+    // Categorize tasks by status using exact UI terminology
+    const todoTasks = tasks.filter(t => t.status === 'todo' || (!t.completed && t.status !== 'pomodoro'));
+    const pomodoroTasks = tasks.filter(t => t.status === 'pomodoro');
+    const completedTasks = tasks.filter(t => t.completed || t.status === 'completed');
+
+    // Calculate time metrics
     const totalTime = Math.round(tasks.reduce((sum, t) => sum + (t.timeSpent || 0), 0));
     const totalSessions = sessions.length;
+    const projectAge = this.calculateProjectAge(project, tasks);
     
-    let text = `Project '${project.name}' contains ${totalTasks} tasks with ${completedTasks} completed (${completionRate}% completion rate).`;
-    
-    text += ` Total time invested: ${Math.round(totalTime / 60)} hours across ${totalSessions} work sessions.`;
-    
-    if (project.description) {
-      text += ` Project description: ${project.description}`;
+    // Project header with age and overview
+    let text = `Project "${project.name}" created ${projectAge}, containing ${totalTasks} tasks across ${this.getTaskCategoryCount(tasks)} categories.`;
+    text += `\n\n`;
+
+    // TO-DO LIST STATUS section
+    text += `TO-DO LIST STATUS (${todoTasks.length} tasks):\n`;
+    if (todoTasks.length > 0) {
+      const prioritizedTodos = this.prioritizeTasksForDisplay(todoTasks, 4);
+      prioritizedTodos.forEach(task => {
+        const estimated = task.timeEstimated ? `estimated ${task.timeEstimated} min` : 'no estimate';
+        const priority = this.inferTaskPriority(task);
+        const dueInfo = this.getTaskDueInfo(task);
+        text += `- "${task.title}" (${estimated}, priority: ${priority}${dueInfo})\n`;
+      });
+    } else {
+      text += `- No tasks in to-do list\n`;
     }
+    text += `\n`;
+
+    // IN POMODORO STATUS section  
+    text += `IN POMODORO STATUS (${pomodoroTasks.length} tasks):\n`;
+    if (pomodoroTasks.length > 0) {
+      pomodoroTasks.forEach(task => {
+        const progress = task.timeEstimated ? 
+          `${task.timeSpent}/${task.timeEstimated} min completed, ${Math.round((task.timeSpent / task.timeEstimated) * 100)}% progress` : 
+          `${task.timeSpent} min invested`;
+        const sessionCount = sessions.filter(s => s.taskId === task.id).length;
+        const workPattern = this.analyzeTaskWorkPattern(task, sessions);
+        text += `- "${task.title}" (${progress}, ${sessionCount} sessions, ${workPattern})\n`;
+      });
+    } else {
+      text += `- No tasks currently in pomodoro\n`;
+    }
+    text += `\n`;
+
+    // COMPLETED STATUS section
+    text += `COMPLETED STATUS (${completedTasks.length} tasks):\n`;
+    if (completedTasks.length > 0) {
+      const recentCompleted = this.getRecentCompletedTasks(completedTasks, 4);
+      recentCompleted.forEach(task => {
+        const timeSpent = task.timeSpent ? `${task.timeSpent} min` : 'no time logged';
+        const completedWhen = this.getCompletionTimeframe(task);
+        text += `- "${task.title}" (${timeSpent}, completed ${completedWhen})\n`;
+      });
+    } else {
+      text += `- No completed tasks yet\n`;
+    }
+    text += `\n`;
+
+    // PROJECT ANALYTICS section
+    const completionRate = Math.round((completedTasks.length / totalTasks) * 100);
+    const avgSessionDuration = totalSessions > 0 ? Math.round(sessions.reduce((sum, s) => sum + (s.duration || 0), 0) / totalSessions) : 0;
+    const timeEstimationAccuracy = this.calculateTimeEstimationAccuracy(completedTasks);
+    const momentum = this.analyzeProjectMomentum(sessions);
+    const peakProductivity = this.findPeakProductivityPattern(sessions);
+    const velocityTarget = this.calculateTaskVelocity(completedTasks, projectAge);
     
-    if (tasks.length > 0) {
-      const categories = this.extractKeyCategories(tasks, project);
-      text += ` Key focus areas: ${categories.join(', ')}.`;
-      
-      const momentum = this.analyzeProjectMomentum(sessions);
-      text += ` Progress trajectory: ${momentum}.`;
+    text += `PROJECT ANALYTICS: Total ${totalTime} minutes invested across ${totalSessions} work sessions over ${this.getProjectDuration(tasks, sessions)}. `;
+    text += `Average session duration: ${avgSessionDuration} minutes. `;
+    text += `Completion velocity: ${velocityTarget.current} tasks per week${velocityTarget.target ? ` (${velocityTarget.comparison} target of ${velocityTarget.target})` : ''}. `;
+    text += `Time estimation accuracy: ${timeEstimationAccuracy}%. `;
+    text += `Peak productivity: ${peakProductivity}. `;
+    text += `Current momentum: ${momentum}.`;
+
+    // RISK INDICATORS section if any issues detected
+    const riskIndicators = this.identifyProjectRisks(tasks, sessions, pomodoroTasks);
+    if (riskIndicators.length > 0) {
+      text += `\n\nRISK INDICATORS: ${riskIndicators.join('. ')}.`;
+    }
+
+    // Add project description if available
+    if (project.description) {
+      text += `\n\nProject description: ${project.description}`;
     }
     
     return text;
@@ -368,5 +436,212 @@ export class SyntheticTextGenerator {
     // Only show OVERDUE for past due dates, otherwise just show the date
     if (daysDiff < 0) return `${absoluteDate} - OVERDUE`;
     return absoluteDate;
+  }
+
+  // Enhanced Helper Methods for Project Summary Generation
+  private static calculateProjectAge(project: ProjectData, tasks: TaskData[]): string {
+    // Try to find the earliest task creation date as proxy for project age
+    if (tasks.length === 0) return "recently";
+    
+    const earliestTask = tasks.reduce((earliest, task) => 
+      new Date(task.createdAt) < new Date(earliest.createdAt) ? task : earliest
+    );
+    
+    const ageInDays = Math.floor((Date.now() - new Date(earliestTask.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (ageInDays < 1) return "today";
+    if (ageInDays === 1) return "1 day ago";
+    if (ageInDays < 7) return `${ageInDays} days ago`;
+    if (ageInDays < 30) return `${Math.floor(ageInDays / 7)} weeks ago`;
+    if (ageInDays < 365) return `${Math.floor(ageInDays / 30)} months ago`;
+    return `${Math.floor(ageInDays / 365)} years ago`;
+  }
+
+  private static getTaskCategoryCount(tasks: TaskData[]): number {
+    const categories = new Set<string>();
+    
+    tasks.forEach(task => {
+      if (task.title.toLowerCase().includes('bug') || task.title.toLowerCase().includes('fix')) {
+        categories.add('Bug Fixes');
+      } else if (task.title.toLowerCase().includes('feature') || task.title.toLowerCase().includes('implement')) {
+        categories.add('Features');
+      } else if (task.title.toLowerCase().includes('test') || task.title.toLowerCase().includes('testing')) {
+        categories.add('Testing');
+      } else if (task.title.toLowerCase().includes('design')) {
+        categories.add('Design');
+      } else {
+        categories.add('General');
+      }
+    });
+    
+    return categories.size;
+  }
+
+  private static prioritizeTasksForDisplay(tasks: TaskData[], limit: number): TaskData[] {
+    return tasks
+      .sort((a, b) => {
+        // Prioritize by time estimated (high first), then by creation date (recent first)
+        const aEstimated = a.timeEstimated || 0;
+        const bEstimated = b.timeEstimated || 0;
+        if (aEstimated !== bEstimated) return bEstimated - aEstimated;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      })
+      .slice(0, limit);
+  }
+
+  private static inferTaskPriority(task: TaskData): string {
+    if (!task.timeEstimated) return "low";
+    if (task.timeEstimated > 300) return "high"; // > 5 hours
+    if (task.timeEstimated > 120) return "medium"; // > 2 hours
+    return "low";
+  }
+
+  private static getTaskDueInfo(task: TaskData): string {
+    // Since scheduledDate is optional, we'll use a simple heuristic
+    // In a real implementation, you'd check the scheduledDate field
+    return ""; // For now, return empty - can be enhanced with actual due date logic
+  }
+
+  private static analyzeTaskWorkPattern(task: TaskData, sessions: SessionData[]): string {
+    const taskSessions = sessions.filter(s => s.taskId === task.id);
+    if (taskSessions.length === 0) return "no sessions yet";
+    
+    const avgDuration = taskSessions.reduce((sum, s) => sum + (s.duration || 0), 0) / taskSessions.length;
+    
+    if (avgDuration > 30) return "sustained focus sessions";
+    if (avgDuration < 15) return "short burst sessions";
+    return "balanced work rhythm";
+  }
+
+  private static getRecentCompletedTasks(tasks: TaskData[], limit: number): TaskData[] {
+    return tasks
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
+      .slice(0, limit);
+  }
+
+  private static getCompletionTimeframe(task: TaskData): string {
+    const completionDate = new Date(task.updatedAt || task.createdAt);
+    const daysAgo = Math.floor((Date.now() - completionDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysAgo === 0) return "today";
+    if (daysAgo === 1) return "yesterday";
+    if (daysAgo < 7) return `${daysAgo} days ago`;
+    if (daysAgo < 30) return `${Math.floor(daysAgo / 7)} weeks ago`;
+    return `${Math.floor(daysAgo / 30)} months ago`;
+  }
+
+  private static calculateTimeEstimationAccuracy(completedTasks: TaskData[]): number {
+    const tasksWithEstimates = completedTasks.filter(t => t.timeEstimated && t.timeEstimated > 0);
+    if (tasksWithEstimates.length === 0) return 0;
+    
+    const accuracySum = tasksWithEstimates.reduce((sum, task) => {
+      const accuracy = Math.min(task.timeSpent / task.timeEstimated!, task.timeEstimated! / task.timeSpent) * 100;
+      return sum + accuracy;
+    }, 0);
+    
+    return Math.round(accuracySum / tasksWithEstimates.length);
+  }
+
+  private static findPeakProductivityPattern(sessions: SessionData[]): string {
+    if (sessions.length === 0) return "no data available";
+    
+    const dayOfWeekCounts: Record<number, number> = {};
+    const hourCounts: Record<number, number> = {};
+    
+    sessions.forEach(session => {
+      if (session.startTime) {
+        const date = new Date(session.startTime);
+        const dayOfWeek = date.getDay();
+        const hour = date.getHours();
+        
+        dayOfWeekCounts[dayOfWeek] = (dayOfWeekCounts[dayOfWeek] || 0) + (session.duration || 0);
+        hourCounts[hour] = (hourCounts[hour] || 0) + (session.duration || 0);
+      }
+    });
+    
+    const peakDay = Object.entries(dayOfWeekCounts).reduce((max, [day, duration]) => 
+      duration > max[1] ? [day, duration] : max, ["0", 0]);
+    
+    const peakHour = Object.entries(hourCounts).reduce((max, [hour, duration]) => 
+      duration > max[1] ? [hour, duration] : max, ["0", 0]);
+    
+    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const dayName = dayNames[parseInt(peakDay[0])];
+    
+    const hour = parseInt(peakHour[0]);
+    const period = hour >= 12 ? "afternoon" : "morning";
+    
+    return `${dayName} ${period}s`;
+  }
+
+  private static calculateTaskVelocity(completedTasks: TaskData[], projectAge: string): { current: number, target?: number, comparison?: string } {
+    if (completedTasks.length === 0) return { current: 0 };
+    
+    // Extract weeks from project age string
+    const weeksMatch = projectAge.match(/(\d+)\s+weeks?/);
+    const weeks = weeksMatch ? parseInt(weeksMatch[1]) : 1;
+    
+    const current = Number((completedTasks.length / weeks).toFixed(1));
+    const target = 2.5; // Assumed target from the sample
+    
+    let comparison = "below";
+    if (current >= target) comparison = "meeting";
+    if (current > target * 1.1) comparison = "exceeding";
+    
+    return { current, target, comparison };
+  }
+
+  private static getProjectDuration(tasks: TaskData[], sessions: SessionData[]): string {
+    if (tasks.length === 0) return "no duration data";
+    
+    const allDates = [
+      ...tasks.map(t => new Date(t.createdAt)),
+      ...sessions.map(s => s.startTime ? new Date(s.startTime) : new Date())
+    ].filter(d => d);
+    
+    if (allDates.length === 0) return "no duration data";
+    
+    const earliest = new Date(Math.min(...allDates.map(d => d.getTime())));
+    const latest = new Date(Math.max(...allDates.map(d => d.getTime())));
+    
+    const days = Math.floor((latest.getTime() - earliest.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (days === 0) return "1 day";
+    if (days < 7) return `${days} days`;
+    if (days < 30) return `${Math.floor(days / 7)} weeks`;
+    return `${Math.floor(days / 30)} months`;
+  }
+
+  private static identifyProjectRisks(tasks: TaskData[], sessions: SessionData[], pomodoroTasks: TaskData[]): string[] {
+    const risks: string[] = [];
+    
+    // Check for tasks behind schedule
+    const behindScheduleTasks = pomodoroTasks.filter(task => {
+      if (!task.timeEstimated) return false;
+      return task.timeSpent > task.timeEstimated * 1.2; // 20% over estimate
+    });
+    
+    if (behindScheduleTasks.length > 0) {
+      risks.push(`${behindScheduleTasks.length} task${behindScheduleTasks.length > 1 ? 's' : ''} behind schedule`);
+    }
+    
+    // Check for irregular work patterns
+    const recentSessions = sessions.filter(s => {
+      if (!s.startTime) return false;
+      const daysDiff = (Date.now() - new Date(s.startTime).getTime()) / (1000 * 60 * 60 * 24);
+      return daysDiff <= 7;
+    });
+    
+    if (recentSessions.length === 0 && sessions.length > 0) {
+      risks.push("No recent activity in past week");
+    }
+    
+    // Check completion velocity
+    const completedTasks = tasks.filter(t => t.completed);
+    if (tasks.length > 5 && completedTasks.length / tasks.length < 0.3) {
+      risks.push("Low completion rate, recommend schedule review");
+    }
+    
+    return risks;
   }
 } 

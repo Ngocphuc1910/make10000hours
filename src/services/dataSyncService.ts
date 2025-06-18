@@ -17,14 +17,16 @@ export class DataSyncService {
 
   static async initializeUserSync(userId: string): Promise<void> {
     try {
-      // Clear existing listeners
+      console.log('Initializing data sync for user:', userId);
+      
+      // CRITICAL: Stop any existing listeners before creating new ones
       this.stopSync();
-
-      // Set up real-time listeners for user data
+      
+      // Initialize sync for different data types
       await Promise.all([
         this.syncTasks(userId),
         this.syncSessions(userId),
-        this.syncProjects(userId),
+        this.syncProjects(userId)
       ]);
 
       console.log('Data sync initialized for user:', userId);
@@ -35,8 +37,18 @@ export class DataSyncService {
   }
 
   static stopSync(): void {
+    console.log(`🛑 Stopping ${this.syncListeners.length} active Firebase listeners`);
     this.syncListeners.forEach(unsubscribe => unsubscribe());
     this.syncListeners = [];
+    console.log('✅ All Firebase listeners cleaned up');
+  }
+
+  static getActiveListenerCount(): number {
+    return this.syncListeners.length;
+  }
+
+  static isActive(): boolean {
+    return this.syncListeners.length > 0;
   }
 
   private static async syncTasks(userId: string): Promise<void> {

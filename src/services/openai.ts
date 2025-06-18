@@ -168,16 +168,34 @@ export class OpenAIService {
         hasHistory: !!request.conversationHistory?.length
       });
 
+      // Get current date/time information
+      const now = new Date();
+      const currentDate = now.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      const currentTime = now.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true 
+      });
+
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         {
           role: 'system',
           content: `You are a helpful AI assistant that analyzes productivity data and provides clear, direct responses. 
-          Use the provided context to answer questions about work patterns, productivity, and task management.
-          Be concise and specific in your responses. If you can't find relevant information in the context, say so clearly.
-          Avoid using asterisks (**) for formatting in your responses.
-          Only provide insights or recommendations when specifically asked for them.
+
+CURRENT DATE & TIME: ${currentDate} at ${currentTime}
+IMPORTANT: When answering questions about "today", "now", or current time, use the above current date/time.
+
+Use the provided context to answer questions about work patterns, productivity, and task management.
+Be concise and specific in your responses. If you can't find relevant information in the context, say so clearly.
+Avoid using asterisks (**) for formatting in your responses.
+Only provide insights or recommendations when specifically asked for them.
           
-          Context: ${request.context}`,
+Context: ${request.context}`,
         },
       ];
 
@@ -231,16 +249,34 @@ export class OpenAIService {
     try {
       const openai = this.ensureOpenAI();
       
+      // Get current date/time information
+      const now = new Date();
+      const currentDate = now.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      const currentTime = now.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true 
+      });
+      
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         {
           role: 'system',
           content: `You are a helpful AI assistant that analyzes productivity data and provides clear, direct responses. 
-          Use the provided context to answer questions about work patterns, productivity, and task management.
-          Be concise and specific in your responses. If you can't find relevant information in the context, say so clearly.
-          Avoid using asterisks (**) for formatting in your responses.
-          Only provide insights or recommendations when specifically asked for them.
+
+CURRENT DATE & TIME: ${currentDate} at ${currentTime}
+IMPORTANT: When answering questions about "today", "now", or current time, use the above current date/time.
+
+Use the provided context to answer questions about work patterns, productivity, and task management.
+Be concise and specific in your responses. If you can't find relevant information in the context, say so clearly.
+Avoid using asterisks (**) for formatting in your responses.
+Only provide insights or recommendations when specifically asked for them.
           
-          Context: ${request.context}`,
+Context: ${request.context}`,
         },
       ];
 
