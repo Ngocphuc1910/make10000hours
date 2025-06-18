@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import './App.css';
 import './typography.css';
 import './styles.css';
-import { Routes, Route, Navigate, Link, HashRouter as Router, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, Link, HashRouter as Router, useLocation, useNavigate } from 'react-router-dom';
 import PomodoroPage from './components/pages/PomodoroPage';
 import DashboardPage from './components/pages/DashboardPage';
 import MainLayout from './components/layout/MainLayout';
@@ -98,10 +98,126 @@ const SupportPage = () => (
   </div>
 );
 
+// Global keyboard shortcuts component - must be inside Router context
+const GlobalKeyboardShortcuts: React.FC = () => {
+  const setIsAddingTask = useTaskStore(state => state.setIsAddingTask);
+  const { isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar } = useUIStore();
+  const navigate = useNavigate();
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    console.log('🔧 GlobalKeyboardShortcuts: Component mounted and event listener attached');
+    
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check if user is typing in a form element
+      const target = event.target as HTMLElement;
+      const isTypingInFormElement = target.tagName === 'INPUT' || 
+                                   target.tagName === 'TEXTAREA' || 
+                                   target.isContentEditable ||
+                                   target.getAttribute('role') === 'textbox';
+      
+      // Debug logging for any key press
+      console.log('🔑 Key pressed:', {
+        key: event.key,
+        code: event.code,
+        target: target.tagName,
+        isTypingInFormElement,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey
+      });
+      
+      // Debug logging for Alt key combinations
+      if (event.altKey) {
+        console.log('Alt key pressed with:', {
+          key: event.key,
+          code: event.code,
+          keyCode: event.keyCode,
+          altKey: event.altKey,
+          shiftKey: event.shiftKey,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey
+        });
+      }
+      
+      // Check for Shift + N to create new task (only if not typing in form elements)
+      if (event.shiftKey && event.key === 'N' && !isTypingInFormElement) {
+        console.log('🔑 Shift+N detected - creating new task');
+        event.preventDefault();
+        
+        // Ensure the right sidebar is open to show tasks
+        if (!isRightSidebarOpen) {
+          toggleRightSidebar();
+        }
+        
+        // Trigger new task creation
+        setIsAddingTask(true);
+      }
+      
+      // Check for Cmd + \ to toggle right sidebar
+      if (event.metaKey && (event.key === '\\' || event.key === '|')) {
+        console.log('🔑 Cmd+\\ detected - toggling right sidebar');
+        event.preventDefault();
+        toggleRightSidebar();
+      }
+      
+      // Check for Alt/Option + \ to toggle left sidebar
+      if (event.altKey && (event.key === '\\' || event.key === '|' || event.code === 'Backslash')) {
+        console.log('🔑 Alt+\\ detected - toggling left sidebar');
+        event.preventDefault();
+        toggleLeftSidebar();
+      }
+      
+      // Check for P to navigate to Pomodoro Timer (only if not typing in form elements)
+      if ((event.key === 'P' || event.key === 'p') && !isTypingInFormElement) {
+        console.log('🔑 P detected - navigating to Pomodoro Timer');
+        event.preventDefault();
+        navigate('/pomodoro');
+      }
+      
+      // Check for C to navigate to Calendar (only if not typing in form elements)
+      if ((event.key === 'C' || event.key === 'c') && !isTypingInFormElement) {
+        console.log('🔑 C detected - navigating to Calendar');
+        event.preventDefault();
+        navigate('/calendar');
+      }
+      
+      // Check for T to navigate to Task Management (only if not typing in form elements)
+      if ((event.key === 'T' || event.key === 't') && !isTypingInFormElement) {
+        console.log('🔑 T detected - navigating to Task Management');
+        event.preventDefault();
+        navigate('/projects');
+      }
+      
+      // Check for I to navigate to Productivity Insights (only if not typing in form elements)
+      if ((event.key === 'I' || event.key === 'i') && !isTypingInFormElement) {
+        console.log('🔑 I detected - navigating to Productivity Insights');
+        event.preventDefault();
+        navigate('/dashboard');
+      }
+      
+      // Check for D to navigate to Deep Focus (only if not typing in form elements)
+      if ((event.key === 'D' || event.key === 'd') && !isTypingInFormElement) {
+        console.log('🔑 D detected - navigating to Deep Focus');
+        event.preventDefault();
+        navigate('/deep-focus');
+      }
+    };
+
+    // Add event listener
+    document.addEventListener('keydown', handleKeyDown);
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar, setIsAddingTask, navigate]);
+
+  return null; // This component renders nothing
+};
+
 const App: React.FC = () => {
   const { initialize, user, isLoading, isInitialized } = useUserStore();
-  const setIsAddingTask = useTaskStore(state => state.setIsAddingTask);
-  const { isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar, isLeftSidebarOpen } = useUIStore();
   const { initializeTheme } = useThemeStore();
 
   // Global timer interval - runs regardless of current page
@@ -189,64 +305,6 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Global keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Check if user is typing in a form element
-      const target = event.target as HTMLElement;
-      const isTypingInFormElement = target.tagName === 'INPUT' || 
-                                   target.tagName === 'TEXTAREA' || 
-                                   target.isContentEditable ||
-                                   target.getAttribute('role') === 'textbox';
-      
-      // Debug logging for Alt key combinations
-      if (event.altKey) {
-        console.log('Alt key pressed with:', {
-          key: event.key,
-          code: event.code,
-          keyCode: event.keyCode,
-          altKey: event.altKey,
-          shiftKey: event.shiftKey,
-          ctrlKey: event.ctrlKey,
-          metaKey: event.metaKey
-        });
-      }
-      
-      // Check for Shift + N to create new task (only if not typing in form elements)
-      if (event.shiftKey && event.key === 'N' && !isTypingInFormElement) {
-        event.preventDefault();
-        
-        // Ensure the right sidebar is open to show tasks
-        if (!isRightSidebarOpen) {
-          toggleRightSidebar();
-        }
-        
-        // Trigger new task creation
-        setIsAddingTask(true);
-      }
-      
-      // Check for Cmd + \ to toggle right sidebar
-      if (event.metaKey && (event.key === '\\' || event.key === '|')) {
-        event.preventDefault();
-        toggleRightSidebar();
-      }
-      
-      // Check for Alt/Option + \ to toggle left sidebar
-      if (event.altKey && (event.key === '\\' || event.key === '|' || event.code === 'Backslash')) {
-        event.preventDefault();
-        toggleLeftSidebar();
-      }
-    };
-
-    // Add event listener
-    document.addEventListener('keydown', handleKeyDown);
-
-    // Cleanup
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar, setIsAddingTask]);
-
   console.log('App component rendered');
 
   // Wrap PomodoroPage with MainLayout
@@ -286,6 +344,7 @@ const App: React.FC = () => {
   return (
     <Router>
       <GlobalTabTitleUpdater />
+      <GlobalKeyboardShortcuts />
       <AnalyticsWrapper>
         <Routes>
           <Route path="/" element={<PomodoroPageWithLayout />} />
