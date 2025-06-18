@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Bot, User, AlertCircle, FileText, ExternalLink } from 'lucide-react';
+import { X, Send, Bot, User, AlertCircle, FileText, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import { useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
 import type { ChatMessage, ChatSource } from '../../types/chat';
@@ -261,13 +261,9 @@ const MessageBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
           )}
         </div>
 
-        {/* Sources */}
+        {/* Collapsible Sources Section */}
         {message.sources && message.sources.length > 0 && (
-          <div className="mt-2 space-y-1">
-            {message.sources.map((source) => (
-              <SourceCard key={source.id} source={source} />
-            ))}
-          </div>
+          <CollapsibleSources sources={message.sources} />
         )}
 
         <div className={`text-xs text-gray-500 mt-1 ${isUser ? 'text-right' : ''}`}>
@@ -282,26 +278,106 @@ const MessageBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
   );
 };
 
-const SourceCard: React.FC<{ source: ChatSource }> = ({ source }) => {
+// Enhanced Collapsible Sources Component
+const CollapsibleSources: React.FC<{ sources: ChatSource[] }> = ({ sources }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  const averageRelevance = sources.reduce((sum, source) => sum + (source.relevanceScore || 0), 0) / sources.length;
+  const topSource = sources.reduce((prev, current) => 
+    (current.relevanceScore || 0) > (prev.relevanceScore || 0) ? current : prev
+  );
+
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded p-2 text-xs">
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center space-x-1">
-          <FileText className="w-3 h-3 text-gray-400" />
-          <span className="font-medium text-gray-700">{source.title}</span>
+    <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+      {/* Collapsible Header */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-100 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
+        aria-expanded={isExpanded}
+        aria-label={`${isExpanded ? 'Hide' : 'Show'} source references`}
+      >
+        <div className="flex items-center space-x-2 text-left">
+          <FileText className="w-4 h-4 text-gray-500" />
+          <div>
+            <div className="text-sm font-medium text-gray-700">
+              {sources.length} source{sources.length !== 1 ? 's' : ''} referenced
+            </div>
+            {!isExpanded && (
+              <div className="text-xs text-gray-500">
+                {Math.round(averageRelevance * 100)}% avg relevance • "{topSource.title}"
+              </div>
+            )}
+          </div>
         </div>
-        <span className="text-gray-500">{Math.round((source.relevanceScore || 0) * 100)}%</span>
+        <div className="flex items-center space-x-1">
+          <span className="text-xs text-gray-500 mr-1">
+            {isExpanded ? 'Hide' : 'Show'}
+          </span>
+          {isExpanded ? (
+            <ChevronDown className="w-4 h-4 text-gray-500 transition-transform duration-200" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-gray-500 transition-transform duration-200" />
+          )}
+        </div>
+      </button>
+
+      {/* Expandable Content */}
+      <div 
+        className={`transition-all duration-300 ease-in-out ${
+          isExpanded 
+            ? 'max-h-96 opacity-100' 
+            : 'max-h-0 opacity-0'
+        } overflow-hidden`}
+      >
+        <div className="px-3 pb-3 space-y-2 border-t border-gray-200">
+          {sources.map((source, index) => (
+            <SourceCard key={source.id || index} source={source} isExpanded={true} />
+          ))}
+        </div>
       </div>
-      <p className="text-gray-600 mb-1">{source.snippet}</p>
-      <div className="flex items-center justify-between">
-        <span className="bg-gray-200 px-2 py-0.5 rounded text-gray-600">{source.type}</span>
-        {source.contentId && (
-          <button className="text-blue-600 hover:text-blue-800 flex items-center space-x-1">
-            <span>View</span>
-            <ExternalLink className="w-3 h-3" />
-          </button>
-        )}
+    </div>
+  );
+};
+
+// Enhanced Source Card Component
+const SourceCard: React.FC<{ source: ChatSource; isExpanded?: boolean }> = ({ source, isExpanded = false }) => {
+  return (
+    <div className="bg-white border border-gray-200 rounded p-3 text-xs shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center space-x-2">
+          <FileText className="w-3 h-3 text-gray-400" />
+          <span className="font-medium text-gray-700 truncate">{source.title}</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <span className="text-gray-500 font-mono">
+            {Math.round((source.relevanceScore || 0) * 100)}%
+          </span>
+          <span className="bg-gray-200 px-2 py-0.5 rounded text-gray-600 text-xs">
+            {source.type}
+          </span>
+        </div>
       </div>
+      
+      {isExpanded && (
+        <>
+          <p className="text-gray-600 mb-2 line-clamp-3">{source.snippet}</p>
+          <div className="flex items-center justify-between">
+            <div className="text-gray-500 text-xs">
+              {source.contentId && (
+                <span className="font-mono bg-gray-100 px-1 py-0.5 rounded">
+                  ID: {source.contentId.slice(0, 8)}...
+                </span>
+              )}
+            </div>
+            {source.contentId && (
+              <button className="text-blue-600 hover:text-blue-800 flex items-center space-x-1 transition-colors">
+                <span>View details</span>
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 };

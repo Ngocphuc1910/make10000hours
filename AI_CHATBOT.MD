@@ -781,7 +781,143 @@ private static mapChunkTypeToContentType(chunkType: string): string {
 
 ---
 
-## **🎉 Phase 1 & 2 Complete - Production Ready Foundation**
+## **✅ PHASE 6: Enhanced Source Reference UX (COMPLETE)**
+
+**Implementation Status**: **COMPLETE** ✅
+**Duration**: Day 1 of Week 5 Implementation  
+**Priority**: Critical - UX/UI Improvement for Source Citations
+**Dependencies**: Phase 5 Complete
+
+### **🎯 Phase 6 Achievements**
+
+**BREAKTHROUGH UX IMPROVEMENT**: Implemented collapsible source references with accordion UI patterns, dramatically reducing interface clutter while maintaining full source transparency.
+
+#### **🔧 Core UI/UX Enhancements**
+
+##### **1. CollapsibleSources Component** (`src/components/chat/ChatModal.tsx`)
+- **Purpose**: Replace always-visible source cards with space-efficient accordion interface
+- **Collapsed State Benefits**: 
+  - Shows source count and average relevance at a glance
+  - Displays top source title as preview
+  - Reduces visual clutter by default
+- **Expanded State Features**:
+  - Smooth animation (300ms ease-in-out)
+  - Full source details with enhanced metadata
+  - Improved readability with proper spacing
+
+```typescript
+// Key Features:
+- Collapsed by default (follows accordion best practices)
+- Smart preview: Shows count, relevance, and top source
+- Accessible: ARIA labels and keyboard navigation
+- Responsive: Adapts to different screen sizes
+```
+
+##### **2. Enhanced SourceCard Component**
+- **Purpose**: Modernized source display with better information hierarchy
+- **Improved Layout**: 
+  - Clear title and relevance score positioning
+  - Source type badges for quick identification
+  - Truncated content ID for technical reference
+- **Enhanced Interactivity**:
+  - "View details" buttons with hover states
+  - Better visual separation between elements
+  - Improved accessibility with semantic markup
+
+##### **3. Progressive Disclosure Pattern**
+- **Collapsed State**: Essential info only (count, relevance, top source)
+- **Expanded State**: Full source details on demand
+- **User Control**: Clear expand/collapse indicators with chevron icons
+- **State Persistence**: Remembers user preference within session
+
+#### **🎨 Design System Integration**
+
+##### **Visual Hierarchy Improvements**
+- **Collapsed Sources**: Subtle gray background, minimal visual weight
+- **Source Count Badge**: Clear indication of reference quantity
+- **Relevance Indicators**: Percentage-based relevance scores
+- **Type Classification**: Color-coded source type badges
+
+##### **Accessibility Enhancements**
+- **ARIA Labels**: Proper expand/collapse state communication
+- **Keyboard Navigation**: Full keyboard accessibility
+- **Focus States**: Clear visual focus indicators
+- **Screen Reader Support**: Descriptive labels and state changes
+
+##### **Animation & Interaction Design**
+- **Smooth Transitions**: 300ms ease-in-out for expand/collapse
+- **Hover States**: Subtle feedback on interactive elements
+- **Loading States**: Graceful handling of source data
+- **Touch-Friendly**: Appropriate touch targets for mobile
+
+#### **🎯 Problem Solved: Interface Clutter Reduction**
+
+**BEFORE Phase 6**:
+- ❌ Sources always visible, creating cluttered interface
+- ❌ Redundant content display overwhelming users
+- ❌ No progressive disclosure of source information
+- ❌ Poor mobile experience due to space constraints
+
+**AFTER Phase 6** (Implemented):
+- ✅ Clean, collapsed-by-default source interface
+- ✅ Smart preview with essential information visible
+- ✅ Progressive disclosure following accordion UI best practices
+- ✅ Improved mobile experience with touch-friendly interactions
+- ✅ Reduced cognitive load while maintaining transparency
+
+### **📊 Technical Specifications**
+
+#### **Component Architecture**
+- **CollapsibleSources**: Manages accordion state and preview logic
+- **Enhanced SourceCard**: Renders individual source with improved layout
+- **State Management**: Local component state for expand/collapse
+- **Animation System**: CSS transitions for smooth interactions
+
+#### **UI/UX Patterns Applied**
+- **Accordion Pattern**: Collapsed by default with clear expansion triggers
+- **Progressive Disclosure**: Information revealed based on user intent
+- **Visual Hierarchy**: Clear distinction between primary and secondary info
+- **Responsive Design**: Adapts gracefully across device sizes
+
+#### **Accessibility Compliance**
+- **WCAG 2.1 AA**: Meets accessibility guidelines
+- **Keyboard Navigation**: Tab, Enter, Space key support
+- **Screen Reader Support**: Proper ARIA labels and state communication
+- **Color Contrast**: Sufficient contrast ratios for all text elements
+
+### **🚀 User Experience Impact**
+
+#### **Immediate Benefits**
+1. **Reduced Cognitive Load**: Users see clean responses without clutter
+2. **Faster Scanning**: Quick assessment of source quality and quantity
+3. **Optional Deep Dive**: Full source details available on demand
+4. **Better Mobile UX**: Compact interface works well on small screens
+
+#### **Behavioral Improvements**
+- **Increased Engagement**: Cleaner interface encourages interaction
+- **Source Exploration**: Progressive disclosure makes sources more approachable
+- **Trust Building**: Transparent source access builds user confidence
+- **Efficiency Gains**: Faster response consumption with optional detail access
+
+### **🔗 Integration Points**
+
+#### **Enhanced Chat Flow**
+```typescript
+MessageBubble → CollapsibleSources → Individual SourceCards
+- Seamless integration with existing chat interface
+- Backward compatible with current source data structure
+- Enhanced metadata display for better user understanding
+```
+
+#### **Future Enhancement Ready**
+- **Source Filtering**: Framework ready for source type/relevance filtering
+- **Expanded Metadata**: Easy to add more source information
+- **Interaction Analytics**: Track which sources users expand most
+- **Personalization**: Remember user preferences for source display
+
+---
+
+## **🎉 Phase 1-6 Complete - Production Ready Foundation**
 
 ### **✅ Comprehensive Implementation Status**
 
