@@ -6,6 +6,8 @@ import { FirebaseToSupabaseEmbedder } from '../../services/firebaseToSupabaseEmb
 import { UserDataValidator } from '../../services/userDataValidator';
 import { IncrementalSyncService } from '../../services/incrementalSyncService';
 import { DatabaseSetup } from '../../services/databaseSetup';
+import { DataSyncService } from '../../services/dataSyncService';
+import { CompleteDataSync } from '../../services/completeDataSync';
 
 interface SyncStatus {
   status: 'loading' | 'success' | 'warning' | 'error';
@@ -248,6 +250,28 @@ export const DataSyncDashboard: React.FC = () => {
     }
   };
 
+  const stopAllListeners = async () => {
+    if (!user?.uid) return;
+
+    try {
+      // Stop all different sync services
+      DataSyncService.stopSync();
+      CompleteDataSync.stopSync();
+      
+      setSyncStatus({
+        status: 'success',
+        message: `✅ All sync listeners stopped (${DataSyncService.getActiveListenerCount()} active)`,
+        lastSync: new Date()
+      });
+    } catch (error) {
+      console.error('Error stopping all sync listeners:', error);
+      setSyncStatus({
+        status: 'error',
+        message: `Failed to stop all sync listeners: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+    }
+  };
+
   const getStatusIcon = () => {
     switch (syncStatus.status) {
       case 'loading':
@@ -399,7 +423,7 @@ export const DataSyncDashboard: React.FC = () => {
       )}
 
       {/* Action Buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <button
           onClick={runIncrementalSync}
           disabled={isRunningIncremental || isRunningSync || isRunningEmbeddings}
@@ -438,6 +462,14 @@ export const DataSyncDashboard: React.FC = () => {
         >
           <TrendingUp className="w-5 h-5" />
           <span>Full Report</span>
+        </button>
+
+        <button
+          onClick={stopAllListeners}
+          className="flex items-center justify-center space-x-2 p-4 bg-red-600 text-white rounded-lg hover:bg-red-700"
+        >
+          <XCircle className="w-5 h-5" />
+          <span>Stop Sync</span>
         </button>
       </div>
 
