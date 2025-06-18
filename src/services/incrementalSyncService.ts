@@ -171,7 +171,8 @@ export class IncrementalSyncService {
             timeEstimated: data.timeEstimated,
             userId: data.userId,
             createdAt: data.createdAt?.toDate() || new Date(),
-            updatedAt: data.updatedAt?.toDate()
+            updatedAt: data.updatedAt?.toDate() || new Date(),
+            order: data.order || 0
           };
 
           const project = projectsMap[task.projectId];
@@ -342,7 +343,9 @@ export class IncrementalSyncService {
             notes: data.notes,
             status: data.status,
             userId: data.userId,
-            date: data.date || new Date().toISOString().split('T')[0]
+            date: data.date || new Date().toISOString().split('T')[0],
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date()
           };
 
           const task = tasksMap[session.taskId];
@@ -540,7 +543,8 @@ export class IncrementalSyncService {
         timeEstimated: data.timeEstimated,
         userId: data.userId,
         createdAt: data.createdAt?.toDate() || new Date(),
-        updatedAt: data.updatedAt?.toDate()
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+        order: data.order || 0
       };
     });
     
@@ -581,7 +585,9 @@ export class IncrementalSyncService {
         notes: data.notes,
         status: data.status,
         userId: data.userId,
-        date: data.date || new Date().toISOString().split('T')[0]
+        date: data.date || new Date().toISOString().split('T')[0],
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date()
       };
       
       if (!sessionsMap[session.taskId]) {
@@ -638,5 +644,71 @@ export class IncrementalSyncService {
       console.error('Failed to check sync status:', error);
       return { needed: true, lastSyncTime: null, pendingChanges: -1 };
     }
+  }
+
+  /**
+   * Execute sync for projects only
+   */
+  static async executeProjectSync(userId: string): Promise<IncrementalSyncResult> {
+    const startTime = Date.now();
+    console.log(`📁 Starting project sync for user: ${userId}`);
+    
+    const result: IncrementalSyncResult = {
+      success: true,
+      processedDocuments: 0,
+      skippedDocuments: 0,
+      errors: [],
+      executionTime: 0,
+      collections: { tasks: 0, projects: 0, workSessions: 0 }
+    };
+
+    try {
+      // Get last sync time for projects only
+      const syncTimes = await this.getLastSyncTimes(userId);
+      
+      // Process projects only
+      const projectResult = await this.syncProjectsIncremental(userId, syncTimes.projects);
+      
+      // Set results
+      result.processedDocuments = projectResult.processed;
+      result.skippedDocuments = projectResult.skipped;
+      result.collections.projects = projectResult.processed;
+      result.errors = projectResult.errors;
+      
+      // Update sync tracker for projects only
+      await this.updateProjectSyncTracker(userId);
+      
+      result.executionTime = Date.now() - startTime;
+      result.success = result.errors.length === 0;
+      
+      console.log(`✅ Project sync complete: ${result.processedDocuments} processed, ${result.skippedDocuments} skipped in ${result.executionTime}ms`);
+      
+      return result;
+      
+    } catch (error) {
+      result.errors.push(error instanceof Error ? error.message : 'Unknown error');
+      result.success = false;
+      result.executionTime = Date.now() - startTime;
+      console.error('❌ Project sync failed:', error);
+      return result;
+    }
+  }
+
+  /**
+   * Update sync tracker for projects only
+   */
+  private static async updateProjectSyncTracker(userId: string): Promise<void> {
+    const now = new Date();
+    
+    await supabase
+      .from('sync_trackers')
+      .upsert({
+        user_id: userId,
+        collection: 'projects',
+        last_sync_time: now.toISOString(),
+        updated_at: now.toISOString()
+      }, {
+        onConflict: 'user_id,collection'
+      });
   }
 } 

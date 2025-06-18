@@ -6,25 +6,27 @@ import { SyntheticTextGenerator, SessionData, TaskData, ProjectData } from './sy
 export interface ProductivityChunk {
   id: string;
   content: string;
+  content_type: string;
   originalContent: string;
   metadata: {
-    chunkType: 'session' | 'task_aggregate' | 'project_summary' | 'temporal_pattern' | 'task_sessions';
-    chunkLevel: 1 | 2 | 3 | 4;
+    chunkType: string;
+    chunkLevel: number;
     sourceIds: string[];
     timeframe?: string;
     created: string;
     entities: {
-      taskId?: string;
-      projectId?: string;
-      sessionIds?: string[];
       userId: string;
+      projectId?: string;
+      taskId?: string;
+      sessionIds?: string[];
     };
     analytics: {
-      duration?: number;
-      sessionCount?: number;
+      duration: number;
+      sessionCount: number;
       completionRate?: number;
-      timeOfDay?: string;
       productivity?: number;
+      tasksCreated?: number;
+      projectsWorkedOn?: number;
     };
   };
   chunkIndex: number;
@@ -48,6 +50,9 @@ export class HierarchicalChunker {
     const { sessions, tasks, projects } = userData;
 
     console.log(`📊 Data fetched - Sessions: ${sessions.length}, Tasks: ${tasks.length}, Projects: ${projects.length}`);
+    
+    // Validate data before processing
+    this.validateUserData(sessions, tasks, projects);
 
     const allChunks: ProductivityChunk[] = [];
 
@@ -64,7 +69,7 @@ export class HierarchicalChunker {
     allChunks.push(...sessionChunks);
 
     // Level 4: Temporal pattern chunks (time-based patterns and trends)
-    const temporalChunks = await this.createTemporalChunks(sessions, userId);
+    const temporalChunks = await this.createTemporalChunks(sessions, tasks, projects, userId);
     allChunks.push(...temporalChunks);
 
     console.log(`✅ Created ${allChunks.length} total chunks across 4 levels`);
@@ -84,7 +89,7 @@ export class HierarchicalChunker {
         const data = doc.data();
         return {
           id: doc.id,
-          title: data.title || data.text || 'Untitled Task', // Handle both field names
+          title: data.title || data.text || 'Untitled Task',
           description: data.description || data.notes || '',
           projectId: data.projectId || '',
           completed: data.completed || false,
@@ -93,8 +98,9 @@ export class HierarchicalChunker {
           timeEstimated: data.timeEstimated || 0,
           userId: data.userId,
           createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate()
-        };
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          order: data.order ?? 0
+        } as TaskData;
       });
 
       // Get work sessions with correct Firebase fields
@@ -102,19 +108,25 @@ export class HierarchicalChunker {
       const sessionsSnapshot = await getDocs(sessionsQuery);
       const sessions: SessionData[] = sessionsSnapshot.docs.map(doc => {
         const data = doc.data();
+        const start = data.startTime?.toDate ? data.startTime.toDate() : undefined;
+        const created = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+        const updated = data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date();
+        const dateStr = (SyntheticTextGenerator.safeToDate(start || data.date) || new Date()).toISOString().split('T')[0];
         return {
           id: doc.id,
           taskId: data.taskId || '',
           projectId: data.projectId || '',
           duration: data.duration || 0,
           sessionType: data.sessionType || 'work',
-          startTime: data.startTime?.toDate(),
+          startTime: start,
           endTime: data.endTime?.toDate(),
           notes: data.notes || '',
           status: data.status || 'completed',
           userId: data.userId,
-          date: data.date || new Date().toISOString().split('T')[0]
-        };
+          date: data.date || dateStr,
+          createdAt: created,
+          updatedAt: updated
+        } as SessionData;
       });
 
       // Get projects with correct Firebase fields
@@ -168,6 +180,7 @@ export class HierarchicalChunker {
       chunks.push({
         id: `task_sessions_${task.id}`,
         content: syntheticText,
+        content_type: 'task_sessions',
         originalContent: JSON.stringify({ task, sessions: taskSessions }),
         metadata: {
           chunkType: 'task_sessions',
@@ -183,7 +196,6 @@ export class HierarchicalChunker {
           analytics: {
             duration: taskSessions.reduce((sum, s) => sum + s.duration, 0),
             sessionCount: taskSessions.length,
-            timeOfDay: this.getMostCommonTimeSlot(taskSessions),
             productivity: this.calculateTaskSessionsProductivity(taskSessions, task),
             completionRate: task.timeEstimated ? Math.round((task.timeSpent / task.timeEstimated) * 100) : 0
           }
@@ -237,6 +249,7 @@ export class HierarchicalChunker {
       chunks.push({
         id: `task_aggregate_${task.id}`,
         content: syntheticText,
+        content_type: 'task_aggregate',
         originalContent: JSON.stringify({ task, sessions: taskSessions }),
         metadata: {
           chunkType: 'task_aggregate',
@@ -283,6 +296,7 @@ export class HierarchicalChunker {
       chunks.push({
         id: `project_summary_${project.id}`,
         content: syntheticText,
+        content_type: 'project_summary',
         originalContent: JSON.stringify({ project, tasks: projectTasks, sessions: projectSessions }),
         metadata: {
           chunkType: 'project_summary',
@@ -311,6 +325,8 @@ export class HierarchicalChunker {
 
   private static async createTemporalChunks(
     sessions: SessionData[],
+    tasks: TaskData[],
+    projects: ProjectData[],
     userId: string
   ): Promise<ProductivityChunk[]> {
     const chunks: ProductivityChunk[] = [];
@@ -322,11 +338,12 @@ export class HierarchicalChunker {
     Object.entries(sessionsByDate).forEach(([date, dateSessions]) => {
       if (dateSessions.length === 0) return;
       
-      const syntheticText = SyntheticTextGenerator.generateTemporalSummaryText('daily', dateSessions, date);
+      const syntheticText = SyntheticTextGenerator.generateTemporalSummaryText('daily', dateSessions, date, tasks, projects);
       
       chunks.push({
         id: `daily_${date}`,
         content: syntheticText,
+        content_type: 'daily_summary',
         originalContent: JSON.stringify({ date, sessions: dateSessions }),
         metadata: {
           chunkType: 'temporal_pattern',
@@ -339,7 +356,7 @@ export class HierarchicalChunker {
             userId
           },
           analytics: {
-            duration: dateSessions.reduce((sum, s) => sum + s.duration, 0),
+            duration: dateSessions.reduce((sum, s) => sum + (s.duration || 0), 0),
             sessionCount: dateSessions.length,
             productivity: this.calculateTemporalProductivity(dateSessions)
           }
@@ -354,16 +371,42 @@ export class HierarchicalChunker {
     Object.entries(weeklyGroups).forEach(([week, weekSessions]) => {
       if (weekSessions.length === 0) return;
       
-      const syntheticText = SyntheticTextGenerator.generateTemporalSummaryText('weekly', weekSessions, week);
+      // Convert week key to actual start date for proper week processing
+      const weekStartDate = this.parseWeekKey(week);
+      
+      // Get tasks and projects for this week
+      const weekTasks = tasks.filter(task => {
+        const taskSessions = weekSessions.filter(s => s.taskId === task.id);
+        return taskSessions.length > 0;
+      });
+
+      const weekProjects = projects.filter(project => 
+        weekTasks.some(task => task.projectId === project.id)
+      );
+
+      console.log(`📅 Processing weekly chunk for week ${week}:`, {
+        weekStartDate: weekStartDate.toISOString(),
+        sessionsCount: weekSessions.length,
+        tasksCount: weekTasks.length,
+        projectsCount: weekProjects.length
+      });
+
+      const syntheticText = SyntheticTextGenerator.generateTemporalSummaryText('weekly', weekSessions, weekStartDate.toISOString(), weekTasks, weekProjects);
       
       chunks.push({
         id: `weekly_${week}`,
         content: syntheticText,
-        originalContent: JSON.stringify({ week, sessions: weekSessions }),
+        content_type: 'weekly_summary',
+        originalContent: JSON.stringify({ 
+          week, 
+          sessions: weekSessions,
+          tasks: weekTasks,
+          projects: weekProjects
+        }),
         metadata: {
           chunkType: 'temporal_pattern',
           chunkLevel: 4,
-          sourceIds: weekSessions.map(s => s.id),
+          sourceIds: [...weekSessions.map(s => s.id), ...weekTasks.map(t => t.id)],
           timeframe: `weekly_${week}`,
           created: new Date().toISOString(),
           entities: {
@@ -371,9 +414,73 @@ export class HierarchicalChunker {
             userId
           },
           analytics: {
-            duration: weekSessions.reduce((sum, s) => sum + s.duration, 0),
+            duration: weekSessions.reduce((sum, s) => sum + (s.duration || 0), 0),
             sessionCount: weekSessions.length,
+            completionRate: weekTasks.length > 0 ? 
+              Math.round((weekTasks.filter(t => t.completed).length / weekTasks.length) * 100) : 0,
             productivity: this.calculateTemporalProductivity(weekSessions)
+          }
+        },
+        chunkIndex: 0,
+        tokenCount: OpenAIService.estimateTokens(syntheticText)
+      });
+    });
+
+    // Create monthly summaries
+    const monthlyGroups = this.groupSessionsByMonth(sessions);
+    Object.entries(monthlyGroups).forEach(([month, monthSessions]) => {
+      if (monthSessions.length === 0) return;
+      
+      // Convert month key to actual start date for proper month processing
+      const monthStartDate = this.parseMonthKey(month);
+      
+      // Get tasks and projects for this month
+      const monthTasks = tasks.filter(task => {
+        const taskSessions = monthSessions.filter(s => s.taskId === task.id);
+        return taskSessions.length > 0;
+      });
+
+      const monthProjects = projects.filter(project => 
+        monthTasks.some(task => task.projectId === project.id)
+      );
+
+      console.log(`📅 Processing monthly chunk for month ${month}:`, {
+        monthStartDate: monthStartDate.toISOString(),
+        sessionsCount: monthSessions.length,
+        tasksCount: monthTasks.length,
+        projectsCount: monthProjects.length
+      });
+
+      const syntheticText = SyntheticTextGenerator.generateTemporalSummaryText('monthly', monthSessions, monthStartDate.toISOString(), monthTasks, monthProjects);
+      
+      chunks.push({
+        id: `monthly_${month}`,
+        content: syntheticText,
+        content_type: 'monthly_summary',
+        originalContent: JSON.stringify({ 
+          month, 
+          sessions: monthSessions,
+          tasks: monthTasks,
+          projects: monthProjects
+        }),
+        metadata: {
+          chunkType: 'temporal_pattern',
+          chunkLevel: 4,
+          sourceIds: [...monthSessions.map(s => s.id), ...monthTasks.map(t => t.id)],
+          timeframe: `monthly_${month}`,
+          created: new Date().toISOString(),
+          entities: {
+            sessionIds: monthSessions.map(s => s.id),
+            userId
+          },
+          analytics: {
+            duration: monthSessions.reduce((sum, s) => sum + (s.duration || 0), 0),
+            sessionCount: monthSessions.length,
+            completionRate: monthTasks.length > 0 ? 
+              Math.round((monthTasks.filter(t => t.completed).length / monthTasks.length) * 100) : 0,
+            productivity: this.calculateTemporalProductivity(monthSessions),
+            tasksCreated: monthTasks.length,
+            projectsWorkedOn: monthProjects.length
           }
         },
         chunkIndex: 0,
@@ -445,22 +552,54 @@ export class HierarchicalChunker {
   }
 
   private static groupSessionsByDate(sessions: SessionData[]): Record<string, SessionData[]> {
-    return sessions.reduce((groups, session) => {
-      const date = session.date || new Date().toISOString().split('T')[0];
+    console.log(`📊 Grouping ${sessions.length} sessions by date...`);
+    
+    const groups = sessions.reduce((groups, session) => {
+      const dateObj = SyntheticTextGenerator.safeToDate(session.date || session.startTime) || new Date();
+      const date = dateObj.toISOString().split('T')[0];
       if (!groups[date]) groups[date] = [];
       groups[date].push(session);
       return groups;
     }, {} as Record<string, SessionData[]>);
+    
+    const groupCount = Object.keys(groups).length;
+    console.log(`📅 Grouped sessions into ${groupCount} days:`, Object.entries(groups).map(([date, sessions]) => 
+      `${date}: ${sessions.length} sessions`
+    ));
+    
+    return groups;
   }
 
   private static groupSessionsByWeek(sessions: SessionData[]): Record<string, SessionData[]> {
-    return sessions.reduce((groups, session) => {
-      const date = new Date(session.startTime || session.date);
-      const week = this.getWeekKey(date);
-      if (!groups[week]) groups[week] = [];
-      groups[week].push(session);
-      return groups;
+    console.log(`📊 Grouping ${sessions.length} sessions by week...`);
+    
+    const groups = sessions.reduce((groups, session) => {
+      try {
+        const date = SyntheticTextGenerator.safeToDate(session.startTime || session.date);
+        if (!date) {
+          console.warn('Invalid date in session, skipping:', { 
+            sessionId: session.id, 
+            date: session.date, 
+            startTime: session.startTime 
+          });
+          return groups;
+        }
+        const week = this.getWeekKey(date);
+        if (!groups[week]) groups[week] = [];
+        groups[week].push(session);
+        return groups;
+      } catch (error) {
+        console.error('Error processing session for weekly grouping:', error, session);
+        return groups;
+      }
     }, {} as Record<string, SessionData[]>);
+    
+    const weekCount = Object.keys(groups).length;
+    console.log(`📅 Grouped sessions into ${weekCount} weeks:`, Object.entries(groups).map(([week, sessions]) => 
+      `${week}: ${sessions.length} sessions`
+    ));
+    
+    return groups;
   }
 
   private static getWeekKey(date: Date): string {
@@ -475,5 +614,131 @@ export class HierarchicalChunker {
     d.setUTCDate(d.getUTCDate() + 4 - dayNum);
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
     return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  }
+
+  private static parseWeekKey(weekKey: string): Date {
+    // Parse week key format "2025-W25" to start of that week
+    const match = weekKey.match(/(\d{4})-W(\d{2})/);
+    if (!match) {
+      console.warn('Invalid week key format:', weekKey);
+      return new Date(); // fallback to current date
+    }
+    
+    const year = parseInt(match[1]);
+    const week = parseInt(match[2]);
+    
+    // Get first day of year
+    const jan1 = new Date(year, 0, 1);
+    // Calculate the start of the specified week
+    const days = (week - 1) * 7;
+    const weekStart = new Date(jan1.getTime() + days * 24 * 60 * 60 * 1000);
+    
+    // Adjust to Monday (start of week)
+    const dayOfWeek = weekStart.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    weekStart.setDate(weekStart.getDate() + daysToMonday);
+    
+    return weekStart;
+  }
+
+  private static groupSessionsByMonth(sessions: SessionData[]): Record<string, SessionData[]> {
+    console.log(`📊 Grouping ${sessions.length} sessions by month...`);
+    
+    const groups = sessions.reduce((groups, session) => {
+      try {
+        const date = SyntheticTextGenerator.safeToDate(session.startTime || session.date);
+        if (!date) {
+          console.warn('Invalid date in session, skipping:', { 
+            sessionId: session.id, 
+            date: session.date, 
+            startTime: session.startTime 
+          });
+          return groups;
+        }
+        const month = this.getMonthKey(date);
+        if (!groups[month]) groups[month] = [];
+        groups[month].push(session);
+        return groups;
+      } catch (error) {
+        console.error('Error processing session for monthly grouping:', error, session);
+        return groups;
+      }
+    }, {} as Record<string, SessionData[]>);
+    
+    const groupCount = Object.keys(groups).length;
+    console.log(`📅 Grouped sessions into ${groupCount} months:`, Object.entries(groups).map(([month, sessions]) => 
+      `${month}: ${sessions.length} sessions`
+    ).join(', '));
+    
+    return groups;
+  }
+
+  private static getMonthKey(date: Date): string {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1; // getMonth() returns 0-11
+    return `${year}-${month.toString().padStart(2, '0')}`;
+  }
+
+  private static parseMonthKey(monthKey: string): Date {
+    // Parse month key format "2025-06" to start of that month
+    const match = monthKey.match(/(\d{4})-(\d{2})/);
+    if (!match) {
+      console.warn('Invalid month key format:', monthKey);
+      return new Date(); // fallback to current date
+    }
+    
+    const year = parseInt(match[1]);
+    const month = parseInt(match[2]) - 1; // Date constructor expects 0-11 for months
+    
+    return new Date(year, month, 1); // First day of the month
+  }
+
+  private static validateUserData(sessions: SessionData[], tasks: TaskData[], projects: ProjectData[]): void {
+    console.log('🔍 Validating user data...');
+    
+    // Validate sessions
+    const validSessions = sessions.filter(s => s.duration > 0 && s.taskId);
+    const sessionsWithValidDates = sessions.filter(s => {
+      const date = SyntheticTextGenerator.safeToDate(s.date || s.startTime);
+      return date !== null;
+    });
+    
+    console.log(`📊 Session validation:`, {
+      total: sessions.length,
+      withDuration: validSessions.length,
+      withValidDates: sessionsWithValidDates.length,
+      sampleDates: sessions.slice(0, 3).map(s => ({ id: s.id, date: s.date, startTime: s.startTime }))
+    });
+    
+    // Validate tasks
+    const tasksWithProjects = tasks.filter(t => projects.some(p => p.id === t.projectId));
+    console.log(`📊 Task validation:`, {
+      total: tasks.length,
+      withValidProjects: tasksWithProjects.length,
+      sampleTasks: tasks.slice(0, 3).map(t => ({ id: t.id, title: t.title, projectId: t.projectId, timeSpent: t.timeSpent }))
+    });
+    
+    // Validate projects
+    console.log(`📊 Project validation:`, {
+      total: projects.length,
+      sampleProjects: projects.slice(0, 3).map(p => ({ id: p.id, name: p.name }))
+    });
+    
+    // Cross-reference validation
+    const sessionsWithValidTasks = sessions.filter(s => tasks.some(t => t.id === s.taskId));
+    const sessionsWithValidProjects = sessions.filter(s => projects.some(p => p.id === s.projectId));
+    
+    console.log(`🔗 Cross-reference validation:`, {
+      sessionsWithValidTasks: sessionsWithValidTasks.length,
+      sessionsWithValidProjects: sessionsWithValidProjects.length
+    });
+    
+    if (validSessions.length === 0) {
+      console.warn('⚠️  No valid sessions found! This will result in empty weekly summaries.');
+    }
+    
+    if (sessionsWithValidDates.length === 0) {
+      console.warn('⚠️  No sessions with valid dates found! Date filtering will fail.');
+    }
   }
 } 

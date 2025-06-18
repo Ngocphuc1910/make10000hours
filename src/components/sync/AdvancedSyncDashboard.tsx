@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useUserStore } from '../../store/userStore';
 import { AdvancedDataSyncService } from '../../services/advancedDataSyncService';
+import { IncrementalSyncService } from '../../services/incrementalSyncService';
 
 interface SyncResult {
   success: boolean;
@@ -12,23 +13,23 @@ interface SyncResult {
 
 interface TestResult {
   success: boolean;
-  results: Array<{
-    query: string;
-    responseTime: number;
-    retrievedDocs: number;
-    chunkLevels: number[];
-    success: boolean;
-  }>;
+  queryResults: any[];
+  processingTime: number;
+  errors: string[];
 }
 
 export const AdvancedSyncDashboard: React.FC = () => {
   const { user } = useUserStore();
   const [isRunning, setIsRunning] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [isWeeklySync, setIsWeeklySync] = useState(false);
+  const [isMonthlySync, setIsMonthlySync] = useState(false);
+  const [isProjectSync, setIsProjectSync] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationResult, setMigrationResult] = useState<any>(null);
+  const [projectSyncResult, setProjectSyncResult] = useState<any>(null);
 
   const handleAdvancedSync = async () => {
     if (!user?.uid) return;
@@ -50,6 +51,52 @@ export const AdvancedSyncDashboard: React.FC = () => {
       });
     } finally {
       setIsRunning(false);
+    }
+  };
+
+  const handleWeeklySync = async () => {
+    if (!user?.uid) return;
+
+    setIsWeeklySync(true);
+    setSyncResult(null);
+
+    try {
+      const result = await AdvancedDataSyncService.executeWeeklySync(user.uid);
+      setSyncResult(result);
+    } catch (error) {
+      console.error('Weekly sync failed:', error);
+      setSyncResult({
+        success: false,
+        totalChunks: 0,
+        chunksByLevel: {},
+        processingTime: 0,
+        errors: [error instanceof Error ? error.message : 'Unknown error']
+      });
+    } finally {
+      setIsWeeklySync(false);
+    }
+  };
+
+  const handleMonthlySync = async () => {
+    if (!user?.uid) return;
+
+    setIsMonthlySync(true);
+    setSyncResult(null);
+
+    try {
+      const result = await AdvancedDataSyncService.executeMonthlySync(user.uid);
+      setSyncResult(result);
+    } catch (error) {
+      console.error('Monthly sync failed:', error);
+      setSyncResult({
+        success: false,
+        totalChunks: 0,
+        chunksByLevel: {},
+        processingTime: 0,
+        errors: [error instanceof Error ? error.message : 'Unknown error']
+      });
+    } finally {
+      setIsMonthlySync(false);
     }
   };
 
@@ -90,190 +137,170 @@ export const AdvancedSyncDashboard: React.FC = () => {
     }
   };
 
-  return (
-    <div className="p-6 bg-white rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold mb-6 text-gray-900">
-        🚀 Advanced Multi-Level Chunking System
-      </h2>
-      
-      <div className="space-y-6">
-        {/* Phase 3 Status */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-green-800 mb-2">
-            ✅ Phase 3: Multi-Level Chunking (Complete)
-          </h3>
-          <ul className="text-green-700 space-y-1">
-            <li>• Synthetic text generation with 4 levels</li>
-            <li>• Hybrid search with metadata filtering</li>
-            <li>• Intelligent query routing and relevance ranking</li>
-            <li>• Proper Firebase field mapping</li>
-          </ul>
-        </div>
+  const handleProjectSync = async () => {
+    if (!user?.uid) return;
 
-        {/* Advanced Sync Section */}
-        <div className="border border-gray-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold mb-3">Multi-Level Data Sync</h3>
-          <p className="text-gray-600 mb-4">
-            Generate synthetic text chunks across 4 levels: Sessions, Task Aggregates, Project Summaries, and Temporal Patterns.
-          </p>
-          
+    setIsProjectSync(true);
+    setProjectSyncResult(null);
+
+    try {
+      const result = await IncrementalSyncService.executeProjectSync(user.uid);
+      setProjectSyncResult(result);
+    } catch (error) {
+      console.error('Project sync failed:', error);
+      setProjectSyncResult({
+        success: false,
+        processedDocuments: 0,
+        skippedDocuments: 0,
+        errors: [error instanceof Error ? error.message : 'Unknown error'],
+        executionTime: 0,
+        collections: { tasks: 0, projects: 0, workSessions: 0 }
+      });
+    } finally {
+      setIsProjectSync(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex flex-wrap gap-4">
           <button
             onClick={handleAdvancedSync}
-            disabled={isRunning || !user}
-            className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-md transition-colors"
+            disabled={isRunning || isTesting || isMigrating || isWeeklySync || isMonthlySync || isProjectSync}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
-            {isRunning ? '🔄 Processing Multi-Level Chunks...' : '🚀 Execute Advanced Sync'}
+            <span>{isRunning ? 'Running Full Sync...' : 'Run Full Sync'}</span>
           </button>
 
-          {syncResult && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-md">
-              <h4 className="font-semibold mb-2">
-                {syncResult.success ? '✅ Sync Complete' : '❌ Sync Failed'}
-              </h4>
-              <div className="text-sm space-y-1">
-                <p><strong>Total Chunks:</strong> {syncResult.totalChunks}</p>
-                <p><strong>Processing Time:</strong> {syncResult.processingTime}ms</p>
-                
-                {Object.keys(syncResult.chunksByLevel).length > 0 && (
-                  <div>
-                    <strong>Chunks by Level:</strong>
-                    <ul className="ml-4">
-                      {Object.entries(syncResult.chunksByLevel).map(([level, count]) => (
-                        <li key={level}>Level {level}: {count} chunks</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                
-                {syncResult.errors.length > 0 && (
-                  <div>
-                    <strong>Errors:</strong>
-                    <ul className="ml-4 text-red-600">
-                      {syncResult.errors.map((error, index) => (
-                        <li key={index}>{error}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+          <button
+            onClick={handleWeeklySync}
+            disabled={isRunning || isTesting || isMigrating || isWeeklySync || isMonthlySync || isProjectSync}
+            className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+          >
+            <span>{isWeeklySync ? 'Syncing Weekly Summary...' : 'Sync Weekly Summary'}</span>
+          </button>
 
-        {/* Enhanced RAG Testing */}
-        <div className="border border-gray-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold mb-3">Enhanced RAG Testing</h3>
-          <p className="text-gray-600 mb-4">
-            Test hybrid search with intelligent chunk level selection across different query types.
-          </p>
-          
+          <button
+            onClick={handleMonthlySync}
+            disabled={isRunning || isTesting || isMigrating || isWeeklySync || isMonthlySync || isProjectSync}
+            className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+          >
+            <span>{isMonthlySync ? 'Syncing Monthly Summary...' : 'Sync Monthly Summary'}</span>
+          </button>
+
           <button
             onClick={testEnhancedRAG}
-            disabled={isTesting || !user || !syncResult?.success}
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-md transition-colors"
+            disabled={isRunning || isTesting || isMigrating || isWeeklySync || isMonthlySync || isProjectSync}
+            className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
           >
-            {isTesting ? '🧪 Testing Enhanced RAG...' : '🧪 Test Hybrid Search'}
+            <span>{isTesting ? 'Testing...' : 'Test RAG'}</span>
           </button>
 
-          {testResult && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-md">
-              <h4 className="font-semibold mb-2">
-                {testResult.success ? '✅ All Tests Passed' : '⚠️ Some Tests Failed'}
-              </h4>
-              <div className="space-y-2">
-                {testResult.results.map((result, index) => (
-                  <div key={index} className="text-sm border-l-4 border-gray-300 pl-3">
-                    <p><strong>Query:</strong> "{result.query}"</p>
-                    <p className="text-gray-600">
-                      {result.success ? '✅' : '❌'} {result.responseTime}ms | 
-                      {result.retrievedDocs} docs | 
-                      Levels: [{result.chunkLevels.join(', ')}]
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Implementation Guide */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-blue-800 mb-2">
-            📋 Implementation Complete
-          </h3>
-          <div className="text-blue-700 space-y-2">
-            <p><strong>Services Created:</strong></p>
-            <ul className="ml-4 space-y-1">
-              <li>• SyntheticTextGenerator - Natural language conversion</li>
-              <li>• HierarchicalChunker - Multi-level chunk generation</li>
-              <li>• EnhancedRAGService - Hybrid search with filtering</li>
-              <li>• AdvancedDataSyncService - Complete integration</li>
-            </ul>
-            
-            <p className="mt-3"><strong>Next Steps:</strong></p>
-            <ol className="ml-4 space-y-1">
-              <li>1. Execute Advanced Sync to generate multi-level chunks</li>
-              <li>2. Test Enhanced RAG to verify hybrid search functionality</li>
-              <li>3. Update chat interface to use EnhancedRAGService</li>
-              <li>4. Monitor performance and prepare for Phase 4 optimization</li>
-            </ol>
-          </div>
-        </div>
-
-        {/* Integration Code */}
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold mb-2">🔗 Chat Interface Integration</h3>
-          <pre className="text-sm bg-gray-800 text-green-400 p-3 rounded overflow-x-auto">
-{`// Replace in your chat service:
-import { EnhancedRAGService } from './services/enhancedRAGService';
-
-const response = await EnhancedRAGService.queryWithHybridSearch(
-  query, 
-  userId, 
-  { 
-    timeframe: 'week', 
-    chunkLevels: [2, 3] 
-  }
-);`}
-          </pre>
-        </div>
-
-        {/* Migration Section */}
-        <div className="border border-gray-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold mb-3">Data Migration</h3>
-          <p className="text-gray-600 mb-4">
-            Clean up redundant synthetic_chunk records and show the benefits of the optimization
-          </p>
-          
           <button
             onClick={handleMigration}
-            disabled={isMigrating || !user || !syncResult?.success}
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-md transition-colors"
+            disabled={isRunning || isTesting || isMigrating || isWeeklySync || isMonthlySync || isProjectSync}
+            className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50"
           >
-            {isMigrating ? '�� Migrating Data...' : '🚀 Migrate Data'}
+            <span>{isMigrating ? 'Migrating...' : 'Run Migration'}</span>
           </button>
 
-          {migrationResult && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-md">
-              <h4 className="font-semibold mb-2">
-                {migrationResult.success ? '✅ Migration Complete' : '❌ Migration Failed'}
-              </h4>
-              <div className="text-sm space-y-1">
-                <p><strong>Removed Chunks:</strong> {migrationResult.removedChunks}</p>
-                {migrationResult.errors.length > 0 && (
-                  <div>
-                    <strong>Errors:</strong>
-                    <ul className="ml-4 text-red-600">
-                                             {migrationResult.errors.map((error: string, index: number) => (
-                         <li key={index}>{error}</li>
-                       ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          <button
+            onClick={handleProjectSync}
+            disabled={isRunning || isTesting || isMigrating || isWeeklySync || isMonthlySync || isProjectSync}
+            className="flex items-center space-x-2 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50"
+          >
+            <span>{isProjectSync ? 'Syncing Projects...' : 'Sync Project Chunks'}</span>
+          </button>
         </div>
+
+        {/* Results Display */}
+        {syncResult && (
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {isWeeklySync ? 'Weekly Summary Sync Results' : isMonthlySync ? 'Monthly Summary Sync Results' : 'Sync Results'}
+            </h3>
+            <div className="space-y-2 text-sm text-gray-600">
+              <p>Status: {syncResult.success ? '✅ Success' : '❌ Failed'}</p>
+              <p>Total Chunks: {syncResult.totalChunks}</p>
+              <p>Processing Time: {syncResult.processingTime}ms</p>
+              {syncResult.errors.length > 0 && (
+                <div className="text-red-600">
+                  <p>Errors:</p>
+                  <ul className="list-disc list-inside">
+                    {syncResult.errors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {testResult && (
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">RAG Test Results</h3>
+            <div className="space-y-2 text-sm text-gray-600">
+              <p>Status: {testResult.success ? '✅ Success' : '❌ Failed'}</p>
+              <p>Processing Time: {testResult.processingTime}ms</p>
+              <p>Results Found: {testResult.queryResults.length}</p>
+              {testResult.errors.length > 0 && (
+                <div className="text-red-600">
+                  <p>Errors:</p>
+                  <ul className="list-disc list-inside">
+                    {testResult.errors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {migrationResult && (
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Migration Results</h3>
+            <div className="space-y-2 text-sm text-gray-600">
+              <p>Status: {migrationResult.success ? '✅ Success' : '❌ Failed'}</p>
+              <p>Removed Chunks: {migrationResult.removedChunks}</p>
+              {migrationResult.errors?.length > 0 && (
+                <div className="text-red-600">
+                  <p>Errors:</p>
+                  <ul className="list-disc list-inside">
+                    {migrationResult.errors.map((error: string, index: number) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {projectSyncResult && (
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Project Sync Results</h3>
+            <div className="space-y-2 text-sm text-gray-600">
+              <p>Status: {projectSyncResult.success ? '✅ Success' : '❌ Failed'}</p>
+              <p>Processed Documents: {projectSyncResult.processedDocuments}</p>
+              <p>Skipped Documents: {projectSyncResult.skippedDocuments}</p>
+              <p>Execution Time: {projectSyncResult.executionTime}ms</p>
+              <p>Collections: Tasks - {projectSyncResult.collections.tasks}, Projects - {projectSyncResult.collections.projects}, Work Sessions - {projectSyncResult.collections.workSessions}</p>
+              {projectSyncResult.errors.length > 0 && (
+                <div className="text-red-600">
+                  <p>Errors:</p>
+                  <ul className="list-disc list-inside">
+                    {projectSyncResult.errors.map((error: string, index: number) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
