@@ -49,117 +49,154 @@ export class AdvancedDataSyncService {
     }
   }
 
-  static async testEnhancedRAG(userId: string, testQueries: string[] = [
-    'How productive was I this week?',
-    'What tasks am I working on?',
-    'Which project needs the most attention?',
-    'Show me my morning productivity patterns'
-  ]): Promise<{
+  static async executeWeeklySync(userId: string): Promise<{
     success: boolean;
-    results: Array<{
-      query: string;
-      responseTime: number;
-      retrievedDocs: number;
-      chunkLevels: number[];
-      success: boolean;
-    }>;
-  }> {
-    console.log(`🧪 Testing enhanced RAG for user: ${userId}`);
-    
-    const results = [];
-    
-    for (const query of testQueries) {
-      try {
-        const response = await EnhancedRAGService.queryWithHybridSearch(query, userId);
-        
-        results.push({
-          query,
-          responseTime: response.metadata.responseTime,
-          retrievedDocs: response.metadata.retrievedDocuments,
-          chunkLevels: response.metadata.chunkLevelsUsed || [],
-          success: true
-        });
-        
-      } catch (error) {
-        results.push({
-          query,
-          responseTime: 0,
-          retrievedDocs: 0,
-          chunkLevels: [],
-          success: false
-        });
-      }
-    }
-    
-    const successCount = results.filter(r => r.success).length;
-    console.log(`🎯 RAG test results: ${successCount}/${testQueries.length} successful`);
-    
-    return {
-      success: successCount === testQueries.length,
-      results
-    };
-  }
-
-  /**
-   * Clean up redundant synthetic_chunk records
-   */
-  private static async clearExistingChunks(userId: string): Promise<void> {
-    console.log('🧹 Cleaning up redundant synthetic_chunk records...');
-    
-    // Remove all synthetic_chunk records (they will be replaced with specific content types)
-    const { error: deleteError } = await supabase
-      .from('user_productivity_documents')
-      .delete()
-      .eq('user_id', userId)
-      .eq('content_type', 'synthetic_chunk');
-    
-    if (deleteError) {
-      console.warn('⚠️ Error deleting synthetic_chunk records:', deleteError);
-    } else {
-      console.log('✅ Cleaned up synthetic_chunk records');
-    }
-  }
-
-  /**
-   * Migrate from synthetic_chunk to optimized content types
-   */
-  static async migrateSyntheticChunks(userId: string): Promise<{
-    success: boolean;
-    removedChunks: number;
+    totalChunks: number;
+    chunksByLevel: Record<number, number>;
+    processingTime: number;
     errors: string[];
   }> {
-    console.log(`🔄 Migrating synthetic_chunk records for user: ${userId}`);
+    const startTime = Date.now();
+    console.log(`🚀 Starting weekly summary sync for user: ${userId}`);
     
     try {
-      // Count existing synthetic_chunk records
-      const { data: existingChunks, error: countError } = await supabase
-        .from('user_productivity_documents')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('content_type', 'synthetic_chunk');
+      // Step 1: Clear existing weekly summary chunks
+      await this.clearExistingWeeklySummaries(userId);
       
-      if (countError) throw countError;
+      // Step 2: Generate new weekly summaries
+      const chunks = await HierarchicalChunker.createMultiLevelChunks(userId);
+      const weeklyChunks = chunks.filter(chunk => 
+        chunk.content_type === 'weekly_summary' || 
+        (chunk.metadata.chunkType === 'temporal_pattern' && chunk.metadata.timeframe?.startsWith('weekly_'))
+      );
       
-      const removedCount = existingChunks?.length || 0;
+      // Step 3: Store weekly chunks with embeddings
+      let processedCount = 0;
+      const errors: string[] = [];
       
-      // Remove synthetic_chunk records
-      await this.clearExistingChunks(userId);
+      for (const chunk of weeklyChunks) {
+        try {
+          await EnhancedRAGService.storeChunkWithEmbedding(chunk, userId);
+          processedCount++;
+        } catch (error) {
+          console.error('Failed to store weekly chunk:', error);
+          errors.push(error instanceof Error ? error.message : 'Unknown error');
+        }
+      }
       
-      console.log(`✅ Migration complete: removed ${removedCount} synthetic_chunk records`);
+      const processingTime = Date.now() - startTime;
+      console.log(`✅ Weekly sync complete: ${processedCount} chunks in ${processingTime}ms`);
       
       return {
-        success: true,
-        removedChunks: removedCount,
-        errors: []
+        success: errors.length === 0,
+        totalChunks: processedCount,
+        chunksByLevel: { 4: processedCount }, // Weekly summaries are level 4
+        processingTime,
+        errors
       };
       
     } catch (error) {
-      console.error('❌ Migration failed:', error);
+      console.error('❌ Weekly sync failed:', error);
       return {
         success: false,
-        removedChunks: 0,
+        totalChunks: 0,
+        chunksByLevel: {},
+        processingTime: Date.now() - startTime,
         errors: [error instanceof Error ? error.message : 'Unknown error']
       };
+    }
+  }
+
+  static async executeMonthlySync(userId: string): Promise<{
+    success: boolean;
+    totalChunks: number;
+    chunksByLevel: Record<number, number>;
+    processingTime: number;
+    errors: string[];
+  }> {
+    const startTime = Date.now();
+    console.log(`🚀 Starting monthly summary sync for user: ${userId}`);
+    
+    try {
+      // Step 1: Clear existing monthly summary chunks
+      await this.clearExistingMonthlySummaries(userId);
+      
+      // Step 2: Generate new monthly summaries
+      const chunks = await HierarchicalChunker.createMultiLevelChunks(userId);
+      const monthlyChunks = chunks.filter(chunk => 
+        chunk.content_type === 'monthly_summary' || 
+        (chunk.metadata.chunkType === 'temporal_pattern' && chunk.metadata.timeframe?.startsWith('monthly_'))
+      );
+      
+      // Step 3: Store monthly chunks with embeddings
+      let processedCount = 0;
+      const errors: string[] = [];
+      
+      for (const chunk of monthlyChunks) {
+        try {
+          await EnhancedRAGService.storeChunkWithEmbedding(chunk, userId);
+          processedCount++;
+        } catch (error) {
+          console.error('Failed to store monthly chunk:', error);
+          errors.push(error instanceof Error ? error.message : 'Unknown error');
+        }
+      }
+      
+      const processingTime = Date.now() - startTime;
+      console.log(`✅ Monthly sync complete: ${processedCount} chunks in ${processingTime}ms`);
+      
+      return {
+        success: errors.length === 0,
+        totalChunks: processedCount,
+        chunksByLevel: { 5: processedCount }, // Monthly summaries are level 5
+        processingTime,
+        errors
+      };
+      
+    } catch (error) {
+      console.error('❌ Monthly sync failed:', error);
+      return {
+        success: false,
+        totalChunks: 0,
+        chunksByLevel: {},
+        processingTime: Date.now() - startTime,
+        errors: [error instanceof Error ? error.message : 'Unknown error']
+      };
+    }
+  }
+
+  private static async clearExistingWeeklySummaries(userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('user_productivity_documents')
+      .delete()
+      .eq('user_id', userId)
+      .or('content_type.eq.weekly_summary,metadata->>chunkType.eq.temporal_pattern,metadata->>timeframe.like.weekly_%');
+
+    if (error) {
+      throw new Error(`Failed to clear existing weekly summaries: ${error.message}`);
+    }
+  }
+
+  private static async clearExistingMonthlySummaries(userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('user_productivity_documents')
+      .delete()
+      .eq('user_id', userId)
+      .or('content_type.eq.monthly_summary,metadata->>chunkType.eq.temporal_pattern,metadata->>timeframe.like.monthly_%');
+
+    if (error) {
+      throw new Error(`Failed to clear existing monthly summaries: ${error.message}`);
+    }
+  }
+
+  private static async clearExistingChunks(userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('user_productivity_documents')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) {
+      throw new Error(`Failed to clear existing chunks: ${error.message}`);
     }
   }
 
@@ -168,19 +205,98 @@ export class AdvancedDataSyncService {
       .from('user_productivity_documents')
       .select('metadata')
       .eq('user_id', userId);
-    
-    if (error || !data) {
-      console.warn('⚠️ Error analyzing chunk distribution:', error);
-      return {};
+
+    if (error) {
+      throw new Error(`Failed to analyze chunk distribution: ${error.message}`);
     }
-    
+
     const distribution: Record<number, number> = {};
-    
-    data.forEach(doc => {
-      const level = doc.metadata?.chunkLevel || 1;
-      distribution[level] = (distribution[level] || 0) + 1;
+    data.forEach(row => {
+      const level = row.metadata?.chunkLevel;
+      if (level) {
+        distribution[level] = (distribution[level] || 0) + 1;
+      }
     });
-    
+
     return distribution;
+  }
+
+  static async testEnhancedRAG(userId: string): Promise<{
+    success: boolean;
+    queryResults: any[];
+    processingTime: number;
+    errors: string[];
+  }> {
+    const startTime = Date.now();
+    const errors: string[] = [];
+    const results: any[] = [];
+
+    try {
+      // Test queries
+      const queries = [
+        "What did I work on this week?",
+        "Show me my most productive sessions",
+        "What projects am I behind on?",
+        "What are my work patterns?"
+      ];
+
+      for (const query of queries) {
+        try {
+          const result = await EnhancedRAGService.queryWithHybridSearch(query, userId);
+          results.push(result);
+        } catch (error) {
+          errors.push(`Query "${query}" failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      return {
+        success: errors.length === 0,
+        queryResults: results,
+        processingTime: Date.now() - startTime,
+        errors
+      };
+
+    } catch (error) {
+      return {
+        success: false,
+        queryResults: [],
+        processingTime: Date.now() - startTime,
+        errors: [error instanceof Error ? error.message : 'Unknown error']
+      };
+    }
+  }
+
+  static async migrateSyntheticChunks(userId: string): Promise<{
+    success: boolean;
+    removedChunks: number;
+    errors: string[];
+  }> {
+    try {
+      // Delete chunks with generic synthetic_chunk content type
+      const { data, error } = await supabase
+        .from('user_productivity_documents')
+        .delete()
+        .eq('user_id', userId)
+        .eq('content_type', 'synthetic_chunk')
+        .select();
+
+      if (error) {
+        throw error;
+      }
+
+      return {
+        success: true,
+        removedChunks: data?.length || 0,
+        errors: []
+      };
+
+    } catch (error) {
+      console.error('Migration failed:', error);
+      return {
+        success: false,
+        removedChunks: 0,
+        errors: [error instanceof Error ? error.message : 'Unknown error']
+      };
+    }
   }
 } 

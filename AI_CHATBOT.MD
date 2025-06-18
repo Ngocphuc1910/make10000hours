@@ -1307,3 +1307,66 @@ The comprehensive data sync system provides the robust foundation needed for RAG
 ---
 
 **🎯 Ready to execute comprehensive Firebase to Supabase sync and resolve ALL data synchronization issues!**
+
+##### **Content Type: daily_summary**
+```typescript
+// Example Daily Summary:
+DAILY PRODUCTIVITY SUMMARY: Tuesday, June 18, 2025
+
+OVERVIEW: 47 minutes of productive work across 6 pomodoro sessions. Worked on 3 projects, 4 tasks. Created 1 new task, 0 new projects today.
+
+TOP PROJECTS BY TIME INVESTMENT:
+1. "Learn React" - 23m (49% of day)
+   └─ "new task to test time" (time spent: 15m)
+   └─ "This is task on calendar" (time spent: 8m)
+
+2. "Personal Notes" - 15m (32% of day)
+   └─ "mmmm" (time spent: 15m)
+
+3. Unassigned Tasks - 9m (19% of day)
+   └─ "testing the counting feature" (time spent: 9m)
+
+TOP TASKS BY TIME SPENT:
+1. "new task to test time" - 15m (Learn React project)
+   └─ Progress: 15/100 estimated minutes (15% complete)
+   └─ Created: June 8, 2025
+
+2. "mmmm" - 15m (Personal Notes project)
+   └─ Progress: No time estimate set
+   └─ Created: June 17, 2025
+
+3. "testing the counting feature" - 9m (Unassigned)
+   └─ Progress: 9/25 estimated minutes (36% complete)
+   └─ Created: June 15, 2025
+
+4. "This is task on calendar" - 8m (Learn React project)
+   └─ Progress: No time estimate set
+   └─ Created: June 8, 2025
+
+PRODUCTIVITY METRICS:
+- Total Productive Time: 47 minutes
+- Session Count: 6 pomodoro sessions
+- Average Session: ~8 minutes
+- Completion Rate: 0 tasks completed today
+- Projects Worked On: 3 projects
+- Task Creation Activity: 1 new task created
+
+INSIGHTS: Short session durations (8-minute average) suggest frequent task switching between Learn React and unassigned work. The 36% progress on "testing the counting feature" makes it a good completion candidate for tomorrow. Consider consolidating unassigned tasks into proper projects for better focus.
+```
+
+**Key Features:**
+- Comprehensive daily overview with exact timestamps
+- Project and task rankings by time investment
+- Detailed progress tracking for each task
+- Productivity metrics with session analysis
+- AI-generated insights based on work patterns
+- Perfect alignment with UI terminology
+- Rich metadata for enhanced searchability
+
+**Query Examples:**
+- "How productive was I today?"
+- "What projects did I work on today?"
+- "Which tasks took the most time?"
+- "What's my completion rate today?"
+- "Show me my productivity metrics"
+- "What insights do you have about my work today?"

@@ -3,6 +3,8 @@ import { OpenAIService } from './openai';
 import { HierarchicalChunker, ProductivityChunk } from './hierarchicalChunker';
 import { SmartSourceSelector, SourceSelectionOptions } from './smartSourceSelector';
 import { AdaptiveRAGConfigService } from './adaptiveRAGConfig';
+import { IntelligentQueryClassifier, QueryClassification } from './intelligentQueryClassifier';
+import { IntelligentPromptGenerator } from './intelligentPromptGenerator';
 import type { RAGResponse } from '../types/chat';
 
 export interface SearchFilters {
@@ -40,28 +42,38 @@ export class EnhancedRAGService {
         console.log('📄 Sample documents:', userDocs.map(d => ({ id: d.id, type: d.content_type, created: d.created_at })));
       }
       
-      // Step 1: Determine optimal chunk levels for query
-      const optimalLevels = this.determineOptimalChunkLevels(query);
-      console.log(`🎯 Optimal chunk levels: [${optimalLevels.join(', ')}]`);
-      
-      // Step 2: Execute hybrid search
-      const relevantDocs = await this.executeEnhancedSearch(query, userId, {
-        chunkLevels: optimalLevels
+      // Step 1: Intelligent query classification with content type prioritization
+      const classification = IntelligentQueryClassifier.classifyQuery(query);
+      console.log(`🎯 Query classification for "${query}":`, {
+        intent: classification.primaryIntent,
+        confidence: classification.confidence,
+        contentTypes: classification.suggestedContentTypes,
+        strategy: classification.mixingStrategy
       });
+      
+      // Step 2: Execute enhanced search with content type priorities
+      const relevantDocs = await this.executeIntelligentSearch(query, userId, classification);
       
       console.log(`📚 Retrieved ${relevantDocs.length} relevant documents`);
       
-      if (relevantDocs.length === 0) {
+      // Enhanced: Ensure minimum source guarantee for rich context
+      const enrichedSources = await this.ensureRichContext(relevantDocs, query, userId, classification);
+      console.log(`🎯 Enriched to ${enrichedSources.length} sources for comprehensive context`);
+      
+      if (enrichedSources.length === 0) {
         return this.generateFallbackResponse(query, startTime);
       }
       
-      // Step 3: Bypass SmartSourceSelector for comprehensive project coverage
-      // Since user has 8 projects, ensure we get sources from multiple projects
-      const projectDiverseSources = this.selectDiverseProjectSources(relevantDocs, 25);
+      // Step 3: Apply intelligent source selection with diverse mixing
+      const optimalSources = IntelligentQueryClassifier.getOptimalSourceMix(
+        classification,
+        enrichedSources,
+        60 // Increased from 20 to 60 for richer context
+      );
       
-      console.log(`🎯 Direct selection: ${projectDiverseSources.length}/${relevantDocs.length} sources for comprehensive project coverage`);
+      console.log(`🎯 Intelligent selection: ${optimalSources.length}/${enrichedSources.length} sources using ${classification.mixingStrategy} strategy`);
       
-      return await this.generateResponseFromDocs(query, projectDiverseSources, startTime, conversationHistory);
+      return await this.generateResponseFromDocs(query, optimalSources, startTime, classification, conversationHistory);
       
     } catch (error) {
       console.error('❌ Enhanced RAG query error:', error);
@@ -97,7 +109,17 @@ export class EnhancedRAGService {
       
       console.log(`🎯 Hybrid diverse selection: ${projectDiverseSources.length}/${relevantDocs.length} sources across multiple projects`);
       
-      return await this.generateResponseFromDocs(query, projectDiverseSources, startTime, conversationHistory);
+      // Create a basic classification for backward compatibility
+      const basicClassification: QueryClassification = {
+        primaryIntent: 'general',
+        secondaryIntents: [],
+        confidence: 0.5,
+        suggestedContentTypes: ['task_aggregate', 'project_summary', 'daily_summary'],
+        suggestedChunkTypes: ['task_aggregate', 'project_summary', 'temporal_pattern'],
+        mixingStrategy: 'balanced'
+      };
+      
+      return await this.generateResponseFromDocs(query, projectDiverseSources, startTime, basicClassification, conversationHistory);
       
     } catch (error) {
       console.error('❌ Enhanced RAG query error:', error);
@@ -125,6 +147,310 @@ export class EnhancedRAGService {
       
     } catch (error) {
       console.error('❌ Enhanced search failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * New intelligent search method that prioritizes content types based on query classification
+   */
+  private static async executeIntelligentSearch(
+    query: string,
+    userId: string,
+    classification: QueryClassification
+  ): Promise<any[]> {
+    try {
+      console.log(`🔍 Starting intelligent search with ${classification.suggestedContentTypes.length} prioritized content types`);
+      
+      // Strategy 1: Try semantic search with content type prioritization
+      const semanticResults = await this.performContentAwareSemanticSearch(
+        query, 
+        userId, 
+        classification.suggestedContentTypes
+      );
+      
+      if (semanticResults.length > 0) {
+        console.log(`✅ Content-aware semantic search returned ${semanticResults.length} results`);
+        return semanticResults;
+      }
+      
+      // Strategy 2: Fallback to keyword search with content type filtering
+      console.log('⚠️ Semantic search failed, using content-aware keyword search');
+      return await this.performContentAwareKeywordSearch(
+        query, 
+        userId, 
+        classification.suggestedContentTypes
+      );
+      
+    } catch (error) {
+      console.error('❌ Intelligent search failed:', error);
+      // Final fallback - use old method
+      return await this.executeEnhancedSearch(query, userId, { chunkLevels: [1, 2, 3, 4] });
+    }
+  }
+
+  /**
+   * Content-aware semantic search that prioritizes specific content types
+   */
+  private static async performContentAwareSemanticSearch(
+    query: string,
+    userId: string,
+    prioritizedContentTypes: string[]
+  ): Promise<any[]> {
+    try {
+      // Generate query embedding
+      const queryEmbedding = await OpenAIService.generateEmbedding({
+        content: query,
+        contentType: 'query'
+      });
+      
+      if (!queryEmbedding || queryEmbedding.length === 0) {
+        throw new Error('Failed to generate query embedding');
+      }
+
+      console.log(`📊 Content-aware search for types: [${prioritizedContentTypes.join(', ')}]`);
+
+      // Try different table names to find documents
+      const tablesToTry = ['user_productivity_documents', 'embeddings'];
+      let allResults: any[] = [];
+
+      for (const tableName of tablesToTry) {
+        try {
+          console.log(`🔍 Searching table: ${tableName} for prioritized content types`);
+          
+          // Get documents with content type prioritization
+          let supabaseQuery = supabase
+            .from(tableName)
+            .select('*')
+            .eq('user_id', userId)
+            .not('embedding', 'is', null);
+          
+          // Apply content type filtering if we have prioritized types
+          if (prioritizedContentTypes.length > 0) {
+            console.log(`🎯 Filtering by content types: [${prioritizedContentTypes.join(', ')}]`);
+            supabaseQuery = supabaseQuery.in('content_type', prioritizedContentTypes);
+          }
+          
+          const { data: docs, error } = await supabaseQuery.limit(100);
+          
+          if (!error && docs && docs.length > 0) {
+            console.log(`✅ Found ${docs.length} documents with prioritized content types in ${tableName}`);
+            
+            // Calculate similarity scores and apply content type boosting
+            const docsWithSimilarity = docs.map((doc, index) => {
+              let parsedEmbedding = doc.embedding;
+              
+              if (typeof doc.embedding === 'string') {
+                try {
+                  parsedEmbedding = JSON.parse(doc.embedding);
+                } catch (e) {
+                  console.error('Failed to parse embedding:', e);
+                  return { ...doc, similarity_score: 0, content_type_boost: 0 };
+                }
+              }
+              
+              if (!Array.isArray(parsedEmbedding)) {
+                return { ...doc, similarity_score: 0, content_type_boost: 0 };
+              }
+              
+              const similarity = this.calculateCosineSimilarity(queryEmbedding, parsedEmbedding);
+              
+              // Apply content type boosting based on priority order
+              const contentType = doc.content_type || 'unknown';
+              const typeIndex = prioritizedContentTypes.indexOf(contentType);
+              const contentTypeBoost = typeIndex !== -1 ? 
+                (prioritizedContentTypes.length - typeIndex) / prioritizedContentTypes.length * 0.3 : 0;
+              
+              const finalScore = Math.min(1.0, similarity + contentTypeBoost);
+              
+              return {
+                ...doc,
+                similarity_score: similarity,
+                content_type_boost: contentTypeBoost,
+                final_score: finalScore,
+                embedding: parsedEmbedding
+              };
+            });
+            
+            // Sort by final score (similarity + content type boost)
+            const sortedDocs = docsWithSimilarity
+              .sort((a, b) => b.final_score - a.final_score)
+              .filter(doc => doc.final_score > 0.10); // Lowered from 0.15 to 0.10 for richer context
+            
+            console.log(`📊 Content-aware semantic results: ${sortedDocs.length} docs above threshold`);
+            if (sortedDocs.length > 0) {
+              console.log(`Top scores: ${sortedDocs.slice(0, 3).map(d => 
+                `${d.content_type}(${d.final_score.toFixed(3)})`
+              ).join(', ')}`);
+            }
+            
+            allResults = sortedDocs.slice(0, 80); // Increased from 30 to 80 for richer context
+            break;
+          } else if (docs && docs.length === 0 && prioritizedContentTypes.length > 0) {
+            // Fallback: Search without content type filtering if no docs found with prioritized types
+            console.log(`⚠️ No documents found with prioritized content types [${prioritizedContentTypes.join(', ')}], falling back to broader search`);
+            
+            let fallbackQuery = supabase
+              .from(tableName)
+              .select('*')
+              .eq('user_id', userId)
+              .not('embedding', 'is', null);
+            
+            const { data: fallbackDocs, error: fallbackError } = await fallbackQuery.limit(100);
+            
+            if (!fallbackError && fallbackDocs && fallbackDocs.length > 0) {
+              console.log(`✅ Fallback search found ${fallbackDocs.length} documents in ${tableName}`);
+              
+              // Calculate similarity scores (no content type boost since we couldn't find prioritized types)
+              const docsWithSimilarity = fallbackDocs.map((doc, index) => {
+                let parsedEmbedding = doc.embedding;
+                
+                if (typeof doc.embedding === 'string') {
+                  try {
+                    parsedEmbedding = JSON.parse(doc.embedding);
+                  } catch (e) {
+                    console.error('Failed to parse embedding:', e);
+                    return { ...doc, similarity_score: 0, content_type_boost: 0 };
+                  }
+                }
+                
+                if (!Array.isArray(parsedEmbedding)) {
+                  return { ...doc, similarity_score: 0, content_type_boost: 0 };
+                }
+                
+                const similarity = this.calculateCosineSimilarity(queryEmbedding, parsedEmbedding);
+                
+                return {
+                  ...doc,
+                  similarity_score: similarity,
+                  content_type_boost: 0,
+                  final_score: similarity,
+                  embedding: parsedEmbedding
+                };
+              });
+              
+              // Sort by similarity score
+              const sortedDocs = docsWithSimilarity
+                .sort((a, b) => b.final_score - a.final_score)
+                .filter(doc => doc.final_score > 0.10);
+              
+              console.log(`📊 Fallback semantic results: ${sortedDocs.length} docs above threshold`);
+              if (sortedDocs.length > 0) {
+                console.log(`Available content types: ${[...new Set(sortedDocs.map(d => d.content_type))].join(', ')}`);
+                console.log(`Top scores: ${sortedDocs.slice(0, 3).map(d => 
+                  `${d.content_type}(${d.final_score.toFixed(3)})`
+                ).join(', ')}`);
+              }
+              
+              allResults = sortedDocs.slice(0, 80); // Increased from 30 to 80 for richer context
+              break;
+            }
+          }
+        } catch (tableError) {
+          console.warn(`⚠️ Error searching ${tableName}:`, tableError);
+          continue;
+        }
+      }
+
+      return allResults;
+      
+    } catch (error) {
+      console.warn('Content-aware semantic search failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Content-aware keyword search as fallback
+   */
+  private static async performContentAwareKeywordSearch(
+    query: string,
+    userId: string,
+    prioritizedContentTypes: string[]
+  ): Promise<any[]> {
+    try {
+      console.log(`🔍 Content-aware keyword search for types: [${prioritizedContentTypes.join(', ')}]`);
+      
+      const searchTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 2);
+      console.log(`🔍 Keyword search terms: [${searchTerms.join(', ')}]`);
+
+      // Build search query with content type prioritization
+      let supabaseQuery = supabase
+        .from('user_productivity_documents')
+        .select('*')
+        .eq('user_id', userId);
+
+      // Apply content type filtering
+      if (prioritizedContentTypes.length > 0) {
+        supabaseQuery = supabaseQuery.in('content_type', prioritizedContentTypes);
+      }
+
+      // Apply text search
+      if (searchTerms.length > 0) {
+        const searchText = searchTerms.join(' | '); // OR search
+        supabaseQuery = supabaseQuery.textSearch('content', searchText);
+      }
+
+      const { data: docs, error } = await supabaseQuery
+        .order('created_at', { ascending: false })
+        .limit(80); // Increased from 50 to 80 for richer context
+
+      if (error) {
+        console.error('❌ Content-aware keyword search error:', error);
+        return [];
+      }
+
+      if (!docs || docs.length === 0) {
+        console.log('ℹ️ No documents found with content-aware keyword search');
+        return [];
+      }
+
+      // Score documents based on keyword matches and content type priority
+      const scoredDocs = docs.map(doc => {
+        const content = (doc.content || '').toLowerCase();
+        
+        // Calculate keyword relevance score
+        let keywordScore = 0;
+        searchTerms.forEach(term => {
+          const termCount = (content.match(new RegExp(term, 'g')) || []).length;
+          keywordScore += termCount * (1 / Math.sqrt(term.length)); // Longer terms get less weight
+        });
+        
+        // Normalize keyword score
+        keywordScore = Math.min(1.0, keywordScore / searchTerms.length);
+        
+        // Apply content type boosting
+        const contentType = doc.content_type || 'unknown';
+        const typeIndex = prioritizedContentTypes.indexOf(contentType);
+        const contentTypeBoost = typeIndex !== -1 ? 
+          (prioritizedContentTypes.length - typeIndex) / prioritizedContentTypes.length * 0.4 : 0;
+        
+        const finalScore = Math.min(1.0, keywordScore + contentTypeBoost);
+        
+        return {
+          ...doc,
+          relevanceScore: finalScore,
+          keywordScore,
+          contentTypeBoost
+        };
+      });
+
+      // Sort and filter by relevance
+      const sortedDocs = scoredDocs
+        .sort((a, b) => b.relevanceScore - a.relevanceScore)
+        .filter(doc => doc.relevanceScore > 0.05); // Lowered from 0.1 to 0.05 for richer context
+
+      console.log(`📊 Content-aware keyword search found ${sortedDocs.length} relevant documents`);
+      if (sortedDocs.length > 0) {
+        console.log(`Top matches: ${sortedDocs.slice(0, 3).map(d => 
+          `${d.content_type}(${d.relevanceScore.toFixed(3)})`
+        ).join(', ')}`);
+      }
+
+      return sortedDocs.slice(0, 60); // Increased from 25 to 60 for richer context
+
+    } catch (error) {
+      console.error('❌ Content-aware keyword search failed:', error);
       return [];
     }
   }
@@ -758,6 +1084,7 @@ export class EnhancedRAGService {
     query: string,
     docs: any[],
     startTime: number,
+    classification: QueryClassification,
     conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
   ): Promise<RAGResponse> {
     if (docs.length === 0) {
@@ -774,7 +1101,7 @@ export class EnhancedRAGService {
       })
       .join('\n\n');
 
-    const prompt = this.buildEnhancedPrompt(query, context, docs);
+    const prompt = this.buildEnhancedPrompt(query, context, docs, classification);
 
     try {
       const response = await OpenAIService.generateChatResponse({
@@ -815,16 +1142,20 @@ export class EnhancedRAGService {
     }
   }
 
-  private static async storeChunkWithEmbedding(chunk: ProductivityChunk, userId: string): Promise<void> {
+  /**
+   * Store a chunk with its embedding in the database
+   */
+  static async storeChunkWithEmbedding(chunk: ProductivityChunk, userId: string): Promise<void> {
     try {
       // Generate embedding for the chunk content
       const embedding = await OpenAIService.generateEmbedding({
         content: chunk.content,
-        contentType: chunk.metadata.chunkType
+        contentType: chunk.content_type
       });
       
-      // Use specific content types instead of generic 'synthetic_chunk'
-      const contentType = this.mapChunkTypeToContentType(chunk.metadata.chunkType);
+      // Use the chunk's own content_type instead of mapping from chunkType
+      // This preserves the distinction between weekly_summary and daily_summary
+      const contentType = chunk.content_type;
       
       // First, try to find existing document
       const documentId = chunk.metadata.entities?.taskId || chunk.metadata.entities?.projectId || chunk.id;
@@ -873,64 +1204,36 @@ export class EnhancedRAGService {
     }
   }
 
-  /**
-   * Map chunk types to specific content types to avoid generic 'synthetic_chunk'
-   */
-  private static mapChunkTypeToContentType(chunkType: string): string {
-    const mapping: Record<string, string> = {
-      'session': 'session',
-      'task_aggregate': 'task', 
-      'project_summary': 'project',
-      'task_sessions': 'task_sessions_summary',
-      'temporal_pattern': 'daily_summary'
-    };
-    return mapping[chunkType] || chunkType;
-  }
+  private static buildEnhancedPrompt(query: string, context: string, docs: any[], classification: QueryClassification): string {
+    // Use the intelligent prompt generator for better context-aware prompts
+    const contextualPrompt = IntelligentPromptGenerator.generateContextualPrompt(
+      query,
+      context,
+      classification
+    );
 
-  private static buildEnhancedPrompt(query: string, context: string, docs: any[]): string {
-    const chunkTypes = Array.from(new Set(docs.map(d => d.metadata?.chunkType).filter(Boolean)));
-    const hasMultipleLevels = new Set(docs.map(d => d.metadata?.chunkLevel).filter(Boolean)).size > 1;
+    // Enhance with data quality assessment
+    const availableDataTypes = Array.from(new Set(docs.map(d => 
+      d.content_type || d.metadata?.chunkType || 'unknown'
+    ).filter(type => type !== 'unknown')));
+
+    // Assess data quality based on number of sources and content richness
+    let dataQuality: 'high' | 'medium' | 'low' = 'low';
+    if (docs.length >= 15 && availableDataTypes.length >= 3) {
+      dataQuality = 'high';
+    } else if (docs.length >= 8 && availableDataTypes.length >= 2) {
+      dataQuality = 'medium';
+    }
+
+    const enhancedPrompt = IntelligentPromptGenerator.enhancePromptWithDataContext(
+      contextualPrompt,
+      availableDataTypes,
+      dataQuality
+    );
+
+    console.log(`🎯 Generated ${classification.primaryIntent} prompt with ${dataQuality} data quality`);
     
-    // Analyze project diversity
-    const projectIds = Array.from(new Set(docs.map(d => 
-      d.metadata?.entities?.projectId || d.metadata?.projectId || d.project_id
-    ).filter(Boolean)));
-    
-    // Determine if the user is asking for insights/recommendations
-    const isAskingForInsights = /\b(insight|recommend|suggest|advice|improve|optimize|analysis|analyze|pattern|trend)\b/i.test(query);
-
-    // Get current date/time information
-    const now = new Date();
-    const currentDate = now.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-    const currentTime = now.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: true 
-    });
-
-    return `You are an AI productivity assistant with comprehensive access to the user's work data from ${projectIds.length > 0 ? `${projectIds.length} different projects` : 'multiple sources'}. 
-
-CURRENT DATE & TIME: ${currentDate} at ${currentTime}
-IMPORTANT: When answering questions about "today", "now", or current time, use the above current date/time, NOT dates from the productivity data context.
-
-Answer the user's question directly using the provided context. Be specific and use actual data from the context.
-
-Context includes ${chunkTypes.join(', ')} data${hasMultipleLevels ? ' across multiple detail levels' : ''}${projectIds.length > 0 ? ` from ${projectIds.length} projects` : ''}.
-${isAskingForInsights ? 'Provide specific insights with concrete numbers, trends, and recommendations.' : 'Focus on answering the question directly with specific data and facts.'}
-
-You have access to data from ${docs.length} sources. Use ALL relevant information to provide a comprehensive answer.
-
-Available Context:
-${context}
-
-User Question: ${query}
-
-Provide a comprehensive, specific response based on the actual data shown above. ${isAskingForInsights ? 'Include relevant metrics, patterns, and actionable suggestions from across all projects.' : 'Use concrete numbers and facts from the data, mentioning specific projects when relevant.'} Avoid using asterisks (**) for formatting.`;
+    return enhancedPrompt;
   }
 
   private static generateSourceTitle(doc: any): string {
@@ -1071,5 +1374,505 @@ Provide a comprehensive, specific response based on the actual data shown above.
     }
     
     return similarity;
+  }
+
+  /**
+   * Ensures rich context by guaranteeing minimum sources through progressive search relaxation
+   */
+  private static async ensureRichContext(docs: any[], query: string, userId: string, classification: QueryClassification): Promise<any[]> {
+    const MINIMUM_SOURCES = 40; // Ensure at least 40 sources for rich context
+    const OPTIMAL_SOURCES = 80; // Aim for 80 sources when possible
+    
+    console.log(`🎯 Rich context analysis: ${docs.length} initial sources (target: ${MINIMUM_SOURCES}-${OPTIMAL_SOURCES})`);
+    
+    let enrichedSources = [...docs];
+    
+    // Step 1: If we already have sufficient sources, optimize their diversity
+    if (enrichedSources.length >= MINIMUM_SOURCES) {
+      console.log(`✅ Sufficient sources found, applying diversity optimization`);
+      return this.optimizeSourceDiversity(enrichedSources, OPTIMAL_SOURCES);
+    }
+    
+    // Step 2: Progressive search relaxation to find more sources
+    console.log(`📈 Insufficient sources (${enrichedSources.length}/${MINIMUM_SOURCES}), applying progressive enrichment`);
+    
+    try {
+      // Strategy 1: Relax similarity thresholds
+      const relaxedSimilarityDocs = await this.performRelaxedSimilaritySearch(query, userId, classification);
+      enrichedSources = this.mergeUniqueDocuments(enrichedSources, relaxedSimilarityDocs);
+      console.log(`📊 After relaxed similarity: ${enrichedSources.length} sources`);
+      
+      if (enrichedSources.length >= MINIMUM_SOURCES) {
+        return this.optimizeSourceDiversity(enrichedSources, OPTIMAL_SOURCES);
+      }
+      
+      // Strategy 2: Expand content type coverage
+      const expandedContentDocs = await this.performExpandedContentTypeSearch(query, userId, classification);
+      enrichedSources = this.mergeUniqueDocuments(enrichedSources, expandedContentDocs);
+      console.log(`📊 After expanded content types: ${enrichedSources.length} sources`);
+      
+      if (enrichedSources.length >= MINIMUM_SOURCES) {
+        return this.optimizeSourceDiversity(enrichedSources, OPTIMAL_SOURCES);
+      }
+      
+      // Strategy 3: Temporal diversification (get sources from different time periods)
+      const temporalDocs = await this.performTemporalDiversifiedSearch(query, userId);
+      enrichedSources = this.mergeUniqueDocuments(enrichedSources, temporalDocs);
+      console.log(`📊 After temporal diversification: ${enrichedSources.length} sources`);
+      
+      if (enrichedSources.length >= MINIMUM_SOURCES) {
+        return this.optimizeSourceDiversity(enrichedSources, OPTIMAL_SOURCES);
+      }
+      
+      // Strategy 4: Semantic neighbor expansion
+      const neighborDocs = await this.performSemanticNeighborExpansion(enrichedSources, userId);
+      enrichedSources = this.mergeUniqueDocuments(enrichedSources, neighborDocs);
+      console.log(`📊 After semantic neighbor expansion: ${enrichedSources.length} sources`);
+      
+    } catch (error) {
+      console.error('❌ Error during rich context enrichment:', error);
+    }
+    
+    // Final optimization
+    const finalSources = this.optimizeSourceDiversity(enrichedSources, OPTIMAL_SOURCES);
+    console.log(`🎯 Final rich context: ${finalSources.length} sources (${finalSources.length >= MINIMUM_SOURCES ? '✅ sufficient' : '⚠️ limited'})`);
+    
+    return finalSources;
+  }
+
+  /**
+   * Strategy 1: Relaxed similarity search with lower thresholds
+   */
+  private static async performRelaxedSimilaritySearch(
+    query: string, 
+    userId: string, 
+    classification: QueryClassification
+  ): Promise<any[]> {
+    try {
+      const queryEmbedding = await OpenAIService.generateEmbedding({
+        content: query,
+        contentType: 'query'
+      });
+      
+      if (!queryEmbedding || queryEmbedding.length === 0) {
+        return [];
+      }
+
+      console.log(`🔍 Relaxed similarity search (threshold: 0.05)`);
+      
+      const tablesToTry = ['user_productivity_documents', 'embeddings'];
+      let allResults: any[] = [];
+
+      for (const tableName of tablesToTry) {
+        try {
+          const { data: docs, error } = await supabase
+            .from(tableName)
+            .select('*')
+            .eq('user_id', userId)
+            .not('embedding', 'is', null)
+            .limit(200); // Increased limit for broader search
+          
+          if (!error && docs && docs.length > 0) {
+            const docsWithSimilarity = docs.map(doc => {
+              let parsedEmbedding = doc.embedding;
+              
+              if (typeof doc.embedding === 'string') {
+                try {
+                  parsedEmbedding = JSON.parse(doc.embedding);
+                } catch (e) {
+                  return { ...doc, similarity_score: 0 };
+                }
+              }
+              
+              if (!Array.isArray(parsedEmbedding)) {
+                return { ...doc, similarity_score: 0 };
+              }
+              
+              const similarity = this.calculateCosineSimilarity(queryEmbedding, parsedEmbedding);
+              return { ...doc, similarity_score: similarity, embedding: parsedEmbedding };
+            });
+            
+            // Much lower threshold for broader coverage
+            const relevantDocs = docsWithSimilarity
+              .filter(doc => doc.similarity_score > 0.05) // Relaxed from 0.15 to 0.05
+              .sort((a, b) => b.similarity_score - a.similarity_score);
+            
+            allResults = relevantDocs.slice(0, 100); // Take top 100
+            break;
+          }
+        } catch (tableError) {
+          continue;
+        }
+      }
+
+      console.log(`📊 Relaxed similarity found: ${allResults.length} additional sources`);
+      return allResults;
+      
+    } catch (error) {
+      console.warn('⚠️ Relaxed similarity search failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Strategy 2: Expand content type coverage beyond prioritized types
+   */
+  private static async performExpandedContentTypeSearch(
+    query: string, 
+    userId: string, 
+    classification: QueryClassification
+  ): Promise<any[]> {
+    try {
+      console.log(`🔍 Expanded content type search beyond prioritized types`);
+      
+      // Get all available content types not in the original priority list
+      const { data: contentTypes, error: ctError } = await supabase
+        .from('user_productivity_documents')
+        .select('content_type')
+        .eq('user_id', userId)
+        .not('content_type', 'is', null);
+      
+      if (ctError || !contentTypes) {
+        return [];
+      }
+      
+      const allContentTypes = [...new Set(contentTypes.map(ct => ct.content_type))];
+      const expandedTypes = allContentTypes.filter(type => 
+        !classification.suggestedContentTypes.includes(type)
+      );
+      
+      if (expandedTypes.length === 0) {
+        return [];
+      }
+      
+      console.log(`📊 Searching expanded content types: [${expandedTypes.join(', ')}]`);
+      
+      const searchTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 2);
+      
+      let supabaseQuery = supabase
+        .from('user_productivity_documents')
+        .select('*')
+        .eq('user_id', userId)
+        .in('content_type', expandedTypes);
+      
+      // Apply text search if we have search terms
+      if (searchTerms.length > 0) {
+        const searchText = searchTerms.join(' | ');
+        supabaseQuery = supabaseQuery.textSearch('content', searchText);
+      }
+      
+      const { data: docs, error } = await supabaseQuery
+        .order('created_at', { ascending: false })
+        .limit(80);
+      
+      if (error || !docs) {
+        return [];
+      }
+      
+      // Score by keyword relevance
+      const scoredDocs = docs.map(doc => {
+        const content = (doc.content || '').toLowerCase();
+        let keywordScore = 0;
+        
+        searchTerms.forEach(term => {
+          const termCount = (content.match(new RegExp(term, 'g')) || []).length;
+          keywordScore += termCount;
+        });
+        
+        return {
+          ...doc,
+          relevanceScore: keywordScore / Math.max(1, searchTerms.length),
+          source: 'expanded_content_types'
+        };
+      });
+      
+      const sortedDocs = scoredDocs
+        .sort((a, b) => b.relevanceScore - a.relevanceScore)
+        .filter(doc => doc.relevanceScore > 0);
+      
+      console.log(`📊 Expanded content types found: ${sortedDocs.length} additional sources`);
+      return sortedDocs.slice(0, 50);
+      
+    } catch (error) {
+      console.warn('⚠️ Expanded content type search failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Strategy 3: Temporal diversification to get sources from different time periods
+   */
+  private static async performTemporalDiversifiedSearch(query: string, userId: string): Promise<any[]> {
+    try {
+      console.log(`🔍 Temporal diversification search`);
+      
+      const searchTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 2);
+      const timeRanges = [
+        { label: 'last_7_days', days: 7 },
+        { label: 'last_30_days', days: 30 },
+        { label: 'last_90_days', days: 90 },
+        { label: 'older', days: 365 }
+      ];
+      
+      let allTemporalDocs: any[] = [];
+      
+      for (const range of timeRanges) {
+        try {
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - range.days);
+          
+          let supabaseQuery = supabase
+            .from('user_productivity_documents')
+            .select('*')
+            .eq('user_id', userId);
+          
+          if (range.label === 'older') {
+            supabaseQuery = supabaseQuery.lt('created_at', startDate.toISOString());
+          } else {
+            supabaseQuery = supabaseQuery.gte('created_at', startDate.toISOString());
+          }
+          
+          // Apply text search if we have search terms
+          if (searchTerms.length > 0) {
+            const searchText = searchTerms.join(' | ');
+            supabaseQuery = supabaseQuery.textSearch('content', searchText);
+          }
+          
+          const { data: docs, error } = await supabaseQuery
+            .order('created_at', { ascending: false })
+            .limit(20); // 20 from each time range
+          
+          if (!error && docs && docs.length > 0) {
+            const enrichedDocs = docs.map(doc => ({
+              ...doc,
+              temporal_range: range.label,
+              relevanceScore: this.calculateTemporalRelevance(doc, query),
+              source: 'temporal_diversification'
+            }));
+            
+            allTemporalDocs.push(...enrichedDocs);
+            console.log(`📊 ${range.label}: ${docs.length} sources`);
+          }
+        } catch (rangeError) {
+          console.warn(`⚠️ Temporal range ${range.label} search failed:`, rangeError);
+          continue;
+        }
+      }
+      
+      // Sort by relevance and deduplicate
+      const sortedTemporalDocs = allTemporalDocs
+        .sort((a, b) => b.relevanceScore - a.relevanceScore)
+        .filter(doc => doc.relevanceScore > 0);
+      
+      console.log(`📊 Temporal diversification found: ${sortedTemporalDocs.length} additional sources`);
+      return sortedTemporalDocs.slice(0, 60);
+      
+    } catch (error) {
+      console.warn('⚠️ Temporal diversification search failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Strategy 4: Semantic neighbor expansion based on existing good sources
+   */
+  private static async performSemanticNeighborExpansion(existingSources: any[], userId: string): Promise<any[]> {
+    try {
+      console.log(`🔍 Semantic neighbor expansion from ${existingSources.length} seed sources`);
+      
+      if (existingSources.length === 0) {
+        return [];
+      }
+      
+      // Get top performing sources as seeds
+      const seedSources = existingSources
+        .filter(doc => (doc.similarity_score || doc.relevanceScore || 0) > 0.2)
+        .slice(0, 10); // Top 10 sources as seeds
+      
+      if (seedSources.length === 0) {
+        return [];
+      }
+      
+      let allNeighbors: any[] = [];
+      
+      for (const seed of seedSources) {
+        try {
+          // Find documents with similar embeddings to this seed
+          if (!seed.embedding) continue;
+          
+          const { data: neighbors, error } = await supabase
+            .from('user_productivity_documents')
+            .select('*')
+            .eq('user_id', userId)
+            .not('embedding', 'is', null)
+            .neq('id', seed.id) // Exclude the seed itself
+            .limit(30);
+          
+          if (!error && neighbors && neighbors.length > 0) {
+            const neighborsWithSimilarity = neighbors.map(neighbor => {
+              let parsedEmbedding = neighbor.embedding;
+              
+              if (typeof neighbor.embedding === 'string') {
+                try {
+                  parsedEmbedding = JSON.parse(neighbor.embedding);
+                } catch (e) {
+                  return null;
+                }
+              }
+              
+              if (!Array.isArray(parsedEmbedding)) {
+                return null;
+              }
+              
+              const similarity = this.calculateCosineSimilarity(seed.embedding, parsedEmbedding);
+              
+              if (similarity > 0.3) { // Only similar neighbors
+                return {
+                  ...neighbor,
+                  neighbor_similarity: similarity,
+                  seed_id: seed.id,
+                  source: 'semantic_neighbor',
+                  embedding: parsedEmbedding
+                };
+              }
+              
+              return null;
+            }).filter(Boolean);
+            
+            allNeighbors.push(...neighborsWithSimilarity);
+          }
+        } catch (seedError) {
+          console.warn(`⚠️ Neighbor expansion for seed ${seed.id} failed:`, seedError);
+          continue;
+        }
+      }
+      
+      // Sort by neighbor similarity and deduplicate
+      const uniqueNeighbors = this.deduplicateById(allNeighbors)
+        .sort((a, b) => b.neighbor_similarity - a.neighbor_similarity);
+      
+      console.log(`📊 Semantic neighbor expansion found: ${uniqueNeighbors.length} additional sources`);
+      return uniqueNeighbors.slice(0, 40);
+      
+    } catch (error) {
+      console.warn('⚠️ Semantic neighbor expansion failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Optimize source diversity for comprehensive coverage
+   */
+  private static optimizeSourceDiversity(sources: any[], targetCount: number): any[] {
+    console.log(`🎯 Optimizing source diversity: ${sources.length} → ${targetCount} sources`);
+    
+    if (sources.length <= targetCount) {
+      return sources;
+    }
+    
+    // Group sources by different dimensions for diversity
+    const sourcesByContentType = this.groupBy(sources, 'content_type');
+    const sourcesByProject = this.groupBy(sources, 'project_id');
+    const sourcesByTemporalRange = this.groupBy(sources, 'temporal_range');
+    
+    console.log(`📊 Diversity analysis:`, {
+      contentTypes: Object.keys(sourcesByContentType).length,
+      projects: Object.keys(sourcesByProject).length,
+      temporalRanges: Object.keys(sourcesByTemporalRange).length
+    });
+    
+    // Ensure representation from each group
+    const diverseSources: any[] = [];
+    const sourcesPerType = Math.max(1, Math.floor(targetCount * 0.6 / Object.keys(sourcesByContentType).length));
+    const sourcesPerProject = Math.max(1, Math.floor(targetCount * 0.3 / Object.keys(sourcesByProject).length));
+    const sourcesPerTemporal = Math.max(1, Math.floor(targetCount * 0.1 / Object.keys(sourcesByTemporalRange).length));
+    
+    // Add diverse sources by content type (60% weight)
+    Object.entries(sourcesByContentType).forEach(([type, typeSources]) => {
+      const sortedSources = (typeSources as any[]).sort((a, b) => 
+        (b.similarity_score || b.relevanceScore || b.final_score || 0) - 
+        (a.similarity_score || a.relevanceScore || a.final_score || 0)
+      );
+      diverseSources.push(...sortedSources.slice(0, sourcesPerType));
+    });
+    
+    // Add diverse sources by project (30% weight)
+    Object.entries(sourcesByProject).forEach(([project, projectSources]) => {
+      const sortedSources = (projectSources as any[]).sort((a, b) => 
+        (b.similarity_score || b.relevanceScore || b.final_score || 0) - 
+        (a.similarity_score || a.relevanceScore || a.final_score || 0)
+      );
+      
+      // Only add if not already included
+      const newSources = sortedSources.filter(source => 
+        !diverseSources.some(existing => existing.id === source.id)
+      );
+      diverseSources.push(...newSources.slice(0, sourcesPerProject));
+    });
+    
+    // Fill remaining slots with highest scoring sources
+    const remainingSlots = targetCount - diverseSources.length;
+    if (remainingSlots > 0) {
+      const remainingSources = sources
+        .filter(source => !diverseSources.some(existing => existing.id === source.id))
+        .sort((a, b) => 
+          (b.similarity_score || b.relevanceScore || b.final_score || 0) - 
+          (a.similarity_score || a.relevanceScore || a.final_score || 0)
+        );
+      
+      diverseSources.push(...remainingSources.slice(0, remainingSlots));
+    }
+    
+    console.log(`✅ Diversity optimization complete: ${diverseSources.length} sources selected`);
+    return diverseSources.slice(0, targetCount);
+  }
+
+  /**
+   * Utility methods for rich context processing
+   */
+  private static mergeUniqueDocuments(existing: any[], newDocs: any[]): any[] {
+    const existingIds = new Set(existing.map(doc => doc.id));
+    const uniqueNewDocs = newDocs.filter(doc => !existingIds.has(doc.id));
+    return [...existing, ...uniqueNewDocs];
+  }
+  
+  private static deduplicateById(docs: any[]): any[] {
+    const seen = new Set();
+    return docs.filter(doc => {
+      if (seen.has(doc.id)) {
+        return false;
+      }
+      seen.add(doc.id);
+      return true;
+    });
+  }
+  
+  private static groupBy(array: any[], key: string): Record<string, any[]> {
+    return array.reduce((groups, item) => {
+      const groupKey = item[key] || 'unknown';
+      if (!groups[groupKey]) {
+        groups[groupKey] = [];
+      }
+      groups[groupKey].push(item);
+      return groups;
+    }, {});
+  }
+  
+  private static calculateTemporalRelevance(doc: any, query: string): number {
+    const content = (doc.content || '').toLowerCase();
+    const queryTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 2);
+    
+    let relevance = 0;
+    queryTerms.forEach(term => {
+      const matches = (content.match(new RegExp(term, 'g')) || []).length;
+      relevance += matches;
+    });
+    
+    // Boost recent documents slightly
+    const docDate = new Date(doc.created_at || doc.timestamp || Date.now());
+    const daysSinceCreation = (Date.now() - docDate.getTime()) / (1000 * 60 * 60 * 24);
+    const recencyBoost = Math.max(0, 1 - (daysSinceCreation / 365)); // Boost decreases over a year
+    
+    return (relevance / Math.max(1, queryTerms.length)) + (recencyBoost * 0.1);
   }
 } 
