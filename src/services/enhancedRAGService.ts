@@ -3,9 +3,9 @@ import { OpenAIService } from './openai';
 import { HierarchicalChunker, ProductivityChunk } from './hierarchicalChunker';
 import { SmartSourceSelector, SourceSelectionOptions } from './smartSourceSelector';
 import { AdaptiveRAGConfigService } from './adaptiveRAGConfig';
-import { IntelligentQueryClassifier, QueryClassification } from './intelligentQueryClassifier';
+import { IntelligentQueryClassifier, QueryClassification, AIContentTypeSelection } from './intelligentQueryClassifier';
 import { IntelligentPromptGenerator } from './intelligentPromptGenerator';
-import type { RAGResponse } from '../types/chat';
+import type { RAGResponse, ChatSource } from '../types/chat';
 
 export interface SearchFilters {
   timeframe?: 'today' | 'week' | 'month' | 'all';
@@ -28,79 +28,56 @@ export class EnhancedRAGService {
     const startTime = Date.now();
     
     try {
-      console.log(`🔍 Enhanced RAG query with query enhancement: "${query}" for user: ${userId}`);
-      
-      // Step 1: Intelligent query classification
-      const classification = IntelligentQueryClassifier.classifyQuery(query);
-      console.log(`🎯 Query classification:`, {
-        intent: classification.primaryIntent,
-        confidence: classification.confidence,
-        contentTypes: classification.suggestedContentTypes,
-        strategy: classification.mixingStrategy
-      });
-      
-      // Step 2: Apply query enhancement (HyDE/Multi-query) for improved retrieval
-      const { QueryEnhancementService } = await import('./queryEnhancementService');
-      const enhancementResult = await QueryEnhancementService.enhanceAndSearch(
-        query,
-        userId,
-        classification
-      );
-      
-      console.log(`🚀 Query enhancement: ${enhancementResult.enhancedQuery.strategy} strategy applied`);
-      console.log(`📊 Enhancement benefit: ${(enhancementResult.metadata.enhancementBenefit * 100).toFixed(1)}%`);
-      
-      let relevantDocs = enhancementResult.searchResults;
-      
-      // Step 3: Fallback to standard search if enhancement didn't yield results
-      if (relevantDocs.length === 0) {
-        console.log('⚠️ Query enhancement yielded no results, falling back to standard search');
-        relevantDocs = await this.executeIntelligentSearch(query, userId, classification);
+      console.log('🎯 Enhanced RAG Service: Processing query:', query);
+
+      // Step 1: Get AI-powered content type selection
+      let contentTypeSelection: AIContentTypeSelection;
+      try {
+        console.log('🤖 Getting AI-powered content type selection...');
+        contentTypeSelection = await IntelligentQueryClassifier.selectBestContentTypesWithAI(query, userId);
+        console.log('✅ AI Content Type Selection:', contentTypeSelection);
+      } catch (error) {
+        console.warn('⚠️ AI content type selection failed, using rule-based fallback:', error);
+        // Fallback to rule-based classification
+        const classification = IntelligentQueryClassifier.classifyQuery(query);
+        const mappings = IntelligentQueryClassifier.getContentTypeMappings()[classification.primaryIntent];
+        contentTypeSelection = {
+          primaryTypes: mappings.primary.slice(0, 2),
+          secondaryTypes: mappings.secondary.slice(0, 2),
+          reasoning: `Rule-based fallback: ${classification.primaryIntent}`,
+          confidence: Math.round(classification.confidence * 100)
+        };
       }
-      
-      console.log(`📚 Retrieved ${relevantDocs.length} relevant documents`);
-      
-      // Step 4: Ensure minimum source guarantee for rich context
-      const enrichedSources = await this.ensureRichContext(relevantDocs, query, userId, classification);
-      console.log(`🎯 Enriched to ${enrichedSources.length} sources for comprehensive context`);
-      
-      if (enrichedSources.length === 0) {
-        return this.generateFallbackResponse(query, startTime);
-      }
-      
-      // Step 5: Apply intelligent source selection with diverse mixing
-      const optimalSources = IntelligentQueryClassifier.getOptimalSourceMix(
-        classification,
-        enrichedSources,
-        60 // Rich context for enhanced queries
+
+      // Step 2: Search with AI-selected content types
+      const searchResults = await this.performIntelligentSearch(
+        query, 
+        userId, 
+        contentTypeSelection.primaryTypes,
+        contentTypeSelection.secondaryTypes
       );
-      
-      console.log(`🎯 Intelligent selection: ${optimalSources.length}/${enrichedSources.length} sources using ${classification.mixingStrategy} strategy`);
-      
-      // Step 6: Generate enhanced response with query enhancement metadata
-      const response = await this.generateResponseFromDocs(query, optimalSources, startTime, classification, conversationHistory);
-      
-      // Add enhancement metadata to response
-      response.metadata = {
-        ...response.metadata,
-        queryEnhancement: {
-          strategy: enhancementResult.enhancedQuery.strategy,
-          candidateQueries: Array.isArray(enhancementResult.metadata.candidateQueries) 
-            ? enhancementResult.metadata.candidateQueries 
-            : [query],
-          enhancementBenefit: enhancementResult.metadata.enhancementBenefit,
-          enhancementTime: enhancementResult.metadata.totalProcessingTime
-        }
-      };
-      
+
+      // Step 3: Generate response with enhanced metadata
+      const response = await this.generateResponseFromDocs(
+        query, 
+        searchResults, 
+        startTime, 
+        contentTypeSelection,
+        conversationHistory
+      );
+
+      // Add AI content type selection metadata
+      (response.metadata as any).contentTypeSelection = contentTypeSelection;
+      response.metadata.searchStrategy = `ai_content_selection_${contentTypeSelection.confidence > 80 ? 'high' : 'medium'}_confidence`;
+
       return response;
-      
+
     } catch (error) {
-      console.error('❌ Enhanced RAG query error:', error);
-      return this.generateFallbackResponse(query, startTime);
+      console.error('❌ Enhanced RAG Service failed:', error);
+      return this.generateFallbackResponse(query, startTime, []);
     }
   }
-  
+
   static async queryWithHybridSearch(
     query: string,
     userId: string,
@@ -900,8 +877,8 @@ export class EnhancedRAGService {
         minKeywordScore: 0.0,
         enableEnhancedBM25: true,
         contentTypeBoosts: {
-          'task': 1.2,
-          'project': 1.1,
+          'task_aggregate': 1.2,
+          'project_summary': 1.1,
           'session': 1.0,
           'daily_summary': 1.0
         },
@@ -926,7 +903,7 @@ export class EnhancedRAGService {
       if (filters.productivityRange) {
         hybridOptions.contentTypeBoosts = {
           ...hybridOptions.contentTypeBoosts,
-          'task': 1.3, // Boost task results when filtering by productivity
+          'task_aggregate': 1.3, // Boost task results when filtering by productivity
           'session': 1.2
         };
       }
@@ -1157,7 +1134,7 @@ export class EnhancedRAGService {
     query: string,
     docs: any[],
     startTime: number,
-    classification: QueryClassification,
+    classification: QueryClassification | AIContentTypeSelection,
     conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
   ): Promise<RAGResponse> {
     
@@ -2048,6 +2025,86 @@ export class EnhancedRAGService {
       return `Moderate relevance (${(similarity * 100).toFixed(0)}%) - Contains related information`;
     } else {
       return `Basic relevance (${(similarity * 100).toFixed(0)}%) - Contextual match`;
+    }
+  }
+
+  /**
+   * Perform intelligent search using AI-selected content types
+   */
+  private static async performIntelligentSearch(
+    query: string,
+    userId: string,
+    primaryTypes: string[],
+    secondaryTypes: string[]
+  ): Promise<any[]> {
+    const { supabase } = await import('./supabase');
+    let allResults: any[] = [];
+
+    try {
+      // Search primary content types first (higher priority)
+      for (const contentType of primaryTypes) {
+        console.log(`🔍 Searching primary content type: ${contentType}`);
+        
+        const { data, error } = await supabase.rpc('search_productivity_chunks', {
+          query_text: query,
+          user_id_param: userId,
+          content_type_filter: contentType,
+          similarity_threshold: 0.6,
+          max_results: 8
+        });
+
+        if (!error && data) {
+          // Mark as primary results
+          const primaryResults = data.map((doc: any) => ({
+            ...doc,
+            isPrimary: true,
+            contentTypeRank: 'primary'
+          }));
+          allResults.push(...primaryResults);
+        }
+      }
+
+      // Search secondary content types if we don't have enough results
+      if (allResults.length < 6) {
+        for (const contentType of secondaryTypes) {
+          console.log(`🔍 Searching secondary content type: ${contentType}`);
+          
+          const { data, error } = await supabase.rpc('search_productivity_chunks', {
+            query_text: query,
+            user_id_param: userId,
+            content_type_filter: contentType,
+            similarity_threshold: 0.5,
+            max_results: 4
+          });
+
+          if (!error && data) {
+            // Mark as secondary results
+            const secondaryResults = data.map((doc: any) => ({
+              ...doc,
+              isPrimary: false,
+              contentTypeRank: 'secondary'
+            }));
+            allResults.push(...secondaryResults);
+          }
+        }
+      }
+
+      // Sort by relevance and type priority
+      allResults.sort((a, b) => {
+        // Primary types get priority
+        if (a.isPrimary && !b.isPrimary) return -1;
+        if (!a.isPrimary && b.isPrimary) return 1;
+        
+        // Then by similarity score
+        return (b.similarity || 0) - (a.similarity || 0);
+      });
+
+      console.log(`✅ Found ${allResults.length} results using AI content type selection`);
+      return allResults.slice(0, 12); // Limit to top 12 results
+
+    } catch (error) {
+      console.error('❌ Intelligent search failed:', error);
+      return [];
     }
   }
 } 
