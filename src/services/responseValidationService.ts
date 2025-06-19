@@ -115,7 +115,7 @@ export class ResponseValidationService {
     context: string,
     sources: any[]
   ): string {
-    return `Evaluate this AI response for quality and accuracy:
+    return `Evaluate this AI response for quality and directness:
 
 USER QUERY: "${query}"
 
@@ -123,17 +123,18 @@ AI RESPONSE TO EVALUATE:
 ${response}
 
 VALIDATION CRITERIA:
-1. CONTENT: Does it provide the essential information needed?
-2. RELEVANCE: Is the information directly related to the question?
-3. COMPLETENESS: Are key details included (names, descriptions, etc.)?
-4. FOCUS: Is unnecessary information omitted?
+1. DIRECTNESS: Does it answer exactly what was asked without extra information?
+2. BREVITY: Is it concise and to the point?
+3. RELEVANCE: Is all information directly related to the question?
+4. COMPLETENESS: Are essential details included (but not more)?
 
-Provide assessment in this format:
+Rate each criterion 0.0-1.0 and provide overall score.
+
 SCORE: [0.0-1.0]
 ISSUES:
 - [issue type]: [brief description]
 CORRECTIONS NEEDED:
-- [specific correction]
+- [specific correction to make it more direct]
 
 VALIDATION: [PASS/FAIL]`;
   }
@@ -153,23 +154,27 @@ VALIDATION: [PASS/FAIL]`;
     
     const suggestions = validationResult.corrections.join('\n');
     
-    return `Improve this AI response based on the validation feedback:
+    return `Make this response more direct and focused:
 
 ORIGINAL QUERY: "${query}"
 
 ORIGINAL RESPONSE:
 ${response}
 
-ISSUES IDENTIFIED:
+ISSUES TO FIX:
 ${issueDescriptions}
 
-SPECIFIC CORRECTIONS NEEDED:
+IMPROVEMENTS NEEDED:
 ${suggestions}
 
-AVAILABLE CONTEXT:
-${context.substring(0, 500)}...
+CONTEXT:
+${context.substring(0, 300)}...
 
-Please provide an improved response that addresses all identified issues while maintaining the helpful, informative tone. Focus on accuracy, relevance, and completeness.
+Provide a more direct, focused response that:
+1. Answers exactly what was asked
+2. Removes unnecessary information
+3. Keeps only essential details
+4. Is brief and scannable
 
 IMPROVED RESPONSE:`;
   }
