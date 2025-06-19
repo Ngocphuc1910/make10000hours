@@ -246,7 +246,7 @@ const MessageBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
               : 'bg-white border border-gray-200 text-gray-900'
           }`}
         >
-          <p className="text-sm whitespace-pre-wrap text-gray-900">{message.content}</p>
+          <p className={`text-sm whitespace-pre-wrap ${isUser ? 'text-white' : 'text-gray-900'}`}>{message.content}</p>
           
           {/* Message metadata for assistant messages */}
           {!isUser && message.metadata && (
