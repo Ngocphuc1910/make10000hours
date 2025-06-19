@@ -1,23 +1,20 @@
 import { OpenAIService } from './openai';
 import { QueryClassification } from './intelligentQueryClassifier';
 import { ChainOfThoughtService, ChainOfThoughtResult } from './chainOfThoughtService';
-import { PersonaService, PersonaAssignment } from './personaService';
 import { ResponseValidationService, ValidationResult, SelfCorrectionResult } from './responseValidationService';
 
 export interface AdvancedPromptResult {
   response: string;
-  persona: PersonaAssignment;
   reasoning: ChainOfThoughtResult | null;
   validation: ValidationResult | null;
   correction: SelfCorrectionResult | null;
   confidence: number;
   processing_time: number;
-  technique_used: 'standard' | 'chain_of_thought' | 'persona_enhanced' | 'validated_response';
+  technique_used: 'standard' | 'chain_of_thought' | 'validated_response';
 }
 
 export interface PromptEnhancementOptions {
   enable_chain_of_thought: boolean;
-  enable_persona_selection: boolean;
   enable_validation: boolean;
   enable_self_correction: boolean;
   complexity_threshold: number;
@@ -28,7 +25,6 @@ export class AdvancedPromptService {
   
   private static readonly DEFAULT_OPTIONS: PromptEnhancementOptions = {
     enable_chain_of_thought: true,
-    enable_persona_selection: true,
     enable_validation: true,
     enable_self_correction: true,
     complexity_threshold: 0.6,
@@ -59,14 +55,7 @@ export class AdvancedPromptService {
       const processingStrategy = this.determineProcessingStrategy(query, classification, config);
       console.log('📋 Processing strategy:', processingStrategy);
       
-      // Step 2: Apply persona selection if enabled
-      let personaAssignment: PersonaAssignment | null = null;
-      if (config.enable_persona_selection) {
-        personaAssignment = PersonaService.selectPersona(query, classification);
-        console.log('🎭 Persona selected:', personaAssignment.selectedPersona.name);
-      }
-      
-      // Step 3: Generate response using selected strategy
+      // Step 2: Generate response using selected strategy
       let response: string;
       let reasoning: ChainOfThoughtResult | null = null;
       
@@ -75,11 +64,11 @@ export class AdvancedPromptService {
         response = reasoning.final_conclusion;
         console.log('🧠 Chain-of-thought applied, confidence:', reasoning.overall_confidence);
       } else {
-        response = await this.generateEnhancedResponse(query, context, personaAssignment, conversationHistory);
+        response = await this.generateEnhancedResponse(query, context, conversationHistory);
         console.log('✨ Enhanced response generated');
       }
       
-      // Step 4: Validate response quality if enabled
+      // Step 3: Validate response quality if enabled
       let validation: ValidationResult | null = null;
       let correction: SelfCorrectionResult | null = null;
       
@@ -87,7 +76,7 @@ export class AdvancedPromptService {
         validation = await ResponseValidationService.validateResponse(query, response, context, []);
         console.log('🔍 Response validated, score:', validation.overall_score);
         
-        // Step 5: Self-correct if quality is below threshold
+        // Step 4: Self-correct if quality is below threshold
         if (config.enable_self_correction && validation.overall_score < config.validation_threshold) {
           correction = await ResponseValidationService.performSelfCorrection(query, response, context, validation);
           response = correction.corrected_response;
@@ -95,17 +84,15 @@ export class AdvancedPromptService {
         }
       }
       
-      // Step 6: Calculate final confidence
+      // Step 5: Calculate final confidence
       const finalConfidence = this.calculateFinalConfidence(
         classification.confidence,
         reasoning?.overall_confidence,
-        validation?.confidence,
-        personaAssignment?.confidence
+        validation?.confidence
       );
       
       const result: AdvancedPromptResult = {
         response,
-        persona: personaAssignment || this.getDefaultPersona(),
         reasoning,
         validation,
         correction,
@@ -135,18 +122,13 @@ export class AdvancedPromptService {
     query: string,
     classification: QueryClassification,
     options: PromptEnhancementOptions
-  ): 'standard' | 'chain_of_thought' | 'persona_enhanced' | 'validated_response' {
+  ): 'standard' | 'chain_of_thought' | 'validated_response' {
     
     const queryComplexity = this.assessQueryComplexity(query, classification);
     
     // High complexity queries benefit from chain-of-thought
     if (queryComplexity > options.complexity_threshold && options.enable_chain_of_thought) {
       return 'chain_of_thought';
-    }
-    
-    // Medium complexity with persona selection
-    if (queryComplexity > 0.4 && options.enable_persona_selection) {
-      return 'persona_enhanced';
     }
     
     // Validation for all responses if enabled
@@ -189,27 +171,37 @@ export class AdvancedPromptService {
   }
   
   /**
-   * Generate enhanced response with persona context
+   * Generate enhanced response with standard system prompt
    */
   private static async generateEnhancedResponse(
     query: string,
     context: string,
-    personaAssignment: PersonaAssignment | null,
     conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>
   ): Promise<string> {
     
-    let systemPrompt = this.getDefaultSystemPrompt(context);
-    
-    if (personaAssignment) {
-      systemPrompt = PersonaService.generateEnhancedSystemPrompt(personaAssignment, query, context);
-    }
-    
-    // Add few-shot examples based on query type
+    // Use standard system prompt without persona specialization
+    const systemPrompt = this.getDefaultSystemPrompt(context);
     const enhancedPrompt = this.addFewShotExamples(query, systemPrompt);
     
+    // Add current date/time context
+    const now = new Date();
+    const currentDate = now.toLocaleDateString('en-US', { 
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+    });
+    const currentTime = now.toLocaleTimeString('en-US', { 
+      hour: '2-digit', minute: '2-digit', hour12: true 
+    });
+    
+    const fullSystemPrompt = `${enhancedPrompt}
+
+CURRENT DATE & TIME: ${currentDate} at ${currentTime}
+IMPORTANT: When answering questions about "today", "now", or current time, use the above current date/time, NOT dates from the productivity data context.
+
+Context: ${context}`;
+    
     return await OpenAIService.generateChatResponse({
-      query: enhancedPrompt + `\n\nUser Query: ${query}`,
-      context: context,
+      query,
+      context: fullSystemPrompt,
       conversationHistory
     });
   }
@@ -250,21 +242,18 @@ Example Response: "The 'Database Optimization' task is taking 180% longer than e
   private static calculateFinalConfidence(
     classificationConfidence: number,
     reasoningConfidence: number = 0.7,
-    validationConfidence: number = 0.7,
-    personaConfidence: number = 0.7
+    validationConfidence: number = 0.7
   ): number {
     const weights = {
-      classification: 0.3,
-      reasoning: 0.25,
-      validation: 0.25,
-      persona: 0.2
+      classification: 0.4,
+      reasoning: 0.3,
+      validation: 0.3
     };
     
     return (
       classificationConfidence * weights.classification +
       reasoningConfidence * weights.reasoning +
-      validationConfidence * weights.validation +
-      personaConfidence * weights.persona
+      validationConfidence * weights.validation
     );
   }
   
@@ -296,25 +285,6 @@ Available Context: ${context.substring(0, 300)}...`;
   }
   
   /**
-   * Get default persona for fallback
-   */
-  private static getDefaultPersona(): PersonaAssignment {
-    return {
-      selectedPersona: {
-        name: 'Productivity Assistant',
-        expertise: 'General productivity support',
-        systemPrompt: 'You are a helpful productivity assistant.',
-        responseStyle: 'Friendly and informative',
-        specializations: ['General productivity'],
-        complexityLevel: 'basic'
-      },
-      reasoning: 'Default persona used',
-      confidence: 0.7,
-      adaptations: []
-    };
-  }
-  
-  /**
    * Generate fallback result when processing fails
    */
   private static async generateFallbackResult(
@@ -333,7 +303,6 @@ Available Context: ${context.substring(0, 300)}...`;
       
       return {
         response,
-        persona: this.getDefaultPersona(),
         reasoning: null,
         validation: null,
         correction: null,
@@ -344,7 +313,6 @@ Available Context: ${context.substring(0, 300)}...`;
     } catch (error) {
       return {
         response: 'I apologize, but I encountered an error processing your request. Please try again.',
-        persona: this.getDefaultPersona(),
         reasoning: null,
         validation: null,
         correction: null,
