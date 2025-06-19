@@ -34,25 +34,25 @@ export class HierarchicalPriorityService {
     {
       name: 'monthly_summary',
       contentTypes: ['monthly_summary'],
-      chunkLevels: [4], // Temporal chunks that are monthly
+      chunkLevels: [1], // Monthly chunks are now level 1 (highest priority)
       priority: 1
     },
     {
       name: 'weekly_summary', 
       contentTypes: ['weekly_summary'],
-      chunkLevels: [4], // Temporal chunks that are weekly
+      chunkLevels: [2], // Weekly chunks are now level 2
       priority: 2
     },
     {
       name: 'relevant_sources',
       contentTypes: ['task_aggregate', 'project_summary', 'task_sessions', 'session'],
-      chunkLevels: [1, 2, 3], // All other chunk types - specific tasks, projects, sessions
+      chunkLevels: [4, 5, 6], // Project (4), Task (5), Session (6) chunks
       priority: 3
     },
     {
       name: 'daily_summary',
       contentTypes: ['daily_summary'],
-      chunkLevels: [4], // Temporal chunks that are daily - only if needed
+      chunkLevels: [3], // Daily chunks are now level 3
       priority: 4
     }
   ];

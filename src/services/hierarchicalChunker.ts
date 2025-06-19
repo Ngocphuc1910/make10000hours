@@ -37,10 +37,12 @@ export class HierarchicalChunker {
   
   /**
    * Create multi-level productivity chunks with updated priority structure:
-   * Level 1: Task aggregate chunks (highest priority)
-   * Level 2: Project summary chunks  
-   * Level 3: Summary of all sessions for a specific task
-   * Level 4: Temporal pattern chunks (daily/weekly summaries)
+   * Level 1: Monthly Summary chunks (highest priority)
+   * Level 2: Weekly Summary chunks
+   * Level 3: Daily Summary chunks
+   * Level 4: Project summary chunks  
+   * Level 5: Task aggregate chunks
+   * Level 6: Session summary chunks (lowest priority)
    */
   static async createMultiLevelChunks(userId: string): Promise<ProductivityChunk[]> {
     console.log(`🔄 Creating multi-level chunks for user: ${userId}`);
@@ -56,23 +58,31 @@ export class HierarchicalChunker {
 
     const allChunks: ProductivityChunk[] = [];
 
-    // Level 1: Task aggregate chunks (highest priority - most important for productivity insights)
-    const taskAggregateChunks = await this.createTaskAggregateChunks(tasks, sessions, projects, userId);
-    allChunks.push(...taskAggregateChunks);
+    // Priority 1: Monthly Summary chunks (highest priority for embedding)
+    const monthlyChunks = await this.createMonthlyTemporalChunks(sessions, tasks, projects, userId);
+    allChunks.push(...monthlyChunks);
 
-    // Level 2: Project summary chunks (project-level insights)
+    // Priority 2: Weekly Summary chunks
+    const weeklyChunks = await this.createWeeklyTemporalChunks(sessions, tasks, projects, userId);
+    allChunks.push(...weeklyChunks);
+
+    // Priority 3: Daily Summary chunks
+    const dailyChunks = await this.createDailyTemporalChunks(sessions, tasks, projects, userId);
+    allChunks.push(...dailyChunks);
+
+    // Priority 4: Project summary chunks
     const projectSummaryChunks = await this.createProjectSummaryChunks(projects, tasks, sessions, userId);
     allChunks.push(...projectSummaryChunks);
 
-    // Level 3: Session summary chunks (detailed session-level information)
+    // Priority 5: Task aggregate chunks
+    const taskAggregateChunks = await this.createTaskAggregateChunks(tasks, sessions, projects, userId);
+    allChunks.push(...taskAggregateChunks);
+
+    // Priority 6: Session summary chunks (lowest priority for embedding)
     const sessionChunks = await this.createSessionChunks(sessions, tasks, projects, userId);
     allChunks.push(...sessionChunks);
 
-    // Level 4: Temporal pattern chunks (time-based patterns and trends)
-    const temporalChunks = await this.createTemporalChunks(sessions, tasks, projects, userId);
-    allChunks.push(...temporalChunks);
-
-    console.log(`✅ Created ${allChunks.length} total chunks across 4 levels`);
+    console.log(`✅ Created ${allChunks.length} total chunks with priority: Monthly → Weekly → Daily → Project → Task → Session`);
     return allChunks;
   }
 
@@ -184,7 +194,7 @@ export class HierarchicalChunker {
         originalContent: JSON.stringify({ task, sessions: taskSessions }),
         metadata: {
           chunkType: 'task_sessions',
-          chunkLevel: 3,
+          chunkLevel: 6,
           sourceIds: [task.id, ...taskSessions.map(s => s.id)],
           created: new Date().toISOString(),
           entities: {
@@ -253,7 +263,7 @@ export class HierarchicalChunker {
         originalContent: JSON.stringify({ task, sessions: taskSessions }),
         metadata: {
           chunkType: 'task_aggregate',
-          chunkLevel: 1,
+          chunkLevel: 5,
           sourceIds: [task.id, ...taskSessions.map(s => s.id)],
           created: new Date().toISOString(),
           entities: {
@@ -300,7 +310,7 @@ export class HierarchicalChunker {
         originalContent: JSON.stringify({ project, tasks: projectTasks, sessions: projectSessions }),
         metadata: {
           chunkType: 'project_summary',
-          chunkLevel: 2,
+          chunkLevel: 4,
           sourceIds: [project.id, ...projectTasks.map(t => t.id)],
           created: new Date().toISOString(),
           entities: {
@@ -323,7 +333,7 @@ export class HierarchicalChunker {
     return chunks;
   }
 
-  private static async createTemporalChunks(
+  private static async createMonthlyTemporalChunks(
     sessions: SessionData[],
     tasks: TaskData[],
     projects: ProjectData[],
@@ -331,102 +341,7 @@ export class HierarchicalChunker {
   ): Promise<ProductivityChunk[]> {
     const chunks: ProductivityChunk[] = [];
     
-    // Group sessions by date for daily summaries
-    const sessionsByDate = this.groupSessionsByDate(sessions);
-    
-    // Create daily temporal chunks
-    Object.entries(sessionsByDate).forEach(([date, dateSessions]) => {
-      if (dateSessions.length === 0) return;
-      
-      const syntheticText = SyntheticTextGenerator.generateTemporalSummaryText('daily', dateSessions, date, tasks, projects);
-      
-      chunks.push({
-        id: `daily_${date}`,
-        content: syntheticText,
-        content_type: 'daily_summary',
-        originalContent: JSON.stringify({ date, sessions: dateSessions }),
-        metadata: {
-          chunkType: 'temporal_pattern',
-          chunkLevel: 4,
-          sourceIds: dateSessions.map(s => s.id),
-          timeframe: `daily_${date}`,
-          created: new Date().toISOString(),
-          entities: {
-            sessionIds: dateSessions.map(s => s.id),
-            userId
-          },
-          analytics: {
-            duration: dateSessions.reduce((sum, s) => sum + (s.duration || 0), 0),
-            sessionCount: dateSessions.length,
-            productivity: this.calculateTemporalProductivity(dateSessions)
-          }
-        },
-        chunkIndex: 0,
-        tokenCount: OpenAIService.estimateTokens(syntheticText)
-      });
-    });
-
-    // Create weekly summaries
-    const weeklyGroups = this.groupSessionsByWeek(sessions);
-    Object.entries(weeklyGroups).forEach(([week, weekSessions]) => {
-      if (weekSessions.length === 0) return;
-      
-      // Convert week key to actual start date for proper week processing
-      const weekStartDate = this.parseWeekKey(week);
-      
-      // Get tasks and projects for this week
-      const weekTasks = tasks.filter(task => {
-        const taskSessions = weekSessions.filter(s => s.taskId === task.id);
-        return taskSessions.length > 0;
-      });
-
-      const weekProjects = projects.filter(project => 
-        weekTasks.some(task => task.projectId === project.id)
-      );
-
-      console.log(`📅 Processing weekly chunk for week ${week}:`, {
-        weekStartDate: weekStartDate.toISOString(),
-        sessionsCount: weekSessions.length,
-        tasksCount: weekTasks.length,
-        projectsCount: weekProjects.length
-      });
-
-      const syntheticText = SyntheticTextGenerator.generateTemporalSummaryText('weekly', weekSessions, weekStartDate.toISOString(), weekTasks, weekProjects);
-      
-      chunks.push({
-        id: `weekly_${week}`,
-        content: syntheticText,
-        content_type: 'weekly_summary',
-        originalContent: JSON.stringify({ 
-          week, 
-          sessions: weekSessions,
-          tasks: weekTasks,
-          projects: weekProjects
-        }),
-        metadata: {
-          chunkType: 'temporal_pattern',
-          chunkLevel: 4,
-          sourceIds: [...weekSessions.map(s => s.id), ...weekTasks.map(t => t.id)],
-          timeframe: `weekly_${week}`,
-          created: new Date().toISOString(),
-          entities: {
-            sessionIds: weekSessions.map(s => s.id),
-            userId
-          },
-          analytics: {
-            duration: weekSessions.reduce((sum, s) => sum + (s.duration || 0), 0),
-            sessionCount: weekSessions.length,
-            completionRate: weekTasks.length > 0 ? 
-              Math.round((weekTasks.filter(t => t.completed).length / weekTasks.length) * 100) : 0,
-            productivity: this.calculateTemporalProductivity(weekSessions)
-          }
-        },
-        chunkIndex: 0,
-        tokenCount: OpenAIService.estimateTokens(syntheticText)
-      });
-    });
-
-    // Create monthly summaries
+    // Create monthly summaries only
     const monthlyGroups = this.groupSessionsByMonth(sessions);
     Object.entries(monthlyGroups).forEach(([month, monthSessions]) => {
       if (monthSessions.length === 0) return;
@@ -465,7 +380,7 @@ export class HierarchicalChunker {
         }),
         metadata: {
           chunkType: 'temporal_pattern',
-          chunkLevel: 4,
+          chunkLevel: 1,
           sourceIds: [...monthSessions.map(s => s.id), ...monthTasks.map(t => t.id)],
           timeframe: `monthly_${month}`,
           created: new Date().toISOString(),
@@ -481,6 +396,121 @@ export class HierarchicalChunker {
             productivity: this.calculateTemporalProductivity(monthSessions),
             tasksCreated: monthTasks.length,
             projectsWorkedOn: monthProjects.length
+          }
+        },
+        chunkIndex: 0,
+        tokenCount: OpenAIService.estimateTokens(syntheticText)
+      });
+    });
+    
+    return chunks;
+  }
+
+  private static async createWeeklyTemporalChunks(
+    sessions: SessionData[],
+    tasks: TaskData[],
+    projects: ProjectData[],
+    userId: string
+  ): Promise<ProductivityChunk[]> {
+    const chunks: ProductivityChunk[] = [];
+    
+    // Create weekly summaries only
+    const weeklyGroups = this.groupSessionsByWeek(sessions);
+    Object.entries(weeklyGroups).forEach(([week, weekSessions]) => {
+      if (weekSessions.length === 0) return;
+      
+      // Convert week key to actual start date for proper week processing
+      const weekStartDate = this.parseWeekKey(week);
+      
+      // Get tasks and projects for this week
+      const weekTasks = tasks.filter(task => {
+        const taskSessions = weekSessions.filter(s => s.taskId === task.id);
+        return taskSessions.length > 0;
+      });
+
+      const weekProjects = projects.filter(project => 
+        weekTasks.some(task => task.projectId === project.id)
+      );
+
+      console.log(`📅 Processing weekly chunk for week ${week}:`, {
+        weekStartDate: weekStartDate.toISOString(),
+        sessionsCount: weekSessions.length,
+        tasksCount: weekTasks.length,
+        projectsCount: weekProjects.length
+      });
+
+      const syntheticText = SyntheticTextGenerator.generateTemporalSummaryText('weekly', weekSessions, weekStartDate.toISOString(), weekTasks, weekProjects);
+      
+      chunks.push({
+        id: `weekly_${week}`,
+        content: syntheticText,
+        content_type: 'weekly_summary',
+        originalContent: JSON.stringify({ 
+          week, 
+          sessions: weekSessions,
+          tasks: weekTasks,
+          projects: weekProjects
+        }),
+        metadata: {
+          chunkType: 'temporal_pattern',
+          chunkLevel: 2,
+          sourceIds: [...weekSessions.map(s => s.id), ...weekTasks.map(t => t.id)],
+          timeframe: `weekly_${week}`,
+          created: new Date().toISOString(),
+          entities: {
+            sessionIds: weekSessions.map(s => s.id),
+            userId
+          },
+          analytics: {
+            duration: weekSessions.reduce((sum, s) => sum + (s.duration || 0), 0),
+            sessionCount: weekSessions.length,
+            completionRate: weekTasks.length > 0 ? 
+              Math.round((weekTasks.filter(t => t.completed).length / weekTasks.length) * 100) : 0,
+            productivity: this.calculateTemporalProductivity(weekSessions)
+          }
+        },
+        chunkIndex: 0,
+        tokenCount: OpenAIService.estimateTokens(syntheticText)
+      });
+    });
+    
+    return chunks;
+  }
+
+  private static async createDailyTemporalChunks(
+    sessions: SessionData[],
+    tasks: TaskData[],
+    projects: ProjectData[],
+    userId: string
+  ): Promise<ProductivityChunk[]> {
+    const chunks: ProductivityChunk[] = [];
+    
+    // Create daily summaries only
+    const sessionsByDate = this.groupSessionsByDate(sessions);
+    Object.entries(sessionsByDate).forEach(([date, dateSessions]) => {
+      if (dateSessions.length === 0) return;
+      
+      const syntheticText = SyntheticTextGenerator.generateTemporalSummaryText('daily', dateSessions, date, tasks, projects);
+      
+      chunks.push({
+        id: `daily_${date}`,
+        content: syntheticText,
+        content_type: 'daily_summary',
+        originalContent: JSON.stringify({ date, sessions: dateSessions }),
+        metadata: {
+          chunkType: 'temporal_pattern',
+          chunkLevel: 3,
+          sourceIds: dateSessions.map(s => s.id),
+          timeframe: `daily_${date}`,
+          created: new Date().toISOString(),
+          entities: {
+            sessionIds: dateSessions.map(s => s.id),
+            userId
+          },
+          analytics: {
+            duration: dateSessions.reduce((sum, s) => sum + (s.duration || 0), 0),
+            sessionCount: dateSessions.length,
+            productivity: this.calculateTemporalProductivity(dateSessions)
           }
         },
         chunkIndex: 0,
