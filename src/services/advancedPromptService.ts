@@ -207,6 +207,21 @@ Context: ${context}`;
   }
   
   /**
+   * Get default system prompt
+   */
+  private static getDefaultSystemPrompt(context: string): string {
+    return `You are a helpful productivity AI assistant. Provide direct, focused answers based on user data.
+
+RESPONSE STYLE:
+- Answer exactly what was asked
+- Keep responses brief and scannable  
+- Include only essential information
+- Focus on actionable insights
+
+Available Context: ${context}`;
+  }
+  
+  /**
    * Add few-shot examples to improve response quality
    */
   private static addFewShotExamples(query: string, systemPrompt: string): string {
@@ -215,22 +230,16 @@ Context: ${context}`;
     
     if (queryLower.includes('productiv') || queryLower.includes('pattern')) {
       examples = `
-Example Query: "How was my productivity this week?"
-Example Response: "Based on your work data, you completed 12 tasks this week with a total of 18.5 hours of focused work. Your most productive days were Tuesday (4.2 hours) and Thursday (3.8 hours). I notice you tend to be most effective in the morning hours between 9-11 AM."
-
-Example Query: "What patterns do you see in my work?"
-Example Response: "I've identified several productivity patterns: You consistently perform better on tasks that have clear deadlines, averaging 25% faster completion. Your focus sessions are most effective when they're 25-30 minutes long, and you tend to maintain higher quality work on Tuesdays and Wednesdays."`;
+Example: "How productive was I this week?" → "12 tasks completed, 18.5 hours focused work. Peak days: Tuesday, Thursday."
+Example: "What patterns do you see?" → "You're 25% more effective with deadlines. Best focus: 25-30 minute sessions."`;
     } else if (queryLower.includes('task') || queryLower.includes('priority')) {
       examples = `
-Example Query: "What should I work on next?"
-Example Response: "I recommend prioritizing 'API Integration' task from your Mobile App project. It's 2 days overdue and blocks 3 other tasks. You've allocated 4 hours for it, and based on your patterns, you're most effective with coding tasks in the morning."
-
-Example Query: "Which tasks are taking too long?"
-Example Response: "The 'Database Optimization' task is taking 180% longer than estimated (6 hours vs 3.3 hours estimated). Your 'UI Redesign' task is also running 45% over estimate. Both might benefit from breaking into smaller subtasks."`;
+Example: "What should I work on next?" → "API Integration task - 2 days overdue, blocks 3 other tasks."
+Example: "Which tasks are slow?" → "Database Optimization: 180% over estimate. Consider breaking into subtasks."`;
     }
     
     if (examples) {
-      systemPrompt += `\n\nHere are examples of high-quality responses:\n${examples}\n\nProvide a similar level of detail and specificity in your response.`;
+      systemPrompt += `\n\nExamples of good responses:${examples}\n\nUse this style - direct and specific.`;
     }
     
     return systemPrompt;
@@ -255,33 +264,6 @@ Example Response: "The 'Database Optimization' task is taking 180% longer than e
       reasoningConfidence * weights.reasoning +
       validationConfidence * weights.validation
     );
-  }
-  
-  /**
-   * Get default system prompt
-   */
-  private static getDefaultSystemPrompt(context: string): string {
-    const now = new Date();
-    const currentDate = now.toLocaleDateString('en-US', { 
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
-    });
-    const currentTime = now.toLocaleTimeString('en-US', { 
-      hour: '2-digit', minute: '2-digit', hour12: true 
-    });
-    
-    return `You are an intelligent productivity assistant with expertise in analyzing work patterns and providing actionable insights.
-
-CURRENT DATE & TIME: ${currentDate} at ${currentTime}
-IMPORTANT: When answering questions about "today", "now", or current time, use the above current date/time.
-
-Your approach:
-1. Analyze the available productivity data carefully
-2. Provide specific, actionable insights
-3. Reference actual data points when possible
-4. Offer practical recommendations
-5. Be encouraging and supportive
-
-Available Context: ${context.substring(0, 300)}...`;
   }
   
   /**
