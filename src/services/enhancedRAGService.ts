@@ -13,7 +13,7 @@ export interface SearchFilters {
   categories?: string[];
   productivityRange?: [number, number];
   timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'night';
-  chunkLevels?: (1 | 2 | 3 | 4)[];
+  chunkLevels?: (1 | 2 | 3 | 4 | 5 | 6)[];
   completionStatus?: 'completed' | 'in_progress' | 'all';
 }
 
@@ -205,7 +205,7 @@ export class EnhancedRAGService {
     } catch (error) {
       console.error('❌ Intelligent search failed:', error);
       // Final fallback - use old method
-      return await this.executeEnhancedSearch(query, userId, { chunkLevels: [1, 2, 3, 4] });
+      return await this.executeEnhancedSearch(query, userId, { chunkLevels: [1, 2, 3, 4, 5, 6] });
     }
   }
 
@@ -1046,7 +1046,7 @@ export class EnhancedRAGService {
       return [1, 2, 4]; // Tasks + projects + temporal patterns
     }
     
-    // Default: prioritize task aggregates (most useful for productivity)
+    // Default: prioritize monthly and weekly summaries, then others (follows new priority)
     return [1, 2, 3, 4];
   }
 
