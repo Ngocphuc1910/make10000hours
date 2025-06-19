@@ -8,7 +8,7 @@ import { OpenAIService } from './openai';
 interface EmbeddableDocument {
   id: string;
   content: string;
-  contentType: 'task' | 'project' | 'session' | 'site_usage' | 'deep_focus' | 'user_insight';
+  contentType: 'task_aggregate' | 'project_summary' | 'task_sessions' | 'site_usage' | 'deep_focus' | 'user_insight';
   contentId: string;
   metadata: Record<string, any>;
   userId: string;
@@ -365,7 +365,7 @@ export class CompleteDataSync {
     return {
       id,
       content,
-      contentType: 'task',
+      contentType: 'task_aggregate',
       contentId: id,
       metadata: {
         documentId: id,
@@ -403,7 +403,7 @@ export class CompleteDataSync {
     return {
       id,
       content,
-      contentType: 'project',
+      contentType: 'project_summary',
       contentId: id,
       metadata: {
         documentId: id,
@@ -444,7 +444,7 @@ export class CompleteDataSync {
     return {
       id,
       content,
-      contentType: 'session',
+      contentType: 'task_sessions',
       contentId: id,
       metadata: {
         documentId: id,

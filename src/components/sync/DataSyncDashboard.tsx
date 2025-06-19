@@ -313,7 +313,7 @@ export const DataSyncDashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-4 py-6">
+    <div className="space-y-6 w-full mx-auto px-4 py-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between">

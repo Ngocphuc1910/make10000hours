@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { OpenAIService } from './openai';
-import { IntelligentQueryClassifier, QueryClassification } from './intelligentQueryClassifier';
+import { IntelligentQueryClassifier, QueryClassification, AIContentTypeSelection } from './intelligentQueryClassifier';
 import type { RAGResponse } from '../types/chat';
 
 export interface PriorityLevel {
@@ -17,6 +17,7 @@ export interface PrioritySearchResult {
     levelsSearched: string[];
     totalDocs: number;
     processingTime: number;
+    aiContentTypeSelection?: AIContentTypeSelection;
   };
 }
 
@@ -45,7 +46,7 @@ export class HierarchicalPriorityService {
     },
     {
       name: 'relevant_sources',
-      contentTypes: ['task_aggregate', 'project_summary', 'task_sessions', 'session'],
+      contentTypes: ['task_aggregate', 'project_summary', 'task_sessions'], // Standardized to 6 content types
       chunkLevels: [4, 5, 6], // Project (4), Task (5), Session (6) chunks
       priority: 3
     },
@@ -111,6 +112,7 @@ export class HierarchicalPriorityService {
     const searchStartTime = Date.now();
     const levelsSearched: string[] = [];
     let allDocs: any[] = [];
+    let aiContentTypeSelection: AIContentTypeSelection | undefined;
     
     console.log(`📊 Starting priority cascade search...`);
     
@@ -119,7 +121,28 @@ export class HierarchicalPriorityService {
       console.log(`🔍 Searching ${level.name} (priority ${level.priority})...`);
       levelsSearched.push(level.name);
       
-      const levelDocs = await this.searchPriorityLevel(query, userId, level, classification);
+      let levelDocs: any[] = [];
+      
+      // For relevant_sources level, use AI-powered content type selection
+      if (level.name === 'relevant_sources') {
+        console.log('🤖 Using AI-powered content type selection for relevant sources...');
+        
+        try {
+          aiContentTypeSelection = await IntelligentQueryClassifier.selectBestContentTypesWithAI(query, userId);
+          console.log('✅ AI Content Type Selection:', aiContentTypeSelection);
+          
+          // Use AI-selected content types for this level
+          levelDocs = await this.searchRelevantSourcesWithAI(query, userId, aiContentTypeSelection);
+          
+        } catch (error) {
+          console.warn('⚠️ AI content type selection failed, using fallback:', error);
+          // Fallback to traditional search
+          levelDocs = await this.searchPriorityLevel(query, userId, level, classification);
+        }
+      } else {
+        // For summary levels, use traditional search
+        levelDocs = await this.searchPriorityLevel(query, userId, level, classification);
+      }
       
       if (levelDocs.length > 0) {
         console.log(`✅ Found ${levelDocs.length} docs at ${level.name} level`);
@@ -147,7 +170,8 @@ export class HierarchicalPriorityService {
       searchMetadata: {
         levelsSearched,
         totalDocs: allDocs.length,
-        processingTime
+        processingTime,
+        aiContentTypeSelection
       }
     };
   }
@@ -174,6 +198,184 @@ export class HierarchicalPriorityService {
       
     } catch (error) {
       console.error(`❌ Error searching ${level.name}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Search relevant sources using AI-selected content types
+   */
+  private static async searchRelevantSourcesWithAI(
+    query: string,
+    userId: string,
+    aiSelection: AIContentTypeSelection
+  ): Promise<any[]> {
+    try {
+      let allResults: any[] = [];
+
+      // Search primary content types first (higher priority)
+      for (const contentType of aiSelection.primaryTypes) {
+        console.log(`🔍 Searching AI-selected primary content type: ${contentType}`);
+        
+        const results = await this.searchSpecificContentType(query, userId, contentType, 'primary');
+        allResults.push(...results);
+      }
+
+      // Search secondary content types if we don't have enough results
+      if (allResults.length < 6) {
+        for (const contentType of aiSelection.secondaryTypes) {
+          console.log(`🔍 Searching AI-selected secondary content type: ${contentType}`);
+          
+          const results = await this.searchSpecificContentType(query, userId, contentType, 'secondary');
+          allResults.push(...results);
+        }
+      }
+
+      // Sort by AI selection priority and relevance
+      allResults.sort((a, b) => {
+        // Primary types get priority
+        if (a.contentTypeRank === 'primary' && b.contentTypeRank !== 'primary') return -1;
+        if (a.contentTypeRank !== 'primary' && b.contentTypeRank === 'primary') return 1;
+        
+        // Then by similarity score
+        return (b.similarity || b.similarity_score || 0) - (a.similarity || a.similarity_score || 0);
+      });
+
+      console.log(`✅ AI-powered search found ${allResults.length} relevant sources`);
+      return allResults.slice(0, 12); // Limit to top 12 results
+
+    } catch (error) {
+      console.error('❌ AI-powered relevant sources search failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Search for a specific content type
+   */
+  private static async searchSpecificContentType(
+    query: string,
+    userId: string,
+    contentType: string,
+    rank: 'primary' | 'secondary'
+  ): Promise<any[]> {
+    try {
+      // Use the same search approach as performSemanticSearchByPriority but for specific content type
+      console.log(`🔍 Searching content type: ${contentType} for query: "${query}"`);
+      
+      // First, get documents of this content type
+      const { data: docs, error } = await supabase
+        .from('user_productivity_documents')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('content_type', contentType)
+        .not('embedding', 'is', null)
+        .limit(20);
+
+      if (error) {
+        console.warn(`⚠️ Error fetching ${contentType} docs:`, error.message);
+        return [];
+      }
+
+      if (!docs || docs.length === 0) {
+        console.log(`⚠️ No ${contentType} docs found for user ${userId}`);
+        
+        // Fallback to keyword search without embeddings
+        const { data: keywordData, error: keywordError } = await supabase
+          .from('user_productivity_documents')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('content_type', contentType)
+          .limit(rank === 'primary' ? 8 : 4);
+
+        if (!keywordError && keywordData && keywordData.length > 0) {
+          console.log(`📝 Found ${keywordData.length} ${contentType} docs via basic query`);
+          
+          // Score docs based on keyword matches
+          const keywords = query.toLowerCase().split(' ').filter(word => word.length > 2);
+          const scoredDocs = keywordData
+            .map(doc => {
+              let score = 0;
+              const content = (doc.content || '').toLowerCase();
+              
+              keywords.forEach(keyword => {
+                const matches = (content.match(new RegExp(keyword, 'g')) || []).length;
+                score += matches;
+              });
+              
+              return { 
+                ...doc, 
+                keywordScore: score,
+                contentTypeRank: rank,
+                aiSelected: true,
+                similarity: Math.min(0.8, score * 0.1 + 0.3) // Convert keyword score to similarity
+              };
+            })
+            .filter(doc => doc.keywordScore > 0 || contentType === 'monthly_summary') // Always include monthly summaries
+            .sort((a, b) => b.keywordScore - a.keywordScore);
+
+          return scoredDocs.slice(0, rank === 'primary' ? 8 : 4);
+        }
+        
+        return [];
+      }
+
+      console.log(`📊 Found ${docs.length} ${contentType} docs with embeddings`);
+
+      try {
+        // Generate query embedding for similarity search
+        const queryEmbedding = await OpenAIService.generateEmbedding({ 
+          content: query, 
+          contentType: 'query'
+        });
+        
+        // Calculate similarity scores
+        const docsWithSimilarity = docs
+          .filter(doc => doc.embedding && Array.isArray(doc.embedding))
+          .map(doc => ({
+            ...doc,
+            similarity: this.calculateCosineSimilarity(queryEmbedding, doc.embedding),
+            contentTypeRank: rank,
+            aiSelected: true
+          }))
+          .filter(doc => doc.similarity > (rank === 'primary' ? 0.3 : 0.2)) // Lower threshold for better recall
+          .sort((a, b) => b.similarity - a.similarity);
+
+        console.log(`✅ Found ${docsWithSimilarity.length} relevant ${contentType} docs with similarity > threshold`);
+        return docsWithSimilarity.slice(0, rank === 'primary' ? 8 : 4);
+        
+      } catch (embeddingError) {
+        console.warn(`⚠️ Embedding generation failed for ${contentType}:`, embeddingError);
+        
+        // Fallback to keyword search
+        const keywords = query.toLowerCase().split(' ').filter(word => word.length > 2);
+        const scoredDocs = docs
+          .map(doc => {
+            let score = 0;
+            const content = (doc.content || '').toLowerCase();
+            
+            keywords.forEach(keyword => {
+              const matches = (content.match(new RegExp(keyword, 'g')) || []).length;
+              score += matches;
+            });
+            
+            return { 
+              ...doc, 
+              keywordScore: score,
+              contentTypeRank: rank,
+              aiSelected: true,
+              similarity: Math.min(0.8, score * 0.1 + 0.3)
+            };
+          })
+          .filter(doc => doc.keywordScore > 0 || contentType === 'monthly_summary')
+          .sort((a, b) => b.keywordScore - a.keywordScore);
+
+        console.log(`🔍 Keyword search fallback found ${scoredDocs.length} ${contentType} docs`);
+        return scoredDocs.slice(0, rank === 'primary' ? 8 : 4);
+      }
+
+    } catch (error) {
+      console.error(`❌ Error searching content type ${contentType}:`, error);
       return [];
     }
   }
@@ -501,19 +703,23 @@ export class HierarchicalPriorityService {
         relevanceScore: doc.similarity || doc.totalScore || (1 - index * 0.1),
       }));
 
+      const metadata: any = {
+        responseTime: Date.now() - startTime,
+        relevanceScore: Math.min(0.95, 0.6 + (priorityResult.docs.length * 0.05)),
+        tokens: OpenAIService.estimateTokens(response),
+        model: 'gpt-4o-mini',
+        retrievedDocuments: priorityResult.docs.length,
+        totalSources: priorityResult.searchMetadata.totalDocs,
+        confidence: Math.min(0.95, 0.6 + (priorityResult.docs.length * 0.05)),
+        searchStrategy: `hierarchical_priority_${priorityResult.foundAt}${priorityResult.searchMetadata.aiContentTypeSelection ? '_ai_enhanced' : ''}`,
+        aiContentTypeSelection: priorityResult.searchMetadata.aiContentTypeSelection,
+        priorityLevels: priorityResult.searchMetadata.levelsSearched
+      };
+
       return {
         response: response.trim(),
         sources,
-        metadata: {
-          responseTime: Date.now() - startTime,
-          relevanceScore: Math.min(0.95, 0.6 + (priorityResult.docs.length * 0.05)),
-          tokens: OpenAIService.estimateTokens(response),
-          model: 'gpt-4o-mini',
-          retrievedDocuments: priorityResult.docs.length,
-          totalSources: priorityResult.searchMetadata.totalDocs,
-          confidence: Math.min(0.95, 0.6 + (priorityResult.docs.length * 0.05)),
-          searchStrategy: `hierarchical_priority_${priorityResult.foundAt}`
-        }
+        metadata
       };
       
     } catch (error) {

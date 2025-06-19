@@ -21,11 +21,11 @@ ON embeddings (user_id, content_type, created_at DESC);
 -- Create partial indexes for common queries
 CREATE INDEX IF NOT EXISTS embeddings_active_tasks_idx 
 ON embeddings (user_id, created_at DESC) 
-WHERE content_type = 'task' AND (metadata->>'completionStatus')::boolean = false;
+WHERE content_type = 'task_aggregate' AND (metadata->>'completionStatus')::boolean = false;
 
 CREATE INDEX IF NOT EXISTS embeddings_completed_tasks_idx 
 ON embeddings (user_id, created_at DESC) 
-WHERE content_type = 'task' AND (metadata->>'completionStatus')::boolean = true;
+WHERE content_type = 'task_aggregate' AND (metadata->>'completionStatus')::boolean = true;
 
 -- Create index for time-based queries
 CREATE INDEX IF NOT EXISTS embeddings_recent_idx 

@@ -109,7 +109,7 @@ export class DatabaseSetup {
           CREATE TABLE IF NOT EXISTS embeddings (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id text NOT NULL,
-            content_type text NOT NULL CHECK (content_type IN ('task', 'project', 'session', 'site_usage', 'deep_focus', 'user_insight')),
+            content_type text NOT NULL CHECK (content_type IN ('task_aggregate', 'project_summary', 'session', 'site_usage', 'deep_focus', 'user_insight')),
             content_id text NOT NULL,
             content text NOT NULL,
             embedding vector(1536) NOT NULL,
