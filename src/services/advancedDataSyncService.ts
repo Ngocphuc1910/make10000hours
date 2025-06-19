@@ -90,7 +90,7 @@ export class AdvancedDataSyncService {
       return {
         success: errors.length === 0,
         totalChunks: processedCount,
-        chunksByLevel: { 4: processedCount }, // Weekly summaries are level 4
+        chunksByLevel: { 2: processedCount }, // Weekly summaries are now level 2
         processingTime,
         errors
       };
