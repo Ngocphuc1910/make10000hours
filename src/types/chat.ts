@@ -61,8 +61,25 @@ export interface RAGResponse {
     tokens: number;
     model: string;
     retrievedDocuments: number;
+    totalSources?: number;
+    confidence?: number;
     chunkLevelsUsed?: number[];
     searchStrategy?: string;
+    queryEnhancement?: {
+      strategy: string;
+      candidateQueries: string[];
+      enhancementBenefit: number;
+      enhancementTime: number;
+    };
+    advancedPrompting?: {
+      technique: string;
+      persona: string;
+      confidence: number;
+      processingTime: number;
+      reasoningSteps: number;
+      validationScore?: number;
+      correctionApplied: boolean;
+    };
   };
 }
 

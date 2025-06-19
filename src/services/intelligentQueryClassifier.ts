@@ -26,13 +26,16 @@ export class IntelligentQueryClassifier {
 
   private static readonly PROJECT_FOCUS_PATTERNS = [
     /\b(project|projects)\s+(overview|status|summary|progress)/i,
-    /\b(how\s+many\s+projects|number\s+of\s+projects|count\s+of\s+projects)/i,
-    /\b(all\s+projects|list\s+projects|show\s+projects)/i,
+    /\b(how\s+many\s+projects?|number\s+of\s+projects?|count\s+of\s+projects?)/i,
+    /\b(all\s+projects?|list\s+projects?|show\s+projects?)/i,
+    /\b(tell\s+me.*projects?|projects?\s+i\s+have|projects?\s+do\s+i\s+have)/i,
+    /\b(projects?\s+(available|existing|current))/i,
     /\b(portfolio|initiative|workstream|deliverable)/i,
     /\b(project\s+breakdown|project\s+analysis|across\s+projects)/i,
     /\b(milestone|roadmap|project\s+plan)/i,
     /\b(project\s+comparison|project\s+metrics)/i,
-    /\b(overall\s+progress|total\s+work|project\s+distribution)/i
+    /\b(overall\s+progress|total\s+work|project\s+distribution)/i,
+    /\b(my\s+projects?|which\s+projects?)/i
   ];
 
   private static readonly SUMMARY_INSIGHTS_PATTERNS = [
@@ -53,8 +56,8 @@ export class IntelligentQueryClassifier {
     },
     project_focus: {
       primary: ['project_summary', 'project'],
-      secondary: ['task_aggregate', 'weekly_summary'],
-      tertiary: ['daily_summary', 'monthly_summary']
+      secondary: ['weekly_summary', 'monthly_summary'],
+      tertiary: ['task_aggregate', 'daily_summary']
     },
     summary_insights: {
       primary: ['daily_summary', 'weekly_summary', 'monthly_summary'],
@@ -74,31 +77,36 @@ export class IntelligentQueryClassifier {
     let confidence = 0;
     let secondaryIntents: string[] = [];
 
-    // Test for task priority intent
+    // Test patterns and track all matches
     const taskMatches = this.TASK_PRIORITY_PATTERNS.filter(pattern => pattern.test(queryLower));
-    if (taskMatches.length > 0) {
+    const projectMatches = this.PROJECT_FOCUS_PATTERNS.filter(pattern => pattern.test(queryLower));
+    const summaryMatches = this.SUMMARY_INSIGHTS_PATTERNS.filter(pattern => pattern.test(queryLower));
+
+    // Determine primary intent with proper priority
+    const maxMatches = Math.max(taskMatches.length, projectMatches.length, summaryMatches.length);
+    
+    if (projectMatches.length > 0 && projectMatches.length === maxMatches) {
+      primaryIntent = 'project_focus';
+      confidence = Math.min(0.95, 0.4 + (projectMatches.length * 0.15));
+      secondaryIntents.push('project_management');
+    } else if (taskMatches.length > 0 && taskMatches.length === maxMatches) {
       primaryIntent = 'task_priority';
       confidence = Math.min(0.95, 0.4 + (taskMatches.length * 0.15));
       secondaryIntents.push('task_management');
     }
 
-    // Test for project focus intent
-    const projectMatches = this.PROJECT_FOCUS_PATTERNS.filter(pattern => pattern.test(queryLower));
-    if (projectMatches.length > 0) {
-      if (projectMatches.length > taskMatches.length) {
-        primaryIntent = 'project_focus';
-        confidence = Math.min(0.95, 0.4 + (projectMatches.length * 0.15));
-      }
+    // Handle summary/insights intent if it has the most matches
+    if (summaryMatches.length > 0 && summaryMatches.length === maxMatches) {
+      primaryIntent = 'summary_insights';
+      confidence = Math.min(0.95, 0.4 + (summaryMatches.length * 0.15));
+      secondaryIntents.push('analytics');
+    }
+    
+    // Add secondary intents for any patterns that matched
+    if (projectMatches.length > 0 && primaryIntent !== 'project_focus') {
       secondaryIntents.push('project_management');
     }
-
-    // Test for summary/insights intent
-    const summaryMatches = this.SUMMARY_INSIGHTS_PATTERNS.filter(pattern => pattern.test(queryLower));
-    if (summaryMatches.length > 0) {
-      if (summaryMatches.length > Math.max(taskMatches.length, projectMatches.length)) {
-        primaryIntent = 'summary_insights';
-        confidence = Math.min(0.95, 0.4 + (summaryMatches.length * 0.15));
-      }
+    if (summaryMatches.length > 0 && primaryIntent !== 'summary_insights') {
       secondaryIntents.push('analytics');
     }
 
@@ -114,6 +122,23 @@ export class IntelligentQueryClassifier {
     }
 
     const contentTypePriority = this.CONTENT_TYPE_MAPPINGS[primaryIntent];
+
+    // Debug logging for classification
+    console.log(`🔍 Query Classification Debug:`, {
+      query: query.substring(0, 100),
+      taskMatches: taskMatches.length,
+      projectMatches: projectMatches.length,
+      summaryMatches: summaryMatches.length,
+      primaryIntent,
+      confidence: confidence.toFixed(2),
+      secondaryIntents,
+      mixingStrategy,
+      suggestedContentTypes: [
+        ...contentTypePriority.primary,
+        ...contentTypePriority.secondary.slice(0, 2),
+        ...contentTypePriority.tertiary.slice(0, 1)
+      ]
+    });
 
     return {
       primaryIntent,
