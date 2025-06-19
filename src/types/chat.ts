@@ -73,7 +73,6 @@ export interface RAGResponse {
     };
     advancedPrompting?: {
       technique: string;
-      persona: string;
       confidence: number;
       processingTime: number;
       reasoningSteps: number;

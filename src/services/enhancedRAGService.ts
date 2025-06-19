@@ -85,7 +85,9 @@ export class EnhancedRAGService {
         ...response.metadata,
         queryEnhancement: {
           strategy: enhancementResult.enhancedQuery.strategy,
-          candidateQueries: enhancementResult.metadata.candidateQueries,
+          candidateQueries: Array.isArray(enhancementResult.metadata.candidateQueries) 
+            ? enhancementResult.metadata.candidateQueries 
+            : [query],
           enhancementBenefit: enhancementResult.metadata.enhancementBenefit,
           enhancementTime: enhancementResult.metadata.totalProcessingTime
         }
@@ -1219,7 +1221,6 @@ export class EnhancedRAGService {
           chunkLevelsUsed: Array.from(new Set(docs.map(d => d.metadata?.chunkLevel).filter(Boolean))),
           advancedPrompting: {
             technique: promptResult.technique_used,
-            persona: promptResult.persona.selectedPersona.name,
             confidence: promptResult.confidence,
             processingTime: promptResult.processing_time,
             reasoningSteps: promptResult.reasoning?.reasoning_steps.length || 0,
