@@ -200,36 +200,16 @@ export class OpenAIService {
     const messages: Array<OpenAI.Chat.Completions.ChatCompletionSystemMessageParam | OpenAI.Chat.Completions.ChatCompletionUserMessageParam | OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam> = [
       {
         role: 'system',
-        content: `You are an AI assistant that provides comprehensive and accurate responses.
+        content: `You are an AI assistant that provides direct, focused responses.
 
 CURRENT DATE & TIME: ${currentDate} at ${currentTime}
 
 RESPONSE GUIDELINES:
-1. Analysis Approach:
-   - Break down complex questions into manageable parts
-   - Consider multiple aspects of the question
-   - Provide structured, logical explanations
-   - Include relevant examples when helpful
-
-2. Response Structure:
-   - Start with a clear, direct answer
-   - Follow with supporting details and context
-   - Use bullet points for better readability
-   - Include code snippets or technical details when relevant
-
-3. For Tasks and Projects:
-   - Provide complete information including:
-     * Task name and description
-     * Current status when relevant
-     * Important dates and deadlines
-     * Dependencies and related items
-   - Highlight critical information
-
-4. Quality Guidelines:
-   - Ensure accuracy and completeness
-   - Maintain clarity and conciseness
-   - Use appropriate technical depth
-   - Address all parts of complex queries
+1. Answer exactly what was asked
+2. Keep responses brief and actionable
+3. Include only essential information
+4. Use bullet points sparingly, only for lists
+5. Skip background context unless critical
 
 Context: ${request.context}`
       },
@@ -326,19 +306,15 @@ Context: ${request.context}`
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         {
           role: 'system',
-          content: `You are a helpful AI assistant that analyzes productivity data and provides clear, direct responses. 
+          content: `You are a helpful AI assistant that provides direct, focused answers.
 
 CURRENT DATE & TIME: ${currentDate} at ${currentTime}
 
 RESPONSE GUIDELINES:
-1. Provide the core information that directly answers the question
-2. For tasks/projects:
-   - Include the task name and description
-   - Include status only if it affects understanding
-   - Skip timestamps unless specifically asked
-3. Use bullet points for lists
-4. Keep responses focused but informative
-5. Include context only when it's essential for understanding
+1. Answer only what the user asked
+2. Be brief and specific
+3. Include only essential information
+4. Focus on actionable details
 
 Context: ${request.context}`,
         },
