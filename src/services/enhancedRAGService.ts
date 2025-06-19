@@ -1155,10 +1155,21 @@ export class EnhancedRAGService {
       
       // Apply advanced prompt engineering techniques for complex queries
       const { AdvancedPromptService } = await import('./advancedPromptService');
+      
+      // Convert AIContentTypeSelection to QueryClassification if needed for AdvancedPromptService
+      const queryClassificationForPrompt: QueryClassification = 'primaryTypes' in classification ? {
+        primaryIntent: 'general',
+        secondaryIntents: [],
+        confidence: classification.confidence / 100,
+        suggestedContentTypes: [...classification.primaryTypes, ...classification.secondaryTypes],
+        suggestedChunkTypes: [...classification.primaryTypes, ...classification.secondaryTypes],
+        mixingStrategy: 'comprehensive'
+      } : classification;
+      
       const promptResult = await AdvancedPromptService.processWithAdvancedPrompting(
         query,
         context,
-        classification,
+        queryClassificationForPrompt,
         conversationHistory || []
       );
       
@@ -1226,7 +1237,17 @@ export class EnhancedRAGService {
       })
       .join('\n\n');
 
-    const prompt = this.buildEnhancedPrompt(query, context, docs, classification);
+    // Convert AIContentTypeSelection to QueryClassification if needed
+    const queryClassification: QueryClassification = 'primaryTypes' in classification ? {
+      primaryIntent: 'general',
+      secondaryIntents: [],
+      confidence: classification.confidence / 100,
+      suggestedContentTypes: [...classification.primaryTypes, ...classification.secondaryTypes],
+      suggestedChunkTypes: [...classification.primaryTypes, ...classification.secondaryTypes],
+      mixingStrategy: 'comprehensive'
+    } : classification;
+
+    const prompt = this.buildEnhancedPrompt(query, context, docs, queryClassification);
 
     try {
       const response = await OpenAIService.generateChatResponse({
