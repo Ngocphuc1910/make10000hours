@@ -249,15 +249,22 @@ export class SyntheticTextGenerator {
     const totalSessions = sessions.length;
     const projectAge = this.calculateProjectAge(project, tasks);
     
+    // Count actual status categories (TO-DO, IN POMODORO, COMPLETED)
+    let statusCount = 0;
+    if (todoTasks.length > 0) statusCount++;
+    if (pomodoroTasks.length > 0) statusCount++;
+    if (completedTasks.length > 0) statusCount++;
+    
     // Project header with age and overview
-    let text = `Project "${project.name}" created ${projectAge}, containing ${totalTasks} tasks across ${this.getTaskCategoryCount(tasks)} categories.`;
+    let text = `Project "${project.name}" created ${projectAge}, containing ${totalTasks} tasks across ${statusCount} status.`;
     text += `\n\n`;
 
     // TO-DO LIST STATUS section
     text += `TO-DO LIST STATUS (${todoTasks.length} tasks):\n`;
     if (todoTasks.length > 0) {
-      const prioritizedTodos = this.prioritizeTasksForDisplay(todoTasks, 4);
-      prioritizedTodos.forEach(task => {
+      // Show ALL todo tasks, not just first 4
+      const sortedTodos = this.prioritizeTasksForDisplay(todoTasks, todoTasks.length);
+      sortedTodos.forEach(task => {
         const estimated = task.timeEstimated ? `estimated ${task.timeEstimated} min` : 'no estimate';
         const priority = this.inferTaskPriority(task);
         const dueInfo = this.getTaskDueInfo(task);
@@ -287,8 +294,9 @@ export class SyntheticTextGenerator {
     // COMPLETED STATUS section
     text += `COMPLETED STATUS (${completedTasks.length} tasks):\n`;
     if (completedTasks.length > 0) {
-      const recentCompleted = this.getRecentCompletedTasks(completedTasks, 4);
-      recentCompleted.forEach(task => {
+      // Show ALL completed tasks, not just recent 4
+      const sortedCompleted = this.getRecentCompletedTasks(completedTasks, completedTasks.length);
+      sortedCompleted.forEach(task => {
         const timeSpent = task.timeSpent ? `${task.timeSpent} min` : 'no time logged';
         const completedWhen = this.getCompletionTimeframe(task);
         text += `- "${task.title}" (${timeSpent}, completed ${completedWhen})\n`;
