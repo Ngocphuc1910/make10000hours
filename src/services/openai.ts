@@ -23,7 +23,7 @@ if (currentApiKey) {
 // Constants for optimization
 export const EMBEDDING_MODEL = 'text-embedding-3-small';
 export const CHAT_MODEL = 'gpt-4o-mini';
-export const MAX_TOKENS = 1500;
+export const MAX_TOKENS = 4000;
 export const EMBEDDING_DIMENSIONS = 1536;
 
 export interface EmbeddingRequest {
@@ -41,7 +41,38 @@ export interface ChatRequest {
   }>;
 }
 
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
 export class OpenAIService {
+  private static client: OpenAI;
+
+  static initialize(apiKey: string) {
+    this.client = new OpenAI({ apiKey });
+  }
+
+  static async createChatCompletion(messages: ChatMessage[]): Promise<string> {
+    if (!this.client) {
+      throw new Error('OpenAI client not initialized. Call initialize() first.');
+    }
+
+    try {
+      const completion = await this.client.chat.completions.create({
+        model: 'gpt-4',
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 500
+      });
+
+      return completion.choices[0]?.message?.content || '';
+    } catch (error) {
+      console.error('Error calling OpenAI:', error);
+      throw error;
+    }
+  }
+
   /**
    * Set a custom OpenAI API key
    */
@@ -159,6 +190,59 @@ export class OpenAIService {
   }
 
   static async generateChatResponse(request: ChatRequest): Promise<string> {
+    const currentDate = new Date().toLocaleDateString('en-US', { 
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+    });
+    const currentTime = new Date().toLocaleTimeString('en-US', {
+      hour: '2-digit', minute: '2-digit', hour12: true
+    });
+
+    const messages: Array<OpenAI.Chat.Completions.ChatCompletionSystemMessageParam | OpenAI.Chat.Completions.ChatCompletionUserMessageParam | OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam> = [
+      {
+        role: 'system',
+        content: `You are an AI assistant that provides comprehensive and accurate responses.
+
+CURRENT DATE & TIME: ${currentDate} at ${currentTime}
+
+RESPONSE GUIDELINES:
+1. Analysis Approach:
+   - Break down complex questions into manageable parts
+   - Consider multiple aspects of the question
+   - Provide structured, logical explanations
+   - Include relevant examples when helpful
+
+2. Response Structure:
+   - Start with a clear, direct answer
+   - Follow with supporting details and context
+   - Use bullet points for better readability
+   - Include code snippets or technical details when relevant
+
+3. For Tasks and Projects:
+   - Provide complete information including:
+     * Task name and description
+     * Current status when relevant
+     * Important dates and deadlines
+     * Dependencies and related items
+   - Highlight critical information
+
+4. Quality Guidelines:
+   - Ensure accuracy and completeness
+   - Maintain clarity and conciseness
+   - Use appropriate technical depth
+   - Address all parts of complex queries
+
+Context: ${request.context}`
+      },
+      ...((request.conversationHistory || []).map(msg => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content
+      }))),
+      {
+        role: 'user',
+        content: request.query
+      }
+    ];
+
     try {
       const openai = this.ensureOpenAI();
       
@@ -168,63 +252,39 @@ export class OpenAIService {
         hasHistory: !!request.conversationHistory?.length
       });
 
-      // Get current date/time information
-      const now = new Date();
-      const currentDate = now.toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
-      const currentTime = now.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: true 
-      });
+      // Enhanced error handling and retry logic
+      const maxRetries = 2;
+      let attempt = 0;
+      let lastError: Error | null = null;
 
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-        {
-          role: 'system',
-          content: `You are a helpful AI assistant that analyzes productivity data and provides clear, direct responses. 
+      while (attempt <= maxRetries) {
+        try {
+          const response = await openai.chat.completions.create({
+            model: CHAT_MODEL,
+            messages,
+            max_tokens: MAX_TOKENS,
+            temperature: 0.7,
+            stream: false,
+            presence_penalty: 0.1,  // Slight penalty for repetition
+            frequency_penalty: 0.1,  // Slight penalty for frequent tokens
+          });
 
-CURRENT DATE & TIME: ${currentDate} at ${currentTime}
-IMPORTANT: When answering questions about "today", "now", or current time, use the above current date/time.
-
-Use the provided context to answer questions about work patterns, productivity, and task management.
-Be concise and specific in your responses. If you can't find relevant information in the context, say so clearly.
-Avoid using asterisks (**) for formatting in your responses.
-Only provide insights or recommendations when specifically asked for them.
-          
-Context: ${request.context}`,
-        },
-      ];
-
-      // Add conversation history if provided
-      if (request.conversationHistory) {
-        messages.push(...request.conversationHistory);
+          const responseContent = response.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
+          return this.cleanResponse(responseContent);
+        } catch (error) {
+          lastError = error as Error;
+          if ((error as any)?.status === 429) { // Rate limit error
+            attempt++;
+            if (attempt <= maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+              continue;
+            }
+          }
+          throw error;
+        }
       }
 
-      // Add current query
-      messages.push({
-        role: 'user',
-        content: request.query,
-      });
-
-      const response = await openai.chat.completions.create({
-        model: CHAT_MODEL,
-        messages,
-        max_tokens: MAX_TOKENS,
-        temperature: 0.7,
-        stream: false,
-      });
-
-      const responseContent = response.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
-      
-      // Post-process response to remove ** formatting
-      const cleanedResponse = this.cleanResponse(responseContent);
-      
-      console.log('OpenAI response generated successfully, length:', cleanedResponse.length);
-      return cleanedResponse;
+      throw lastError || new Error('Failed to generate response after retries');
     } catch (error) {
       console.error('Error generating chat response:', error);
       console.error('OpenAI Error details:', {
@@ -269,13 +329,17 @@ Context: ${request.context}`,
           content: `You are a helpful AI assistant that analyzes productivity data and provides clear, direct responses. 
 
 CURRENT DATE & TIME: ${currentDate} at ${currentTime}
-IMPORTANT: When answering questions about "today", "now", or current time, use the above current date/time.
 
-Use the provided context to answer questions about work patterns, productivity, and task management.
-Be concise and specific in your responses. If you can't find relevant information in the context, say so clearly.
-Avoid using asterisks (**) for formatting in your responses.
-Only provide insights or recommendations when specifically asked for them.
-          
+RESPONSE GUIDELINES:
+1. Provide the core information that directly answers the question
+2. For tasks/projects:
+   - Include the task name and description
+   - Include status only if it affects understanding
+   - Skip timestamps unless specifically asked
+3. Use bullet points for lists
+4. Keep responses focused but informative
+5. Include context only when it's essential for understanding
+
 Context: ${request.context}`,
         },
       ];
