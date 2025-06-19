@@ -9,6 +9,7 @@ import type {
   RAGConfig
 } from '../types/chat';
 import { EnhancedRAGService } from '../services/enhancedRAGService';
+import { HierarchicalPriorityService } from '../services/hierarchicalPriorityService';
 
 interface ChatStoreState extends ChatStore {
   // Internal state
@@ -24,12 +25,12 @@ export const useChatStore = create<ChatStoreState>()(
     isLoading: false,
     error: null,
     suggestedQueries: [
-      "What tasks are in my Learn React project?",
-      "How much time did I spend working this week?", 
-      "Show me my recent work sessions",
-      "Which project am I spending the most time on?",
-      "What are my completed tasks today?",
-      "Show me my work patterns from last month"
+      "What were my key achievements this month?",
+      "How was my productivity this week?", 
+      "What did I work on today?",
+      "Which project needs my attention?",
+      "Show me my focus patterns",
+      "What should I prioritize next?"
     ],
     quickActions: [],
     ragConfig: {
@@ -88,8 +89,29 @@ export const useChatStore = create<ChatStoreState>()(
           )
         }));
 
-        // RAG-powered response using Enhanced RAG service
-        const ragResponse = await EnhancedRAGService.queryWithRAG(content, _userId);
+        // Try Hierarchical Priority service first, fallback to Enhanced RAG
+        let ragResponse: RAGResponse;
+        try {
+          console.log('🎯 Attempting Hierarchical Priority search...');
+          ragResponse = await HierarchicalPriorityService.queryWithHierarchicalPriority(
+            content, 
+            _userId,
+            // Pass conversation history for context
+            get().conversations
+              .find(c => c.id === conversationId)?.messages
+              .slice(-5) // Last 5 messages for context
+              .map(m => ({ role: m.role, content: m.content })) || []
+          );
+          
+          // If hierarchical search returns a fallback response, try Enhanced RAG
+          if (ragResponse.metadata.searchStrategy?.includes('no_data')) {
+            console.log('🔄 Hierarchical search returned no data, trying Enhanced RAG...');
+            ragResponse = await EnhancedRAGService.queryWithRAG(content, _userId);
+          }
+        } catch (hierarchicalError) {
+          console.warn('⚠️ Hierarchical Priority service failed, falling back to Enhanced RAG:', hierarchicalError);
+          ragResponse = await EnhancedRAGService.queryWithRAG(content, _userId);
+        }
         
         const assistantMessage: ChatMessage = {
           id: `msg_${Date.now()}_assistant`,

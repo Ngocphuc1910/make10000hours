@@ -122,47 +122,20 @@ and work sessions. You provide clear, specific responses based on the user's pro
     let prompt = `${promptConfig.systemMessage}\n\n`;
     
     // Add specific instructions for this query type
-    prompt += `**Instructions for this response:**\n`;
-    promptConfig.instructions.forEach((instruction, index) => {
-      prompt += `${index + 1}. ${instruction}\n`;
-    });
-    prompt += '\n';
-    
-    // Add response format guidance
-    prompt += `**Response Format:**\n${promptConfig.responseFormat}\n\n`;
-    
-    // Add classification metadata for context
-    prompt += `**Query Analysis:**\n`;
-    prompt += `- Primary Intent: ${classification.primaryIntent}\n`;
-    prompt += `- Confidence: ${Math.round(classification.confidence * 100)}%\n`;
-    prompt += `- Content Types Available: ${classification.suggestedContentTypes.join(', ')}\n`;
-    prompt += `- Response Strategy: ${classification.mixingStrategy}\n\n`;
-    
-    // Add conversation context if available
-    if (conversationHistory && conversationHistory.length > 0) {
-      prompt += `**Recent Conversation Context:**\n`;
-      const recentMessages = conversationHistory.slice(-3); // Last 3 messages
-      recentMessages.forEach(msg => {
-        prompt += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content.substring(0, 100)}...\n`;
-      });
-      prompt += '\n';
-    }
-    
-    // Add productivity data context
-    prompt += `**Available Productivity Data:**\n${context}\n\n`;
+    prompt += `RESPONSE REQUIREMENTS:\n`;
+    prompt += `1. Provide essential information that answers the question\n`;
+    prompt += `2. For tasks and projects:\n`;
+    prompt += `   - Include name and description\n`;
+    prompt += `   - Include status if relevant\n`;
+    prompt += `   - Skip dates unless requested\n`;
+    prompt += `3. Use bullet points for clarity\n`;
+    prompt += `4. Keep responses informative but focused\n\n`;
     
     // Add the user's specific question
-    prompt += `**User Question:** ${query}\n\n`;
+    prompt += `USER QUESTION: ${query}\n\n`;
     
-    // Add intent-specific guidance
-    const intentGuidance = this.getIntentSpecificGuidance(classification);
-    if (intentGuidance) {
-      prompt += `**Specific Guidance for ${classification.primaryIntent}:**\n${intentGuidance}\n\n`;
-    }
-    
-    // Final instruction
-    prompt += `Please provide a comprehensive response that directly addresses the user's question using the available productivity data. `;
-    prompt += `Focus on being specific, actionable, and insightful based on the ${classification.primaryIntent} context.`;
+    // Add relevant context
+    prompt += `RELEVANT CONTEXT:\n${context}\n`;
     
     return prompt;
   }
