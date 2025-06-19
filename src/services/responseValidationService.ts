@@ -122,32 +122,18 @@ USER QUERY: "${query}"
 AI RESPONSE TO EVALUATE:
 ${response}
 
-AVAILABLE CONTEXT:
-${context.substring(0, 500)}...
+VALIDATION CRITERIA:
+1. CONTENT: Does it provide the essential information needed?
+2. RELEVANCE: Is the information directly related to the question?
+3. COMPLETENESS: Are key details included (names, descriptions, etc.)?
+4. FOCUS: Is unnecessary information omitted?
 
-SOURCE COUNT: ${sources.length} documents
-
-Please assess the response on these dimensions:
-
-1. ACCURACY: Does the response contain factual errors?
-2. RELEVANCE: Does it directly address the user's question?
-3. COMPLETENESS: Are all aspects of the query covered?
-4. CLARITY: Is it well-structured and easy to understand?
-5. FACTUAL BASIS: Is it grounded in the provided context?
-
-Provide your assessment in this format:
-OVERALL SCORE: [0.0-1.0]
-CONFIDENCE: [0.0-1.0]
-
-ISSUES FOUND:
-- Type: [accuracy/relevance/completeness/clarity/factual]
-- Severity: [low/medium/high]
-- Description: [What's wrong]
-- Suggestion: [How to fix]
-
+Provide assessment in this format:
+SCORE: [0.0-1.0]
+ISSUES:
+- [issue type]: [brief description]
 CORRECTIONS NEEDED:
-- [Specific correction 1]
-- [Specific correction 2]
+- [specific correction]
 
 VALIDATION: [PASS/FAIL]`;
   }

@@ -1,3 +1,7 @@
+import { OpenAIService } from './openai';
+import { supabase } from './supabase';
+import { SmartSourceSelector } from './smartSourceSelector';
+import { HierarchicalChunker } from './hierarchicalChunker';
 import type { RAGResponse } from '../types/chat';
 
 export class EnhancedRAGEngine {
@@ -10,36 +14,65 @@ export class EnhancedRAGEngine {
     conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
   ): Promise<RAGResponse> {
     try {
-      // Simulate enhanced RAG processing
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Mock response with enhanced metadata
+      const startTime = Date.now();
+
+      // Step 1: Get hierarchical chunks for the user
+      const chunks = await HierarchicalChunker.createMultiLevelChunks(userId);
+      console.log(`📊 Retrieved ${chunks.length} hierarchical chunks`);
+
+      // Step 2: Apply smart source selection
+      const sourceSelection = await SmartSourceSelector.selectOptimalSources(
+        query,
+        userId,
+        chunks,
+        {
+          prioritizeCost: false,
+          minQualityThreshold: 0.4,
+          maxTokenBudget: 6000
+        }
+      );
+
+      const selectedChunks = sourceSelection.selectedSources;
+      console.log(`🎯 Selected ${selectedChunks.length} optimal sources`);
+
+      // Step 3: Build rich context from selected chunks
+      const context = selectedChunks
+        .map((chunk, index) => {
+          const metadata = chunk.metadata;
+          const sourceInfo = metadata.chunkType 
+            ? `[${metadata.chunkType.toUpperCase()} - Level ${metadata.chunkLevel}]` 
+            : '[DOCUMENT]';
+          return `${sourceInfo} ${chunk.content}`;
+        })
+        .join('\n\n');
+
+      // Step 4: Generate enhanced response
+      const response = await OpenAIService.generateChatResponse({
+        query,
+        context: context || 'No relevant data found.',
+        conversationHistory: conversationHistory || []
+      });
+
+      // Step 5: Format sources with rich metadata
+      const sources = selectedChunks.map((chunk, index) => ({
+        id: chunk.id,
+        type: chunk.metadata.chunkType || 'document',
+        contentId: chunk.metadata.entities?.taskId || chunk.metadata.entities?.projectId || chunk.id,
+        title: this.generateSourceTitle(chunk),
+        snippet: chunk.content.substring(0, 150) + '...',
+        relevanceScore: chunk.metadata.analytics?.productivity || 0.5
+      }));
+
       return {
-        response: `Based on your productivity data, I found relevant insights about "${query}". Your most productive tasks typically occur during focused work sessions with minimal interruptions.`,
-        sources: [
-          {
-            id: 'task-001',
-            type: 'task',
-            contentId: 'task-001',
-            title: 'Project Planning Session',
-            snippet: 'Completed project planning session with team leads',
-            relevanceScore: 0.92
-          },
-          {
-            id: 'task-002',
-            type: 'task', 
-            contentId: 'task-002',
-            title: 'Deep Work Coding',
-            snippet: 'Deep work coding session - implemented new features',
-            relevanceScore: 0.87
-          }
-        ],
+        response,
+        sources,
         metadata: {
-          retrievedDocuments: 2,
-          relevanceScore: 0.89,
-          responseTime: 200,
-          tokens: 150,
-          model: 'gpt-4'
+          retrievedDocuments: selectedChunks.length,
+          relevanceScore: sources.length > 0 ? sources[0].relevanceScore : 0,
+          responseTime: Date.now() - startTime,
+          tokens: OpenAIService.estimateTokens(response),
+          model: 'gpt-4',
+          chunkLevelsUsed: Array.from(new Set(selectedChunks.map(c => c.metadata.chunkLevel)))
         }
       };
       
@@ -47,16 +80,33 @@ export class EnhancedRAGEngine {
       console.error('Enhanced RAG query failed:', error);
       
       return {
-        response: 'I apologize, but I encountered an issue processing your query. Please try again.',
+        response: 'I apologize, but I encountered an issue processing your query. This might be because your productivity data hasn\'t been synced yet. Please try syncing your data first.',
         sources: [],
         metadata: {
           retrievedDocuments: 0,
           relevanceScore: 0,
           responseTime: 0,
           tokens: 0,
-          model: 'gpt-4'
+          model: 'gpt-4',
+          chunkLevelsUsed: []
         }
       };
+    }
+  }
+
+  private static generateSourceTitle(chunk: any): string {
+    const metadata = chunk.metadata;
+    const type = metadata.chunkType;
+    
+    switch (type) {
+      case 'task_aggregate':
+        return `Task Summary: ${metadata.entities?.taskId || 'Unknown Task'}`;
+      case 'project_summary':
+        return `Project Overview: ${metadata.entities?.projectId || 'Unknown Project'}`;
+      case 'temporal_pattern':
+        return `Time Analysis: ${metadata.timeframe || 'All Time'}`;
+      default:
+        return `Document: ${chunk.id}`;
     }
   }
 } 
