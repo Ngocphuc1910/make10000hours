@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { RerankerService } from '../../services/rerankerService';
 import { HybridSearchService } from '../../services/hybridSearchService';
-// import { useAuthStore } from '../../stores/useAuthStore';
+import { useUserStore } from '../../store/userStore';
 
 interface RerankingTestResult {
   originalResults: Array<{ document: any; score: number }>;
@@ -16,7 +16,7 @@ const RerankingTester: React.FC = () => {
   const [results, setResults] = useState<RerankingTestResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuthStore();
+  const { user } = useUserStore();
 
   const testQueries = [
     'How many projects do I have?',
