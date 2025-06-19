@@ -101,7 +101,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
             <div>
               <h2 className="text-lg font-semibold text-gray-900">AI Work Assistant</h2>
               <p className="text-sm text-gray-500">
-                Ask about your productivity data and get insights
+                Direct, focused answers about your productivity data
               </p>
             </div>
           </div>
