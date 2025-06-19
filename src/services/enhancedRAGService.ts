@@ -19,7 +19,7 @@ export interface SearchFilters {
 
 export class EnhancedRAGService {
   
-  // Simple query method for basic RAG functionality
+  // Enhanced query method with HyDE and multi-query capabilities
   static async queryWithRAG(
     query: string,
     userId: string,
@@ -28,35 +28,39 @@ export class EnhancedRAGService {
     const startTime = Date.now();
     
     try {
-      console.log(`🔍 Enhanced RAG query: "${query}" for user: ${userId}`);
+      console.log(`🔍 Enhanced RAG query with query enhancement: "${query}" for user: ${userId}`);
       
-      // Debug: Check if user has any documents at all
-      const { data: userDocs, error: userDocsError } = await supabase
-        .from('user_productivity_documents')
-        .select('id, content_type, created_at')
-        .eq('user_id', userId)
-        .limit(5);
-      
-      console.log(`📊 User has ${userDocs?.length || 0} total documents in database`);
-      if (userDocs && userDocs.length > 0) {
-        console.log('📄 Sample documents:', userDocs.map(d => ({ id: d.id, type: d.content_type, created: d.created_at })));
-      }
-      
-      // Step 1: Intelligent query classification with content type prioritization
+      // Step 1: Intelligent query classification
       const classification = IntelligentQueryClassifier.classifyQuery(query);
-      console.log(`🎯 Query classification for "${query}":`, {
+      console.log(`🎯 Query classification:`, {
         intent: classification.primaryIntent,
         confidence: classification.confidence,
         contentTypes: classification.suggestedContentTypes,
         strategy: classification.mixingStrategy
       });
       
-      // Step 2: Execute enhanced search with content type priorities
-      const relevantDocs = await this.executeIntelligentSearch(query, userId, classification);
+      // Step 2: Apply query enhancement (HyDE/Multi-query) for improved retrieval
+      const { QueryEnhancementService } = await import('./queryEnhancementService');
+      const enhancementResult = await QueryEnhancementService.enhanceAndSearch(
+        query,
+        userId,
+        classification
+      );
+      
+      console.log(`🚀 Query enhancement: ${enhancementResult.enhancedQuery.strategy} strategy applied`);
+      console.log(`📊 Enhancement benefit: ${(enhancementResult.metadata.enhancementBenefit * 100).toFixed(1)}%`);
+      
+      let relevantDocs = enhancementResult.searchResults;
+      
+      // Step 3: Fallback to standard search if enhancement didn't yield results
+      if (relevantDocs.length === 0) {
+        console.log('⚠️ Query enhancement yielded no results, falling back to standard search');
+        relevantDocs = await this.executeIntelligentSearch(query, userId, classification);
+      }
       
       console.log(`📚 Retrieved ${relevantDocs.length} relevant documents`);
       
-      // Enhanced: Ensure minimum source guarantee for rich context
+      // Step 4: Ensure minimum source guarantee for rich context
       const enrichedSources = await this.ensureRichContext(relevantDocs, query, userId, classification);
       console.log(`🎯 Enriched to ${enrichedSources.length} sources for comprehensive context`);
       
@@ -64,16 +68,30 @@ export class EnhancedRAGService {
         return this.generateFallbackResponse(query, startTime);
       }
       
-      // Step 3: Apply intelligent source selection with diverse mixing
+      // Step 5: Apply intelligent source selection with diverse mixing
       const optimalSources = IntelligentQueryClassifier.getOptimalSourceMix(
         classification,
         enrichedSources,
-        60 // Increased from 20 to 60 for richer context
+        60 // Rich context for enhanced queries
       );
       
       console.log(`🎯 Intelligent selection: ${optimalSources.length}/${enrichedSources.length} sources using ${classification.mixingStrategy} strategy`);
       
-      return await this.generateResponseFromDocs(query, optimalSources, startTime, classification, conversationHistory);
+      // Step 6: Generate enhanced response with query enhancement metadata
+      const response = await this.generateResponseFromDocs(query, optimalSources, startTime, classification, conversationHistory);
+      
+      // Add enhancement metadata to response
+      response.metadata = {
+        ...response.metadata,
+        queryEnhancement: {
+          strategy: enhancementResult.enhancedQuery.strategy,
+          candidateQueries: enhancementResult.metadata.candidateQueries,
+          enhancementBenefit: enhancementResult.metadata.enhancementBenefit,
+          enhancementTime: enhancementResult.metadata.totalProcessingTime
+        }
+      };
+      
+      return response;
       
     } catch (error) {
       console.error('❌ Enhanced RAG query error:', error);
@@ -861,66 +879,119 @@ export class EnhancedRAGService {
     userId: string,
     filters: SearchFilters & { chunkLevels: number[] }
   ): Promise<any[]> {
-    // Build base query
-    let supabaseQuery = supabase
-      .from('user_productivity_documents')
-      .select('*')
-      .eq('user_id', userId);
+    console.log('🔀 Using NEW True Hybrid Search (Vector + BM25 + RRF)');
     
-    // Apply chunk level filtering
-    if (filters.chunkLevels.length > 0) {
-      supabaseQuery = supabaseQuery.in('metadata->chunkLevel', filters.chunkLevels);
-    }
-    
-    // Apply timeframe filters
-    if (filters.timeframe && filters.timeframe !== 'all') {
-      const dateFilter = this.getDateFilter(filters.timeframe);
-      supabaseQuery = supabaseQuery.gte('created_at', dateFilter);
-    }
-    
-    // Apply project filters
-    if (filters.projects?.length) {
-      supabaseQuery = supabaseQuery.in('metadata->entities->projectId', filters.projects);
-    }
-    
-    // Apply time of day filters
-    if (filters.timeOfDay) {
-      supabaseQuery = supabaseQuery.eq('metadata->analytics->timeOfDay', filters.timeOfDay);
-    }
-    
-    // Apply productivity range filters
-    if (filters.productivityRange) {
-      supabaseQuery = supabaseQuery
-        .gte('metadata->analytics->productivity', filters.productivityRange[0])
-        .lte('metadata->analytics->productivity', filters.productivityRange[1]);
-    }
-    
-    // Apply completion status filters
-    if (filters.completionStatus && filters.completionStatus !== 'all') {
-      const completionFilter = filters.completionStatus === 'completed';
-      supabaseQuery = supabaseQuery.eq('metadata->analytics->completionRate', completionFilter ? 100 : null);
-    }
-    
-    // Execute semantic search
-    const { data: docs, error } = await supabaseQuery
-      .textSearch('content', query)
-      .order('created_at', { ascending: false })
-      .limit(10);
-    
-    if (error) {
-      console.warn('⚠️ Vector search failed, using fallback:', error);
+    try {
+      // Import hybrid search service
+      const { HybridSearchService } = await import('./hybridSearchService');
+      
+      // Convert filters to hybrid search options with re-ranking enabled
+      const hybridOptions = {
+        chunkLevels: filters.chunkLevels,
+        timeframe: filters.timeframe || 'all',
+        projects: filters.projects || [],
+        vectorWeight: 1.0,
+        keywordWeight: 1.0,
+        rrfK: 60,
+        maxResults: 20,
+        minVectorSimilarity: 0.1,
+        minKeywordScore: 0.0,
+        enableEnhancedBM25: true,
+        contentTypeBoosts: {
+          'task': 1.2,
+          'project': 1.1,
+          'session': 1.0,
+          'daily_summary': 1.0
+        },
+        // Enable re-ranking for improved relevance
+        enableReranking: true,
+        rerankingModel: 'hybrid' as const,
+        rerankingCandidates: 50,
+        minRerankScore: 0.1,
+        rerankingWeights: {
+          diversityWeight: 0.1,
+          recencyWeight: 0.05,
+          contentTypeWeights: {
+            'project_summary': 1.2,
+            'task_aggregate': 1.1,
+            'session': 1.0,
+            'daily_summary': 0.9
+          }
+        }
+      };
+      
+      // Apply productivity filter boosting
+      if (filters.productivityRange) {
+        hybridOptions.contentTypeBoosts = {
+          ...hybridOptions.contentTypeBoosts,
+          'task': 1.3, // Boost task results when filtering by productivity
+          'session': 1.2
+        };
+      }
+      
+      // Apply time-based boosting
+      if (filters.timeOfDay) {
+        hybridOptions.contentTypeBoosts = {
+          ...hybridOptions.contentTypeBoosts,
+          'session': 1.3, // Boost session results for time-based queries
+          'daily_summary': 1.2
+        };
+      }
+      
+      // Execute hybrid search
+      const hybridResult = await HybridSearchService.performHybridSearch(
+        query,
+        userId,
+        hybridOptions
+      );
+      
+      console.log(`✅ Hybrid search completed: ${hybridResult.documents.length} results`);
+      console.log(`📊 Vector: ${hybridResult.metadata.vectorResultCount}, Keyword: ${hybridResult.metadata.keywordResultCount}, Processing: ${hybridResult.metadata.processingTime}ms`);
+      
+      // Apply additional filters from the original interface
+      let filteredDocs = hybridResult.documents;
+      
+      // Apply completion status filters
+      if (filters.completionStatus && filters.completionStatus !== 'all') {
+        const completionFilter = filters.completionStatus === 'completed';
+        filteredDocs = filteredDocs.filter(doc => {
+          const completionRate = doc.metadata?.analytics?.completionRate;
+          return completionFilter ? completionRate === 100 : completionRate !== 100;
+        });
+      }
+      
+      // Apply productivity range filters
+      if (filters.productivityRange) {
+        filteredDocs = filteredDocs.filter(doc => {
+          const productivity = doc.metadata?.analytics?.productivity;
+          return productivity >= filters.productivityRange![0] && 
+                 productivity <= filters.productivityRange![1];
+        });
+      }
+      
+      // Apply time of day filters
+      if (filters.timeOfDay) {
+        filteredDocs = filteredDocs.filter(doc => {
+          return doc.metadata?.analytics?.timeOfDay === filters.timeOfDay;
+        });
+      }
+      
+      console.log(`🎯 After additional filtering: ${filteredDocs.length} results`);
+      return filteredDocs;
+      
+    } catch (error) {
+      console.error('❌ Hybrid search failed, falling back to basic search:', error);
+      
       // Fallback to simple content search
       const { data: fallbackDocs } = await supabase
         .from('user_productivity_documents')
         .select('*')
         .eq('user_id', userId)
         .ilike('content', `%${query}%`)
-        .limit(8);
+        .limit(10);
       
       return fallbackDocs || [];
     }
-    
-    return docs || [];
   }
 
   /**
@@ -1087,6 +1158,82 @@ export class EnhancedRAGService {
     classification: QueryClassification,
     conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
   ): Promise<RAGResponse> {
+    
+    // Enhanced with advanced prompt engineering
+    try {
+      console.log(`📊 generateResponseFromDocs called with ${docs.length} docs:`, 
+        docs.map(doc => ({
+          id: doc.id,
+          type: doc.content_type,
+          similarity: doc.similarity,
+          relevanceScore: doc.relevanceScore,
+          hasContent: !!doc.content,
+          contentLength: doc.content?.length || 0
+        }))
+      );
+      
+      const context = docs.map(doc => `${doc.content} (Type: ${doc.content_type}, Relevance: ${doc.similarity || 0.5})`).join('\n\n');
+      
+      // Apply advanced prompt engineering techniques for complex queries
+      const { AdvancedPromptService } = await import('./advancedPromptService');
+      const promptResult = await AdvancedPromptService.processWithAdvancedPrompting(
+        query,
+        context,
+        classification,
+        conversationHistory || []
+      );
+      
+      console.log(`🎯 Advanced prompting: ${promptResult.technique_used}, confidence: ${promptResult.confidence}`);
+      
+      // Fix: Map sources to correct ChatSource interface structure
+      const sources = docs.map((doc, index) => ({
+        id: doc.id || `doc_${index}`,
+        type: doc.metadata?.chunkType || doc.content_type || 'session',
+        contentId: doc.metadata?.entities?.taskId || doc.metadata?.entities?.projectId || doc.id,
+        title: this.generateSourceTitle(doc),
+        snippet: doc.content.substring(0, 150) + '...',
+        relevanceScore: doc.similarity || doc.relevanceScore || (1 - index * 0.1),
+      }));
+
+      console.log(`🔍 Final sources structure (Advanced path):`, sources.map(s => ({
+        id: s.id,
+        type: s.type,
+        title: s.title,
+        relevanceScore: s.relevanceScore,
+        hasSnippet: !!s.snippet,
+        snippetLength: s.snippet?.length || 0
+      })));
+
+      return {
+        response: promptResult.response,
+        sources,
+        metadata: {
+          totalSources: docs.length,
+          responseTime: Date.now() - startTime,
+          searchStrategy: `enhanced_with_${promptResult.technique_used}`,
+          confidence: promptResult.confidence,
+          retrievedDocuments: docs.length,
+          relevanceScore: docs.length > 0 ? (docs[0].similarity || docs[0].relevanceScore || 0.8) : 0,
+          tokens: this.estimateTokens(promptResult.response),
+          model: 'gpt-4o-mini',
+          chunkLevelsUsed: Array.from(new Set(docs.map(d => d.metadata?.chunkLevel).filter(Boolean))),
+          advancedPrompting: {
+            technique: promptResult.technique_used,
+            persona: promptResult.persona.selectedPersona.name,
+            confidence: promptResult.confidence,
+            processingTime: promptResult.processing_time,
+            reasoningSteps: promptResult.reasoning?.reasoning_steps.length || 0,
+            validationScore: promptResult.validation?.overall_score,
+            correctionApplied: !!promptResult.correction
+          }
+        }
+      };
+      
+    } catch (error) {
+      console.error('❌ Advanced prompting failed, using standard approach:', error);
+      // Fallback to existing implementation
+    }
+
     if (docs.length === 0) {
       return this.generateFallbackResponse(query, startTime, docs);
     }
@@ -1119,8 +1266,17 @@ export class EnhancedRAGService {
         contentId: doc.metadata?.entities?.taskId || doc.metadata?.entities?.projectId || doc.id,
         title: this.generateSourceTitle(doc),
         snippet: doc.content.substring(0, 150) + '...',
-        relevanceScore: doc.relevanceScore || (1 - index * 0.1),
+        relevanceScore: doc.similarity || doc.relevanceScore || (1 - index * 0.1),
       }));
+
+      console.log(`🔍 Final sources structure (Fallback path):`, sources.map(s => ({
+        id: s.id,
+        type: s.type,
+        title: s.title,
+        relevanceScore: s.relevanceScore,
+        hasSnippet: !!s.snippet,
+        snippetLength: s.snippet?.length || 0
+      })));
 
       return {
         response: cleanedResponse,
@@ -1874,5 +2030,23 @@ export class EnhancedRAGService {
     const recencyBoost = Math.max(0, 1 - (daysSinceCreation / 365)); // Boost decreases over a year
     
     return (relevance / Math.max(1, queryTerms.length)) + (recencyBoost * 0.1);
+  }
+
+  /**
+   * Generate explanation for why a document is relevant
+   */
+  private static generateRelevanceExplanation(doc: any, query: string): string {
+    const contentType = doc.content_type || 'unknown';
+    const similarity = doc.similarity || 0.5;
+    
+    if (similarity > 0.8) {
+      return `High relevance (${(similarity * 100).toFixed(0)}%) - Strong semantic match with your query`;
+    } else if (similarity > 0.6) {
+      return `Good relevance (${(similarity * 100).toFixed(0)}%) - Related ${contentType} content`;
+    } else if (similarity > 0.4) {
+      return `Moderate relevance (${(similarity * 100).toFixed(0)}%) - Contains related information`;
+    } else {
+      return `Basic relevance (${(similarity * 100).toFixed(0)}%) - Contextual match`;
+    }
   }
 } 

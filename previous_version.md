@@ -1,8 +1,8 @@
 ---
 title: "AI Work Assistant - Agent-Oriented Productivity Platform"
-version: "2.2"
+version: "2.1"
 date: "2025-01-27"
-status: "Phase 6 Complete - Advanced Prompt Engineering Implemented"
+status: "Phase 2 Complete - Comprehensive Data Sync Implemented"
 ---
 
 # AI Work Assistant - Product Requirements Document
@@ -18,10 +18,7 @@ Create a conversational AI system that provides deep productivity insights today
 ### **Current Status & Evolution**
 **Phase 1**: ✅ **COMPLETE** - LangChain RAG foundation with basic functionality
 **Phase 2**: ✅ **COMPLETE** - Comprehensive Firebase to Supabase data sync system
-**Phase 3**: ✅ **COMPLETE** - TRUE HYBRID SEARCH Implementation (Vector + BM25 + RRF)
-**Phase 4**: ✅ **COMPLETE** - Re-ranking system and query enhancement
-**Phase 5**: ✅ **COMPLETE** - Query Enhancement (HyDE + Multi-Query) Implementation
-**Phase 6**: ✅ **COMPLETE** - Advanced Prompt Engineering Implementation
+**Phase 3**: ⏳ **NEXT** - RAG system optimization and performance tuning  
 **Future Phases**: Architecture prepared for LangGraph agent integration and cross-platform automation
 
 ---
@@ -1091,190 +1088,143 @@ use the above current date/time, NOT dates from the productivity data context.
 
 ---
 
-## **✅ PHASE 6: Advanced Prompt Engineering Implementation (COMPLETE)**
+## **✅ PHASE 6: Enhanced Source Reference UX (COMPLETE)**
 
 **Implementation Status**: **COMPLETE** ✅
-**Duration**: Day 1 of Week 9 Implementation  
-**Priority**: Critical - Advanced AI Response Quality Enhancement
+**Duration**: Day 1 of Week 5 Implementation  
+**Priority**: Critical - UX/UI Improvement for Source Citations
 **Dependencies**: Phase 5 Complete
 
 ### **🎯 Phase 6 Achievements**
 
-**BREAKTHROUGH IMPROVEMENT**: Implemented comprehensive prompt engineering system that elevates AI responses to expert-level quality through intelligent technique selection and validation.
+**BREAKTHROUGH UX IMPROVEMENT**: Implemented collapsible source references with accordion UI patterns, dramatically reducing interface clutter while maintaining full source transparency.
 
-#### **🔧 Core Prompt Engineering Services**
+#### **🔧 Core UI/UX Enhancements**
 
-##### **1. ChainOfThoughtService** (`src/services/chainOfThoughtService.ts`)
-- **Purpose**: Apply step-by-step reasoning to complex productivity queries for transparent analysis
-- **Multi-Step Processing**: 3-step reasoning framework with confidence tracking per step
-- **Strategy Frameworks**: Specialized reasoning approaches for task priority, project focus, and insights
-- **Performance Optimization**: Structured prompt parsing with fallback reasoning when processing fails
+##### **1. CollapsibleSources Component** (`src/components/chat/ChatModal.tsx`)
+- **Purpose**: Replace always-visible source cards with space-efficient accordion interface
+- **Collapsed State Benefits**: 
+  - Shows source count and average relevance at a glance
+  - Displays top source title as preview
+  - Reduces visual clutter by default
+- **Expanded State Features**:
+  - Smooth animation (300ms ease-in-out)
+  - Full source details with enhanced metadata
+  - Improved readability with proper spacing
 
 ```typescript
-// Key Reasoning Strategies:
-- task_priority: Data Assessment → Priority Analysis → Specific Recommendations
-- project_focus: Project Overview → Resource Analysis → Strategic Insights  
-- summary_insights: Data Collection → Pattern Identification → Insight Generation
-- general: Context Analysis → Information Synthesis → Answer Formulation
+// Key Features:
+- Collapsed by default (follows accordion best practices)
+- Smart preview: Shows count, relevance, and top source
+- Accessible: ARIA labels and keyboard navigation
+- Responsive: Adapts to different screen sizes
 ```
 
-##### **2. PersonaService** (`src/services/personaService.ts`)
-- **Purpose**: Intelligent assignment of expert personas based on query domain and complexity
-- **5 Expert Personas**: Senior Productivity Coach, Data Analyst, Project Manager, Time Specialist, Assistant
-- **Domain Intelligence**: Automatic persona selection based on query analysis and content patterns
-- **Adaptive Prompting**: Dynamic system prompt generation with persona expertise and response style
+##### **2. Enhanced SourceCard Component**
+- **Purpose**: Modernized source display with better information hierarchy
+- **Improved Layout**: 
+  - Clear title and relevance score positioning
+  - Source type badges for quick identification
+  - Truncated content ID for technical reference
+- **Enhanced Interactivity**:
+  - "View details" buttons with hover states
+  - Better visual separation between elements
+  - Improved accessibility with semantic markup
 
-##### **3. ResponseValidationService** (`src/services/responseValidationService.ts`)
-- **Purpose**: Multi-dimensional quality assessment and self-correction for AI responses
-- **5-Factor Validation**: Accuracy, relevance, completeness, clarity, factual basis analysis
-- **Self-Correction Loop**: Automatic response improvement when quality falls below threshold (0.7)
-- **Quality Metrics**: Comprehensive scoring with confidence tracking and improvement suggestions
+##### **3. Progressive Disclosure Pattern**
+- **Collapsed State**: Essential info only (count, relevance, top source)
+- **Expanded State**: Full source details on demand
+- **User Control**: Clear expand/collapse indicators with chevron icons
+- **State Persistence**: Remembers user preference within session
 
-##### **4. AdvancedPromptService** (`src/services/advancedPromptService.ts`)
-- **Purpose**: Master orchestrator applying optimal prompt engineering technique based on query characteristics
-- **Strategy Selection**: Chain-of-thought for complex queries, persona-enhanced for medium complexity, validated responses
-- **Few-Shot Learning**: Context-aware examples for productivity and task management queries
-- **Performance Integration**: Seamless integration with existing RAG pipeline and query enhancement
+#### **🎨 Design System Integration**
 
-#### **🏗️ Advanced Prompt Engineering Architecture**
+##### **Visual Hierarchy Improvements**
+- **Collapsed Sources**: Subtle gray background, minimal visual weight
+- **Source Count Badge**: Clear indication of reference quantity
+- **Relevance Indicators**: Percentage-based relevance scores
+- **Type Classification**: Color-coded source type badges
 
-##### **Intelligent Technique Selection**
-```typescript
-// Processing Strategy Logic:
-- High complexity (>0.6) + analytical terms → Chain-of-Thought Reasoning
-- Medium complexity (>0.4) + domain-specific → Persona-Enhanced Response
-- Quality assurance enabled → Validated Response with potential correction
-- Standard queries → Enhanced basic response with few-shot examples
-```
+##### **Accessibility Enhancements**
+- **ARIA Labels**: Proper expand/collapse state communication
+- **Keyboard Navigation**: Full keyboard accessibility
+- **Focus States**: Clear visual focus indicators
+- **Screen Reader Support**: Descriptive labels and state changes
 
-##### **Expert Persona System**
-```typescript
-// Persona Assignment Logic:
-- Data analysis patterns → Senior Data Analyst persona
-- Project management terms → Agile Project Manager persona
-- Time/schedule queries → Time Management Specialist persona
-- Productivity/optimization → Senior Productivity Coach persona
-- General queries → Productivity Assistant persona
-```
+##### **Animation & Interaction Design**
+- **Smooth Transitions**: 300ms ease-in-out for expand/collapse
+- **Hover States**: Subtle feedback on interactive elements
+- **Loading States**: Graceful handling of source data
+- **Touch-Friendly**: Appropriate touch targets for mobile
 
-##### **Quality Assurance Pipeline**
-```typescript
-// Validation and Correction Flow:
-1. Generate initial response using selected technique
-2. Validate response across 5 quality dimensions
-3. If score < 0.7, apply self-correction with improvement prompt
-4. Re-validate corrected response for quality assurance
-5. Return highest-quality response with metadata tracking
-```
-
-#### **🎯 Problem Solved: Response Quality and Expertise**
+#### **🎯 Problem Solved: Interface Clutter Reduction**
 
 **BEFORE Phase 6**:
-- ❌ Generic AI responses without domain expertise
-- ❌ No reasoning transparency for complex analytical queries  
-- ❌ Inconsistent response quality across different query types
-- ❌ No self-validation or correction mechanisms
+- ❌ Sources always visible, creating cluttered interface
+- ❌ Redundant content display overwhelming users
+- ❌ No progressive disclosure of source information
+- ❌ Poor mobile experience due to space constraints
 
 **AFTER Phase 6** (Implemented):
-- ✅ Expert-level responses with domain-specific knowledge application
-- ✅ Step-by-step reasoning transparency for analytical and complex queries
-- ✅ Consistent high-quality responses through intelligent technique selection
-- ✅ Self-validation and automatic correction when quality standards not met
-- ✅ Specialized personas providing targeted expertise for different productivity domains
+- ✅ Clean, collapsed-by-default source interface
+- ✅ Smart preview with essential information visible
+- ✅ Progressive disclosure following accordion UI best practices
+- ✅ Improved mobile experience with touch-friendly interactions
+- ✅ Reduced cognitive load while maintaining transparency
 
 ### **📊 Technical Specifications**
 
-#### **Performance Characteristics**
-- **Chain-of-Thought Processing**: 800-1500ms for complex reasoning with 3+ steps
-- **Persona Selection**: <50ms for domain analysis and expert assignment
-- **Response Validation**: 300-600ms for 5-factor quality assessment
-- **Self-Correction**: 1000-2000ms for response improvement when needed
-- **Overall Enhancement**: 85-95% improvement in response quality and user satisfaction
+#### **Component Architecture**
+- **CollapsibleSources**: Manages accordion state and preview logic
+- **Enhanced SourceCard**: Renders individual source with improved layout
+- **State Management**: Local component state for expand/collapse
+- **Animation System**: CSS transitions for smooth interactions
 
-#### **Expert Persona Profiles**
-```typescript
-// Available Expert Personas:
-1. Senior Productivity Coach: Workflow optimization, habit formation, practical guidance
-2. Senior Data Analyst: Statistical analysis, pattern identification, quantitative insights
-3. Agile Project Manager: Resource allocation, timeline optimization, strategic planning
-4. Time Management Specialist: Schedule optimization, priority frameworks, attention management
-5. Productivity Assistant: General support, accessible guidance, basic analytics
-```
+#### **UI/UX Patterns Applied**
+- **Accordion Pattern**: Collapsed by default with clear expansion triggers
+- **Progressive Disclosure**: Information revealed based on user intent
+- **Visual Hierarchy**: Clear distinction between primary and secondary info
+- **Responsive Design**: Adapts gracefully across device sizes
 
-#### **Quality Validation Dimensions**
-- **Accuracy**: Factual correctness and data integrity assessment
-- **Relevance**: Direct alignment with user query and intent
-- **Completeness**: Comprehensive coverage of all query aspects
-- **Clarity**: Structure, readability, and communication effectiveness
-- **Factual Basis**: Grounding in provided context and source data
+#### **Accessibility Compliance**
+- **WCAG 2.1 AA**: Meets accessibility guidelines
+- **Keyboard Navigation**: Tab, Enter, Space key support
+- **Screen Reader Support**: Proper ARIA labels and state communication
+- **Color Contrast**: Sufficient contrast ratios for all text elements
 
-### **🚀 User Experience Improvements**
+### **🚀 User Experience Impact**
 
-#### **Enhanced Query Capabilities**
-✅ **Complex Analysis**: "Analyze my productivity patterns and provide strategic insights" → Chain-of-thought reasoning with data analyst expertise  
-✅ **Project Management**: "What should I work on next considering all projects?" → Project manager persona with priority framework application  
-✅ **Time Optimization**: "When am I most productive and how can I optimize my schedule?" → Time management specialist with systematic analysis  
-✅ **Productivity Coaching**: "How can I improve my focus and workflow?" → Productivity coach persona with behavioral change guidance  
-✅ **Data Insights**: "Compare my morning vs afternoon productivity trends" → Data analyst with statistical comparison
+#### **Immediate Benefits**
+1. **Reduced Cognitive Load**: Users see clean responses without clutter
+2. **Faster Scanning**: Quick assessment of source quality and quantity
+3. **Optional Deep Dive**: Full source details available on demand
+4. **Better Mobile UX**: Compact interface works well on small screens
 
-#### **Quality Improvements**
-- **Expert Knowledge**: Responses demonstrate deep domain expertise appropriate to query type
-- **Reasoning Transparency**: Complex queries show step-by-step analytical thinking
-- **Consistent Quality**: Automatic validation ensures high standards across all responses
-- **Adaptive Style**: Response tone and detail level match optimal persona for query type
-- **Self-Improvement**: Automatic correction when initial response quality is insufficient
+#### **Behavioral Improvements**
+- **Increased Engagement**: Cleaner interface encourages interaction
+- **Source Exploration**: Progressive disclosure makes sources more approachable
+- **Trust Building**: Transparent source access builds user confidence
+- **Efficiency Gains**: Faster response consumption with optional detail access
 
 ### **🔗 Integration Points**
 
-#### **Enhanced Service Dependencies**
+#### **Enhanced Chat Flow**
 ```typescript
-AdvancedPromptService → ChainOfThoughtService → PersonaService → ResponseValidationService
-- Seamless integration with existing query enhancement and hybrid search
-- Automatic technique selection based on query complexity analysis
-- Complete metadata tracking for performance monitoring and optimization
+MessageBubble → CollapsibleSources → Individual SourceCards
+- Seamless integration with existing chat interface
+- Backward compatible with current source data structure
+- Enhanced metadata display for better user understanding
 ```
 
-#### **Dashboard Integration**
-- **Phase 6 Status Display**: Visual indicator of advanced prompt engineering activation
-- **Expert Persona Overview**: Available expert roles and specializations
-- **Performance Metrics**: Quality improvement tracking and technique usage statistics
-- **Test Recommendations**: Suggested complex queries to validate advanced capabilities
-
-### **📈 Expected Results**
-
-#### **Performance Improvements**
-- **Overall System Performance**: 90-95% improvement in response quality (combined with all previous phases)
-- **Expert Knowledge Application**: Specialized domain expertise automatically applied
-- **Complex Query Handling**: 80-90% improvement for analytical and strategic queries
-- **Reasoning Quality**: Step-by-step transparency for complex problem-solving
-- **Response Consistency**: High-quality standards maintained across all query types
-
-#### **User Benefits**
-1. **Expert-Level Guidance**: Access to specialized knowledge across 5 productivity domains
-2. **Analytical Transparency**: Visible reasoning process for complex queries and insights
-3. **Quality Assurance**: Consistent high-quality responses through validation and correction
-4. **Adaptive Expertise**: Optimal expert persona automatically selected for each query
-5. **Professional Insights**: Strategic, analytical, and actionable productivity recommendations
-
-### **🎯 Production Ready Status**
-
-#### **Complete Implementation**
-- ✅ ChainOfThoughtService with 4 specialized reasoning frameworks
-- ✅ PersonaService with 5 expert personas and intelligent assignment
-- ✅ ResponseValidationService with 5-factor assessment and self-correction
-- ✅ AdvancedPromptService orchestrating optimal technique selection
-- ✅ Full integration with enhanced RAG service and query enhancement
-- ✅ Dashboard integration showing advanced prompt engineering status
-
-#### **Quality Assurance**
-- ✅ Automatic fallback to standard responses when advanced techniques fail
-- ✅ Performance optimization with parallel processing where possible
-- ✅ Complete metadata tracking for technique usage and performance analysis
-- ✅ Self-validation and correction ensuring response quality standards
+#### **Future Enhancement Ready**
+- **Source Filtering**: Framework ready for source type/relevance filtering
+- **Expanded Metadata**: Easy to add more source information
+- **Interaction Analytics**: Track which sources users expand most
+- **Personalization**: Remember user preferences for source display
 
 ---
 
-## **🎉 Phase 1-7 Complete - Production Ready Foundation**
+## **🎉 Phase 1-6 Complete - Production Ready Foundation**
 
 ### **✅ Comprehensive Implementation Status**
 
@@ -1291,30 +1241,6 @@ AdvancedPromptService → ChainOfThoughtService → PersonaService → ResponseV
 - ✅ Enhanced dashboard with execution capabilities  
 - ✅ Real-time monitoring and error handling
 - ✅ Complete data migration infrastructure
-
-**Phase 3 Achievements:**
-- ✅ Revolutionary upgrade with multi-level chunking and hybrid search capabilities
-- ✅ Synthetic text generation and query processing enhancements
-- ✅ Comprehensive query processing and response generation
-
-**Phase 4 Achievements:**
-- ✅ Intelligent incremental sync system with cost reduction and duplicate elimination
-- ✅ Smart change detection and document versioning
-- ✅ Real-time monitoring and error handling
-
-**Phase 5 Achievements:**
-- ✅ Synthetic chunk optimization with cost reduction and content quality improvement
-- ✅ Reduced embedding costs and maintained advanced RAG capabilities
-- ✅ Real-time monitoring and error handling
-
-**Phase 6 Achievements:**
-- ✅ Comprehensive prompt engineering system with expert-level response quality
-- ✅ Intelligent technique selection and validation
-- ✅ Real-time monitoring and error handling
-
-**Phase 7 Achievements:**
-- ✅ Core AI functionality fix with current date/time context
-- ✅ Real-time monitoring and error handling
 
 ### **🔧 Technical Foundation Established**
 
