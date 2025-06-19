@@ -61,11 +61,11 @@ export class DatabaseMigration {
         sql: `
           CREATE INDEX IF NOT EXISTS embeddings_active_tasks_idx 
           ON embeddings (user_id, created_at DESC) 
-          WHERE content_type = 'task' AND (metadata->>'completionStatus')::boolean = false;
+          WHERE content_type = 'task_aggregate' AND (metadata->>'completionStatus')::boolean = false;
           
           CREATE INDEX IF NOT EXISTS embeddings_completed_tasks_idx 
           ON embeddings (user_id, created_at DESC) 
-          WHERE content_type = 'task' AND (metadata->>'completionStatus')::boolean = true;
+          WHERE content_type = 'task_aggregate' AND (metadata->>'completionStatus')::boolean = true;
         `
       });
       appliedOptimizations.push('Partial indexes for task filtering created');

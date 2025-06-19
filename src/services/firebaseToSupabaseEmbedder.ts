@@ -26,8 +26,8 @@ export class FirebaseToSupabaseEmbedder {
       console.log(`🔄 Starting comprehensive Firebase to Supabase sync for user: ${userId}`);
 
       const collections = [
-        { name: 'tasks', contentType: 'task' },
-        { name: 'projects', contentType: 'project' },
+        { name: 'tasks', contentType: 'task_aggregate' },
+        { name: 'projects', contentType: 'project_summary' },
         { name: 'workSessions', contentType: 'session' },
         { name: 'dailySiteUsage', contentType: 'site_usage' },
         { name: 'deepFocusSessions', contentType: 'deep_focus' },
@@ -200,15 +200,16 @@ export class FirebaseToSupabaseEmbedder {
    */
   private static formatDocumentContent(doc: DocumentData, contentType: string): string {
     switch (contentType) {
-      case 'task':
-        return `Task: ${doc.title || 'Untitled Task'}
-${doc.notes ? `Notes: ${doc.notes}` : ''}
-${doc.projectName ? `Project: ${doc.projectName}` : ''}
-Status: ${doc.completed ? 'Complete' : 'Incomplete'}
-${doc.pomodoroCount ? `Pomodoros: ${doc.pomodoroCount}` : ''}
-${doc.tags?.length ? `Tags: ${doc.tags.join(', ')}` : ''}`.trim();
+      case 'task_aggregate':
+        return [
+          `Task: ${doc.text || doc.title || 'Untitled'}`,
+          doc.notes ? `Notes: ${doc.notes}` : '',
+          doc.project ? `Project: ${doc.project}` : '',
+          doc.completed ? 'Status: Completed' : 'Status: Incomplete',
+          doc.pomodoroCount ? `Pomodoros: ${doc.pomodoroCount}` : ''
+        ].filter(Boolean).join('\n');
 
-      case 'project':
+      case 'project_summary':
         return `Project: ${doc.name || 'Untitled Project'}
 ${doc.description ? `Description: ${doc.description}` : ''}
 ${doc.category ? `Category: ${doc.category}` : ''}

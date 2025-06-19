@@ -18,6 +18,12 @@ export class ComprehensiveFirebaseSync {
     'users'
   ] as const;
 
+  private static readonly COLLECTION_MAPPINGS = {
+    'tasks': 'task_aggregate',
+    'projects': 'project_summary',
+    'sessions': 'session'
+  } as const;
+
   /**
    * Sync ALL Firebase data to Supabase for a specific user
    */
@@ -193,9 +199,9 @@ export class ComprehensiveFirebaseSync {
    */
   private static getContentType(collectionName: string): string {
     const mapping: Record<string, string> = {
-      'tasks': 'task',
-      'projects': 'project', 
-      'workSessions': 'session',
+      'tasks': 'task_aggregate',
+      'projects': 'project_summary', 
+      'workSessions': 'task_sessions',
       'dailySiteUsage': 'site_usage',
       'deepFocusSessions': 'deep_focus',
       'users': 'user_profile'

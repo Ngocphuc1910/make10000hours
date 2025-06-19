@@ -144,7 +144,7 @@ export class DataSyncService {
     return {
       id,
       content,
-      contentType: 'task',
+      contentType: 'task_aggregate',
       metadata: {
         documentId: id,
         title: data.title,
@@ -178,7 +178,7 @@ export class DataSyncService {
     return {
       id,
       content,
-      contentType: 'session',
+      contentType: 'task_sessions',
       metadata: {
         documentId: id,
         projectName: data.projectName,
@@ -208,7 +208,7 @@ export class DataSyncService {
     return {
       id,
       content,
-      contentType: 'project',
+      contentType: 'project_summary',
       metadata: {
         documentId: id,
         name: data.name,
