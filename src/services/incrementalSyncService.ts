@@ -152,7 +152,7 @@ export class IncrementalSyncService {
         
         try {
           // Check if we already have this document version
-          const existingDoc = await this.getExistingDocument(userId, 'task', doc.id);
+          const existingDoc = await this.getExistingDocument(userId, 'task_aggregate', doc.id);
           if (existingDoc && this.isDocumentCurrent(existingDoc, data.updatedAt?.toDate())) {
             result.skipped++;
             console.log(`⏭️ Skipping task ${doc.id}: already current`);
@@ -182,7 +182,7 @@ export class IncrementalSyncService {
           const syntheticText = SyntheticTextGenerator.generateTaskAggregateText(task, taskSessions, project);
           
           // Generate embedding and store
-          await this.storeDocumentWithEmbedding(userId, 'task', doc.id, syntheticText, {
+          await this.storeDocumentWithEmbedding(userId, 'task_aggregate', doc.id, syntheticText, {
             ...task,
             projectName: project?.name,
             sessionCount: taskSessions.length,
@@ -244,7 +244,7 @@ export class IncrementalSyncService {
         const data = doc.data();
         
         try {
-          const existingDoc = await this.getExistingDocument(userId, 'project', doc.id);
+          const existingDoc = await this.getExistingDocument(userId, 'project_summary', doc.id);
           if (existingDoc && this.isDocumentCurrent(existingDoc, data.updatedAt?.toDate())) {
             result.skipped++;
             console.log(`⏭️ Skipping project ${doc.id}: already current`);
@@ -264,7 +264,7 @@ export class IncrementalSyncService {
 
           const syntheticText = SyntheticTextGenerator.generateProjectSummaryText(project, projectTasks, projectSessions);
           
-          await this.storeDocumentWithEmbedding(userId, 'project', doc.id, syntheticText, {
+          await this.storeDocumentWithEmbedding(userId, 'project_summary', doc.id, syntheticText, {
             ...project,
             taskCount: projectTasks.length,
             sessionCount: projectSessions.length,
@@ -325,7 +325,7 @@ export class IncrementalSyncService {
         const data = doc.data();
         
         try {
-          const existingDoc = await this.getExistingDocument(userId, 'session', doc.id);
+          const existingDoc = await this.getExistingDocument(userId, 'task_sessions', doc.id);
           if (existingDoc && this.isDocumentCurrent(existingDoc, data.updatedAt?.toDate())) {
             result.skipped++;
             console.log(`⏭️ Skipping session ${doc.id}: already current`);
@@ -354,7 +354,7 @@ export class IncrementalSyncService {
           if (task && project) {
             const syntheticText = SyntheticTextGenerator.generateSessionText(session, task, project);
             
-            await this.storeDocumentWithEmbedding(userId, 'session', doc.id, syntheticText, {
+            await this.storeDocumentWithEmbedding(userId, 'task_sessions', doc.id, syntheticText, {
               ...session,
               taskName: task.title,
               projectName: project.name,
@@ -402,11 +402,17 @@ export class IncrementalSyncService {
    */
   private static async getExistingDocument(userId: string, contentType: string, documentId: string): Promise<any> {
     try {
+      // Ensure contentType is properly standardized
+      const standardizedContentType = contentType === 'task' ? 'task_aggregate' : 
+                                     contentType === 'project' ? 'project_summary' : 
+                                     contentType === 'session' ? 'task_sessions' :
+                                     contentType;
+      
       const { data, error } = await supabase
         .from('user_productivity_documents')
         .select('id, metadata, content')
         .eq('user_id', userId)
-        .eq('content_type', contentType)
+        .eq('content_type', standardizedContentType)
         .eq('metadata->>documentId', documentId)
         .single();
       
@@ -433,9 +439,15 @@ export class IncrementalSyncService {
     metadata: any
   ): Promise<void> {
     // Generate embedding
+    // Ensure contentType is properly standardized (should already be, but double-check)
+    const standardizedContentType = contentType === 'task' ? 'task_aggregate' : 
+                                   contentType === 'project' ? 'project_summary' : 
+                                   contentType === 'session' ? 'task_sessions' :
+                                   contentType;
+    
     const embedding = await OpenAIService.generateEmbedding({ 
       content, 
-      contentType: contentType === 'task' ? 'task_aggregate' : contentType 
+      contentType: standardizedContentType 
     });
     
     // Check if document already exists
@@ -443,13 +455,13 @@ export class IncrementalSyncService {
       .from('user_productivity_documents')
       .select('id')
       .eq('user_id', userId)
-      .eq('content_type', contentType)
+      .eq('content_type', standardizedContentType)
       .eq('metadata->>documentId', documentId)
       .single();
 
     const documentData = {
       user_id: userId,
-      content_type: contentType,
+      content_type: standardizedContentType,
       content,
       embedding,
       metadata: {

@@ -325,11 +325,11 @@ const CollapsibleSources: React.FC<{ sources: ChatSource[] }> = ({ sources }) =>
       <div 
         className={`transition-all duration-300 ease-in-out ${
           isExpanded 
-            ? 'max-h-96 opacity-100' 
+            ? 'max-h-80 opacity-100' 
             : 'max-h-0 opacity-0'
         } overflow-hidden`}
       >
-        <div className="px-3 pb-3 space-y-2 border-t border-gray-200">
+        <div className="px-3 pb-3 space-y-2 border-t border-gray-200 max-h-80 overflow-y-auto">
           {sources.map((source, index) => (
             <SourceCard key={source.id || index} source={source} isExpanded={true} />
           ))}

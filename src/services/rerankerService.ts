@@ -507,19 +507,21 @@ export class RerankerService {
     
     let score = 0.5; // Base score
     
-    // Match content type to query intent
+    // Match content type to query intent (optimized for standardized content types)
     switch (queryIntent) {
       case 'quantitative':
-        if (contentType.includes('summary') || contentType.includes('aggregate')) score += 0.3;
+        if (contentType === 'monthly_summary' || contentType === 'weekly_summary' || 
+            contentType === 'daily_summary' || contentType === 'task_aggregate') score += 0.3;
         break;
       case 'informational':
-        if (contentType.includes('project') || contentType.includes('task')) score += 0.3;
+        if (contentType === 'project_summary' || contentType === 'task_aggregate') score += 0.3;
         break;
       case 'analytical':
-        if (contentType.includes('session') || contentType.includes('analysis')) score += 0.3;
+        if (contentType === 'task_sessions' || contentType === 'task_aggregate' || 
+            contentType === 'project_summary') score += 0.3;
         break;
       case 'status':
-        if (contentType.includes('summary') || contentType.includes('update')) score += 0.3;
+        if (contentType.includes('summary') || contentType === 'task_aggregate') score += 0.3;
         break;
     }
     

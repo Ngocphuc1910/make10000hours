@@ -108,8 +108,8 @@ Provide a helpful response with specific information based on the context.`;
         id: doc.id || `source_${index + 1}`,
         type: doc.content_type || 'document',
         contentId: doc.id || `source_${index + 1}`,
-        title: doc.content_type === 'task' ? 'Task' : 
-               doc.content_type === 'project' ? 'Project' : 'Document',
+        title: doc.content_type === 'task_aggregate' ? 'Task' :
+               doc.content_type === 'project_summary' ? 'Project' : 'Document',
         snippet: doc.content.substring(0, 200) + '...',
         relevanceScore: Math.max(0.1, 1 - (index * 0.1)), // Simple relevance scoring
       }));
