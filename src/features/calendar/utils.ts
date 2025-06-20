@@ -116,15 +116,16 @@ export const calculateNewEventTime = (
   // Use actual duration to preserve zero-duration events
   const actualDuration = originalEvent.end.getTime() - originalEvent.start.getTime();
   
-  if (dropResult.isAllDay || originalEvent.isAllDay) {
-    // For all-day events, just move to the target date
+  // Only check drop target, not original event type
+  if (dropResult.isAllDay) {
+    // For all-day drops, move to target date as all-day
     const start = new Date(dropResult.targetDate);
     start.setHours(0, 0, 0, 0);
     const end = new Date(start);
     return { start, end };
   }
   
-  // For timed events
+  // For timed drops
   let start: Date;
   if (dropResult.targetTime) {
     start = new Date(dropResult.targetDate);
@@ -135,8 +136,17 @@ export const calculateNewEventTime = (
     start.setHours(originalEvent.start.getHours(), originalEvent.start.getMinutes(), 0, 0);
   }
   
-  // Preserve original duration (including zero duration for same start/end time events)
-  const end = new Date(start.getTime() + actualDuration);
+  // Smart duration calculation for converted events
+  let duration = actualDuration;
+  if (originalEvent.isAllDay && actualDuration === 0) {
+    // All-day to timed: use 1-hour default
+    duration = 60 * 60 * 1000;
+  } else if (actualDuration === 0) {
+    // Zero-duration to timed: use 30-min default
+    duration = 30 * 60 * 1000;
+  }
+  
+  const end = new Date(start.getTime() + duration);
   return { start, end };
 };
 
