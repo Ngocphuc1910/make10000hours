@@ -17,11 +17,12 @@ interface TaskFormProps {
   initialProjectId?: string;
   initialStartTime?: Date;
   initialEndTime?: Date;
+  isAllDay?: boolean;
   onCancel: () => void;
   onSave?: () => void;
 }
 
-const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, initialStartTime, initialEndTime, onCancel, onSave }) => {
+const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, initialStartTime, initialEndTime, isAllDay, onCancel, onSave }) => {
   const addTask = useTaskStore(state => state.addTask);
   const updateTask = useTaskStore(state => state.updateTask);
   const deleteTask = useTaskStore(state => state.deleteTask);
@@ -68,6 +69,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [includeTime, setIncludeTime] = useState(() => {
     if (task?.includeTime !== undefined) return task.includeTime;
+    if (isAllDay === true) return false; // Force false for all-day events
     if (initialStartTime && initialEndTime) return true;
     return false;
   });

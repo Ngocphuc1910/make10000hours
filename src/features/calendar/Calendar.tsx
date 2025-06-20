@@ -279,11 +279,11 @@ export const Calendar: React.FC = () => {
     setClearDragIndicator(true);
     setTimeout(() => setClearDragIndicator(false), 100);
     
-    // Create all-day event times
+    // Create all-day event - use same date for both start and end without specific times
     const startTime = new Date(date);
     startTime.setHours(0, 0, 0, 0);
     const endTime = new Date(date);
-    endTime.setHours(23, 59, 59, 999);
+    endTime.setHours(0, 0, 0, 0); // Same as start time for all-day events
     
     // Determine task status based on whether the scheduled date is today
     const isToday = isSameDay(startTime, new Date());
@@ -291,6 +291,12 @@ export const Calendar: React.FC = () => {
     
     setTimeSlotData({ startTime, endTime, status, isAllDay: true });
     setIsTimeSlotTaskOpen(true);
+  };
+
+  // Separate handler for month view date clicks (should create all-day events)
+  const handleMonthDateClick = (date: Date) => {
+    // Month view clicks should create all-day events
+    handleAllDayClick(date);
   };
 
   // Old handleSaveEvent - removed since we only use TaskForm now
@@ -712,7 +718,7 @@ export const Calendar: React.FC = () => {
               currentDate={currentDate}
               events={allEvents}
               onEventClick={handleEventClick}
-              onDateClick={handleTimeSlotClick}
+              onDateClick={handleMonthDateClick}
               onEventDrop={handleEventDrop}
               onDayViewClick={(date) => {
                 setCurrentDate(date);
@@ -780,6 +786,7 @@ export const Calendar: React.FC = () => {
                 initialStartTime={timeSlotData.startTime}
                 initialEndTime={timeSlotData.endTime}
                 status={timeSlotData.status}
+                isAllDay={timeSlotData.isAllDay}
                 onCancel={() => {
                   setIsTimeSlotTaskOpen(false);
                   setTimeSlotData(null);
