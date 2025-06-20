@@ -329,12 +329,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
     }
   };
 
-  const handleWorkLater = () => {
+  const handleToggleStatus = () => {
     if (task) {
+      const newStatus = task.status === 'pomodoro' ? 'todo' : 'pomodoro';
       updateTask(task.id, {
         ...task,
-        status: 'todo',
-        completed: false
+        status: newStatus,
+        completed: false,
+        hideFromPomodoro: newStatus === 'pomodoro' ? false : task.hideFromPomodoro
       });
       onCancel();
     }
@@ -649,9 +651,9 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                   </button>
                   <button
                     className="text-[#4096FF] hover:text-blue-600 text-sm font-medium"
-                    onClick={handleWorkLater}
+                    onClick={handleToggleStatus}
                   >
-                    Work later
+                    {task.status === 'pomodoro' ? 'Work later' : 'Add to Pomodoro'}
                   </button>
                 </>
               )}
