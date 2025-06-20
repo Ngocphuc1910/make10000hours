@@ -196,11 +196,32 @@ const GlobalKeyboardShortcuts: React.FC = () => {
         navigate('/dashboard');
       }
       
-      // Check for D to navigate to Deep Focus (only if not typing in form elements)
-      if ((event.key === 'D' || event.key === 'd') && !isTypingInFormElement) {
-        console.log('🔑 D detected - navigating to Deep Focus');
+      // Check for F to navigate to Deep Focus (only if not typing in form elements)
+      if ((event.key === 'F' || event.key === 'f') && !isTypingInFormElement) {
+        console.log('🔑 F detected - navigating to Deep Focus');
         event.preventDefault();
         navigate('/deep-focus');
+      }
+      
+      // Check for D to navigate to Calendar Day view (only if not typing in form elements)
+      if ((event.key === 'D' || event.key === 'd') && !isTypingInFormElement) {
+        console.log('🔑 D detected - navigating to Calendar Day view');
+        event.preventDefault();
+        navigate('/calendar?view=day');
+      }
+      
+      // Check for W to navigate to Calendar Week view (only if not typing in form elements)
+      if ((event.key === 'W' || event.key === 'w') && !isTypingInFormElement) {
+        console.log('🔑 W detected - navigating to Calendar Week view');
+        event.preventDefault();
+        navigate('/calendar?view=week');
+      }
+      
+      // Check for M to navigate to Calendar Month view (only if not typing in form elements)
+      if ((event.key === 'M' || event.key === 'm') && !isTypingInFormElement) {
+        console.log('🔑 M detected - navigating to Calendar Month view');
+        event.preventDefault();
+        navigate('/calendar?view=month');
       }
     };
 
