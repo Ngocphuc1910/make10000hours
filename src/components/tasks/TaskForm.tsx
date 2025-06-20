@@ -116,6 +116,9 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
 
     if (titleInputRef.current) {
       titleInputRef.current.focus();
+      // Position cursor at the end of the text
+      const textLength = titleInputRef.current.value.length;
+      titleInputRef.current.setSelectionRange(textLength, textLength);
     }
   }, []); // Remove dependencies to prevent re-runs
 
@@ -172,6 +175,13 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       textarea.style.height = `${textarea.scrollHeight}px`;
     });
   }, []);
+
+  // Auto-adjust title textarea height on mount and when title changes
+  useEffect(() => {
+    if (titleInputRef.current) {
+      adjustTextareaHeight(titleInputRef.current);
+    }
+  }, [title, adjustTextareaHeight]);
   
   // Debounced height adjustment for better performance during fast typing
   useEffect(() => {
@@ -445,14 +455,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       <div 
         key={task?.id || 'new-task'}
         ref={formRef}
-        className="task-card p-6 bg-task-todo-bg border border-task-todo-border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 animate-fade-in relative"
+        className="task-card p-4 bg-task-todo-bg border border-task-todo-border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 animate-fade-in relative"
         style={{ zIndex: showDatePicker ? 1000 : 'auto' }}
       >
         <div className="flex-1 min-w-0">
           <textarea
             autoFocus
             ref={titleInputRef}
-            className={`w-full text-lg font-medium text-text-primary px-0 py-1 bg-transparent focus:outline-none border-none resize-none overflow-hidden ${titleError ? 'ring-2 ring-red-200' : ''}`}
+            className={`w-full text-lg font-medium text-text-primary px-0 py-0.5 bg-transparent focus:outline-none border-none resize-none overflow-hidden ${titleError ? 'ring-2 ring-red-200' : ''}`}
             placeholder="Task name"
             value={title}
             onChange={(e) => {
@@ -469,7 +479,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
           
           <textarea
             ref={descriptionRef}
-            className="w-full text-sm text-text-secondary px-0 py-2 bg-transparent border-none focus:outline-none resize-none"
+            className="w-full text-sm text-text-secondary px-0 py-1 bg-transparent border-none focus:outline-none resize-none"
             placeholder="Description"
             value={description}
             onChange={(e) => {
@@ -481,7 +491,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
             rows={1}
           />
           
-          <div className="flex flex-wrap gap-3 mb-4">
+          <div className="flex flex-wrap gap-3 mb-2">
             <div className="flex flex-wrap gap-2 min-w-0">
               {/* Project Selection */}
               <div className="relative">
