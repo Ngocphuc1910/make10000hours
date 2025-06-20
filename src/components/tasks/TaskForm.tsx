@@ -455,7 +455,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       <div 
         key={task?.id || 'new-task'}
         ref={formRef}
-        className="task-card p-4 bg-task-todo-bg border border-task-todo-border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 animate-fade-in relative"
+        className="task-card p-4 bg-background-secondary border border-border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 animate-fade-in relative"
         style={{ zIndex: showDatePicker ? 1000 : 'auto' }}
       >
         <div className="flex-1 min-w-0">
