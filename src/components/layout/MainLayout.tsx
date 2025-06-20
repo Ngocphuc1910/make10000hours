@@ -159,7 +159,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
               }
             }
           >
-            <div className="w-full h-full overflow-y-auto">
+            <div className="w-full h-full overflow-y-auto flex flex-col items-center justify-center">
               {children || <Outlet />}
             </div>
           </div>
