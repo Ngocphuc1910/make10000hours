@@ -42,6 +42,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
   const [description, setDescription] = useState(task?.description || '');
   const [titleError, setTitleError] = useState(false);
   const [projectError, setProjectError] = useState(false);
+  const [timeSpentError, setTimeSpentError] = useState(false);
+  const [timeEstimatedError, setTimeEstimatedError] = useState(false);
   const [isCreatingNewProject, setIsCreatingNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [calendarDate, setCalendarDate] = useState(() => {
@@ -92,6 +94,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
   const projectSelectRef = useRef<HTMLSelectElement>(null);
   const newProjectInputRef = useRef<HTMLInputElement>(null);
   const timeEstimatedRef = useRef<HTMLInputElement>(null);
+  const timeSpentRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const calendarInputRef = useRef<HTMLButtonElement>(null);
@@ -200,6 +203,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
     // Reset errors
     setTitleError(false);
     setProjectError(false);
+    setTimeSpentError(false);
+    setTimeEstimatedError(false);
     
     // Validate required fields
     if (!title.trim()) {
@@ -215,6 +220,26 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       setProjectError(true);
       if (newProjectInputRef.current) {
         newProjectInputRef.current.focus();
+      }
+      return;
+    }
+
+    // Validate time values are not negative
+    const timeSpentValue = parseInt(timeSpent) || 0;
+    const timeEstimatedValue = parseInt(timeEstimated) || 0;
+    
+    if (timeSpentValue < 0) {
+      setTimeSpentError(true);
+      if (timeSpentRef.current) {
+        timeSpentRef.current.focus();
+      }
+      return;
+    }
+
+    if (timeEstimatedValue < 0) {
+      setTimeEstimatedError(true);
+      if (timeEstimatedRef.current) {
+        timeEstimatedRef.current.focus();
       }
       return;
     }
@@ -567,35 +592,49 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
               </div>
 
               {/* Time Estimation */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-background-secondary border border-border hover:border-text-secondary rounded text-xs text-text-secondary flex-shrink-0">
-                <div className="w-3.5 h-3.5 flex items-center justify-center">
-                  <Icon name="time-line" className="w-3.5 h-3.5" />
+              <div className="flex flex-col">
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 bg-background-secondary border border-border hover:border-text-secondary rounded text-xs text-text-secondary flex-shrink-0 ${timeSpentError || timeEstimatedError ? 'border-red-500' : ''}`}>
+                  <div className="w-3.5 h-3.5 flex items-center justify-center">
+                    <Icon name="time-line" className="w-3.5 h-3.5" />
+                  </div>
+                  {task && (
+                    <>
+                      <input
+                        ref={timeSpentRef}
+                        type="number"
+                        className="w-7 text-center bg-transparent border-none focus:outline-none p-0 text-xs"
+                        placeholder="0"
+                        min="0"
+                        value={timeSpent}
+                        onChange={(e) => {
+                          setTimeSpent(e.target.value);
+                          setTimeSpentError(false);
+                        }}
+                      />
+                      <span className="text-text-secondary">/</span>
+                    </>
+                  )}
+                  {!task && <span className="whitespace-nowrap">Est.</span>}
+                  <input
+                    ref={timeEstimatedRef}
+                    type="number"
+                    className="w-7 text-center bg-transparent border-none focus:outline-none p-0 text-xs"
+                    placeholder="0"
+                    min="0"
+                    value={timeEstimated}
+                    onChange={(e) => {
+                      setTimeEstimated(e.target.value);
+                      setTimeEstimatedError(false);
+                    }}
+                    onKeyDown={handleTimeEstimatedKeyDown}
+                  />
+                  <span className="text-text-secondary whitespace-nowrap">m</span>
                 </div>
-                {task && (
-                  <>
-                    <input
-                      type="number"
-                      className="w-7 text-center bg-transparent border-none focus:outline-none p-0 text-xs"
-                      placeholder="0"
-                      min="0"
-                      value={timeSpent}
-                      onChange={(e) => setTimeSpent(e.target.value)}
-                    />
-                    <span className="text-text-secondary">/</span>
-                  </>
+                {(timeSpentError || timeEstimatedError) && (
+                  <div className="text-xs text-red-500 mt-1 px-2.5">
+                    Time must be positive!
+                  </div>
                 )}
-                {!task && <span className="whitespace-nowrap">Est.</span>}
-                <input
-                  ref={timeEstimatedRef}
-                  type="number"
-                  className="w-7 text-center bg-transparent border-none focus:outline-none p-0 text-xs"
-                  placeholder="0"
-                  min="0"
-                  value={timeEstimated}
-                  onChange={(e) => setTimeEstimated(e.target.value)}
-                  onKeyDown={handleTimeEstimatedKeyDown}
-                />
-                <span className="text-text-secondary whitespace-nowrap">m</span>
               </div>
 
               {/* Calendar */}
