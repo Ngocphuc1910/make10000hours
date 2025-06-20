@@ -102,6 +102,32 @@ export class IntelligentPromptGenerator {
     // Build the contextualized prompt
     let prompt = `${promptConfig.systemMessage}\n\n`;
     
+    // Add formatting guidelines
+    prompt += `CRITICAL FORMATTING REQUIREMENTS:\\n`;
+    prompt += `• Use clean, scannable format with minimal clutter\\n`;
+    prompt += `• Start with ONE emoji section header: 🎯 **This Week's Focus**\\n`;
+    prompt += `• Use simple hierarchy:\\n`;
+    prompt += `  **Main Category** (bold, no bullets)\\n`;
+    prompt += `  • Key item (bullet + normal text)\\n`;
+    prompt += `  • Another key item\\n`;
+    prompt += `• **Bold only** project names and key metrics like **Make10000hours**\\n`;
+    prompt += `• Limit to 3-5 main points maximum\\n`;
+    prompt += `• NO sub-bullets, NO checkboxes mixed with bullets\\n`;
+    prompt += `• ONE blank line between sections only\\n`;
+    prompt += `• Keep responses short and actionable\\n\\n`;
+    
+    prompt += `FORMATTING EXAMPLE:\\n`;
+    prompt += `🎯 **This Week's Focus**\\n\\n`;
+    prompt += `**Priority Tasks**\\n`;
+    prompt += `• **Make10000hours** project needs **2h 15m** more work\\n`;
+    prompt += `• Calendar improvements are **66% complete**\\n\\n`;
+    prompt += `**Key Metrics**\\n`;
+    prompt += `• **20 tasks completed** out of 22 this week\\n`;
+    prompt += `• **Strong momentum** with daily completion rate\\n\\n`;
+    prompt += `**Next Actions**\\n`;
+    prompt += `• Focus on morning productivity sessions\\n`;
+    prompt += `• Complete remaining calendar features\\n\\n`;
+    
     // Add specific instructions for this query type
     prompt += `RESPONSE REQUIREMENTS:\n`;
     prompt += `1. Answer only what was asked - no extra information\n`;
