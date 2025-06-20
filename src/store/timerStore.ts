@@ -49,6 +49,7 @@ interface TimerState {
   updateActiveSession: () => Promise<void>;
   completeActiveSession: (status: 'completed' | 'paused' | 'switched') => Promise<void>;
   switchActiveSession: () => Promise<void>;
+  switchToNextPomodoroTask: (nextTask: Task) => Promise<void>;
   cleanupOrphanedSessions: () => Promise<void>;
   
   // Persistence actions
@@ -700,6 +701,43 @@ export const useTimerStore = create<TimerState>((set, get) => {
 
     setEnableStartPauseBtn: (enable: boolean) => {
       set({ enableStartPauseBtn: enable });
+    },
+
+    switchToNextPomodoroTask: async (nextTask: Task) => {
+      const { mode, sessionsCompleted, settings, currentTask, activeSession } = get();
+      
+      console.log('switchToNextPomodoroTask called:', {
+        nextTaskId: nextTask.id,
+        nextTaskTitle: nextTask.title,
+        currentTaskId: currentTask?.id,
+        currentTaskTitle: currentTask?.title,
+        mode,
+        hasActiveSession: !!activeSession
+      });
+      
+      if (mode === 'pomodoro' && currentTask && nextTask.id !== currentTask.id) {
+        // Complete current active session
+        if (activeSession) {
+          console.log('Completing current session:', activeSession.sessionId);
+          await get().completeActiveSession('completed');
+        }
+        
+        // Set new task and clear session tracking for fresh start
+        console.log('Setting new current task:', nextTask.title);
+        set({ 
+          currentTask: nextTask,
+          sessionStartTimerPosition: null, // Will be set when new session is created
+          lastCountedMinute: null // Reset minute tracking for new task
+        });
+        
+        // Create new active session for new task
+        console.log('Creating new session for task:', nextTask.title);
+        await get().createActiveSession();
+      } else {
+        console.log('Skipping task switch - conditions not met');
+      }
+      
+      get().saveToDatabase();
     },
   };
 });

@@ -20,7 +20,7 @@ interface TaskState {
   addTask: (taskData: Omit<Task, 'id' | 'order' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   updateTask: (taskId: string, taskData: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
-  toggleTaskCompletion: (taskId: string) => Promise<void>;
+  toggleTaskCompletion: (taskId: string, context?: string) => Promise<Task | null>;
   updateTaskStatus: (taskId: string, status: Task['status']) => Promise<void>;
   reorderTasks: (taskId: string, newIndex: number) => Promise<void>;
   moveTaskToStatusAndPosition: (taskId: string, newStatus: Task['status'], targetIndex: number) => Promise<void>;
@@ -35,6 +35,7 @@ interface TaskState {
   handleArchiveCompleted: () => Promise<void>;
   cleanupListeners: () => void;
   cleanupOrphanedWorkSessions: () => Promise<{ deletedCount: number; orphanedSessions: { id: string; taskId: string; duration: number; date: string; }[]; }>;
+  getNextPomodoroTask: (currentTaskId: string) => Task | null;
 }
 
 const tasksCollection = collection(db, 'tasks');
@@ -359,15 +360,21 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
   },
   
-  toggleTaskCompletion: async (id) => {
+  toggleTaskCompletion: async (id, context = 'default') => {
     try {
       const { tasks } = get();
       const task = tasks.find(t => t.id === id);
       
-      if (!task) return;
+      if (!task) return null;
       
       const completed = !task.completed;
       const status = completed ? 'completed' : 'pomodoro';
+      let nextTask: Task | null = null;
+      
+      // If completing a task in Pomodoro context, find next task
+      if (completed && context === 'pomodoro') {
+        nextTask = get().getNextPomodoroTask(id);
+      }
       
       // If completing a task that is currently active in the timer, handle timer state
       if (completed) {
@@ -377,13 +384,16 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         
         // Check if this task is currently active in the timer
         if (timerState.currentTask && timerState.currentTask.id === id) {
-          // Pause the timer
-          if (timerState.isRunning) {
-            await timerState.pause();
+          if (context === 'pomodoro' && nextTask) {
+            // In Pomodoro context with next task available - switch without pausing
+            await timerState.switchToNextPomodoroTask(nextTask);
+          } else {
+            // Regular completion or no next task - pause timer and clear task
+            if (timerState.isRunning) {
+              await timerState.pause();
+            }
+            await timerState.setCurrentTask(null);
           }
-          
-          // Clear the current task from timer
-          await timerState.setCurrentTask(null);
         }
       }
       
@@ -399,6 +409,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       if (completed) {
         trackTaskCompleted(id, task.timeSpent, task.projectId);
       }
+
+      return nextTask; // Return next task for caller reference
     } catch (error) {
       console.error('Error toggling task completion:', error);
       throw error;
@@ -669,6 +681,35 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       console.error('Error cleaning up orphaned work sessions:', error);
       throw error;
     }
+  },
+
+  // Find next task with 'pomodoro' status after current task
+  getNextPomodoroTask: (currentTaskId: string): Task | null => {
+    const { tasks } = get();
+    
+    // Get all pomodoro tasks after the current task (by order)
+    const pomodoroTasks = tasks
+      .filter(task => task.status === 'pomodoro' && !task.completed && !task.hideFromPomodoro)
+      .sort((a, b) => a.order - b.order);
+    
+    console.log('Finding next Pomodoro task:', {
+      currentTaskId,
+      allPomodoroTasks: pomodoroTasks.map(t => ({ id: t.id, title: t.title, order: t.order }))
+    });
+    
+    // Find current task position in pomodoro list
+    const currentPomodoroIndex = pomodoroTasks.findIndex(t => t.id === currentTaskId);
+    const nextTask = currentPomodoroIndex >= 0 && currentPomodoroIndex < pomodoroTasks.length - 1
+      ? pomodoroTasks[currentPomodoroIndex + 1]
+      : null;
+    
+    console.log('Next task result:', {
+      currentIndex: currentPomodoroIndex,
+      nextTask: nextTask ? { id: nextTask.id, title: nextTask.title } : null
+    });
+    
+    // Return next task in pomodoro list, or null if none available
+    return nextTask;
   },
 }));
 
