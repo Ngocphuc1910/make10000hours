@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useTaskStore } from '../../store/taskStore';
 import { useTimerStore } from '../../store/timerStore';
 import type { Task, Project } from '../../types/models';
@@ -18,6 +19,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   className = '' 
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const location = useLocation();
   const { toggleTaskCompletion } = useTaskStore();
   
   // Use selectors to only subscribe to the specific values we need
@@ -25,6 +27,9 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   const setCurrentTask = useTimerStore(state => state.setCurrentTask);
   
   const isSelected = currentTask?.id === task.id;
+  
+  // Detect if we're on the Pomodoro page
+  const isPomodoroPage = location.pathname === '/pomodoro' || location.pathname === '/';
   
   // Project color indicator styles
   const getStatusIndicator = () => {
@@ -53,9 +58,25 @@ export const TaskItem: React.FC<TaskItemProps> = ({
     setCurrentTask(task);
   };
   
-  const handleCheckboxChange = () => {
-    toggleTaskCompletion(task.id);
-    // Timer pausing and task deselection is now handled automatically in the store
+  const handleCheckboxChange = async () => {
+    // Use Pomodoro context when on Pomodoro page for auto-switching
+    const context = isPomodoroPage ? 'pomodoro' : 'default';
+    console.log('TaskItem completion:', {
+      taskId: task.id,
+      taskTitle: task.title,
+      currentPath: location.pathname,
+      isPomodoroPage,
+      context,
+      isCurrentlyActiveTask: isSelected
+    });
+    
+    const nextTask = await toggleTaskCompletion(task.id, context);
+    
+    if (context === 'pomodoro' && nextTask) {
+      console.log('Next task selected:', nextTask.title);
+    } else if (context === 'pomodoro' && !nextTask) {
+      console.log('No next task available');
+    }
   };
   
   const handleEditClick = (e: React.MouseEvent) => {
