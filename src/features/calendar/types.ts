@@ -47,6 +47,7 @@ export interface DragItem {
   sourceDate: Date;
   sourceView: CalendarView;
   displayDurationMinutes: number; // UI duration for zero-duration events
+  isDuplicate?: boolean; // Alt key was held during drag start
 }
 
 export interface DropResult {
