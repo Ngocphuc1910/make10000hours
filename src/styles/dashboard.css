@@ -34,8 +34,8 @@ body {
 }
 
 .custom-checkbox:checked {
-  background-color: #BB5F5A;
-  border-color: #BB5F5A;
+  background-color: #BA4949;
+  border-color: #BA4949;
 }
 
 .custom-checkbox:checked::after {
@@ -88,7 +88,7 @@ body {
 }
 
 input:checked + .switch-slider {
-  background-color: #BB5F5A;
+  background-color: #BA4949;
 }
 
 input:checked + .switch-slider:before {
@@ -112,7 +112,7 @@ input[type="number"]::-webkit-outer-spin-button {
   left: 0;
   width: 100%;
   height: 2px;
-  background-color: #BB5F5A;
+  background-color: #BA4949;
 }
 
 /* Project hovering effect */
