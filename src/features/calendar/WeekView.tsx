@@ -41,7 +41,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
   clearDragIndicator
 }) => {
   const { projects } = useTaskStore();
-  const startDate = startOfWeek(currentDate);
+  const startDate = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday = 1
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startDate, i));
 
   const [dragState, setDragState] = useState<DragState>({
