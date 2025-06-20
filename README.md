@@ -128,17 +128,6 @@ If you experience issues with authentication:
 3. Make sure your Supabase project has Email/Password authentication enabled
 4. If you see placeholder errors, run the setup script again to update your credentials
 
-## Future Enhancements
-
-This app is part of the make10000hours project, which will be expanded to include:
-
-- Projects management for tracking progress toward 10,000 hours
-- Advanced analytics and reporting
-- Kanban board for task management
-- Gamification features
-- Distraction blocking
-- Social features
-
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
