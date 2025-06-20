@@ -174,3 +174,29 @@ export const getDateISOString = (date: Date = new Date()): string => {
   // Get current date in ISO format (YYYY-MM-DD)
   return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD
 };
+
+/**
+ * Calculate duration in minutes between two dates
+ */
+export const calculateDurationInMinutes = (startTime: Date, endTime: Date): number => {
+  let durationMs = endTime.getTime() - startTime.getTime();
+  
+  // Handle negative duration (end before start) - assume next day
+  if (durationMs < 0) {
+    durationMs += 24 * 60 * 60 * 1000;
+  }
+  
+  let durationMinutes = Math.round(durationMs / (1000 * 60));
+  
+  // Handle zero duration - default to 30 minutes
+  if (durationMinutes === 0) {
+    durationMinutes = 30;
+  }
+  
+  // Cap at maximum 8 hours (480 minutes)
+  if (durationMinutes > 480) {
+    durationMinutes = 480;
+  }
+  
+  return durationMinutes;
+};
