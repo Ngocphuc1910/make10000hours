@@ -5,7 +5,7 @@ import { useTaskStore } from '../../store/taskStore';
 import { Icon } from '../ui/Icon';
 import { useUserStore } from '../../store/userStore';
 import { workSessionService } from '../../api/workSessionService';
-import { formatMinutesToHoursAndMinutes } from '../../utils/timeUtils';
+import { formatMinutesToHoursAndMinutes, calculateDurationInMinutes } from '../../utils/timeUtils';
 import { getDateISOString } from '../../utils/timeUtils';
 import { DatePicker, DateTimeProvider, useDateTimeContext } from '../common/DatePicker';
 import { format, isSameDay } from 'date-fns';
@@ -32,7 +32,13 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
   const [title, setTitle] = useState(task?.title || '');
   const [projectId, setProjectId] = useState(task?.projectId || '');
   const [timeSpent, setTimeSpent] = useState(task?.timeSpent?.toString() || '0');
-  const [timeEstimated, setTimeEstimated] = useState(task?.timeEstimated?.toString() || '');
+  const [timeEstimated, setTimeEstimated] = useState(() => {
+    if (task?.timeEstimated) return task.timeEstimated.toString();
+    if (initialStartTime && initialEndTime) {
+      return calculateDurationInMinutes(initialStartTime, initialEndTime).toString();
+    }
+    return '';
+  });
   const [description, setDescription] = useState(task?.description || '');
   const [titleError, setTitleError] = useState(false);
   const [projectError, setProjectError] = useState(false);
