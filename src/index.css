@@ -26,8 +26,8 @@
 }
 
 .custom-checkbox:checked {
-  background-color: #BB5F5A;
-  border-color: #BB5F5A;
+  background-color: #BA4949;
+  border-color: #BA4949;
 }
 
 .custom-checkbox:checked::after {
@@ -80,7 +80,7 @@
 }
 
 input:checked + .switch-slider {
-  background-color: #BB5F5A;
+  background-color: #BA4949;
 }
 
 input:checked + .switch-slider:before {
@@ -89,7 +89,7 @@ input:checked + .switch-slider:before {
 
 /* Custom radio button styling */
 input[type="radio"][name="addSiteMethod"]:checked + div {
-  border-color: #BB5F5A;
+  border-color: #BA4949;
 }
 
 input[type="radio"][name="addSiteMethod"]:checked + div .radio-checked {
@@ -156,7 +156,7 @@ code {
 }
 
 :root {
-  --primary-color: #BB5F5A;
+  --primary-color: #BA4949;
   
   /* Light theme variables */
   --bg-primary: #ffffff;
@@ -391,7 +391,7 @@ code {
 
 .drag-over {
   background-color: rgba(187, 95, 90, 0.05);
-  border: 2px dashed #BB5F5A;
+  border: 2px dashed #BA4949;
 }
 
 .drop-success {
@@ -670,7 +670,7 @@ code {
 }
 
 .day-number.text-primary {
-  color: #BB5F5A;
+      color: #BA4949;
 }
 
 .time-column-header {
@@ -846,37 +846,37 @@ code {
 }
 
 .flatpickr-day.selected {
-  background: #BB5F5A !important;
-  border-color: #BB5F5A !important;
+  background: #BA4949 !important;
+  border-color: #BA4949 !important;
   color: white !important;
 }
 
 .flatpickr-day.selected:hover {
-  background: #BB5F5A !important;
-  border-color: #BB5F5A !important;
+  background: #BA4949 !important;
+  border-color: #BA4949 !important;
 }
 
 .flatpickr-day.inRange {
-  background: rgba(187, 95, 90, 0.1) !important;
-  border-color: rgba(187, 95, 90, 0.2) !important;
+  background: rgba(186, 73, 73, 0.1) !important;
+  border-color: rgba(186, 73, 73, 0.2) !important;
   color: var(--text-primary) !important;
 }
 
 .flatpickr-day.startRange,
 .flatpickr-day.endRange {
-  background: #BB5F5A !important;
-  border-color: #BB5F5A !important;
+  background: #BA4949 !important;
+  border-color: #BA4949 !important;
   color: white !important;
 }
 
 .flatpickr-day.today {
-  border-color: #BB5F5A !important;
-  color: #BB5F5A !important;
+  border-color: #BA4949 !important;
+  color: #BA4949 !important;
 }
 
 .flatpickr-day.today:hover {
-  background: rgba(187, 95, 90, 0.1) !important;
-  border-color: #BB5F5A !important;
+  background: rgba(186, 73, 73, 0.1) !important;
+  border-color: #BA4949 !important;
 }
 
 .flatpickr-day.prevMonthDay,
@@ -902,7 +902,7 @@ code {
 }
 
 .flatpickr-time input:focus {
-  border-color: #BB5F5A !important;
+  border-color: #BA4949 !important;
 }
 
 .flatpickr-time .flatpickr-time-separator {
