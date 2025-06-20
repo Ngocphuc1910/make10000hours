@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Bot, User, AlertCircle, FileText, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
 import type { ChatMessage, ChatSource } from '../../types/chat';
@@ -240,13 +241,37 @@ const MessageBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
       
       <div className={`flex-1 max-w-xs sm:max-w-md md:max-w-lg lg:max-w-xl ${isUser ? 'text-right' : ''}`}>
         <div
-          className={`rounded-lg p-3 ${
+          className={`rounded-lg ${
             isUser 
-              ? 'bg-blue-600 text-white ml-auto' 
-              : 'bg-white border border-gray-200 text-gray-900'
+              ? 'bg-blue-600 text-white ml-auto p-3' 
+              : 'bg-white border border-gray-200 text-gray-900 p-5 shadow-sm'
           }`}
         >
-          <p className={`text-sm whitespace-pre-wrap ${isUser ? 'text-white' : 'text-gray-900'}`}>{message.content}</p>
+          {isUser ? (
+            <p className="text-sm whitespace-pre-wrap text-white">{message.content}</p>
+          ) : (
+            <ReactMarkdown 
+              className="text-sm text-gray-900 leading-normal break-words whitespace-pre-wrap"
+              components={{
+                strong: ({node, ...props}) => <strong className="font-bold text-gray-900" {...props} />,
+                em: ({node, ...props}) => <em className="italic text-gray-900" {...props} />,
+                ul: ({node, ...props}) => <ul className="space-y-2 my-3" {...props} />,
+                li: ({node, ...props}) => (
+                  <li className="flex items-start pl-0 mb-2" {...props}>
+                    <span className="text-gray-900 font-bold mr-2 mt-0.5 flex-shrink-0">•</span>
+                    <div className="text-sm leading-normal flex-1 break-words">{props.children}</div>
+                  </li>
+                ),
+                p: ({node, ...props}) => <div className="text-sm mb-3 last:mb-0 leading-normal break-words" {...props} />,
+                h1: ({node, ...props}) => <h1 className="text-lg font-bold mb-3 text-gray-900 border-b border-gray-200 pb-2 mt-4 first:mt-0" {...props} />,
+                h2: ({node, ...props}) => <h2 className="text-base font-bold mb-2 text-gray-900 mt-4 first:mt-0" {...props} />,
+                h3: ({node, ...props}) => <h3 className="text-sm font-bold mb-2 text-gray-900 mt-3 first:mt-0" {...props} />,
+                code: ({node, ...props}) => <code className="bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded text-xs font-mono font-semibold" {...props} />,
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          )}
           
           {/* Message metadata for assistant messages */}
           {!isUser && message.metadata && (
