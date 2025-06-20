@@ -21,6 +21,25 @@ import TaskForm from '../../components/tasks/TaskForm';
 
 // Old DragState interface - removed since we have new drag-to-create system
 
+// Undo/Redo state types
+interface UndoRedoState {
+  taskId: string;
+  beforeState: {
+    scheduledDate: string | null;
+    scheduledStartTime: string | null;
+    scheduledEndTime: string | null;
+    includeTime: boolean;
+    status: 'pomodoro' | 'todo' | 'completed';
+  };
+  afterState: {
+    scheduledDate: string | null;
+    scheduledStartTime: string | null;
+    scheduledEndTime: string | null;
+    includeTime: boolean;
+    status: 'pomodoro' | 'todo' | 'completed';
+  };
+}
+
 export const Calendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentView, setCurrentView] = useState<CalendarView>('week');
@@ -40,6 +59,10 @@ export const Calendar: React.FC = () => {
     isAllDay?: boolean;
   } | null>(null);
   const [clearDragIndicator, setClearDragIndicator] = useState(false);
+  
+  // Undo/Redo state management
+  const [undoStack, setUndoStack] = useState<UndoRedoState[]>([]);
+  const [redoStack, setRedoStack] = useState<UndoRedoState[]>([]);
   // Old drag state - removed since we have new drag-to-create system
   
   // Get tasks and projects from task store
@@ -62,6 +85,71 @@ export const Calendar: React.FC = () => {
   useEnhancedDeepFocusSync(); // Enhanced sync with activity detection and extension sync
   useExtensionSync(); // Bidirectional extension sync
 
+  // Handle URL query parameters for view selection
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const viewParam = urlParams.get('view');
+    if (viewParam && ['day', 'week', 'month'].includes(viewParam)) {
+      setCurrentView(viewParam as CalendarView);
+    }
+  }, [location.search]);
+
+  // Undo/Redo functions
+  const performUndo = useCallback(() => {
+    console.log('↩️ performUndo called, undo stack length:', undoStack.length);
+    if (undoStack.length === 0) {
+      console.log('❌ Undo stack is empty');
+      return;
+    }
+
+    const lastAction = undoStack[undoStack.length - 1];
+    const { taskId, beforeState } = lastAction;
+    console.log('🔄 Undoing action for task:', taskId, 'to state:', beforeState);
+
+    // Convert null to undefined for the updateTask function
+    const updateData = {
+      ...beforeState,
+      scheduledDate: beforeState.scheduledDate === null ? undefined : beforeState.scheduledDate,
+      scheduledStartTime: beforeState.scheduledStartTime === null ? undefined : beforeState.scheduledStartTime,
+      scheduledEndTime: beforeState.scheduledEndTime === null ? undefined : beforeState.scheduledEndTime,
+    };
+
+    // Apply the before state
+    updateTask(taskId, updateData).then(() => {
+      // Move action to redo stack
+      setRedoStack(prev => [...prev, lastAction]);
+      // Remove from undo stack
+      setUndoStack(prev => prev.slice(0, -1));
+    }).catch(error => {
+      console.error('Failed to undo task change:', error);
+    });
+  }, [undoStack, updateTask]);
+
+  const performRedo = useCallback(() => {
+    if (redoStack.length === 0) return;
+
+    const lastUndoneAction = redoStack[redoStack.length - 1];
+    const { taskId, afterState } = lastUndoneAction;
+
+    // Convert null to undefined for the updateTask function
+    const updateData = {
+      ...afterState,
+      scheduledDate: afterState.scheduledDate === null ? undefined : afterState.scheduledDate,
+      scheduledStartTime: afterState.scheduledStartTime === null ? undefined : afterState.scheduledStartTime,
+      scheduledEndTime: afterState.scheduledEndTime === null ? undefined : afterState.scheduledEndTime,
+    };
+
+    // Apply the after state
+    updateTask(taskId, updateData).then(() => {
+      // Move action back to undo stack
+      setUndoStack(prev => [...prev, lastUndoneAction]);
+      // Remove from redo stack
+      setRedoStack(prev => prev.slice(0, -1));
+    }).catch(error => {
+      console.error('Failed to redo task change:', error);
+    });
+  }, [redoStack, updateTask]);
+
   // Keyboard shortcuts for view switching
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -78,18 +166,30 @@ export const Calendar: React.FC = () => {
         return;
       }
 
+      // Check for Command+Z (undo) and Command+Shift+Z (redo) on Mac
+      if (event.metaKey && event.key.toLowerCase() === 'z') {
+        console.log('⌨️ Command+Z detected, shiftKey:', event.shiftKey);
+        event.preventDefault();
+        if (event.shiftKey) {
+          // Command+Shift+Z = Redo
+          console.log('🔄 Calling performRedo');
+          performRedo();
+        } else {
+          // Command+Z = Undo
+          console.log('↩️ Calling performUndo');
+          performUndo();
+        }
+        return;
+      }
+
       switch (event.key.toLowerCase()) {
-        case 'd':
+        case 'arrowleft':
           event.preventDefault();
-          setCurrentView('day');
+          handleNavigate('prev');
           break;
-        case 'w':
+        case 'arrowright':
           event.preventDefault();
-          setCurrentView('week');
-          break;
-        case 'm':
-          event.preventDefault();
-          setCurrentView('month');
+          handleNavigate('next');
           break;
       }
     };
@@ -98,7 +198,7 @@ export const Calendar: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [editingTaskId, isDragCreateTaskOpen, isTimeSlotTaskOpen]);
+  }, [editingTaskId, isDragCreateTaskOpen, isTimeSlotTaskOpen, currentView, currentDate, performUndo, performRedo]);
   
   const handleNavigate = (direction: 'prev' | 'next' | 'today') => {
     if (direction === 'today') {
@@ -221,6 +321,14 @@ export const Calendar: React.FC = () => {
       // Handle task updates through task store
       const task = tasks.find(t => t.id === item.event.taskId);
       if (task) {
+        // Capture the before state for undo/redo
+        const beforeState = {
+          scheduledDate: task.scheduledDate || null,
+          scheduledStartTime: task.scheduledStartTime || null,
+          scheduledEndTime: task.scheduledEndTime || null,
+          includeTime: task.includeTime || false,
+          status: task.status
+        };
 
         // Prepare task update data
         const taskUpdateData: any = {
@@ -251,9 +359,36 @@ export const Calendar: React.FC = () => {
           taskUpdateData.status = 'todo';
         }
 
+        // Capture the after state for undo/redo
+        const afterState = {
+          scheduledDate: taskUpdateData.scheduledDate,
+          scheduledStartTime: taskUpdateData.scheduledStartTime,
+          scheduledEndTime: taskUpdateData.scheduledEndTime,
+          includeTime: taskUpdateData.includeTime,
+          status: taskUpdateData.status || task.status
+        };
+
+        // Add to undo stack before making the change
+        const undoRedoAction: UndoRedoState = {
+          taskId: task.id,
+          beforeState,
+          afterState
+        };
+
+        console.log('🔄 Adding action to undo stack:', undoRedoAction);
+        setUndoStack(prev => {
+          const newStack = [...prev, undoRedoAction];
+          console.log('📚 Undo stack updated, length:', newStack.length);
+          return newStack;
+        });
+        // Clear redo stack when new action is performed
+        setRedoStack([]);
+
         // Update the task through the task store
         updateTask(task.id, taskUpdateData).catch(error => {
           console.error('Failed to update task scheduling:', error);
+          // Remove the action from undo stack if update failed
+          setUndoStack(prev => prev.slice(0, -1));
         });
       }
     } else {
