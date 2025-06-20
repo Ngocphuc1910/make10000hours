@@ -16,6 +16,7 @@ import { useUIStore } from '../../store/uiStore';
 // EventDialog import removed - using TaskForm for all calendar interactions
 
 import { useTaskStore } from '../../store/taskStore';
+import { useUserStore } from '../../store/userStore';
 import { mergeEventsAndTasks, calculateNewEventTime, isValidDrop } from './utils';
 import TaskForm from '../../components/tasks/TaskForm';
 
@@ -66,7 +67,8 @@ export const Calendar: React.FC = () => {
   // Old drag state - removed since we have new drag-to-create system
   
   // Get tasks and projects from task store
-  const { tasks, projects, updateTask, setEditingTaskId: setStoreEditingTaskId } = useTaskStore();
+  const { tasks, projects, addTask, updateTask, setEditingTaskId: setStoreEditingTaskId } = useTaskStore();
+  const { user } = useUserStore();
   
   // Merge calendar events with task events
   const allEvents = useMemo(() => {
@@ -294,7 +296,11 @@ export const Calendar: React.FC = () => {
   // Old handleSaveEvent - removed since we only use TaskForm now
 
   const handleEventDrop = useCallback((item: DragItem, dropResult: DropResult) => {
-    if (!isValidDrop(item.event, dropResult, allEvents)) {
+    // If user is duplicating via Alt/Option key, allow drop even at the same position
+    const isAltDuplicate = item.isDuplicate === true;
+
+    // For non-duplicate moves, validate the drop location
+    if (!isAltDuplicate && !isValidDrop(item.event, dropResult, allEvents)) {
       return;
     }
 
@@ -316,11 +322,53 @@ export const Calendar: React.FC = () => {
       isAllDay: shouldBeAllDay
     };
 
-    // Update the event in the appropriate store
+    // Handle task duplication or update
     if (item.event.isTask && item.event.taskId) {
       // Handle task updates through task store
       const task = tasks.find(t => t.id === item.event.taskId);
       if (task) {
+        // Check if this is a duplication (Alt+Drag)
+        if (item.isDuplicate) {
+          console.log('🔄 Duplicating task:', task.title);
+          
+          // Prepare the new task data for duplication
+          const duplicateTaskData = {
+            title: task.title,
+            description: task.description || '',
+            status: task.status,
+            projectId: task.projectId,
+            userId: user?.uid || task.userId,
+            timeEstimated: task.timeEstimated,
+            scheduledDate: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`,
+            includeTime: !shouldBeAllDay,
+            scheduledStartTime: !shouldBeAllDay ? start.toTimeString().substring(0, 5) : undefined,
+            scheduledEndTime: !shouldBeAllDay ? end.toTimeString().substring(0, 5) : undefined,
+            completed: false,
+            timeSpent: 0
+          };
+
+          // Auto-change status: "To do list" → "In Pomodoro" when duplicated to today
+          const isMovedToToday = isSameDay(start, new Date());
+          if (isMovedToToday && task.status === 'todo') {
+            duplicateTaskData.status = 'pomodoro';
+          }
+
+          // Auto-change status: "In Pomodoro" → "To do list" when duplicated from today to another date (Week/Month view only)
+          const isMovedFromToday = isSameDay(item.event.start, new Date()) && !isSameDay(start, new Date());
+          const isWeekOrMonthView = currentView === 'week' || currentView === 'month';
+          if (isMovedFromToday && isWeekOrMonthView && task.status === 'pomodoro') {
+            duplicateTaskData.status = 'todo';
+          }
+
+          // Create the duplicate task
+          addTask(duplicateTaskData).then(() => {
+            console.log('✅ Task duplicated successfully');
+          }).catch((error: any) => {
+            console.error('❌ Failed to duplicate task:', error);
+          });
+
+          return; // Exit early - don't modify original task
+        }
         // Capture the before state for undo/redo
         const beforeState = {
           scheduledDate: task.scheduledDate || null,
