@@ -244,6 +244,13 @@ export const Calendar: React.FC = () => {
           taskUpdateData.status = 'pomodoro';
         }
 
+        // Auto-change status: "In Pomodoro" → "To do list" when moved from today to another date (Week/Month view only)
+        const isMovedFromToday = isSameDay(item.event.start, new Date()) && !isSameDay(start, new Date());
+        const isWeekOrMonthView = currentView === 'week' || currentView === 'month';
+        if (isMovedFromToday && isWeekOrMonthView && task.status === 'pomodoro') {
+          taskUpdateData.status = 'todo';
+        }
+
         // Update the task through the task store
         updateTask(task.id, taskUpdateData).catch(error => {
           console.error('Failed to update task scheduling:', error);
