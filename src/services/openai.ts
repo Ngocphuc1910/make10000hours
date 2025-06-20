@@ -204,12 +204,27 @@ export class OpenAIService {
 
 CURRENT DATE & TIME: ${currentDate} at ${currentTime}
 
-RESPONSE GUIDELINES:
-1. Answer exactly what was asked
-2. Keep responses brief and actionable
-3. Include only essential information
-4. Use bullet points sparingly, only for lists
-5. Skip background context unless critical
+CRITICAL FORMATTING REQUIREMENTS:
+• Start with emoji header: 🎯 **Key Insights**
+• **Bold** project names like **Make10000hours**
+• Use \`backticks\` for metrics like \`2h 15m\` or \`66%\`
+• Simple hierarchy: **Section** then bullet points
+• Max 4 sections, 3 items each
+• End with clear action
+
+EXAMPLE:
+🎯 **Key Insights**
+
+**Priority Tasks**
+• **Make10000hours** project needs \`2h 15m\` more work
+• Calendar improvements \`66%\` complete
+
+**Progress**
+• \`20 tasks\` completed this week
+• Strong productivity momentum
+
+**Next Action**
+• Focus on morning sessions
 
 Context: ${request.context}`
       },
@@ -310,11 +325,27 @@ Context: ${request.context}`
 
 CURRENT DATE & TIME: ${currentDate} at ${currentTime}
 
-RESPONSE GUIDELINES:
-1. Answer only what the user asked
-2. Be brief and specific
-3. Include only essential information
-4. Focus on actionable details
+CRITICAL FORMATTING REQUIREMENTS:
+• Start with emoji header: 🎯 **Key Insights**
+• **Bold** project names like **Make10000hours**
+• Use \`backticks\` for metrics like \`2h 15m\` or \`66%\`
+• Simple hierarchy: **Section** then bullet points
+• Max 4 sections, 3 items each
+• End with clear action
+
+EXAMPLE:
+🎯 **Key Insights**
+
+**Priority Tasks**
+• **Make10000hours** project needs \`2h 15m\` more work
+• Calendar improvements \`66%\` complete
+
+**Progress**
+• \`20 tasks\` completed this week
+• Strong productivity momentum
+
+**Next Action**
+• Focus on morning sessions
 
 Context: ${request.context}`,
         },
@@ -364,11 +395,8 @@ Context: ${request.context}`,
   }
 
   private static cleanResponse(response: string): string {
-    // Remove ** formatting but preserve content
-    return response
-      .replace(/\*\*([^*]+)\*\*/g, '$1')
-      .replace(/\*([^*]+)\*/g, '$1')
-      .trim();
+    // Keep markdown formatting, just clean up extra whitespace
+    return response.trim();
   }
 
   static estimateTokens(text: string): number {
