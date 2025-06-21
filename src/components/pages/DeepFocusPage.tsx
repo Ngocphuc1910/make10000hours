@@ -932,7 +932,7 @@ const DeepFocusPage: React.FC = () => {
     <div className="deep-focus-page-container flex h-screen overflow-hidden bg-background-primary dark:bg-[#141414]">
       <Sidebar />
       
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 overflow-hidden">
         {/* Header - Productivity Insights Style */}
         <div className={`h-16 border-b border-border flex items-center justify-between px-4 bg-background-secondary transition-all duration-500 relative`}>
           <div className="flex items-center">
