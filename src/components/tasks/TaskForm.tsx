@@ -68,8 +68,9 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [includeTime, setIncludeTime] = useState(() => {
+    // Always force false for all-day events, regardless of existing task data
+    if (isAllDay === true) return false;
     if (task?.includeTime !== undefined) return task.includeTime;
-    if (isAllDay === true) return false; // Force false for all-day events
     if (initialStartTime && initialEndTime) return true;
     return false;
   });
