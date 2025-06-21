@@ -60,4 +60,41 @@ debugBlocking();
 
 console.log('🔧 Debug functions available:');
 console.log('- debugBlocking() - Get current debug info');
-console.log('- resetAndTest() - Reset state and test again'); 
+console.log('- resetAndTest() - Reset state and test again');
+
+/**
+ * Debug Auto-Redirect Feature
+ * Test message handlers and focus mode detection
+ */
+
+console.log('🔧 Debug Auto-Redirect Feature');
+
+// Test message handlers
+async function testMessageHandlers() {
+  console.log('\n1. Testing GET_FOCUS_STATUS...');
+  
+  try {
+    const focusResponse = await chrome.runtime.sendMessage({ type: 'GET_FOCUS_STATUS' });
+    console.log('Focus Status Response:', focusResponse);
+    
+    if (focusResponse?.success && focusResponse.data) {
+      console.log('✅ Focus Mode:', focusResponse.data.focusMode);
+    } else {
+      console.log('❌ Invalid response format');
+    }
+  } catch (error) {
+    console.error('❌ GET_FOCUS_STATUS failed:', error);
+  }
+  
+  console.log('\n2. Testing GET_CACHED_URL...');
+  
+  try {
+    const urlResponse = await chrome.runtime.sendMessage({ type: 'GET_CACHED_URL' });
+    console.log('Cached URL Response:', urlResponse);
+  } catch (error) {
+    console.error('❌ GET_CACHED_URL failed:', error);
+  }
+}
+
+// Run tests
+testMessageHandlers(); 

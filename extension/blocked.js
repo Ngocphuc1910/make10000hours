@@ -10,10 +10,44 @@ class BlockedPage {
 
   async initialize() {
     try {
-      // Get blocked site info from URL
+      // Get cached URL from background script
+      const response = await chrome.runtime.sendMessage({ type: 'GET_CACHED_URL' });
+      const cachedUrl = response?.data?.url;
+      
+      // Fallback to URL params if cache miss
       const urlParams = new URLSearchParams(window.location.search);
-      const blockedUrl = urlParams.get('url') || window.location.href;
+      const blockedUrl = cachedUrl || urlParams.get('url') || 'Unknown Site';
       const domain = this.extractDomain(blockedUrl);
+      
+      // Store for override handler
+      this.originalUrl = blockedUrl;
+      
+      // Check if focus mode is still active - auto-redirect if OFF
+      try {
+        const focusResponse = await chrome.runtime.sendMessage({ type: 'GET_FOCUS_STATUS' });
+        console.log('🔍 Focus status response:', focusResponse);
+        
+        if (focusResponse?.success && focusResponse.data && !focusResponse.data.focusMode) {
+          console.log('🔓 Focus mode is OFF, auto-redirecting to:', this.originalUrl);
+          if (this.originalUrl && this.originalUrl !== 'Unknown Site') {
+            // Clear cached URL before redirecting
+            await chrome.runtime.sendMessage({ type: 'CLEAR_CACHED_URL' });
+            window.location.href = this.originalUrl;
+            return; // Exit early, redirect in progress
+          } else {
+            // Fallback - redirect to domain homepage like override button
+            const domain = this.extractDomain(blockedUrl);
+            if (domain && domain !== 'Unknown Site') {
+              await chrome.runtime.sendMessage({ type: 'CLEAR_CACHED_URL' });
+              window.location.href = `https://${domain}`;
+              return;
+            }
+          }
+        }
+      } catch (focusError) {
+        console.error('Error checking focus status:', focusError);
+        // Continue with normal blocking page if focus check fails
+      }
       
       document.getElementById('blockedSite').textContent = domain;
       
@@ -123,10 +157,17 @@ class BlockedPage {
         });
         
         if (response && response.success) {
-          // Redirect to original site
-          const urlParams = new URLSearchParams(window.location.search);
-          const originalUrl = urlParams.get('url') || 'about:blank';
-          window.location.href = originalUrl;
+          // Clear cached URL before redirecting
+          await chrome.runtime.sendMessage({ type: 'CLEAR_CACHED_URL' });
+          
+          // Redirect to original site using cached URL
+          if (this.originalUrl && this.originalUrl !== 'Unknown Site') {
+            window.location.href = this.originalUrl;
+          } else {
+            // Fallback - try to go back or to domain homepage
+            const domain = document.getElementById('blockedSite').textContent;
+            window.location.href = `https://${domain}`;
+          }
         }
       }
     } catch (error) {
