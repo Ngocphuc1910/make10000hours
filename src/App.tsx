@@ -18,6 +18,7 @@ import { useUserStore } from './store/userStore';
 import { useTaskStore } from './store/taskStore';
 import { useUIStore } from './store/uiStore';
 import { useThemeStore } from './store/themeStore';
+import { useUserSync } from './hooks/useUserSync';
 import SettingsPage from './components/pages/SettingsPage';
 import { formatTime } from './utils/timeUtils';
 import { trackPageView, setAnalyticsUserId } from './utils/analytics';
@@ -240,6 +241,9 @@ const GlobalKeyboardShortcuts: React.FC = () => {
 const App: React.FC = () => {
   const { initialize, user, isLoading, isInitialized } = useUserStore();
   const { initializeTheme } = useThemeStore();
+
+  // Global user sync with extension
+  useUserSync();
 
   // Global timer interval - runs regardless of current page
   useEffect(() => {

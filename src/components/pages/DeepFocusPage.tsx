@@ -17,7 +17,7 @@ import { debugDeepFocus } from '../../utils/debugUtils';
 import { FaviconService } from '../../utils/faviconUtils';
 import { testOverrideSchema } from '../../utils/testOverrideSchema';
 import { quickOverrideTest } from '../../utils/quickOverrideTest';
-import { useUserSync } from '../../hooks/useUserSync';
+
 import { testUserSync } from '../../utils/testUserSync';
 import { debugUserSync, forceUserSync } from '../../utils/debugUserSync';
 import '../../utils/debugOverrideSession'; // Import for console access
@@ -120,7 +120,7 @@ const DeepFocusPage: React.FC = () => {
   const { loadDateRangeData, isLoading: dateRangeLoading } = useExtensionDateRange();
   
   // User sync hook - ensures extension knows current user ID
-  useUserSync();
+
 
   // State for extension-loaded data
   const [extensionData, setExtensionData] = useState<{
@@ -242,6 +242,8 @@ const DeepFocusPage: React.FC = () => {
             (messageData?.source?.includes('make10000hours') || 
              messageData?.source?.includes('extension'))) {
           console.log('🔍 DEBUG: RECORD_OVERRIDE_SESSION received in DeepFocusPage:', messageData);
+          console.log('🔍 DEBUG: Current domain:', window.location.hostname);
+          console.log('🔍 DEBUG: User state:', { user: user?.uid, isLoggedIn: !!user });
           
           const { domain, duration, userId: incomingUserId, timestamp, extensionTimestamp } = messageData.payload || {};
           
@@ -1560,6 +1562,28 @@ const DeepFocusPage: React.FC = () => {
                                 title="Test Direct Create"
                               >
                                 Test Direct Create
+                              </button>
+                              <button
+                                onClick={() => {
+                                  console.log('🧪 Testing production override session...');
+                                  const testMessage = {
+                                    type: 'RECORD_OVERRIDE_SESSION',
+                                    payload: {
+                                      domain: 'production-test.com',
+                                      duration: 5,
+                                      userId: user?.uid,
+                                      timestamp: Date.now(),
+                                      source: 'test'
+                                    },
+                                    source: 'make10000hours-extension'
+                                  };
+                                  window.postMessage(testMessage, '*');
+                                  console.log('📤 Production test message sent:', testMessage);
+                                }}
+                                className="px-3 py-1 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200"
+                                title="Test Production Override"
+                              >
+                                Test Prod Override
                               </button>
                             </div>
                           </div>
