@@ -166,7 +166,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                     
                     return (
                       <>
-                        <div className="space-y-4">
+                        <div className="flex flex-col gap-[2px]">
                           {eventsToShow.map((event, eventIdx) => {
                             if (event.isAllDay) {
                               return (
