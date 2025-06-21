@@ -538,12 +538,12 @@ export const Calendar: React.FC = () => {
                 <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${
                   isDeepFocusActive 
                     ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]' 
-                    : 'bg-background-primary/80 backdrop-blur-sm border border-border justify-end pr-[10.5px]'
+                    : 'bg-gray-100/80 border-0 justify-end pr-[10.5px]'
                 }`}>
                   <span className={`text-sm font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${
                     isDeepFocusActive 
                       ? 'text-white font-semibold [text-shadow:0_0_12px_rgba(255,255,255,0.5)]' 
-                      : 'text-text-secondary'
+                      : 'text-gray-600 font-semibold'
                   }`}>
                     {isDeepFocusActive ? 'Deep Focus' : 'Focus Off'}
                   </span>
