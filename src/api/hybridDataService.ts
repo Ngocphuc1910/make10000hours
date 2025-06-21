@@ -191,7 +191,10 @@ class HybridDataService {
     // Generate all dates in range
     const current = new Date(start);
     while (current <= end) {
-      const dateStr = current.toISOString().split('T')[0];
+      const year = current.getFullYear();
+      const month = String(current.getMonth() + 1).padStart(2, '0');
+      const day = String(current.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
       
       console.log(`📅 Processing date: ${dateStr}, today: ${today}, comparison: ${dateStr} < ${today} = ${dateStr < today}`);
       
@@ -253,7 +256,10 @@ class HybridDataService {
     
     const current = new Date(start);
     while (current <= end) {
-      const dateStr = current.toISOString().split('T')[0];
+      const year = current.getFullYear();
+      const month = String(current.getMonth() + 1).padStart(2, '0');
+      const day = String(current.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
       
       if (!result[dateStr]) {
         result[dateStr] = {
