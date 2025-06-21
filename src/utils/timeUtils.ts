@@ -171,8 +171,19 @@ export const calculateElapsedTime = (sessionStartTime: Date, lastUpdated: Date):
 }; 
 
 export const getDateISOString = (date: Date = new Date()): string => {
-  // Get current date in ISO format (YYYY-MM-DD)
-  return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD
+  // Get current date in ISO format (YYYY-MM-DD) - DEPRECATED, use formatLocalDate instead
+  return formatLocalDate(date);
+};
+
+/**
+ * Format date to YYYY-MM-DD string while preserving local timezone
+ * Avoids timezone conversion issues with toISOString()
+ */
+export const formatLocalDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 /**
