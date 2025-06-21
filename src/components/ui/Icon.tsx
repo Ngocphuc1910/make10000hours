@@ -40,7 +40,14 @@ import {
   Monitor,
   Database,
   RefreshCw,
-  Info
+  Info,
+  Globe,
+  Github,
+  Facebook,
+  FileText,
+  Beaker,
+  Link,
+  Bug
 } from 'lucide-react';
 
 interface IconProps {
@@ -90,7 +97,16 @@ const iconMap = {
   'computer-line': Monitor,
   'database-2-line': Database,
   'refresh-line': RefreshCw,
-  'information-line': Info
+  'information-line': Info,
+  // Remix icon compatibility
+  'ri-global-line': Globe,
+  'ri-github-line': Github,
+  'ri-facebook-line': Facebook,
+  'ri-file-list-line': FileText,
+  // Debug icons
+  'flask-line': Beaker,
+  'links-line': Link,
+  'bug-line': Bug
 };
 
 export const Icon: React.FC<IconProps> = ({ 

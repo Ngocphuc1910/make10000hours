@@ -145,11 +145,21 @@ class BlockedPage {
 
   async handleOverride() {
     try {
+      // Prevent multiple rapid clicks
+      const overrideBtn = document.getElementById('overrideBtn');
+      if (overrideBtn.disabled) {
+        return;
+      }
+
       const confirmed = confirm(
         'This will temporarily allow access to this site for 5 minutes. Are you sure?'
       );
       
       if (confirmed) {
+        // Disable button to prevent duplicate clicks
+        overrideBtn.disabled = true;
+        overrideBtn.textContent = 'Processing...';
+        
         const domain = document.getElementById('blockedSite').textContent;
         const response = await chrome.runtime.sendMessage({ 
           type: 'OVERRIDE_BLOCK', 
@@ -157,6 +167,12 @@ class BlockedPage {
         });
         
         if (response && response.success) {
+          // Record override in web app if connected
+          await chrome.runtime.sendMessage({ 
+            type: 'RECORD_OVERRIDE_SESSION', 
+            payload: { domain, duration: 5 } // 5 minutes
+          });
+          
           // Clear cached URL before redirecting
           await chrome.runtime.sendMessage({ type: 'CLEAR_CACHED_URL' });
           
@@ -168,10 +184,18 @@ class BlockedPage {
             const domain = document.getElementById('blockedSite').textContent;
             window.location.href = `https://${domain}`;
           }
+        } else {
+          // Re-enable button if override failed
+          overrideBtn.disabled = false;
+          overrideBtn.textContent = 'Override (5 min)';
         }
       }
     } catch (error) {
       console.error('Error handling override:', error);
+      // Re-enable button on error
+      const overrideBtn = document.getElementById('overrideBtn');
+      overrideBtn.disabled = false;
+      overrideBtn.textContent = 'Override (5 min)';
     }
   }
 

@@ -3,19 +3,26 @@
  * Detects user activity and communicates with background script
  */
 
+// Enhanced Content Script with Activity Detection
+console.log('🚀 Content script loading on:', window.location.href);
+console.log('🔍 Chrome extension API available:', typeof chrome !== 'undefined' && !!chrome.runtime);
+console.log('🔍 Document ready state:', document.readyState);
+
 class ActivityDetector {
   constructor() {
-    this.isActive = true;
     this.lastActivity = Date.now();
-    this.activityThreshold = 30000; // 30 seconds (enhanced from 5 seconds)
-    this.reportInterval = null;
-    this.focusMode = false;
-    
-    // Enhanced tracking
+    this.isActive = true;
     this.isPageVisible = !document.hidden;
     this.isWindowFocused = document.hasFocus();
-    this.lastReportTime = Date.now();
-    this.reportFrequency = 10000; // Report every 10 seconds
+    this.activityCheckInterval = null;
+    this.reportingInterval = null;
+    this.inactivityThreshold = 30000; // 30 seconds
+    this.reportingFrequency = 10000; // 10 seconds
+    
+    // Add flags to prevent duplicate setup
+    this.isInitialized = false;
+    this.messageListenersSetup = false;
+    this.chromeListenerSetup = false;
     
     this.initialize();
   }
@@ -24,56 +31,160 @@ class ActivityDetector {
    * Initialize the activity detector
    */
   initialize() {
-    // Only run on trackable pages
-    if (!this.isTrackablePage()) {
+    // Prevent duplicate initialization
+    if (this.isInitialized) {
+      console.log('🔄 ActivityDetector already initialized, skipping...');
       return;
     }
 
-    this.setupActivityListeners();
-    this.setupWebAppCommunication();
-    this.startReporting();
-    this.checkFocusMode();
-    
-    console.log('Activity detector initialized for:', window.location.hostname);
+    try {
+      console.log('🚀 Initializing Enhanced ActivityDetector...');
+      
+      // Set up event listeners for activity detection
+      this.setupEventListeners();
+      
+      // Set up web app communication bridge
+      this.setupWebAppCommunication();
+      
+      // Set up Chrome runtime listener
+      this.setupChromeListener();
+      
+      // Start activity monitoring
+      this.startReporting();
+      
+      // Mark as initialized
+      this.isInitialized = true;
+      
+      console.log('✅ Enhanced ActivityDetector initialized successfully');
+      
+      // Send a test message to verify extension is working
+      window.postMessage({
+        type: 'EXTENSION_STATUS',
+        payload: { status: 'online', timestamp: Date.now() },
+        source: 'make10000hours-extension'
+      }, '*');
+      
+    } catch (error) {
+      console.error('❌ Failed to initialize ActivityDetector:', error);
+      console.error('🔍 Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+    }
   }
 
   /**
    * Set up web app communication bridge
    */
   setupWebAppCommunication() {
+    // Prevent duplicate setup
+    if (this.messageListenersSetup) {
+      console.log('🔄 Web app communication already set up, skipping...');
+      return;
+    }
+
+    // Check if Chrome extension API is available
+    if (typeof chrome === 'undefined' || !chrome.runtime) {
+      console.warn('⚠️ Chrome extension API not available in content script');
+      return;
+    }
+
+    console.log('🔧 Setting up web app communication bridge...');
+
+    // Listen for messages from web app
     window.addEventListener('message', async (event) => {
-      // Only accept messages from same origin and with correct type
-      if (event.source !== window || event.data?.type !== 'EXTENSION_REQUEST') {
+      // Only accept messages from same origin
+      if (event.origin !== window.location.origin) {
         return;
       }
 
-      const { messageId, payload } = event.data;
-      
-      try {
-        // Forward message to extension background script
-        const response = await chrome.runtime.sendMessage(payload);
+      // Handle EXTENSION_PING messages
+      if (event.data?.type === 'EXTENSION_PING' && event.data?.source?.includes('make10000hours')) {
+        console.log('🔄 Received EXTENSION_PING from web app, responding...');
         
-        // Send response back to web app
+        // Respond immediately to confirm extension is online
         window.postMessage({
-          extensionResponseId: messageId,
-          response: response
+          type: 'EXTENSION_STATUS',
+          payload: { status: 'online', timestamp: Date.now() },
+          source: 'make10000hours-extension'
         }, '*');
-      } catch (error) {
-        // Send error response back to web app
-        window.postMessage({
-          extensionResponseId: messageId,
-          response: { success: false, error: error.message }
-        }, '*');
+        return;
+      }
+
+      // Add guard to prevent processing duplicate messages
+      const messageId = `${event.data?.type}_${Date.now()}`;
+      if (this.lastProcessedMessage === messageId) {
+        console.log('🔄 Skipping duplicate message:', messageId);
+        return;
+      }
+      this.lastProcessedMessage = messageId;
+
+      // Handle SET_USER_ID messages
+      if (event.data?.type === 'SET_USER_ID' && event.data?.source?.includes('make10000hours')) {
+        console.log('🔄 Received SET_USER_ID from web app:', event.data.payload);
+        
+        try {
+          console.log('🔍 DEBUG: Forwarding SET_USER_ID to extension background');
+          const response = await chrome.runtime.sendMessage({
+            type: 'SET_USER_ID',
+            payload: event.data.payload
+          });
+          
+          console.log('✅ User ID forwarded to extension:', response);
+          console.log('🔍 DEBUG: User sync response details:', {
+            success: response?.success,
+            userId: response?.userId,
+            error: response?.error
+          });
+          
+          window.postMessage({
+            type: 'SET_USER_ID_RESPONSE',
+            payload: response,
+            source: 'make10000hours-extension'
+          }, '*');
+          
+        } catch (error) {
+          console.error('❌ Failed to forward SET_USER_ID:', error);
+          
+          window.postMessage({
+            type: 'SET_USER_ID_RESPONSE',
+            payload: { success: false, error: error.message },
+            source: 'make10000hours-extension'
+          }, '*');
+        }
+      }
+
+      // Handle RECORD_OVERRIDE_SESSION messages from web app
+      if (event.data?.type === 'RECORD_OVERRIDE_SESSION' && event.data?.source?.includes('make10000hours')) {
+        // Only process messages originating from web app (not extension)
+        if (event.data.payload?.source === 'extension') {
+          return; // Skip messages that originated from extension to prevent loops
+        }
+        
+        console.log('📝 Forwarding override session from web app to extension');
+        
+        try {
+          const response = await chrome.runtime.sendMessage({
+            type: 'RECORD_OVERRIDE_SESSION',
+            payload: event.data.payload
+          });
+          
+          console.log('✅ Override session recorded');
+        } catch (error) {
+          console.error('❌ Failed to record override session:', error);
+        }
       }
     });
 
-    console.log('Web app communication bridge established');
+    this.messageListenersSetup = true;
+    console.log('✅ Web app communication bridge set up successfully');
   }
 
   /**
    * Set up activity detection listeners
    */
-  setupActivityListeners() {
+  setupEventListeners() {
     const activityEvents = [
       'mousedown',
       'mousemove', 
@@ -236,7 +347,7 @@ class ActivityDetector {
    */
   startReporting() {
     // Report activity every 10 seconds
-    this.reportInterval = setInterval(() => {
+    this.reportingInterval = setInterval(() => {
       this.checkActiveStatus();
       this.reportActivity();
     }, 10000);
@@ -251,7 +362,7 @@ class ActivityDetector {
     
     // More strict activity checking
     const wasActive = this.isActive;
-    this.isActive = timeSinceLastActivity < this.activityThreshold && 
+    this.isActive = timeSinceLastActivity < this.inactivityThreshold && 
                    this.isPageVisible && 
                    this.isWindowFocused;
     
@@ -279,7 +390,7 @@ class ActivityDetector {
         domain: window.location.hostname,
         timestamp: now,
         eventType: eventType,
-        activityThreshold: this.activityThreshold
+        activityThreshold: this.inactivityThreshold
       };
 
       // Send enhanced message to background script
@@ -290,7 +401,7 @@ class ActivityDetector {
         });
 
         if (response?.success) {
-          this.lastReportTime = now;
+          this.lastActivity = now;
           console.log(`📊 Enhanced activity reported (${eventType}):`, {
             isActive: this.isActive,
             timeSinceActivity: Math.round(timeSinceLastActivity / 1000) + 's',
@@ -324,7 +435,9 @@ class ActivityDetector {
       });
 
       if (response?.success && response.data?.focusMode) {
-        this.focusMode = true;
+        this.isActive = true;
+        this.isPageVisible = true;
+        this.isWindowFocused = true;
         this.showFocusIndicator();
       }
     } catch (error) {
@@ -352,7 +465,9 @@ class ActivityDetector {
     if (indicator) {
       indicator.remove();
     }
-    this.focusMode = false;
+    this.isActive = false;
+    this.isPageVisible = false;
+    this.isWindowFocused = false;
   }
 
   /**
@@ -373,7 +488,7 @@ class ActivityDetector {
       isActive: this.isActive,
       lastActivity: this.lastActivity,
       timeSinceLastActivity: Date.now() - this.lastActivity,
-      focusMode: this.focusMode
+      focusMode: this.isActive
     };
   }
 
@@ -381,12 +496,60 @@ class ActivityDetector {
    * Clean up listeners and intervals
    */
   cleanup() {
-    if (this.reportInterval) {
-      clearInterval(this.reportInterval);
+    if (this.reportingInterval) {
+      clearInterval(this.reportingInterval);
     }
     
     // Report final activity
     this.reportActivity(true);
+  }
+
+  /**
+   * Set up Chrome runtime message listener for messages from extension background
+   */
+  setupChromeListener() {
+    // Prevent duplicate setup
+    if (this.chromeListenerSetup) {
+      console.log('🔄 Chrome runtime listener already set up, skipping...');
+      return;
+    }
+
+    // Check if Chrome extension API is available
+    if (typeof chrome === 'undefined' || !chrome.runtime) {
+      console.warn('⚠️ Chrome extension API not available for runtime listener');
+      return;
+    }
+
+    console.log('🔧 Setting up Chrome runtime message listener...');
+
+    // Set up Chrome runtime message listener for messages from extension background
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === 'RECORD_OVERRIDE_SESSION') {
+        console.log('📝 Processing override session from extension');
+        
+        // Create unique payload with deduplication ID
+        const uniquePayload = {
+          ...message.payload,
+          messageId: `override_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          source: 'extension'
+        };
+        
+        // Forward to web app via window message
+        window.postMessage({
+          type: 'RECORD_OVERRIDE_SESSION',
+          payload: uniquePayload,
+          source: 'make10000hours-extension'
+        }, '*');
+        
+        sendResponse({ success: true });
+        return true;
+      }
+      
+      return false;
+    });
+
+    this.chromeListenerSetup = true;
+    console.log('✅ Chrome runtime message listener set up successfully');
   }
 }
 
@@ -402,7 +565,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
     case 'FOCUS_MODE_CHANGED':
       if (message.payload.enabled) {
-        activityDetector.focusMode = true;
+        activityDetector.isActive = true;
+        activityDetector.isPageVisible = true;
+        activityDetector.isWindowFocused = true;
         activityDetector.showFocusIndicator();
       } else {
         activityDetector.hideFocusIndicator();
@@ -412,7 +577,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
     case 'FOCUS_STATE_CHANGED':
       // Update local state and forward to web app if present
-      activityDetector.focusMode = message.payload.isActive;
+      activityDetector.isActive = message.payload.isActive;
+      activityDetector.isPageVisible = message.payload.isVisible;
+      activityDetector.isWindowFocused = message.payload.isFocused;
       if (message.payload.isActive) {
         activityDetector.showFocusIndicator();
       } else {
@@ -422,7 +589,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Forward to web app
       window.postMessage({
         type: 'EXTENSION_FOCUS_STATE_CHANGED',
-        payload: { isActive: message.payload.isActive }
+        payload: { isActive: message.payload.isActive, isVisible: message.payload.isVisible, isFocused: message.payload.isFocused }
       }, '*');
       
       sendResponse({ success: true });

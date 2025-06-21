@@ -25,7 +25,13 @@ class ExtensionDataService {
   private static extensionId: string | null = null;
 
   static isExtensionInstalled(): boolean {
-    return typeof window !== 'undefined' && (window as any).chrome?.runtime;
+    // Temporarily disable to prevent conflicts with new window.postMessage system
+    console.log('🔄 ExtensionDataService disabled - using window.postMessage bridge instead');
+    return false;
+    
+    // Original implementation (commented out):
+    // return typeof (window as any).chrome !== 'undefined' && 
+    //        !!(window as any).chrome.runtime;
   }
 
   // Alternative method: Use window postMessage to communicate with content script
