@@ -171,6 +171,7 @@ class ActivityDetector {
         }
         
         console.log('📝 Forwarding override session from web app to extension');
+        console.log('🔍 Override session payload:', event.data.payload);
         
         try {
           const response = await chrome.runtime.sendMessage({
@@ -178,9 +179,24 @@ class ActivityDetector {
             payload: event.data.payload
           });
           
-          console.log('✅ Override session recorded');
+          console.log('✅ Override session recorded:', response);
+          
+          // Send confirmation back to web app
+          window.postMessage({
+            type: 'RECORD_OVERRIDE_SESSION_RESPONSE',
+            payload: { success: true },
+            source: 'make10000hours-extension'
+          }, '*');
+          
         } catch (error) {
           console.error('❌ Failed to record override session:', error);
+          
+          // Send error back to web app
+          window.postMessage({
+            type: 'RECORD_OVERRIDE_SESSION_RESPONSE',
+            payload: { success: false, error: error.message },
+            source: 'make10000hours-extension'
+          }, '*');
         }
       }
     });

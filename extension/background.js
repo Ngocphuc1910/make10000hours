@@ -1381,12 +1381,15 @@ class FocusTimeTracker {
             const enhancedPayload = {
               ...message.payload,
               userId: this.currentUserId,
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              source: 'extension'
             };
             
-            console.log('📤 Recording override session:', enhancedPayload.domain);
+            console.log('📤 Recording override session:', enhancedPayload);
+            console.log('🔍 Current user ID:', this.currentUserId);
+            
             this.forwardToWebApp('RECORD_OVERRIDE_SESSION', enhancedPayload);
-            sendResponse({ success: true });
+            sendResponse({ success: true, payload: enhancedPayload });
           } catch (error) {
             console.error('❌ Error recording override session:', error);
             sendResponse({ success: false, error: error.message });
@@ -1998,15 +2001,28 @@ class FocusTimeTracker {
         }
       });
       
-      // Try production domain (single tab only)
-      chrome.tabs.query({ url: "*://make10000hours.com*" }, (tabs) => {
-        if (tabs.length > 0) {
-          const targetTab = tabs[0]; // Only send to first tab
-          chrome.tabs.sendMessage(targetTab.id, { type, payload })
-            .catch(error => {
-              console.warn('⚠️ Production message failed:', error.message);
-            });
-        }
+      // Try production domain with both HTTP and HTTPS, with and without www
+      const productionUrls = [
+        "https://make10000hours.com/*",
+        "https://www.make10000hours.com/*",
+        "http://make10000hours.com/*",
+        "http://www.make10000hours.com/*"
+      ];
+      
+      productionUrls.forEach(urlPattern => {
+        chrome.tabs.query({ url: urlPattern }, (tabs) => {
+          if (tabs.length > 0) {
+            const targetTab = tabs[0];
+            console.log('✅ Found production tab:', targetTab.url);
+            chrome.tabs.sendMessage(targetTab.id, { type, payload })
+              .then(response => {
+                console.log('✅ Production message delivered successfully');
+              })
+              .catch(error => {
+                console.warn('⚠️ Production message failed:', error.message);
+              });
+          }
+        });
       });
       
     } catch (error) {
