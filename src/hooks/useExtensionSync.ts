@@ -12,23 +12,58 @@ export const useExtensionSync = () => {
   // Initialize extension sync only once per session
   useEffect(() => {
     const initializeSync = async () => {
-      // Only sync once per session to avoid overriding persisted state
-      if (hasInitializedSync) {
-        // Just load data without syncing focus state
-        await loadExtensionData();
-        return;
+      try {
+        // Only sync once per session to avoid overriding persisted state
+        if (hasInitializedSync) {
+          // Just load data without syncing focus state
+          console.log('🔄 Extension sync already initialized, refreshing data only');
+          try {
+            await Promise.race([
+              loadExtensionData(),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Extension data load timeout')), 5000)
+              )
+            ]);
+          } catch (error) {
+            console.warn('⚠️ Failed to refresh extension data (continuing without extension):', error);
+          }
+          return;
+        }
+        
+        hasInitializedSync = true;
+        console.log('🚀 Initializing extension sync for first time...');
+        
+        // Load extension data first (with timeout)
+        try {
+          await Promise.race([
+            loadExtensionData(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Extension data load timeout')), 5000)
+            )
+          ]);
+          console.log('✅ Extension data loaded successfully');
+        } catch (error) {
+          console.warn('⚠️ Failed to load extension data (continuing without extension):', error);
+        }
+        
+        // Small delay to ensure persisted state is fully restored
+        setTimeout(async () => {
+          try {
+            // Use the new initialization method that respects persisted state (with timeout)
+            await Promise.race([
+              initializeFocusSync(),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Focus sync initialization timeout')), 3000)
+              )
+            ]);
+            console.log('✅ Focus sync initialized successfully');
+          } catch (error) {
+            console.warn('⚠️ Failed to initialize focus sync (continuing without extension sync):', error);
+          }
+        }, 100);
+      } catch (error) {
+        console.error('❌ Extension sync initialization failed:', error);
       }
-      
-      hasInitializedSync = true;
-      
-      // Load extension data first
-      await loadExtensionData();
-      
-      // Small delay to ensure persisted state is fully restored
-      setTimeout(async () => {
-        // Use the new initialization method that respects persisted state
-        await initializeFocusSync();
-      }, 100);
     };
     
     initializeSync();

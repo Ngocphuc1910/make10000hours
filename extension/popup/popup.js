@@ -7,6 +7,7 @@ class PopupManager {
   constructor() {
     this.currentState = null;
     this.todayStats = null;
+    this.userInfo = null;
     this.sessionTimer = null;
     this.updateInterval = null;
     this.analyticsUI = null;
@@ -32,10 +33,11 @@ class PopupManager {
       }
 
       // Get initial state and stats - always get fresh focus state
-      const [stateResponse, statsResponse, focusStateResponse] = await Promise.all([
+      const [stateResponse, statsResponse, focusStateResponse, userInfoResponse] = await Promise.all([
         this.sendMessage('GET_CURRENT_STATE'),
         this.sendMessage('GET_TODAY_STATS'),
-        this.sendMessage('GET_FOCUS_STATE')
+        this.sendMessage('GET_FOCUS_STATE'),
+        this.sendMessage('GET_USER_INFO')
       ]);
 
       if (stateResponse?.success) {
@@ -55,6 +57,12 @@ class PopupManager {
         console.log('🔄 Popup initialized with fresh focus state:', focusStateResponse.data.focusMode);
       }
 
+      // Store user info
+      if (userInfoResponse?.success) {
+        this.userInfo = userInfoResponse.data;
+        console.log('👤 User info loaded:', this.userInfo);
+      }
+
       // Update UI with initial data
       this.updateUI();
       this.hideLoading();
@@ -67,6 +75,8 @@ class PopupManager {
         this.refreshState();
         // Also refresh focus state specifically to catch changes from web app
         this.refreshFocusState();
+        // Also refresh user info to catch changes from web app
+        this.refreshUserInfo();
       }, 2000); // Check every 2 seconds
 
       // Set up event listeners
@@ -82,6 +92,10 @@ class PopupManager {
           // Update local state and UI without triggering another toggle
           this.currentState.focusStats.focusMode = message.payload.isActive;
           this.updateUI();
+        } else if (message.type === 'USER_INFO_UPDATED') {
+          console.log('👤 User info updated:', message.payload);
+          this.userInfo = message.payload;
+          this.updateUserInfo();
         }
         sendResponse({ success: true });
         return true;
@@ -334,10 +348,31 @@ class PopupManager {
   }
 
   /**
+   * Refresh user info from background
+   */
+  async refreshUserInfo() {
+    try {
+      const response = await this.sendMessage('GET_USER_INFO');
+      if (response?.success) {
+        // Only update if the user info has changed
+        const newUserInfo = response.data;
+        if (JSON.stringify(this.userInfo) !== JSON.stringify(newUserInfo)) {
+          this.userInfo = newUserInfo;
+          this.updateUserInfo();
+          console.log('👤 User info refreshed:', this.userInfo);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing user info:', error);
+    }
+  }
+
+  /**
    * Update UI elements with current state
    */
   updateUI() {
     this.updateHeader();
+    this.updateUserInfo();
     this.updateStatsOverview();
     this.updateCurrentSession();
     this.updateActivityStatus();
@@ -382,6 +417,62 @@ class PopupManager {
         <span class="focus-text">Distracted</span>
       `;
       focusIndicator.className = 'focus-indicator inactive';
+    }
+  }
+
+  /**
+   * Update user info display
+   */
+  updateUserInfo() {
+    const userInfoElement = document.getElementById('user-info');
+    const noUserInfoElement = document.getElementById('no-user-info');
+    const userNameElement = document.getElementById('user-name');
+    const userEmailElement = document.getElementById('user-email');
+    const userAvatarElement = document.getElementById('user-avatar-text');
+    const syncIndicatorElement = document.getElementById('sync-indicator');
+
+    if (this.userInfo && this.userInfo.userId) {
+      // Show user info
+      if (userInfoElement) userInfoElement.classList.remove('hidden');
+      if (noUserInfoElement) noUserInfoElement.classList.add('hidden');
+
+      // Update user details
+      const displayName = this.userInfo.displayName || this.userInfo.userEmail || 'Anonymous';
+      const email = this.userInfo.userEmail || this.userInfo.userId;
+      
+      if (userNameElement) userNameElement.textContent = displayName;
+      if (userEmailElement) userEmailElement.textContent = email;
+      
+      // Generate avatar initials
+      if (userAvatarElement) {
+        const initials = displayName
+          .split(' ')
+          .map(name => name.charAt(0))
+          .join('')
+          .substring(0, 2)
+          .toUpperCase();
+        userAvatarElement.textContent = initials || '?';
+      }
+
+      // Update sync indicator
+      if (syncIndicatorElement) {
+        syncIndicatorElement.classList.remove('offline');
+        syncIndicatorElement.title = 'Connected to web app';
+      }
+
+      console.log('👤 User info displayed:', { displayName, email });
+    } else {
+      // Show no user info
+      if (userInfoElement) userInfoElement.classList.add('hidden');
+      if (noUserInfoElement) noUserInfoElement.classList.remove('hidden');
+
+      // Update sync indicator
+      if (syncIndicatorElement) {
+        syncIndicatorElement.classList.add('offline');
+        syncIndicatorElement.title = 'Not connected to web app';
+      }
+
+      console.log('👤 No user info available');
     }
   }
 
