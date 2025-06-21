@@ -25,9 +25,12 @@ class ExtensionDataService {
   private static extensionId: string | null = null;
 
   static isExtensionInstalled(): boolean {
-    // Temporarily disable to prevent conflicts with new window.postMessage system
-    console.log('🔄 ExtensionDataService disabled - using window.postMessage bridge instead');
-    return false;
+    // Re-enabled for testing - check if Chrome extension API is available
+    console.log('🔄 ExtensionDataService: Checking Chrome extension API availability');
+    const isAvailable = typeof (window as any).chrome !== 'undefined' && 
+           !!(window as any).chrome.runtime;
+    console.log('🔄 Chrome extension API available:', isAvailable);
+    return isAvailable;
     
     // Original implementation (commented out):
     // return typeof (window as any).chrome !== 'undefined' && 
@@ -147,12 +150,58 @@ class ExtensionDataService {
   // Test connection method
   static async testConnection(): Promise<boolean> {
     try {
+      console.log('🔍 Testing extension connection...');
+      
+      // Method 1: Try postMessage approach (most reliable for web pages)
+      const isPostMessageAvailable = await this.testPostMessageConnection();
+      if (isPostMessageAvailable) {
+        console.log('✅ Extension connected via postMessage');
+        return true;
+      }
+      
+      // Method 2: Try direct chrome.runtime approach
       const response = await this.sendMessage({ type: 'GET_TODAY_STATS' });
-      return response && response.success !== false;
+      const isConnected = response && response.success !== false;
+      console.log('🔗 Extension connection test result:', isConnected);
+      return isConnected;
     } catch (error) {
-      console.log('Extension connection test failed:', error);
+      console.log('❌ Extension connection test failed:', error);
       return false;
     }
+  }
+
+  // Test postMessage connection
+  static async testPostMessageConnection(): Promise<boolean> {
+    return new Promise((resolve) => {
+      const messageId = Math.random().toString(36);
+      let resolved = false;
+      
+      const timeoutId = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          window.removeEventListener('message', responseHandler);
+          resolve(false);
+        }
+      }, 2000);
+
+      const responseHandler = (event: MessageEvent) => {
+        if (event.data?.type === 'EXTENSION_PONG' && event.data?.messageId === messageId && !resolved) {
+          resolved = true;
+          clearTimeout(timeoutId);
+          window.removeEventListener('message', responseHandler);
+          resolve(true);
+        }
+      };
+
+      window.addEventListener('message', responseHandler);
+      
+      // Send ping message
+      window.postMessage({
+        type: 'EXTENSION_PING',
+        messageId,
+        source: 'make10000hours-webapp'
+      }, '*');
+    });
   }
 
   static async getTodayStats(): Promise<ExtensionResponse<ExtensionTimeData>> {
