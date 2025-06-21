@@ -49,7 +49,7 @@ export const taskToCalendarEvent = (task: Task, project?: Project): CalendarEven
   endDate.setHours(endHour, endMinute, 0, 0);
 
   // If end time is before start time, assume it's the next day
-  if (endDate <= startDate) {
+  if (endDate < startDate) {
     endDate.setDate(endDate.getDate() + 1);
   }
 
