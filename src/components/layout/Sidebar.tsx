@@ -92,6 +92,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
     if (path === '/deep-focus' && location.pathname === '/deep-focus') {
       return true;
     }
+    if (path === '/calendar' && location.pathname === '/calendar') {
+      return true;
+    }
     if (path === '/data-sync' && location.pathname === '/data-sync') {
       return true;
     }
