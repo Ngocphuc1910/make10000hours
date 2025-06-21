@@ -19,6 +19,7 @@ import { useTaskStore } from '../../store/taskStore';
 import { useUserStore } from '../../store/userStore';
 import { mergeEventsAndTasks, calculateNewEventTime, isValidDrop } from './utils';
 import TaskForm from '../../components/tasks/TaskForm';
+import { Task } from '../../types/models';
 
 // Old DragState interface - removed since we have new drag-to-create system
 
@@ -338,7 +339,7 @@ export const Calendar: React.FC = () => {
           console.log('🔄 Duplicating task:', task.title);
           
           // Prepare the new task data for duplication
-          const duplicateTaskData = {
+          const duplicateTaskData: Omit<Task, 'id' | 'order' | 'createdAt' | 'updatedAt'> = {
             title: task.title,
             description: task.description || '',
             status: task.status,
@@ -347,11 +348,15 @@ export const Calendar: React.FC = () => {
             timeEstimated: task.timeEstimated,
             scheduledDate: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`,
             includeTime: !shouldBeAllDay,
-            scheduledStartTime: !shouldBeAllDay ? start.toTimeString().substring(0, 5) : undefined,
-            scheduledEndTime: !shouldBeAllDay ? end.toTimeString().substring(0, 5) : undefined,
             completed: false,
             timeSpent: 0
           };
+
+          if (!shouldBeAllDay) {
+            // Add time fields only if not all-day
+            duplicateTaskData.scheduledStartTime = start.toTimeString().substring(0, 5); // HH:MM format
+            duplicateTaskData.scheduledEndTime = end.toTimeString().substring(0, 5); // HH:MM format
+          }
 
           // Auto-change status: "To do list" → "In Pomodoro" when duplicated to today
           const isMovedToToday = isSameDay(start, new Date());
