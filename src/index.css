@@ -1377,4 +1377,26 @@ code {
   border: 1px solid var(--border-color) !important;
 }
 
+/* Deep Focus Switch Dark Mode Override - All Pages */
+[data-theme="dark"] label div.bg-gray-100\/80 {
+  background: rgba(20, 20, 20, 0.8) !important;
+  backdrop-filter: blur(4px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.dark label div.bg-gray-100\/80 {
+  background: rgba(20, 20, 20, 0.8) !important;
+  backdrop-filter: blur(4px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Deep Focus Switch Text Dark Mode Override */
+[data-theme="dark"] label div.bg-gray-100\/80 span.text-gray-600 {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.dark label div.bg-gray-100\/80 span.text-gray-600 {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
 
