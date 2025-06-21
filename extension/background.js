@@ -596,6 +596,7 @@ class BlockingManager {
     this.focusMode = false;
     this.blockedSites = new Set();
     this.temporaryOverrides = new Map(); // domain -> expiry timestamp
+    this.urlCache = new Map(); // tabId -> original URL
     this.focusStartTime = null;
     this.blockedAttempts = 0;
     
@@ -887,6 +888,36 @@ class BlockingManager {
   }
 
   /**
+   * Cache URL before potential blocking
+   */
+  cacheUrl(tabId, url) {
+    if (this.focusMode && url && !url.startsWith('chrome-extension://') && !url.startsWith('chrome://')) {
+      const domain = url.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+      if (this.blockedSites.has(domain) && !this.temporaryOverrides.has(domain)) {
+        this.urlCache.set(tabId, url);
+        console.log(`🔗 Cached URL for tab ${tabId}: ${url}`);
+      }
+    }
+  }
+
+  /**
+   * Get cached URL for tab
+   */
+  getCachedUrl(tabId) {
+    const url = this.urlCache.get(tabId);
+    // Don't delete immediately - keep for auto-redirect on reload
+    return url;
+  }
+
+  /**
+   * Clear cached URL for tab (call when actually navigating)
+   */
+  clearCachedUrl(tabId) {
+    this.urlCache.delete(tabId);
+    console.log(`🧹 Cleared cached URL for tab ${tabId}`);
+  }
+
+  /**
    * Get focus session stats
    */
   getFocusStats() {
@@ -1051,6 +1082,13 @@ class FocusTimeTracker {
       this.handleWindowFocusChanged(windowId);
     });
 
+    // Navigation events for URL caching
+    chrome.webNavigation.onBeforeNavigate.addListener((details) => {
+      if (details.frameId === 0) { // Main frame only
+        this.blockingManager.cacheUrl(details.tabId, details.url);
+      }
+    });
+
     // Message handling from popup and content scripts
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       this.handleMessage(message, sender, sendResponse);
@@ -1118,6 +1156,8 @@ class FocusTimeTracker {
       if (this.currentSession.tabId === tabId) {
         await this.stopCurrentTracking();
       }
+      // Clean up cached URL
+      this.blockingManager.urlCache.delete(tabId);
     } catch (error) {
       console.error('Error handling tab removal:', error);
     }
@@ -1293,6 +1333,16 @@ class FocusTimeTracker {
         case 'GET_DEBUG_INFO':
           const debugInfo = this.blockingManager.getDebugInfo(message.payload?.domain);
           sendResponse({ success: true, data: debugInfo });
+          break;
+
+        case 'GET_CACHED_URL':
+          const cachedUrl = this.blockingManager.getCachedUrl(sender.tab?.id);
+          sendResponse({ success: true, data: { url: cachedUrl } });
+          break;
+
+        case 'CLEAR_CACHED_URL':
+          this.blockingManager.clearCachedUrl(sender.tab?.id);
+          sendResponse({ success: true });
           break;
 
         case 'RESET_BLOCKING_STATE':
