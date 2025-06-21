@@ -172,12 +172,20 @@ const DeepFocusPage: React.FC = () => {
         const hybridData = await loadHybridTimeRangeData(startDateStr, endDateStr);
         console.log('✅ Loaded hybrid data:', hybridData);
         
-        // Convert to the format expected by the UI
-        setExtensionData({
-          timeMetrics: hybridData.timeMetrics,
-          siteUsage: hybridData.siteUsage,
-          dailyUsage: [] // TODO: Convert daily data if needed
-        });
+        // Check if we have meaningful data for this range
+        const hasData = hybridData.timeMetrics.onScreenTime > 0 || hybridData.siteUsage.length > 0;
+        
+        if (hasData) {
+          // Convert to the format expected by the UI
+          setExtensionData({
+            timeMetrics: hybridData.timeMetrics,
+            siteUsage: hybridData.siteUsage,
+            dailyUsage: [] // TODO: Convert daily data if needed
+          });
+        } else {
+          console.log('⚠️ No data found for date range, falling back to store data');
+          setExtensionData(null); // This will show store data with date filtering
+        }
       } catch (error) {
         console.error('❌ Failed to load hybrid date range data:', error);
         console.log('⚠️ Falling back to extension-only data...');
@@ -186,10 +194,19 @@ const DeepFocusPage: React.FC = () => {
         try {
           const data = await loadDateRangeData(startDateStr, endDateStr);
           console.log('📱 Loaded fallback extension data:', data);
-          setExtensionData(data);
+          
+          // Check if extension data has meaningful content
+          const hasExtensionData = data?.timeMetrics?.onScreenTime > 0 || data?.siteUsage?.length > 0;
+          
+          if (hasExtensionData) {
+            setExtensionData(data);
+          } else {
+            console.log('⚠️ Extension also has no data, using store data with filtering');
+            setExtensionData(null); // Fall back to store data
+          }
         } catch (fallbackError) {
-          console.error('❌ Extension fallback also failed:', fallbackError);
-          setExtensionData(null);
+          console.error('❌ Extension fallback also failed, using store data:', fallbackError);
+          setExtensionData(null); // Fall back to store data
         }
       }
     };
@@ -1331,11 +1348,13 @@ const DeepFocusPage: React.FC = () => {
                           onClick={async () => {
                             try {
                               console.log('🧪 Quick override test...');
-                              const result = await quickOverrideTest(user.uid);
-                              if (result.success) {
-                                console.log('✅ Quick test completed:', result);
-                                // Reload override sessions to update UI
-                                await loadOverrideSessions(user.uid, selectedRange.startDate || undefined, selectedRange.endDate || undefined);
+                              if (user?.uid) {
+                                const result = await quickOverrideTest(user.uid);
+                                if (result.success) {
+                                  console.log('✅ Quick test completed:', result);
+                                  // Reload override sessions to update UI
+                                  await loadOverrideSessions(user.uid, selectedRange.startDate || undefined, selectedRange.endDate || undefined);
+                                }
                               }
                             } catch (error) {
                               console.error('❌ Quick test failed:', error);
@@ -1354,10 +1373,12 @@ const DeepFocusPage: React.FC = () => {
                               onClick={async () => {
                                 try {
                                   console.log('🧪 Testing override schema...');
-                                  await testOverrideSchema(user.uid);
-                                  console.log('✅ Override schema test completed');
-                                  // Reload override sessions to update UI
-                                  await loadOverrideSessions(user.uid, selectedRange.startDate || undefined, selectedRange.endDate || undefined);
+                                  if (user?.uid) {
+                                    await testOverrideSchema(user.uid);
+                                    console.log('✅ Override schema test completed');
+                                    // Reload override sessions to update UI
+                                    await loadOverrideSessions(user.uid, selectedRange.startDate || undefined, selectedRange.endDate || undefined);
+                                  }
                                 } catch (error) {
                                   console.error('❌ Override schema test failed:', error);
                                 }
@@ -1372,7 +1393,9 @@ const DeepFocusPage: React.FC = () => {
                               onClick={async () => {
                                 try {
                                   console.log('🔗 Testing user sync with extension...');
-                                  await testUserSync(user.uid);
+                                  if (user?.uid) {
+                                    await testUserSync(user.uid);
+                                  }
                                   console.log('✅ User sync test completed');
                                 } catch (error) {
                                   console.error('❌ User sync test failed:', error);
