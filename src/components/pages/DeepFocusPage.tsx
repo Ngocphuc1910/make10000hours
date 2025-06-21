@@ -309,12 +309,17 @@ const DeepFocusPage: React.FC = () => {
     const totalWorkingTime = workSessionsForCalculation
       .reduce((total, session) => total + (session.duration || 0), 0);
 
-    console.log('Deep Focus Page - Working Time Calculation:', {
+    // Calculate On Screen Time by summing all site usage for accurate aggregation
+    const totalOnScreenTime = filteredSiteUsage.reduce((total, site) => total + site.timeSpent, 0);
+
+    console.log('Deep Focus Page - Time Metrics Calculation:', {
       totalWorkSessions: workSessions.length,
       filteredWorkSessions: filteredWorkSessions.length,
       workSessionsForCalculation: workSessionsForCalculation.length,
       totalWorkingTime,
       filteredDeepFocusTime,
+      onScreenTimeFromSites: totalOnScreenTime,
+      siteCount: filteredSiteUsage.length,
       selectedRange: selectedRange.rangeType,
       dateRange: {
         start: selectedRange.startDate?.toISOString(),
@@ -322,19 +327,13 @@ const DeepFocusPage: React.FC = () => {
       }
     });
 
-    // Use extension data for screen time metrics but ALWAYS use session data for deep focus time
-    const baseMetrics = extensionData ? extensionData.timeMetrics : timeMetrics;
-    const totalOnScreenTime = selectedRange.rangeType === 'all time' 
-      ? baseMetrics.onScreenTime 
-      : filteredDailyUsage.reduce((sum, day) => sum + day.onScreenTime, 0);
-
     return {
       onScreenTime: totalOnScreenTime,
       workingTime: totalWorkingTime, // Use work sessions data
       deepFocusTime: filteredDeepFocusTime, // ALWAYS use filtered session data
       overrideTime: Math.round(totalOnScreenTime * 0.1) // Estimate override time
     };
-  }, [extensionData, timeMetrics, filteredDailyUsage, selectedRange, filteredWorkSessions, filteredDeepFocusTime]);
+  }, [filteredSiteUsage, filteredWorkSessions, filteredDeepFocusTime, selectedRange]);
 
   // Ensure sidebar state is properly synchronized on mount and state changes
   useEffect(() => {
