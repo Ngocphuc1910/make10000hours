@@ -251,16 +251,13 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       
       // Fire and forget - don't wait for addDoc to complete since it hangs
       // The real-time listener will update the UI when the task is created
-      addDoc(tasksRef, newTask).then((docRef) => {
-        console.log('Firestore addDoc completed, docRef:', docRef.id);
-        // Track task creation in Analytics
-        trackTaskCreated(taskData.projectId);
-      }).catch((error) => {
-        console.error('Error in addDoc:', error);
-      });
+      const docRef = await addDoc(tasksRef, newTask);
+      console.log('Firestore addDoc completed, docRef:', docRef.id);
+      // Track task creation in Analytics
+      trackTaskCreated(taskData.projectId);
       
       console.log('Task creation initiated successfully');
-      return 'pending'; // Return immediately
+      return docRef.id; // Return the new task ID
     } catch (error) {
       console.error('Error adding task:', error);
       throw error;
