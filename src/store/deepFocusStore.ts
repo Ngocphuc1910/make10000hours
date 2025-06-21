@@ -6,6 +6,7 @@ import ExtensionDataService from '../services/extensionDataService';
 import { deepFocusSessionService } from '../api/deepFocusSessionService';
 import { siteUsageService } from '../api/siteUsageService';
 import HybridDataService from '../api/hybridDataService';
+import { overrideSessionService, OverrideSession } from '../api/overrideSessionService';
 
 // Mock data with exact colors from AI design
 const mockSiteUsage: SiteUsage[] = [
@@ -170,6 +171,10 @@ interface DeepFocusStore extends DeepFocusData {
   pauseSessionOnInactivity: (inactivityDuration: number) => Promise<void>;
   resumeSessionOnActivity: () => Promise<void>;
   setAutoSessionManagement: (enabled: boolean) => void;
+  // Override sessions
+  overrideSessions: OverrideSession[];
+  recordOverrideSession: (domain: string, duration: number) => Promise<void>;
+  loadOverrideSessions: (userId: string, startDate?: Date, endDate?: Date) => Promise<void>;
 }
 
 export const useDeepFocusStore = create<DeepFocusStore>()(
@@ -214,7 +219,10 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
   isSessionPaused: false,
   pausedAt: null,
   totalPausedTime: 0,
-  autoSessionManagement: true, // enabled by default
+  autoSessionManagement: true,
+  
+  // Override sessions state
+  overrideSessions: [], // enabled by default
 
   loadExtensionData: async () => {
     try {
@@ -942,6 +950,73 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       } catch (error) {
         console.error('❌ Failed to load hybrid time range data:', error);
         throw error;
+      }
+    },
+
+    // Override session methods
+    recordOverrideSession: async (domain: string, duration: number) => {
+      try {
+        const { useUserStore } = await import('./userStore');
+        const user = useUserStore.getState().user;
+        const state = get();
+        
+        if (user?.uid) {
+          console.log('🎯 Recording override session:', { domain, duration, userId: user.uid });
+          
+          // Create temporary local override session for immediate UI update
+          const tempOverride = {
+            id: `temp-${Date.now()}`,
+            userId: user.uid,
+            domain,
+            duration,
+            deepFocusSessionId: state.activeSessionId || undefined,
+            createdAt: new Date()
+          };
+          
+          // Add to local state immediately
+          set(state => ({
+            overrideSessions: [tempOverride, ...state.overrideSessions]
+          }));
+          
+          try {
+            // Try to save to Firebase
+            const docId = await overrideSessionService.createOverrideSession({
+              userId: user.uid,
+              domain,
+              duration,
+              deepFocusSessionId: state.activeSessionId || undefined
+            });
+            
+            console.log('✅ Override session saved to Firebase:', docId);
+            
+            // Replace temp with real data
+            set(state => ({
+              overrideSessions: state.overrideSessions.map(session => 
+                session.id === tempOverride.id 
+                  ? { ...session, id: docId }
+                  : session
+              )
+            }));
+            
+          } catch (firebaseError) {
+            console.warn('⚠️ Firebase save failed, keeping local override:', firebaseError);
+            // Keep the temporary override in local state
+          }
+        }
+      } catch (error) {
+        console.error('Failed to record override session:', error);
+      }
+    },
+
+    loadOverrideSessions: async (userId: string, startDate?: Date, endDate?: Date) => {
+      try {
+        const overrides = await overrideSessionService.getUserOverrides(userId, startDate, endDate);
+        set({ overrideSessions: overrides });
+        console.log('✅ Loaded override sessions:', overrides.length);
+      } catch (error) {
+        console.warn('Could not load override sessions (this is normal if index is still building):', error);
+        // Set empty array instead of leaving it undefined
+        set({ overrideSessions: [] });
       }
     }
 }),
