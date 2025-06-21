@@ -236,7 +236,8 @@ export const getTasksWorkedOnDate = async (
     }
     
     // Filter sessions for the specific date
-    const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const { formatLocalDate } = await import('../utils/timeUtils');
+    const dateString = formatLocalDate(date); // YYYY-MM-DD format, timezone-safe
     const sessionsForDate = sessions.filter(session => session.date === dateString);
     
     if (sessionsForDate.length === 0) {

@@ -34,7 +34,13 @@ import {
   CheckCheck,
   MoreVertical,
   Folder,
-  Palette
+  Palette,
+  Sun,
+  Moon,
+  Monitor,
+  Database,
+  RefreshCw,
+  Info
 } from 'lucide-react';
 
 interface IconProps {
@@ -78,7 +84,13 @@ const iconMap = {
   'checkbox-multiple-line': CheckCheck,
   'more-2-fill': MoreVertical,
   'folder-line': Folder,
-  'palette-line': Palette
+  'palette-line': Palette,
+  'sun-line': Sun,
+  'moon-line': Moon,
+  'computer-line': Monitor,
+  'database-2-line': Database,
+  'refresh-line': RefreshCw,
+  'information-line': Info
 };
 
 export const Icon: React.FC<IconProps> = ({ 

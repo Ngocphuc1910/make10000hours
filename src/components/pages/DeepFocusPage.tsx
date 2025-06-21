@@ -11,7 +11,7 @@ import { useUserStore } from '../../store/userStore';
 import { useUIStore } from '../../store/uiStore';
 import { Icon } from '../ui/Icon';
 import { Tooltip } from '../ui/Tooltip';
-import { formatTime } from '../../utils/timeUtils';
+import { formatTime, formatLocalDate } from '../../utils/timeUtils';
 import { formatElapsedTime } from '../../utils/timeFormat';
 import { debugDeepFocus } from '../../utils/debugUtils';
 import { FaviconService } from '../../utils/faviconUtils';
@@ -144,8 +144,8 @@ const DeepFocusPage: React.FC = () => {
         return;
       }
 
-      const startDateStr = selectedRange.startDate.toISOString().split('T')[0];
-      const endDateStr = selectedRange.endDate.toISOString().split('T')[0];
+      const startDateStr = formatLocalDate(selectedRange.startDate);
+      const endDateStr = formatLocalDate(selectedRange.endDate);
 
       try {
         console.log('🔄 Loading hybrid data for date range:', startDateStr, 'to', endDateStr);
@@ -240,7 +240,13 @@ const DeepFocusPage: React.FC = () => {
     
     return workSessions.filter(session => {
       const sessionDate = new Date(session.date);
-      return sessionDate >= startDate && sessionDate <= endDate;
+      
+      // Convert session date to local date for comparison (same logic as deep focus sessions)
+      const sessionLocalDate = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate());
+      const startLocalDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const endLocalDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+      
+      return sessionLocalDate >= startLocalDate && sessionLocalDate <= endLocalDate;
     });
   }, [workSessions, selectedRange]);
 
@@ -261,7 +267,24 @@ const DeepFocusPage: React.FC = () => {
     
     return deepFocusSessions.filter(session => {
       const sessionDate = new Date(session.createdAt);
-      return sessionDate >= startDate && sessionDate <= endDate;
+      
+      // Convert session UTC date to local date for comparison
+      const sessionLocalDate = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate());
+      const startLocalDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const endLocalDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+      
+      const isInRange = sessionLocalDate >= startLocalDate && sessionLocalDate <= endLocalDate;
+      
+      console.log('🔍 Session date filtering:', {
+        sessionId: session.id,
+        sessionUTC: session.createdAt,
+        sessionLocal: sessionLocalDate.toISOString().split('T')[0],
+        filterStart: startLocalDate.toISOString().split('T')[0],
+        filterEnd: endLocalDate.toISOString().split('T')[0],
+        isInRange
+      });
+      
+      return isInRange;
     });
   }, [deepFocusSessions, selectedRange]);
 
@@ -739,7 +762,7 @@ const DeepFocusPage: React.FC = () => {
               >
                 <span>{getLabel()}</span>
                 <div className="w-4 h-4 flex items-center justify-center">
-                  <i className="ri-arrow-down-s-line"></i>
+                  <Icon name="arrow-down-s-line" className="w-4 h-4" />
                 </div>
               </button>
               
@@ -770,7 +793,7 @@ const DeepFocusPage: React.FC = () => {
                   >
                     <span>Time range</span>
                     <div className="w-4 h-4 flex items-center justify-center">
-                      <i className="ri-calendar-line"></i>
+                      <Icon name="calendar-line" className="w-4 h-4" />
                     </div>
                   </button>
                   <button 
@@ -804,7 +827,7 @@ const DeepFocusPage: React.FC = () => {
                       }}
                     >
                       <div className="w-4 h-4 flex items-center justify-center">
-                        <i className="ri-close-line"></i>
+                        <Icon name="close-line" className="w-4 h-4" />
                       </div>
                     </button>
                   </div>
@@ -1000,22 +1023,17 @@ const DeepFocusPage: React.FC = () => {
                 <div key={index} className={`bg-background-secondary p-6 rounded-lg border border-border ${metric.hoverBorder} transition-all duration-300 group`}>
                   <div className="flex justify-between items-center mb-3">
                     <div className={`w-10 h-10 ${metric.iconBg} rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
-                      <i className={`ri-${metric.icon} text-xl ${metric.iconColor}`}></i>
+                      <Icon name={metric.icon} className={`text-xl ${metric.iconColor}`} size={20} />
                     </div>
                     <button className="text-text-secondary hover:text-text-primary opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       <div className="w-4 h-4 flex items-center justify-center">
-                        <i className="ri-information-line"></i>
+                        <Icon name="information-line" className="w-4 h-4" />
                       </div>
                     </button>
                   </div>
                   <h3 className="text-sm text-text-secondary mb-1">{metric.label}</h3>
                   <div className={`text-2xl font-semibold ${metric.valueColor}`}>
-                    {(metric as any).isDeepFocusTime
-                      ? (() => {
-                          console.log('🎯 Deep Focus Time Display:', metric.value, 'minutes');
-                          return formatMinutesToHours(metric.value);
-                        })()
-                      : formatMinutesToHours(metric.value)}
+                    {formatMinutesToHours(metric.value)}
                   </div>
                   <div className="flex items-center mt-3 text-green-500 text-xs font-medium">
                     <span>{metric.change}</span>
