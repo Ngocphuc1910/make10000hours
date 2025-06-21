@@ -1032,6 +1032,10 @@ class FocusTimeTracker {
     // Focus state tracking
     this.latestFocusState = false;
     
+    // User authentication state
+    this.currentUserId = null;
+    this.userInfo = null;
+    
     this.initialize();
   }
 
@@ -1091,6 +1095,13 @@ class FocusTimeTracker {
 
     // Message handling from popup and content scripts
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      this.handleMessage(message, sender, sendResponse);
+      return true; // Keep message channel open for async responses
+    });
+
+    // External message handling from web apps (externally_connectable domains)
+    chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+      console.log('📨 External message received from:', sender.origin);
       this.handleMessage(message, sender, sendResponse);
       return true; // Keep message channel open for async responses
     });
@@ -1321,6 +1332,53 @@ class FocusTimeTracker {
         case 'RECORD_BLOCKED_ATTEMPT':
           this.blockingManager.recordBlockedAttempt(message.payload?.domain);
           sendResponse({ success: true });
+          break;
+
+        case 'SET_USER_ID':
+          // Store user ID for override session attribution
+          try {
+            console.log('🔍 DEBUG: SET_USER_ID received:', message.payload);
+            
+            this.currentUserId = message.payload?.userId;
+            this.userInfo = {
+              userId: message.payload?.userId,
+              userEmail: message.payload?.userEmail,
+              displayName: message.payload?.displayName
+            };
+            console.log('✅ User ID set in extension:', this.currentUserId);
+            console.log('🔍 DEBUG: Full user info stored:', this.userInfo);
+            sendResponse({ success: true, userId: this.currentUserId });
+          } catch (error) {
+            console.error('❌ DEBUG: Error setting user ID:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'RECORD_OVERRIDE_SESSION':
+          // Forward to web app with user ID if available
+          try {
+            if (!this.currentUserId) {
+              console.warn('⚠️ No user ID available for override session');
+              sendResponse({ 
+                success: false, 
+                error: 'No user ID available. Please ensure you are logged in to the web app.' 
+              });
+              return;
+            }
+
+            const enhancedPayload = {
+              ...message.payload,
+              userId: this.currentUserId,
+              timestamp: Date.now()
+            };
+            
+            console.log('📤 Recording override session:', enhancedPayload.domain);
+            this.forwardToWebApp('RECORD_OVERRIDE_SESSION', enhancedPayload);
+            sendResponse({ success: true });
+          } catch (error) {
+            console.error('❌ Error recording override session:', error);
+            sendResponse({ success: false, error: error.message });
+          }
           break;
 
         case 'GET_SESSION_TIME':
@@ -1879,6 +1937,55 @@ class FocusTimeTracker {
 
     // Store the latest focus state for popup to query when it opens
     this.latestFocusState = isActive;
+  }
+
+  /**
+   * Forward messages to web app if available
+   */
+  forwardToWebApp(type, payload) {
+    try {
+      console.log('📤 Forwarding message to web app:', type);
+      
+      // Find the most recent/active tab running the web app
+      chrome.tabs.query({ url: "*://localhost:*/*" }, (tabs) => {
+        if (tabs.length > 0) {
+          // Filter for likely dev server ports and get the most recently accessed
+          const appTabs = tabs.filter(tab => {
+            const url = new URL(tab.url);
+            const port = parseInt(url.port);
+            return port >= 3000 && port <= 9000; // Common dev server ports
+          });
+          
+          if (appTabs.length > 0) {
+            // Send to the first active tab only to prevent broadcast
+            const targetTab = appTabs[0];
+            console.log('✅ Sending to web app tab:', targetTab.url);
+            
+            chrome.tabs.sendMessage(targetTab.id, { type, payload })
+              .then(response => {
+                console.log('✅ Message delivered successfully');
+              })
+              .catch(error => {
+                console.warn('⚠️ Message delivery failed:', error.message);
+              });
+          }
+        }
+      });
+      
+      // Try production domain (single tab only)
+      chrome.tabs.query({ url: "*://make10000hours.com*" }, (tabs) => {
+        if (tabs.length > 0) {
+          const targetTab = tabs[0]; // Only send to first tab
+          chrome.tabs.sendMessage(targetTab.id, { type, payload })
+            .catch(error => {
+              console.warn('⚠️ Production message failed:', error.message);
+            });
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ Error in forwardToWebApp:', error);
+    }
   }
 }
 
