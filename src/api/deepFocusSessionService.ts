@@ -47,7 +47,7 @@ class DeepFocusSessionService {
       const sessionRef = doc(db, this.collectionName, sessionId);
       const endTime = new Date();
       
-      // Get session to calculate duration
+      // Get session data but trust the existing incremental duration
       const sessionDoc = await getDocs(query(
         collection(db, this.collectionName),
         where('__name__', '==', sessionId)
@@ -60,23 +60,32 @@ class DeepFocusSessionService {
       
       const sessionData = sessionDoc.docs[0].data();
       const startTime = sessionData.startTime?.toDate() || new Date();
-      const duration = Math.round((endTime.getTime() - startTime.getTime()) / (1000 * 60)); // minutes
+      
+      // ✅ TRUST THE INCREMENTAL DURATION - don't recalculate
+      const existingDuration = sessionData.duration || 0;
+      
+      // Only fallback to calculation if no incremental duration exists (edge case)
+      const finalDuration = existingDuration > 0 
+        ? existingDuration 
+        : Math.round((endTime.getTime() - startTime.getTime()) / (1000 * 60));
       
       await updateDoc(sessionRef, {
         endTime: serverTimestamp(),
-        duration: duration,
+        duration: finalDuration, // Use existing incremental duration
         status: 'completed',
         updatedAt: serverTimestamp()
       });
 
-      console.log('Deep Focus session ended:', sessionId, 'Duration:', duration, 'minutes');
+      console.log('Deep Focus session ended:', sessionId, 
+        'Duration:', finalDuration, 'minutes', 
+        '(used incremental:', existingDuration > 0 ? 'YES' : 'NO, calculated fallback', ')');
       
       return {
         id: sessionId,
         userId: sessionData.userId,
         startTime: startTime,
         endTime: endTime,
-        duration: duration,
+        duration: finalDuration,
         status: 'completed',
         createdAt: sessionData.createdAt?.toDate() || new Date(),
         updatedAt: new Date()
@@ -329,18 +338,27 @@ class DeepFocusSessionService {
         const data = docSnapshot.data();
         const startTime = data.startTime?.toDate() || new Date();
         const now = new Date();
-        const duration = Math.round((now.getTime() - startTime.getTime()) / (1000 * 60)); // minutes
+        
+        // ✅ TRUST THE INCREMENTAL DURATION - don't recalculate
+        const existingDuration = data.duration || 0;
+        
+        // Only fallback to calculation if no incremental duration exists
+        const finalDuration = existingDuration > 0 
+          ? existingDuration 
+          : Math.round((now.getTime() - startTime.getTime()) / (1000 * 60));
         
         // End the orphaned session
         await updateDoc(doc(db, this.collectionName, docSnapshot.id), {
           endTime: serverTimestamp(),
-          duration: duration,
+          duration: finalDuration, // Use existing incremental duration
           status: 'completed',
           updatedAt: serverTimestamp()
         });
         
         cleanedCount++;
-        console.log('🧹 Cleaned up orphaned session:', docSnapshot.id, 'Duration:', duration, 'minutes');
+        console.log('🧹 Cleaned up orphaned session:', docSnapshot.id, 
+          'Duration:', finalDuration, 'minutes',
+          '(used incremental:', existingDuration > 0 ? 'YES' : 'NO, calculated fallback', ')');
       }
       
       if (cleanedCount > 0) {
