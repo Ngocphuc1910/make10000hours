@@ -39,6 +39,7 @@ interface UndoRedoState {
     scheduledEndTime: string | null;
     includeTime: boolean;
     status: 'pomodoro' | 'todo' | 'completed';
+    isNewlyCreated?: boolean; // true if this is a newly created task
   };
 }
 
@@ -61,16 +62,16 @@ export const Calendar: React.FC = () => {
     isAllDay?: boolean;
   } | null>(null);
   const [clearDragIndicator, setClearDragIndicator] = useState(false);
-  
+
   // Undo/Redo state management
   const [undoStack, setUndoStack] = useState<UndoRedoState[]>([]);
   const [redoStack, setRedoStack] = useState<UndoRedoState[]>([]);
   // Old drag state - removed since we have new drag-to-create system
-  
+
   // Get tasks and projects from task store
-  const { tasks, projects, addTask, updateTask, setEditingTaskId: setStoreEditingTaskId } = useTaskStore();
+  const { tasks, projects, addTask, updateTask, setEditingTaskId: setStoreEditingTaskId, deleteTask } = useTaskStore();
   const { user } = useUserStore();
-  
+
   // Merge calendar events with task events
   const allEvents = useMemo(() => {
     return mergeEventsAndTasks(calendarEvents, tasks, projects);
@@ -80,10 +81,10 @@ export const Calendar: React.FC = () => {
   const location = useLocation();
   const { isLeftSidebarOpen, toggleLeftSidebar } = useUIStore();
 
-  const { 
-    isDeepFocusActive, 
-    enableDeepFocus, 
-    disableDeepFocus 
+  const {
+    isDeepFocusActive,
+    enableDeepFocus,
+    disableDeepFocus
   } = useDeepFocusStore();
   useEnhancedDeepFocusSync(); // Enhanced sync with activity detection and extension sync
   useExtensionSync(); // Bidirectional extension sync
@@ -106,7 +107,7 @@ export const Calendar: React.FC = () => {
     }
 
     const lastAction = undoStack[undoStack.length - 1];
-    const { taskId, beforeState } = lastAction;
+    const { taskId, beforeState, afterState } = lastAction;
     console.log('🔄 Undoing action for task:', taskId, 'to state:', beforeState);
 
     // Convert null to undefined for the updateTask function
@@ -118,14 +119,26 @@ export const Calendar: React.FC = () => {
     };
 
     // Apply the before state
-    updateTask(taskId, updateData).then(() => {
-      // Move action to redo stack
-      setRedoStack(prev => [...prev, lastAction]);
-      // Remove from undo stack
-      setUndoStack(prev => prev.slice(0, -1));
-    }).catch(error => {
-      console.error('Failed to undo task change:', error);
-    });
+    if (!afterState.isNewlyCreated) {
+      updateTask(taskId, updateData).then(() => {
+        // Move action to redo stack
+        setRedoStack(prev => [...prev, lastAction]);
+        // Remove from undo stack
+        setUndoStack(prev => prev.slice(0, -1));
+      }).catch(error => {
+        console.error('Failed to undo task change:', error);
+      });
+    } else {
+      // If this was a newly created task, we need to delete it instead
+      deleteTask(taskId).then(() => {
+        // Move action to redo stack
+        setRedoStack(prev => [...prev, lastAction]);
+        // Remove from undo stack
+        setUndoStack(prev => prev.slice(0, -1));
+      }).catch(error => {
+        console.error('Failed to undo task creation:', error);
+      });
+    }
   }, [undoStack, updateTask]);
 
   const performRedo = useCallback(() => {
@@ -159,8 +172,8 @@ export const Calendar: React.FC = () => {
       // Only handle shortcuts if no modal is open and target is not an input/textarea
       const target = event.target as HTMLElement;
       if (
-        editingTaskId || 
-        isDragCreateTaskOpen || 
+        editingTaskId ||
+        isDragCreateTaskOpen ||
         isTimeSlotTaskOpen ||
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
@@ -202,7 +215,7 @@ export const Calendar: React.FC = () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [editingTaskId, isDragCreateTaskOpen, isTimeSlotTaskOpen, currentView, currentDate, performUndo, performRedo]);
-  
+
   const handleNavigate = (direction: 'prev' | 'next' | 'today') => {
     if (direction === 'today') {
       setCurrentDate(new Date());
@@ -229,11 +242,11 @@ export const Calendar: React.FC = () => {
     setDragCreateData(null);
     setIsTimeSlotTaskOpen(false);
     setTimeSlotData(null);
-    
+
     // Clear any existing drag indicators
     setClearDragIndicator(true);
     setTimeout(() => setClearDragIndicator(false), 100);
-    
+
     // Always open TaskForm for all events (both tasks and regular events)
     if (event.isTask && event.taskId) {
       setEditingTaskId(event.taskId);
@@ -251,20 +264,20 @@ export const Calendar: React.FC = () => {
     setStoreEditingTaskId(null);
     setIsDragCreateTaskOpen(false);
     setDragCreateData(null);
-    
+
     // Clear any existing drag indicators
     setClearDragIndicator(true);
     setTimeout(() => setClearDragIndicator(false), 100);
-    
+
     // Create start and end times (1 hour duration by default)
     const startTime = new Date(date);
     const endTime = new Date(date);
     endTime.setHours(endTime.getHours() + 1);
-    
+
     // Determine task status based on whether the scheduled date is today
     const isToday = isSameDay(startTime, new Date());
     const status: 'pomodoro' | 'todo' = isToday ? 'pomodoro' : 'todo';
-    
+
     setTimeSlotData({ startTime, endTime, status, isAllDay: false });
     setIsTimeSlotTaskOpen(true);
   };
@@ -275,21 +288,21 @@ export const Calendar: React.FC = () => {
     setStoreEditingTaskId(null);
     setIsDragCreateTaskOpen(false);
     setDragCreateData(null);
-    
+
     // Clear any existing drag indicators
     setClearDragIndicator(true);
     setTimeout(() => setClearDragIndicator(false), 100);
-    
+
     // Create all-day event - use same date for both start and end without specific times
     const startTime = new Date(date);
     startTime.setHours(0, 0, 0, 0);
     const endTime = new Date(date);
     endTime.setHours(0, 0, 0, 0); // Same as start time for all-day events
-    
+
     // Determine task status based on whether the scheduled date is today
     const isToday = isSameDay(startTime, new Date());
     const status: 'pomodoro' | 'todo' = isToday ? 'pomodoro' : 'todo';
-    
+
     setTimeSlotData({ startTime, endTime, status, isAllDay: true });
     setIsTimeSlotTaskOpen(true);
   };
@@ -313,15 +326,15 @@ export const Calendar: React.FC = () => {
 
     // Preserve the original event's all-day status when dropping in month view
     // Only force all-day when explicitly dropped in week/day view all-day zones
-    const shouldBeAllDay = currentView === 'month' 
+    const shouldBeAllDay = currentView === 'month'
       ? item.event.isAllDay  // In month view, preserve original isAllDay status
       : (dropResult.isAllDay || false); // In week/day view, use drop zone's isAllDay status
 
-    const { start, end } = calculateNewEventTime(item.event, { 
-      ...dropResult, 
-      isAllDay: shouldBeAllDay 
+    const { start, end } = calculateNewEventTime(item.event, {
+      ...dropResult,
+      isAllDay: shouldBeAllDay
     });
-    
+
     const updatedEvent: CalendarEvent = {
       ...item.event,
       start,
@@ -337,7 +350,7 @@ export const Calendar: React.FC = () => {
         // Check if this is a duplication (Alt+Drag)
         if (item.isDuplicate) {
           console.log('🔄 Duplicating task:', task.title);
-          
+
           // Prepare the new task data for duplication
           const duplicateTaskData: Omit<Task, 'id' | 'order' | 'createdAt' | 'updatedAt'> = {
             title: task.title,
@@ -372,9 +385,39 @@ export const Calendar: React.FC = () => {
           }
 
           // Create the duplicate task
-          addTask(duplicateTaskData).then(() => {
-            console.log('✅ Task duplicated successfully');
-          }).catch((error: any) => {
+          addTask(duplicateTaskData).then((newTaskId) => {
+            console.log('✅ Task duplicated successfully with ID:', newTaskId);
+
+            // Add to undo stack for the newly created task
+            const duplicateUndoAction: UndoRedoState = {
+              taskId: newTaskId,
+              beforeState: {
+                scheduledDate: null,
+                scheduledStartTime: null,
+                scheduledEndTime: null,
+                includeTime: false,
+                status: 'todo' as 'pomodoro' | 'todo' | 'completed'
+              },
+              afterState: {
+                scheduledDate: duplicateTaskData.scheduledDate || null,
+                scheduledStartTime: duplicateTaskData.scheduledStartTime || null,
+                scheduledEndTime: duplicateTaskData.scheduledEndTime || null,
+                includeTime: Boolean(duplicateTaskData.includeTime),
+                status: duplicateTaskData.status,
+                isNewlyCreated: true,
+              }
+            };
+
+            // Add to undo stack after successful creation
+            console.log('🔄 Adding duplication action to undo stack:', duplicateUndoAction);
+            setUndoStack(prev => {
+              const newStack = [...prev, duplicateUndoAction];
+              console.log('📚 Undo stack updated after duplication, length:', newStack.length);
+              return newStack;
+            });
+            // Clear redo stack when new action is performed
+            setRedoStack([]);
+          }).catch((error) => {
             console.error('❌ Failed to duplicate task:', error);
           });
 
@@ -452,7 +495,7 @@ export const Calendar: React.FC = () => {
       }
     } else {
       // Update calendar event
-      setCalendarEvents(calendarEvents.map(e => 
+      setCalendarEvents(calendarEvents.map(e =>
         e.id === item.event.id ? updatedEvent : e
       ));
     }
@@ -466,11 +509,11 @@ export const Calendar: React.FC = () => {
     setStoreEditingTaskId(null);
     setIsTimeSlotTaskOpen(false);
     setTimeSlotData(null);
-    
+
     // Determine task status based on whether the scheduled date is today
     const isToday = isSameDay(startTime, new Date());
     const status: 'pomodoro' | 'todo' = isToday ? 'pomodoro' : 'todo';
-    
+
     setDragCreateData({ startTime, endTime, status });
     setIsDragCreateTaskOpen(true);
   }, []);
@@ -517,20 +560,19 @@ export const Calendar: React.FC = () => {
                 </div>
               </button>
             </div>
-            <h2 className={`text-lg font-semibold transition-all duration-500 ${
-              isDeepFocusActive 
-                ? 'bg-gradient-to-r from-[rgb(187,95,90)] via-[rgb(236,72,153)] to-[rgb(251,146,60)] bg-clip-text text-transparent font-bold' 
+            <h2 className={`text-lg font-semibold transition-all duration-500 ${isDeepFocusActive
+                ? 'bg-gradient-to-r from-[rgb(187,95,90)] via-[rgb(236,72,153)] to-[rgb(251,146,60)] bg-clip-text text-transparent font-bold'
                 : 'text-text-primary'
-            }`}>
+              }`}>
               {format(currentDate, 'MMMM yyyy')}
             </h2>
-            
+
             {/* Deep Focus Switch */}
             <div className="ml-4 flex items-center">
               <label className="relative inline-flex items-center cursor-pointer group">
-                <input 
-                  type="checkbox" 
-                  className="sr-only peer" 
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
                   checked={isDeepFocusActive}
                   onChange={(e) => {
                     if (e.target.checked) {
@@ -540,24 +582,21 @@ export const Calendar: React.FC = () => {
                     }
                   }}
                 />
-                <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${
-                  isDeepFocusActive 
-                    ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]' 
+                <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${isDeepFocusActive
+                    ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]'
                     : 'bg-gray-100/80 border-0 justify-end pr-[10.5px]'
-                }`}>
-                  <span className={`text-sm font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${
-                    isDeepFocusActive 
-                      ? 'text-white font-semibold [text-shadow:0_0_12px_rgba(255,255,255,0.5)]' 
-                      : 'text-gray-600 font-semibold'
                   }`}>
+                  <span className={`text-sm font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${isDeepFocusActive
+                      ? 'text-white font-semibold [text-shadow:0_0_12px_rgba(255,255,255,0.5)]'
+                      : 'text-gray-600 font-semibold'
+                    }`}>
                     {isDeepFocusActive ? 'Deep Focus' : 'Focus Off'}
                   </span>
                 </div>
-                <div className={`absolute w-6 h-6 bg-white rounded-full shadow-lg transition-all duration-500 ${
-                  isDeepFocusActive 
-                    ? 'left-[calc(100%-27px)] shadow-[0_6px_20px_rgba(187,95,90,0.2)]' 
+                <div className={`absolute w-6 h-6 bg-white rounded-full shadow-lg transition-all duration-500 ${isDeepFocusActive
+                    ? 'left-[calc(100%-27px)] shadow-[0_6px_20px_rgba(187,95,90,0.2)]'
                     : 'left-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.1)]'
-                }`}></div>
+                  }`}></div>
               </label>
             </div>
           </div>
@@ -575,33 +614,30 @@ export const Calendar: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCurrentView('day')}
-                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${
-                  currentView === 'day'
+                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${currentView === 'day'
                     ? 'bg-background-primary text-text-primary shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
-                }`}
+                  }`}
               >
                 Day
               </button>
               <button
                 type="button"
                 onClick={() => setCurrentView('week')}
-                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${
-                  currentView === 'week'
+                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${currentView === 'week'
                     ? 'bg-background-primary text-text-primary shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
-                }`}
+                  }`}
               >
                 Week
               </button>
               <button
                 type="button"
                 onClick={() => setCurrentView('month')}
-                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${
-                  currentView === 'month'
+                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${currentView === 'month'
                     ? 'bg-background-primary text-text-primary shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
-                }`}
+                  }`}
               >
                 Month
               </button>
@@ -609,12 +645,11 @@ export const Calendar: React.FC = () => {
 
             {/* Navigation Icons */}
             <Tooltip text="Pomodoro Timer">
-              <button 
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                  location.pathname === '/pomodoro' 
-                    ? 'bg-background-container text-text-primary' 
+              <button
+                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${location.pathname === '/pomodoro'
+                    ? 'bg-background-container text-text-primary'
                     : 'hover:bg-background-container hover:text-text-primary'
-                }`}
+                  }`}
                 onClick={location.pathname === '/pomodoro' ? undefined : () => navigate('/pomodoro')}
                 aria-label={location.pathname === '/pomodoro' ? 'Current page: Pomodoro Timer' : 'Go to Pomodoro Timer'}
               >
@@ -623,14 +658,13 @@ export const Calendar: React.FC = () => {
                 </span>
               </button>
             </Tooltip>
-            
+
             <Tooltip text="Task management">
-              <button 
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                  location.pathname === '/projects' 
-                    ? 'bg-background-container text-text-primary' 
+              <button
+                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${location.pathname === '/projects'
+                    ? 'bg-background-container text-text-primary'
                     : 'hover:bg-background-container hover:text-text-primary'
-                }`}
+                  }`}
                 onClick={location.pathname === '/projects' ? undefined : () => navigate('/projects')}
                 aria-label={location.pathname === '/projects' ? 'Current page: Task Management' : 'Go to Task Management'}
               >
@@ -639,14 +673,13 @@ export const Calendar: React.FC = () => {
                 </span>
               </button>
             </Tooltip>
-            
+
             <Tooltip text="Productivity Insights">
-              <button 
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                  location.pathname === '/dashboard' 
-                    ? 'bg-background-container text-text-primary' 
+              <button
+                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${location.pathname === '/dashboard'
+                    ? 'bg-background-container text-text-primary'
                     : 'hover:bg-background-container hover:text-text-primary'
-                }`}
+                  }`}
                 onClick={location.pathname === '/dashboard' ? undefined : () => navigate('/dashboard')}
                 aria-label={location.pathname === '/dashboard' ? 'Current page: Productivity Insights' : 'Go to Productivity Insights'}
               >
@@ -655,14 +688,13 @@ export const Calendar: React.FC = () => {
                 </span>
               </button>
             </Tooltip>
-            
+
             <Tooltip text="Calendar">
-              <button 
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                  location.pathname === '/calendar' 
-                    ? 'bg-background-container text-text-primary' 
+              <button
+                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${location.pathname === '/calendar'
+                    ? 'bg-background-container text-text-primary'
                     : 'hover:bg-background-container hover:text-text-primary'
-                }`}
+                  }`}
                 onClick={location.pathname === '/calendar' ? undefined : () => navigate('/calendar')}
                 aria-label={location.pathname === '/calendar' ? 'Current page: Calendar' : 'Go to Calendar'}
               >
@@ -671,14 +703,13 @@ export const Calendar: React.FC = () => {
                 </span>
               </button>
             </Tooltip>
-            
+
             <Tooltip text="Deep Focus">
-              <button 
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                  location.pathname === '/deep-focus' 
-                    ? 'bg-background-container text-text-primary' 
+              <button
+                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${location.pathname === '/deep-focus'
+                    ? 'bg-background-container text-text-primary'
                     : 'hover:bg-background-container hover:text-text-primary'
-                }`}
+                  }`}
                 onClick={location.pathname === '/deep-focus' ? undefined : () => navigate('/deep-focus')}
                 aria-label={location.pathname === '/deep-focus' ? 'Current page: Deep Focus' : 'Go to Deep Focus'}
               >
@@ -704,7 +735,7 @@ export const Calendar: React.FC = () => {
               clearDragIndicator={clearDragIndicator}
             />
           )}
-          
+
           {currentView === 'day' && (
             <DayView
               currentDate={currentDate}
@@ -809,4 +840,4 @@ export const Calendar: React.FC = () => {
   );
 };
 
-export default Calendar; 
+export default Calendar;
