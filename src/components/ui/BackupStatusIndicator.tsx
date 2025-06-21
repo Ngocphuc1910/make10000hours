@@ -33,7 +33,7 @@ const BackupStatusIndicator: React.FC<BackupStatusIndicatorProps> = ({
     if (isBackingUp) {
       return (
         <div className="animate-spin">
-          <Icon name="loader-line" className="w-4 h-4 text-blue-500" />
+          <Icon name="refresh-line" className="w-4 h-4 text-blue-500 animate-spin" />
         </div>
       );
     }

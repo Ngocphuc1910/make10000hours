@@ -15,6 +15,12 @@ import { formatTime, formatLocalDate } from '../../utils/timeUtils';
 import { formatElapsedTime } from '../../utils/timeFormat';
 import { debugDeepFocus } from '../../utils/debugUtils';
 import { FaviconService } from '../../utils/faviconUtils';
+import { testOverrideSchema } from '../../utils/testOverrideSchema';
+import { quickOverrideTest } from '../../utils/quickOverrideTest';
+import { useUserSync } from '../../hooks/useUserSync';
+import { testUserSync } from '../../utils/testUserSync';
+import { debugUserSync, forceUserSync } from '../../utils/debugUserSync';
+import '../../utils/debugOverrideSession'; // Import for console access
 
 import UsageLineChart from '../charts/UsageLineChart';
 import UsagePieChart from '../charts/UsagePieChart';
@@ -76,7 +82,10 @@ const DeepFocusPage: React.FC = () => {
     loadHybridTimeRangeData,
     isSessionPaused,
     autoSessionManagement,
-    setAutoSessionManagement
+    setAutoSessionManagement,
+    recordOverrideSession,
+    overrideSessions,
+    loadOverrideSessions
   } = useDeepFocusStore();
   
   const { workSessions } = useDashboardStore();
@@ -108,6 +117,9 @@ const DeepFocusPage: React.FC = () => {
   const { refreshData } = useExtensionSync();
   const enhancedSync = useEnhancedDeepFocusSync(); // Enhanced sync with activity detection
   const { loadDateRangeData, isLoading: dateRangeLoading } = useExtensionDateRange();
+  
+  // User sync hook - ensures extension knows current user ID
+  useUserSync();
 
   // State for extension-loaded data
   const [extensionData, setExtensionData] = useState<{
@@ -115,6 +127,12 @@ const DeepFocusPage: React.FC = () => {
     dailyUsage: any[];
     timeMetrics: any;
   } | null>(null);
+
+  // Add state to track processed messages
+  const [processedMessages, setProcessedMessages] = useState<Set<string>>(new Set());
+  
+  // Add state to track extension status
+  const [extensionStatus, setExtensionStatus] = useState<'unknown' | 'online' | 'offline'>('unknown');
 
   // Helper function to check if a date string is within the selected range
   const isDateInRange = (dateStr: string): boolean => {
@@ -178,6 +196,148 @@ const DeepFocusPage: React.FC = () => {
 
     loadHybridDateData();
   }, [selectedRange, loadHybridTimeRangeData, loadDateRangeData]);
+
+  // Set up extension message listener for override recording
+  useEffect(() => {
+    const handleExtensionMessage = async (event: any) => {
+      try {
+        // Handle both Chrome extension messages and window messages
+        const messageData = event.data || event;
+        
+        // Debug: Log all incoming messages
+        console.log('📥 Message received in DeepFocusPage:', {
+          type: messageData?.type,
+          source: event.source === window ? 'window' : 'other',
+          origin: event.origin,
+          hasPayload: !!messageData?.payload,
+          fullData: messageData
+        });
+        
+        // Handle extension status messages
+        if (messageData?.type === 'EXTENSION_STATUS' && messageData?.source?.includes('extension')) {
+          console.log('🔍 DEBUG: Extension status received:', messageData.payload);
+          setExtensionStatus(messageData.payload?.status || 'unknown');
+          return;
+        }
+        
+        if (messageData?.type === 'RECORD_OVERRIDE_SESSION' && 
+            (messageData?.source?.includes('make10000hours') || 
+             messageData?.source?.includes('extension'))) {
+          console.log('🔍 DEBUG: RECORD_OVERRIDE_SESSION received in DeepFocusPage:', messageData);
+          
+          const { domain, duration, userId: incomingUserId, timestamp, extensionTimestamp } = messageData.payload || {};
+          
+          // Create unique message ID to prevent duplicate processing
+          const messageId = `${domain}_${duration}_${extensionTimestamp || timestamp || Date.now()}`;
+          
+          if (processedMessages.has(messageId)) {
+            console.log('🔄 Skipping duplicate override session message:', messageId);
+            return;
+          }
+          
+          // Mark message as processed
+          setProcessedMessages(prev => new Set(prev).add(messageId));
+          
+          // Clean up old processed messages (keep only last 100)
+          setProcessedMessages(prev => {
+            const newSet = new Set(prev);
+            if (newSet.size > 100) {
+              const array = Array.from(newSet);
+              return new Set(array.slice(-50)); // Keep only last 50
+            }
+            return newSet;
+          });
+          
+          // Use incoming userId or fallback to current user
+          const effectiveUserId = incomingUserId || user?.uid;
+          
+          console.log('🔍 DEBUG: Override session data validation:', {
+            domain,
+            duration,
+            incomingUserId,
+            currentUserUid: user?.uid,
+            effectiveUserId,
+            timestamp,
+            hasUser: !!user
+          });
+
+          if (!effectiveUserId) {
+            console.error('❌ DEBUG: No user ID available for override session');
+            return;
+          }
+
+          if (!domain || !duration) {
+            console.error('❌ DEBUG: Missing required override session data:', { domain, duration });
+            return;
+          }
+
+          try {
+            console.log('📝 Recording override session from extension:', domain, duration, 'for user:', effectiveUserId);
+            
+            await recordOverrideSession(domain, duration);
+            console.log('✅ Override session recorded successfully');
+            
+            // Reload override sessions to update UI immediately
+            const startDate = selectedRange.startDate;
+            const endDate = selectedRange.endDate;
+            
+            console.log('🔄 Reloading override sessions with date range:', { startDate, endDate });
+            if (user?.uid) {
+              await loadOverrideSessions(user.uid, startDate || undefined, endDate || undefined);
+              console.log('🔄 Reloaded override sessions after recording');
+            }
+            
+          } catch (error) {
+            console.error('❌ Failed to record override session:', error);
+            console.error('🔍 DEBUG: Override session error details:', {
+              name: (error as Error)?.name,
+              message: (error as Error)?.message,
+              stack: (error as Error)?.stack,
+              domain,
+              duration,
+              userId: effectiveUserId
+            });
+          }
+        }
+        
+        // Handle debug responses from extension via content script
+        if (messageData?.type === 'SET_USER_ID_RESPONSE') {
+          console.log('📧 Debug: SET_USER_ID response from extension:', messageData);
+        }
+        
+        if (messageData?.type === 'RECORD_OVERRIDE_SESSION_RESPONSE') {
+          console.log('📧 Debug: RECORD_OVERRIDE_SESSION response from extension:', messageData);
+        }
+      } catch (error) {
+        console.error('Error handling extension message:', error);
+      }
+    };
+
+    // Listen for window messages (for extension communication)
+    window.addEventListener('message', handleExtensionMessage);
+    
+    // Listen for Chrome extension messages if available (with try-catch)
+    try {
+      if (typeof (window as any).chrome !== 'undefined' && 
+          (window as any).chrome?.runtime?.onMessage?.addListener) {
+        (window as any).chrome.runtime.onMessage.addListener(handleExtensionMessage);
+      }
+    } catch (error) {
+      console.warn('Could not set up Chrome extension listener:', error);
+    }
+
+    return () => {
+      try {
+        window.removeEventListener('message', handleExtensionMessage);
+        if (typeof (window as any).chrome !== 'undefined' && 
+            (window as any).chrome?.runtime?.onMessage?.removeListener) {
+          (window as any).chrome.runtime.onMessage.removeListener(handleExtensionMessage);
+        }
+      } catch (error) {
+        console.warn('Error cleaning up extension listeners:', error);
+      }
+    };
+  }, [recordOverrideSession, user?.uid]);
 
   // Filter dailyUsage based on selected date range
   const filteredDailyUsage = useMemo(() => {
@@ -327,13 +487,52 @@ const DeepFocusPage: React.FC = () => {
       }
     });
 
+    // Calculate real override time from Firebase sessions
+    const realOverrideTime = overrideSessions.reduce((total, session) => {
+      return total + session.duration;
+    }, 0);
+    
+    // Debug logging for override sessions with detailed date filtering info
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    
+    console.log('🎯 Override Time Calculation (Detailed):', {
+      sessionsCount: overrideSessions.length,
+      sessions: overrideSessions.map(s => {
+        const sessionDate = new Date(s.createdAt);
+        const isToday = sessionDate >= todayStart && sessionDate <= todayEnd;
+        return {
+          domain: s.domain, 
+          duration: s.duration, 
+          createdAt: s.createdAt,
+          createdAtISO: s.createdAt?.toISOString?.() || 'Invalid Date',
+          sessionLocalTime: sessionDate.toLocaleString(),
+          isWithinTodayRange: isToday
+        };
+      }),
+      totalTime: realOverrideTime,
+      dateRange: selectedRange.rangeType,
+      filters: {
+        start: selectedRange.startDate?.toISOString(),
+        end: selectedRange.endDate?.toISOString()
+      },
+      todayRange: {
+        start: todayStart.toISOString(),
+        end: todayEnd.toISOString(),
+        local: todayStart.toLocaleDateString()
+      },
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    });
+
     return {
       onScreenTime: totalOnScreenTime,
       workingTime: totalWorkingTime, // Use work sessions data
       deepFocusTime: filteredDeepFocusTime, // ALWAYS use filtered session data
-      overrideTime: Math.round(totalOnScreenTime * 0.1) // Estimate override time
+      overrideTime: realOverrideTime // Use real override session data
     };
-  }, [filteredSiteUsage, filteredWorkSessions, filteredDeepFocusTime, selectedRange]);
+  }, [filteredSiteUsage, filteredWorkSessions, filteredDeepFocusTime, selectedRange, overrideSessions]);
 
   // Ensure sidebar state is properly synchronized on mount and state changes
   useEffect(() => {
@@ -419,7 +618,17 @@ const DeepFocusPage: React.FC = () => {
     };
   }, [user?.uid, selectedRange, loadDeepFocusSessions, subscribeToSessions, unsubscribeFromSessions]);
 
-
+  // Load Override sessions when user is available or date range changes
+  useEffect(() => {
+    if (user?.uid) {
+      const startDate = selectedRange.rangeType === 'all time' ? undefined : selectedRange.startDate || undefined;
+      const endDate = selectedRange.rangeType === 'all time' ? undefined : selectedRange.endDate || undefined;
+      console.log('🔄 Loading override sessions for range:', selectedRange.rangeType, { startDate, endDate });
+      
+      // Load sessions with proper date filtering
+      loadOverrideSessions(user.uid, startDate, endDate);
+    }
+  }, [user?.uid, selectedRange, loadOverrideSessions]);
 
   // Preload favicons for better UX
   useEffect(() => {
@@ -666,6 +875,28 @@ const DeepFocusPage: React.FC = () => {
       return `${hours}h ${mins}m`;
     }
   };
+
+  // Check extension status on page load
+  useEffect(() => {
+    console.log('🔍 Checking extension status...');
+    
+    // Set timeout to mark extension as offline if no response
+    const timeout = setTimeout(() => {
+      if (extensionStatus === 'unknown') {
+        console.log('⚠️ Extension status timeout - marking as offline');
+        setExtensionStatus('offline');
+      }
+    }, 3000); // 3 second timeout
+
+    // Send a ping to check if extension is available
+    window.postMessage({
+      type: 'EXTENSION_PING',
+      payload: { timestamp: Date.now() },
+      source: 'make10000hours-webapp'
+    }, '*');
+
+    return () => clearTimeout(timeout);
+  }, []); // Run only on mount
 
   return (
     <div className="deep-focus-page-container flex h-screen overflow-hidden bg-background-primary dark:bg-[#141414]">
@@ -1092,6 +1323,194 @@ const DeepFocusPage: React.FC = () => {
                         onRetryBackup={backupTodayData}
                       />
                     </div>
+                    
+                    {/* Test Override Schema Button */}
+                    {user?.uid && (
+                      <>
+                        <button
+                          onClick={async () => {
+                            try {
+                              console.log('🧪 Quick override test...');
+                              const result = await quickOverrideTest(user.uid);
+                              if (result.success) {
+                                console.log('✅ Quick test completed:', result);
+                                // Reload override sessions to update UI
+                                await loadOverrideSessions(user.uid, selectedRange.startDate || undefined, selectedRange.endDate || undefined);
+                              }
+                            } catch (error) {
+                              console.error('❌ Quick test failed:', error);
+                            }
+                          }}
+                          className="p-1 text-text-secondary hover:text-text-primary transition-colors duration-200"
+                          title="Quick Override Test (simple test)"
+                        >
+                          <Icon name="play-line" className="w-4 h-4" />
+                        </button>
+                        
+                        {/* Debug Icon Buttons - Hidden (change false to true to show) */}
+                        {false && (
+                          <>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  console.log('🧪 Testing override schema...');
+                                  await testOverrideSchema(user.uid);
+                                  console.log('✅ Override schema test completed');
+                                  // Reload override sessions to update UI
+                                  await loadOverrideSessions(user.uid, selectedRange.startDate || undefined, selectedRange.endDate || undefined);
+                                } catch (error) {
+                                  console.error('❌ Override schema test failed:', error);
+                                }
+                              }}
+                              className="p-1 text-text-secondary hover:text-text-primary transition-colors duration-200"
+                              title="Test Override Schema (creates test data)"
+                            >
+                              <Icon name="flask-line" className="w-4 h-4" />
+                            </button>
+                            
+                            <button
+                              onClick={async () => {
+                                try {
+                                  console.log('🔗 Testing user sync with extension...');
+                                  await testUserSync(user.uid);
+                                  console.log('✅ User sync test completed');
+                                } catch (error) {
+                                  console.error('❌ User sync test failed:', error);
+                                }
+                              }}
+                              className="p-1 text-text-secondary hover:text-text-primary transition-colors duration-200"
+                              title="Test User Sync with Extension"
+                            >
+                              <Icon name="links-line" className="w-4 h-4" />
+                            </button>
+                            
+                            <button
+                              onClick={async () => {
+                                try {
+                                  console.log('🔍 Running debug user sync...');
+                                  await debugUserSync();
+                                  console.log('✅ Debug user sync completed');
+                                } catch (error) {
+                                  console.error('❌ Debug user sync failed:', error);
+                                }
+                              }}
+                              className="p-1 text-text-secondary hover:text-text-primary transition-colors duration-200"
+                              title="Debug User Sync (step by step)"
+                            >
+                              <Icon name="bug-line" className="w-4 h-4" />
+                            </button>
+                            
+                            <button
+                              onClick={async () => {
+                                try {
+                                  console.log('🔄 Force user sync...');
+                                  await forceUserSync();
+                                  console.log('✅ Force user sync completed');
+                                } catch (error) {
+                                  console.error('❌ Force user sync failed:', error);
+                                }
+                              }}
+                              className="p-1 text-text-secondary hover:text-text-primary transition-colors duration-200"
+                              title="Force User Sync (manual sync)"
+                            >
+                              <Icon name="refresh-line" className="w-4 h-4" />
+                            </button>
+                            
+                            <button
+                              onClick={async () => {
+                                try {
+                                  console.log('🧪 Simulating extension override message...');
+                                  
+                                  // Simulate the exact message format that extension would send
+                                  const extensionMessage = {
+                                    type: 'RECORD_OVERRIDE_SESSION',
+                                    payload: {
+                                      domain: 'simulated-test.com',
+                                      duration: 5,
+                                      userId: user?.uid,
+                                      timestamp: Date.now()
+                                    }
+                                  };
+                                  
+                                  // Send it via window.postMessage (same as extension would)
+                                  window.postMessage(extensionMessage, '*');
+                                  
+                                  console.log('✅ Simulated override message sent:', extensionMessage);
+                                } catch (error) {
+                                  console.error('❌ Failed to simulate override:', error);
+                                }
+                              }}
+                              className="p-1 text-text-secondary hover:text-text-primary transition-colors duration-200"
+                              title="Simulate Extension Override (test message flow)"
+                            >
+                              <Icon name="test-tube-line" className="w-4 h-4" />
+                            </button>
+                            
+                            <button
+                              onClick={async () => {
+                                try {
+                                  console.log('🧪 Reloading override sessions...');
+                                  if (user?.uid) {
+                                    await loadOverrideSessions(user.uid);
+                                    console.log('✅ Override sessions reloaded');
+                                  }
+                                } catch (error) {
+                                  console.error('❌ Failed to reload override sessions:', error);
+                                }
+                              }}
+                              className="p-1 text-text-secondary hover:text-text-primary transition-colors duration-200"
+                              title="Reload Override Sessions"
+                            >
+                              <Icon name="database-2-line" className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                        
+                        {/* Debug Section - Hidden (change false to true to show) */}
+                        {false && (
+                          <div className="bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-300">
+                            <h3 className="text-sm font-semibold text-gray-700 mb-3">Debug Controls</h3>
+                            
+                            {/* Extension Status */}
+                            <div className="mb-3 p-2 bg-white rounded border">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">Extension Status:</span>
+                                <span className={`px-2 py-1 text-xs rounded font-medium ${
+                                  extensionStatus === 'online' ? 'bg-green-100 text-green-800' :
+                                  extensionStatus === 'offline' ? 'bg-red-100 text-red-800' :
+                                  'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {extensionStatus.toUpperCase()}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 flex-wrap">
+                              <button
+                                onClick={() => (window as any).debugOverrideSession?.testUserSync()}
+                                className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                                title="Test User Sync"
+                              >
+                                Test User Sync
+                              </button>
+                              <button
+                                onClick={() => (window as any).debugOverrideSession?.testExtensionMessage()}
+                                className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                                title="Test Extension Message"
+                              >
+                                Test Extension Msg
+                              </button>
+                              <button
+                                onClick={() => (window as any).debugOverrideSession?.testCreateSession()}
+                                className="px-3 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
+                                title="Test Direct Create"
+                              >
+                                Test Direct Create
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
                 <button 
