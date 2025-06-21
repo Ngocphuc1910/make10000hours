@@ -103,7 +103,15 @@ class ActivityDetector {
       if (event.data?.type === 'EXTENSION_PING' && event.data?.source?.includes('make10000hours')) {
         console.log('🔄 Received EXTENSION_PING from web app, responding...');
         
-        // Respond immediately to confirm extension is online
+        // Respond with EXTENSION_PONG to confirm extension is online
+        window.postMessage({
+          type: 'EXTENSION_PONG',
+          messageId: event.data.messageId, // Include original messageId for proper matching
+          payload: { status: 'online', timestamp: Date.now() },
+          source: 'focus-time-tracker-extension'
+        }, '*');
+        
+        // Also send the legacy status message for backward compatibility
         window.postMessage({
           type: 'EXTENSION_STATUS',
           payload: { status: 'online', timestamp: Date.now() },

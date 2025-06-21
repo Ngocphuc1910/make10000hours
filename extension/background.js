@@ -1347,6 +1347,18 @@ class FocusTimeTracker {
             };
             console.log('✅ User ID set in extension:', this.currentUserId);
             console.log('🔍 DEBUG: Full user info stored:', this.userInfo);
+            
+            // Notify popup about user info update
+            try {
+              chrome.runtime.sendMessage({
+                type: 'USER_INFO_UPDATED',
+                payload: this.userInfo
+              });
+            } catch (error) {
+              // Popup might not be open, ignore error
+              console.log('📝 Popup not available for user info update notification');
+            }
+            
             sendResponse({ success: true, userId: this.currentUserId });
           } catch (error) {
             console.error('❌ DEBUG: Error setting user ID:', error);
@@ -1396,6 +1408,20 @@ class FocusTimeTracker {
         case 'GET_CACHED_URL':
           const cachedUrl = this.blockingManager.getCachedUrl(sender.tab?.id);
           sendResponse({ success: true, data: { url: cachedUrl } });
+          break;
+
+        case 'GET_USER_INFO':
+          try {
+            const userInfo = this.userInfo || null;
+            console.log('📤 Sending user info to popup:', userInfo);
+            sendResponse({ 
+              success: true, 
+              data: userInfo 
+            });
+          } catch (error) {
+            console.error('❌ Error getting user info:', error);
+            sendResponse({ success: false, error: error.message });
+          }
           break;
 
         case 'CLEAR_CACHED_URL':
