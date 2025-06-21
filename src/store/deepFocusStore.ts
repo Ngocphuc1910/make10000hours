@@ -342,9 +342,12 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
             }, 1000);
             
             const timer = setInterval(async () => {
-              const newDuration = Math.floor((Date.now() - startTime.getTime()) / 60000);
-              set({ activeSessionDuration: newDuration });
-              await deepFocusSessionService.updateSessionDuration(newSessionId, newDuration);
+              const duration = Math.floor((Date.now() - startTime.getTime()) / 60000);
+              set({ activeSessionDuration: duration });
+              if (newSessionId) {
+                await deepFocusSessionService.updateSessionDuration(newSessionId, duration);
+                console.log('⏱️ Deep Focus: Updated session duration:', duration, 'minutes (incremental tracking)');
+              }
             }, 60000);
             
             set({ timer, secondTimer });
@@ -463,6 +466,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
             set({ activeSessionDuration: duration });
             if (sessionId) {
               await deepFocusSessionService.updateSessionDuration(sessionId, duration);
+              console.log('⏱️ Deep Focus: Updated session duration:', duration, 'minutes (incremental tracking)');
             }
           }, 60000);
           
