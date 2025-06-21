@@ -177,6 +177,118 @@ body {
   50% { opacity: 0.5; }
 }
 
+/* User Info Section */
+.user-info-section {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  background: rgba(255, 255, 255, 0.15);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.avatar-text {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+}
+
+.user-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-name {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-email {
+  font-size: var(--font-size-xs);
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sync-status {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success-color);
+  animation: pulse 2s infinite;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.sync-dot.offline {
+  background: var(--error-color);
+  animation: none;
+}
+
+.no-user-info {
+  background: rgba(255, 255, 255, 0.1);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.sync-prompt {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.sync-icon {
+  font-size: var(--font-size-lg);
+  opacity: 0.8;
+}
+
+.sync-text {
+  flex: 1;
+}
+
+.sync-title {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: white;
+  margin-bottom: 2px;
+}
+
+.sync-subtitle {
+  font-size: var(--font-size-xs);
+  color: rgba(255, 255, 255, 0.7);
+}
+
 /* Tab Navigation */
 .tab-navigation {
   display: flex;

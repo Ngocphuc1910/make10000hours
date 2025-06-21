@@ -21,6 +21,7 @@ import { useUserSync } from '../../hooks/useUserSync';
 import { testUserSync } from '../../utils/testUserSync';
 import { debugUserSync, forceUserSync } from '../../utils/debugUserSync';
 import '../../utils/debugOverrideSession'; // Import for console access
+import '../../utils/debugExtensionCommunication'; // Import debug extension utility
 
 import UsageLineChart from '../charts/UsageLineChart';
 import UsagePieChart from '../charts/UsagePieChart';
@@ -893,9 +894,17 @@ const DeepFocusPage: React.FC = () => {
     }
   };
 
-  // Check extension status on page load
+  // Extension status detection
   useEffect(() => {
-    console.log('🔍 Checking extension status...');
+    // Add response listener for extension ping
+    const handleExtensionPing = (event: MessageEvent) => {
+      if (event.data?.type === 'EXTENSION_PONG' && event.data?.source === 'focus-time-tracker-extension') {
+        console.log('✅ Extension responded to ping - marking as online');
+        setExtensionStatus('online');
+      }
+    };
+
+    window.addEventListener('message', handleExtensionPing);
     
     // Set timeout to mark extension as offline if no response
     const timeout = setTimeout(() => {
@@ -906,13 +915,17 @@ const DeepFocusPage: React.FC = () => {
     }, 3000); // 3 second timeout
 
     // Send a ping to check if extension is available
+    console.log('📡 Sending extension ping...');
     window.postMessage({
       type: 'EXTENSION_PING',
       payload: { timestamp: Date.now() },
       source: 'make10000hours-webapp'
     }, '*');
 
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener('message', handleExtensionPing);
+    };
   }, []); // Run only on mount
 
   return (
@@ -949,12 +962,31 @@ const DeepFocusPage: React.FC = () => {
                     type="checkbox" 
                     className="sr-only peer" 
                     checked={isDeepFocusActive}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       console.log('Deep Focus switch toggled:', e.target.checked, 'User:', user);
-                      if (e.target.checked) {
-                        enableDeepFocus();
-                      } else {
-                        disableDeepFocus();
+                      try {
+                        if (e.target.checked) {
+                          console.log('🟢 Enabling Deep Focus...');
+                          await enableDeepFocus();
+                          console.log('✅ Deep Focus enabled successfully');
+                        } else {
+                          console.log('🔴 Disabling Deep Focus...');
+                          await disableDeepFocus();
+                          console.log('✅ Deep Focus disabled successfully');
+                        }
+                      } catch (error) {
+                        console.error('❌ Failed to toggle Deep Focus:', error);
+                        
+                        // Reset the checkbox to its previous state if the operation failed
+                        setTimeout(() => {
+                          const checkbox = e.target;
+                          if (checkbox) {
+                            checkbox.checked = !e.target.checked;
+                          }
+                        }, 100);
+                        
+                        // Show error to user
+                        alert(`Failed to ${e.target.checked ? 'enable' : 'disable'} Deep Focus: ${error instanceof Error ? error.message : 'Unknown error'}`);
                       }
                     }}
                   />
@@ -1489,8 +1521,8 @@ const DeepFocusPage: React.FC = () => {
                           </>
                         )}
                         
-                        {/* Debug Section - Hidden (change false to true to show) */}
-                        {false && (
+                        {/* Debug Section - Enabled for testing */}
+                        {true && (
                           <div className="bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-300">
                             <h3 className="text-sm font-semibold text-gray-700 mb-3">Debug Controls</h3>
                             
