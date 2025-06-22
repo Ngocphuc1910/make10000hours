@@ -47,7 +47,9 @@ import {
   FileText,
   Beaker,
   Link,
-  Bug
+  Bug,
+  AlertTriangle,
+  TestTube
 } from 'lucide-react';
 
 interface IconProps {
@@ -98,6 +100,9 @@ const iconMap = {
   'database-2-line': Database,
   'refresh-line': RefreshCw,
   'information-line': Info,
+  // Missing icons that were causing errors
+  'error-warning-line': AlertTriangle,
+  'test-tube-line': TestTube,
   // Remix icon compatibility
   'ri-global-line': Globe,
   'ri-github-line': Github,
