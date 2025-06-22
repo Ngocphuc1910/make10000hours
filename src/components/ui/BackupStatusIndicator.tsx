@@ -1,112 +1,62 @@
-import React from 'react';
-import { Icon } from './Icon';
-import ExtensionDataService from '../../services/extensionDataService';
+import React, { useState, useEffect } from 'react';
+import { useDeepFocusStore } from '../../store/deepFocusStore';
 
-interface BackupStatusIndicatorProps {
-  isBackingUp: boolean;
-  lastBackupTime: Date | null;
-  backupError: string | null;
-  onRetryBackup?: () => void;
-}
+const BackupStatusIndicator: React.FC = () => {
+  const [syncStatus, setSyncStatus] = useState<any>(null);
+  const { getSyncStatus, retryBackup } = useDeepFocusStore();
 
-const BackupStatusIndicator: React.FC<BackupStatusIndicatorProps> = ({
-  isBackingUp,
-  lastBackupTime,
-  backupError,
-  onRetryBackup
-}) => {
-  const formatLastBackup = (date: Date | null): string => {
-    if (!date) return 'Never';
-    
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-    
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${diffDays}d ago`;
-  };
+  useEffect(() => {
+    const updateStatus = () => {
+      setSyncStatus(getSyncStatus());
+    };
 
-  const handleResetConnection = () => {
-    console.log('🔄 Manually resetting extension connection...');
-    ExtensionDataService.resetCircuitBreaker();
-    if (onRetryBackup) {
-      onRetryBackup();
-    }
-  };
+    updateStatus();
+    const interval = setInterval(updateStatus, 5000); // Update every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [getSyncStatus]);
+
+  if (!syncStatus) return null;
 
   const getStatusIcon = () => {
-    if (isBackingUp) {
-      return (
-        <div className="animate-spin">
-          <Icon name="refresh-line" className="w-4 h-4 text-blue-500 animate-spin" />
-        </div>
-      );
-    }
-    
-    if (backupError) {
-      return <Icon name="error-warning-line" className="w-4 h-4 text-red-500" />;
-    }
-    
-    if (lastBackupTime) {
-      return <Icon name="check-line" className="w-4 h-4 text-green-500" />;
-    }
-    
-    return <Icon name="time-line" className="w-4 h-4 text-gray-400" />;
+    if (syncStatus.isBackingUp) return '⏳';
+    if (syncStatus.backupError) return '❌';
+    if (syncStatus.lastBackupTime) return '✅';
+    return '🔄';
   };
 
   const getStatusText = () => {
-    if (isBackingUp) return 'Backing up...';
-    if (backupError) return 'Backup failed';
-    if (lastBackupTime) return 'Backed up';
-    return 'Not backed up';
+    if (syncStatus.isBackingUp) return 'Syncing...';
+    if (syncStatus.backupError) return `Error: ${syncStatus.backupError}`;
+    if (syncStatus.lastBackupTime) {
+      const time = new Date(syncStatus.lastBackupTime).toLocaleTimeString();
+      return `Last sync: ${time}`;
+    }
+    return 'No sync yet';
   };
 
-  const getStatusColor = () => {
-    if (isBackingUp) return 'text-blue-600';
-    if (backupError) return 'text-red-600';
-    if (lastBackupTime) return 'text-green-600';
-    return 'text-gray-500';
+  const handleRetry = () => {
+    retryBackup();
   };
 
   return (
-    <div className="flex items-center space-x-2 text-xs">
-      {getStatusIcon()}
-      <div className="flex flex-col">
-        <span className={`font-medium ${getStatusColor()}`}>
-          {getStatusText()}
-        </span>
-        <span className="text-gray-400">
-          {formatLastBackup(lastBackupTime)}
-        </span>
-      </div>
+    <div className="flex items-center gap-2 text-sm">
+      <span className="text-lg">{getStatusIcon()}</span>
+      <span className="text-gray-600 dark:text-gray-400">{getStatusText()}</span>
       
-      {backupError && onRetryBackup && (
+      {syncStatus.canRetry && syncStatus.backupError && (
         <button
-          onClick={onRetryBackup}
-          className="text-blue-500 hover:text-blue-600 transition-colors duration-200 ml-2"
-          title="Retry backup"
+          onClick={handleRetry}
+          className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
         >
-          <Icon name="refresh-line" className="w-3 h-3" />
+          Retry
         </button>
       )}
       
-      {backupError && (
-        <>
-          <button
-            onClick={handleResetConnection}
-            className="text-orange-500 hover:text-orange-600 transition-colors duration-200 ml-1"
-            title="Reset extension connection"
-          >
-            <Icon name="restart-line" className="w-3 h-3" />
-          </button>
-          <div className="ml-2 text-xs text-red-500 max-w-xs truncate" title={backupError}>
-            {backupError}
-          </div>
-        </>
+      {syncStatus.circuitBreaker?.state === 'OPEN' && (
+        <span className="text-xs text-orange-500">
+          Cooling down... ({Math.ceil(syncStatus.circuitBreaker.timeUntilRetry / 1000)}s)
+        </span>
       )}
     </div>
   );
