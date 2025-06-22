@@ -227,21 +227,12 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
   loadExtensionData: async () => {
     try {
       if (!ExtensionDataService.isExtensionInstalled()) {
-        console.log('Chrome extension API not available, using mock data');
         set({ isExtensionConnected: false });
         return;
       }
 
-      // Test connection first
-      const isConnected = await ExtensionDataService.testConnection();
-      if (!isConnected) {
-        console.log('Extension not responding, using mock data');
-        set({ isExtensionConnected: false });
-        return;
-      }
-
+      // Circuit breaker will handle connection testing
       const extensionResponse = await ExtensionDataService.getTodayStats();
-      console.log('Extension response received:', extensionResponse);
       
       if (extensionResponse.success === false) {
         throw new Error(extensionResponse.error || 'Extension returned error');
@@ -255,10 +246,8 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         siteUsage: mappedData.siteUsage,
         isExtensionConnected: true
       });
-
-      console.log('Extension data successfully loaded and mapped');
     } catch (error) {
-      console.error('Failed to load extension data:', error);
+      // Circuit breaker handles error logging
       set({ isExtensionConnected: false });
     }
   },
