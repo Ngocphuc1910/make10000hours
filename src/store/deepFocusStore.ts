@@ -898,6 +898,8 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         
         const { useUserStore } = await import('./userStore');
         const user = useUserStore.getState().user;
+        
+        // Authentication guard - prevent backup if user not authenticated
         if (!user?.uid) {
           console.warn('⚠️ User not authenticated, skipping backup');
           return;
@@ -926,11 +928,10 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         await siteUsageService.backupDayData(user.uid, today, extensionResponse.data || extensionResponse);
         
         set({ lastBackupTime: new Date() });
-        console.log('✅ Successfully backed up today\'s site usage data');
+        console.log('✅ Successfully backed up today\'s data');
       } catch (error) {
-        console.warn('⚠️ Failed to backup today\'s data (non-critical):', error);
-        set({ backupError: error instanceof Error ? error.message : 'Unknown error' });
-        // Don't throw - backup failure shouldn't break the app
+        console.error('❌ Failed to backup today\'s data:', error);
+        set({ backupError: error instanceof Error ? error.message : 'Backup failed' });
       } finally {
         set({ isBackingUp: false });
       }
@@ -938,35 +939,23 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
 
     performDailyBackup: async () => {
       const state = get();
-      if (state.isBackingUp) return;
+      if (state.isBackingUp) return; // Prevent concurrent backups
       
       try {
         set({ isBackingUp: true, backupError: null });
+        console.log('🔄 Starting daily backup...');
         
         const { useUserStore } = await import('./userStore');
         const user = useUserStore.getState().user;
+        
+        // Authentication guard - prevent backup if user not authenticated
         if (!user?.uid) {
-          throw new Error('User not authenticated');
-        }
-
-        if (!ExtensionDataService.isExtensionInstalled()) {
-          console.log('Extension not available, skipping daily backup');
+          console.warn('⚠️ User not authenticated, skipping daily backup');
           return;
         }
-
-        // Get last 7 days of data to catch any missed days
-        const endDate = new Date().toISOString().split('T')[0];
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 7);
-        const startDateStr = startDate.toISOString().split('T')[0];
-
-        const response = await ExtensionDataService.getTimeDataRange(startDateStr, endDate);
-        if (response.success === false) {
-          throw new Error(response.error || 'Failed to get extension data range');
-        }
-
-        const dataMap = response.data as Record<string, any>;
-        await siteUsageService.batchBackupData(user.uid, dataMap);
+        
+        // First backup today's data
+        await get().backupTodayData();
         
         // Also clean up old data (keep last 90 days)
         await siteUsageService.cleanupOldData(user.uid, 90);
@@ -1052,11 +1041,14 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       try {
         const { useUserStore } = await import('./userStore');
         const user = useUserStore.getState().user;
+        
+        // Authentication guard - prevent sync if user not authenticated
         if (!user?.uid) {
+          console.warn('⚠️ User not authenticated - skipping hybrid data load');
           throw new Error('User not authenticated');
         }
 
-        console.log('🔄 Loading hybrid data for range:', { startDate, endDate });
+        console.log('🔄 Loading hybrid data for range:', { startDate, endDate, userId: user.uid });
         
         const response = await HybridDataService.getTimeRangeData(user.uid, startDate, endDate);
         
@@ -1098,48 +1090,52 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         const user = useUserStore.getState().user;
         const state = get();
         
-        if (user?.uid) {
-          console.log('🎯 Recording override session:', { domain, duration, userId: user.uid });
-          
-          // Create temporary local override session for immediate UI update
-          const tempOverride = {
-            id: `temp-${Date.now()}`,
+        // Authentication guard - prevent Firebase operation if user not authenticated
+        if (!user?.uid) {
+          console.warn('⚠️ User not authenticated - skipping override session recording');
+          return;
+        }
+        
+        console.log('🎯 Recording override session:', { domain, duration, userId: user.uid });
+        
+        // Create temporary local override session for immediate UI update
+        const tempOverride = {
+          id: `temp-${Date.now()}`,
+          userId: user.uid,
+          domain,
+          duration,
+          deepFocusSessionId: state.activeSessionId || undefined,
+          createdAt: new Date()
+        };
+        
+        // Add to local state immediately
+        set(state => ({
+          overrideSessions: [tempOverride, ...state.overrideSessions]
+        }));
+        
+        try {
+          // Try to save to Firebase
+          const docId = await overrideSessionService.createOverrideSession({
             userId: user.uid,
             domain,
             duration,
-            deepFocusSessionId: state.activeSessionId || undefined,
-            createdAt: new Date()
-          };
+            deepFocusSessionId: state.activeSessionId || undefined
+          });
           
-          // Add to local state immediately
+          console.log('✅ Override session saved to Firebase:', docId);
+          
+          // Replace temp with real data
           set(state => ({
-            overrideSessions: [tempOverride, ...state.overrideSessions]
+            overrideSessions: state.overrideSessions.map(session => 
+              session.id === tempOverride.id 
+                ? { ...session, id: docId }
+                : session
+            )
           }));
           
-          try {
-            // Try to save to Firebase
-            const docId = await overrideSessionService.createOverrideSession({
-              userId: user.uid,
-              domain,
-              duration,
-              deepFocusSessionId: state.activeSessionId || undefined
-            });
-            
-            console.log('✅ Override session saved to Firebase:', docId);
-            
-            // Replace temp with real data
-            set(state => ({
-              overrideSessions: state.overrideSessions.map(session => 
-                session.id === tempOverride.id 
-                  ? { ...session, id: docId }
-                  : session
-              )
-            }));
-            
-          } catch (firebaseError) {
-            console.warn('⚠️ Firebase save failed, keeping local override:', firebaseError);
-            // Keep the temporary override in local state
-          }
+        } catch (firebaseError) {
+          console.warn('⚠️ Firebase save failed, keeping local override:', firebaseError);
+          // Keep the temporary override in local state
         }
       } catch (error) {
         console.error('Failed to record override session:', error);
@@ -1148,6 +1144,13 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
 
     loadOverrideSessions: async (userId: string, startDate?: Date, endDate?: Date) => {
       try {
+        // Authentication guard - ensure userId is provided
+        if (!userId) {
+          console.warn('⚠️ No userId provided - skipping override sessions load');
+          set({ overrideSessions: [] });
+          return;
+        }
+        
         const overrides = await overrideSessionService.getUserOverrides(userId, startDate, endDate);
         set({ overrideSessions: overrides });
         console.log('✅ Loaded override sessions:', overrides.length);
