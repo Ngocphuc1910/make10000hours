@@ -1,5 +1,6 @@
 import React from 'react';
 import { Icon } from './Icon';
+import ExtensionDataService from '../../services/extensionDataService';
 
 interface BackupStatusIndicatorProps {
   isBackingUp: boolean;
@@ -27,6 +28,14 @@ const BackupStatusIndicator: React.FC<BackupStatusIndicatorProps> = ({
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     return `${diffDays}d ago`;
+  };
+
+  const handleResetConnection = () => {
+    console.log('🔄 Manually resetting extension connection...');
+    ExtensionDataService.resetCircuitBreaker();
+    if (onRetryBackup) {
+      onRetryBackup();
+    }
   };
 
   const getStatusIcon = () => {
@@ -86,9 +95,18 @@ const BackupStatusIndicator: React.FC<BackupStatusIndicatorProps> = ({
       )}
       
       {backupError && (
-        <div className="ml-2 text-xs text-red-500 max-w-xs truncate" title={backupError}>
-          {backupError}
-        </div>
+        <>
+          <button
+            onClick={handleResetConnection}
+            className="text-orange-500 hover:text-orange-600 transition-colors duration-200 ml-1"
+            title="Reset extension connection"
+          >
+            <Icon name="restart-line" className="w-3 h-3" />
+          </button>
+          <div className="ml-2 text-xs text-red-500 max-w-xs truncate" title={backupError}>
+            {backupError}
+          </div>
+        </>
       )}
     </div>
   );
