@@ -905,9 +905,29 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           return;
         }
 
+        // Reset circuit breaker before attempting extension communication
+        ExtensionDataService.resetCircuitBreaker();
+
         // Get today's data from extension with timeout
         if (!ExtensionDataService.isExtensionInstalled()) {
-          console.log('📱 Extension not available, skipping backup');
+          console.log('📱 Extension not available, using fallback backup mode');
+          // Fallback: Create minimal backup entry to maintain sync schedule
+          const today = new Date().toISOString().split('T')[0];
+          const fallbackData = {
+            totalTime: 0,
+            sitesVisited: 0,
+            productivityScore: 0,
+            sites: {},
+            version: '1.0.0',
+            source: 'fallback'
+          };
+          
+          await siteUsageService.backupDayData(user.uid, today, fallbackData);
+          set({ 
+            lastBackupTime: new Date(),
+            backupError: 'Extension offline - using fallback mode'
+          });
+          console.log('✅ Fallback backup completed');
           return;
         }
 
@@ -931,6 +951,38 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         console.log('✅ Successfully backed up today\'s data');
       } catch (error) {
         console.error('❌ Failed to backup today\'s data:', error);
+        
+        // If extension timeout, try fallback backup
+        if (error instanceof Error && error.message.includes('timeout')) {
+          console.log('🔄 Extension timeout detected, attempting fallback backup...');
+          try {
+            const { useUserStore } = await import('./userStore');
+            const user = useUserStore.getState().user;
+            
+            if (user?.uid) {
+              const today = new Date().toISOString().split('T')[0];
+              const fallbackData = {
+                totalTime: 0,
+                sitesVisited: 0,
+                productivityScore: 0,
+                sites: {},
+                version: '1.0.0',
+                source: 'timeout-fallback'
+              };
+              
+              await siteUsageService.backupDayData(user.uid, today, fallbackData);
+              set({ 
+                lastBackupTime: new Date(),
+                backupError: 'Extension timeout - fallback backup used'
+              });
+              console.log('✅ Fallback backup after timeout completed');
+              return;
+            }
+          } catch (fallbackError) {
+            console.error('❌ Fallback backup also failed:', fallbackError);
+          }
+        }
+        
         set({ backupError: error instanceof Error ? error.message : 'Backup failed' });
       } finally {
         set({ isBackingUp: false });
@@ -971,35 +1023,50 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
     },
 
     initializeDailyBackup: () => {
-      // Run backup every 4 hours
-      setInterval(() => {
-        get().backupTodayData();
-      }, 4 * 60 * 60 * 1000);
+      // Wait for user authentication before starting backup scheduler
+      const startBackupScheduler = async () => {
+        const { useUserStore } = await import('./userStore');
+        const user = useUserStore.getState().user;
+        if (!user?.uid) {
+          console.log('⏳ Waiting for user authentication before starting backup scheduler...');
+          setTimeout(startBackupScheduler, 2000); // Check every 2 seconds
+          return;
+        }
+        
+        console.log('✅ User authenticated, starting backup scheduler for:', user.uid);
+        
+        // Run backup every 4 hours
+        setInterval(() => {
+          get().backupTodayData();
+        }, 4 * 60 * 60 * 1000);
 
-      // Run full daily backup at 2 AM
-      const scheduleNextDailyBackup = () => {
-        const now = new Date();
-        const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(2, 0, 0, 0); // 2 AM tomorrow
-        
-        const msUntilTomorrow = tomorrow.getTime() - now.getTime();
-        
-        setTimeout(() => {
-          get().performDailyBackup();
-          // Schedule the next one
-          setInterval(() => {
+        // Run full daily backup at 2 AM
+        const scheduleNextDailyBackup = () => {
+          const now = new Date();
+          const tomorrow = new Date(now);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          tomorrow.setHours(2, 0, 0, 0); // 2 AM tomorrow
+          
+          const msUntilTomorrow = tomorrow.getTime() - now.getTime();
+          
+          setTimeout(() => {
             get().performDailyBackup();
-          }, 24 * 60 * 60 * 1000); // Every 24 hours
-        }, msUntilTomorrow);
+            // Schedule the next one
+            setInterval(() => {
+              get().performDailyBackup();
+            }, 24 * 60 * 60 * 1000); // Every 24 hours
+          }, msUntilTomorrow);
+        };
+
+        scheduleNextDailyBackup();
+
+        // Initial backup after authentication (wait for extension)
+        setTimeout(() => {
+          get().backupTodayData();
+        }, 5000);
       };
-
-      scheduleNextDailyBackup();
-
-      // Initial backup on app start (but wait a bit for extension to be ready)
-      setTimeout(() => {
-        get().backupTodayData();
-      }, 5000);
+      
+      startBackupScheduler();
     },
 
     restoreFromBackup: async (date: string) => {
