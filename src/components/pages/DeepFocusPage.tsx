@@ -114,10 +114,8 @@ const DeepFocusPage: React.FC = () => {
   const dateRangeInputRef = useRef<HTMLInputElement>(null);
   const datePickerRef = useRef<FlatpickrInstance | null>(null);
 
-  // Extension sync hooks
+  // Unified extension sync (replaces multiple overlapping hooks)
   const { refreshData } = useExtensionSync();
-  const enhancedSync = useEnhancedDeepFocusSync(); // Enhanced sync with activity detection
-  const { loadDateRangeData, isLoading: dateRangeLoading } = useExtensionDateRange();
   
   // User sync hook - ensures extension knows current user ID
 
@@ -191,29 +189,14 @@ const DeepFocusPage: React.FC = () => {
         console.error('❌ Failed to load hybrid date range data:', error);
         console.log('⚠️ Falling back to extension-only data...');
         
-        // Fallback to extension-only approach
-        try {
-          const data = await loadDateRangeData(startDateStr, endDateStr);
-          console.log('📱 Loaded fallback extension data:', data);
-          
-          // Check if extension data has meaningful content
-          const hasExtensionData = data?.timeMetrics?.onScreenTime > 0 || data?.siteUsage?.length > 0;
-          
-          if (hasExtensionData) {
-            setExtensionData(data);
-          } else {
-            console.log('⚠️ Extension also has no data, using store data with filtering');
-            setExtensionData(null); // Fall back to store data
-          }
-        } catch (fallbackError) {
-          console.error('❌ Extension fallback also failed, using store data:', fallbackError);
-          setExtensionData(null); // Fall back to store data
-        }
+        // Fallback to basic store data filtering
+        console.log('⚠️ Using store data with date filtering');
+        setExtensionData(null); // Fall back to store data
       }
     };
 
     loadHybridDateData();
-  }, [selectedRange, loadHybridTimeRangeData, loadDateRangeData]);
+  }, [selectedRange, loadHybridTimeRangeData]);
 
   // Set up extension message listener for override recording
   useEffect(() => {
@@ -590,32 +573,10 @@ const DeepFocusPage: React.FC = () => {
     });
   }, [isLeftSidebarOpen]);
 
-  // Load extension data on component mount
+  // Initialize daily backup system (extension data loading handled by useExtensionSync)
   useEffect(() => {
-    loadExtensionData();
-    
-    // Initialize daily backup system
     initializeDailyBackup();
-    
-    // Debug: Log chrome availability
-    console.log('Chrome available:', typeof window !== 'undefined' && (window as any).chrome);
-    console.log('Chrome runtime:', typeof window !== 'undefined' && (window as any).chrome?.runtime);
-    
-    // Additional debug: Test postMessage communication
-    window.postMessage({
-      type: 'EXTENSION_REQUEST',
-      messageId: 'debug-test',
-      payload: { type: 'GET_TODAY_STATS' }
-    }, '*');
-    
-    const debugHandler = (event: MessageEvent) => {
-      if (event.data?.extensionResponseId === 'debug-test') {
-        console.log('Debug: Extension communication via postMessage works!', event.data.response);
-        window.removeEventListener('message', debugHandler);
-      }
-    };
-    window.addEventListener('message', debugHandler);
-  }, [loadExtensionData, initializeDailyBackup]);
+  }, [initializeDailyBackup]);
 
   // Load Deep Focus sessions when user is available or date range changes
   useEffect(() => {
@@ -1237,22 +1198,7 @@ const DeepFocusPage: React.FC = () => {
 
         {/* Main Content */}
         <main className="flex-1 p-6 flex gap-6 overflow-y-auto relative">
-          {/* Loading Indicator for Date Range Data */}
-          {dateRangeLoading && (
-            <div className="absolute inset-0 bg-background-primary/80 backdrop-blur-sm flex items-center justify-center z-20">
-              <div className="bg-background-secondary rounded-xl shadow-lg px-8 py-6 max-w-sm w-full mx-4 border border-border">
-                <div className="flex items-center justify-center space-x-4">
-                  <div className="w-8 h-8">
-                    <div className="w-full h-full border-4 border-background-container border-t-primary rounded-full animate-spin"></div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-text-primary">Loading data</div>
-                    <div className="text-xs text-text-secondary mt-1">Analyzing your focus metrics...</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Loading indicator removed for simplicity */}
           
           {/* Left Column */}
           <div className="w-2/3 space-y-6">

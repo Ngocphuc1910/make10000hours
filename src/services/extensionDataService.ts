@@ -20,9 +20,61 @@ interface ExtensionSettings {
   blockedSites: string[];
 }
 
+// Circuit breaker for extension communication
+class ExtensionCircuitBreaker {
+  private static instance: ExtensionCircuitBreaker;
+  private failureCount = 0;
+  private lastFailureTime = 0;
+  private state: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED';
+  private readonly FAILURE_THRESHOLD = 3;
+  private readonly TIMEOUT = 30000; // 30 seconds
+  private readonly RETRY_TIMEOUT = 5000; // 5 seconds
+
+  static getInstance(): ExtensionCircuitBreaker {
+    if (!ExtensionCircuitBreaker.instance) {
+      ExtensionCircuitBreaker.instance = new ExtensionCircuitBreaker();
+    }
+    return ExtensionCircuitBreaker.instance;
+  }
+
+  canExecute(): boolean {
+    const now = Date.now();
+    
+    if (this.state === 'OPEN') {
+      if (now - this.lastFailureTime >= this.TIMEOUT) {
+        this.state = 'HALF_OPEN';
+        return true;
+      }
+      return false;
+    }
+    
+    return true;
+  }
+
+  onSuccess(): void {
+    this.failureCount = 0;
+    this.state = 'CLOSED';
+  }
+
+  onFailure(): void {
+    this.failureCount++;
+    this.lastFailureTime = Date.now();
+    
+    if (this.failureCount >= this.FAILURE_THRESHOLD) {
+      this.state = 'OPEN';
+      console.log('🚫 Extension circuit breaker OPEN - preventing further calls for 30s');
+    }
+  }
+
+  isOpen(): boolean {
+    return this.state === 'OPEN';
+  }
+}
+
 class ExtensionDataService {
   // Extension ID will be dynamically detected or set
   private static extensionId: string | null = null;
+  private static circuitBreaker = ExtensionCircuitBreaker.getInstance();
 
   static isExtensionInstalled(): boolean {
     // Re-enabled for testing - check if Chrome extension API is available
@@ -69,12 +121,18 @@ class ExtensionDataService {
     if (!this.isExtensionInstalled()) {
       throw new Error('Extension not installed');
     }
+
+    // Check circuit breaker before attempting communication
+    if (!this.circuitBreaker.canExecute()) {
+      throw new Error('Extension communication temporarily disabled - circuit breaker open');
+    }
     
     try {
       // Method 1: Try via content script (most reliable for externally_connectable)
       try {
         const response = await this.sendMessageViaContentScript(message);
         if (response && response.success !== false) {
+          this.circuitBreaker.onSuccess();
           return response;
         }
       } catch (error) {
@@ -85,6 +143,7 @@ class ExtensionDataService {
       try {
         const response = await (window as any).chrome.runtime.sendMessage(message);
         if (response && response.success !== false) {
+          this.circuitBreaker.onSuccess();
           return response;
         }
       } catch (error) {
@@ -99,6 +158,7 @@ class ExtensionDataService {
           if (response && response.success !== false) {
             this.extensionId = id; // Cache successful ID
             console.log('Extension connected with ID:', id);
+            this.circuitBreaker.onSuccess();
             return response;
           }
         } catch (error) {
@@ -108,7 +168,10 @@ class ExtensionDataService {
 
       throw new Error('Could not establish connection with Focus Time Tracker extension');
     } catch (error) {
-      console.error('Extension communication failed:', error);
+      this.circuitBreaker.onFailure();
+      if (!this.circuitBreaker.isOpen()) {
+        console.error('Extension communication failed:', error);
+      }
       throw error;
     }
   }
