@@ -133,6 +133,18 @@ const DeepFocusPage: React.FC = () => {
   // Add state to track extension status
   const [extensionStatus, setExtensionStatus] = useState<'unknown' | 'online' | 'offline'>('unknown');
 
+  // Debug: Track selectedRange changes
+  useEffect(() => {
+    console.log('🔍 DEBUG: selectedRange state changed:', {
+      rangeType: selectedRange.rangeType,
+      startDate: selectedRange.startDate?.toISOString(),
+      endDate: selectedRange.endDate?.toISOString(),
+      startFormatted: selectedRange.startDate ? formatLocalDate(selectedRange.startDate) : null,
+      endFormatted: selectedRange.endDate ? formatLocalDate(selectedRange.endDate) : null,
+      todayForReference: new Date().toISOString().split('T')[0]
+    });
+  }, [selectedRange]);
+
   // Helper function to check if a date string is within the selected range
   const isDateInRange = (dateStr: string): boolean => {
     if (selectedRange.rangeType === 'all time' || !selectedRange.startDate || !selectedRange.endDate) {
@@ -157,12 +169,22 @@ const DeepFocusPage: React.FC = () => {
   useEffect(() => {
     const loadHybridDateData = async () => {
       if (selectedRange.rangeType === 'all time' || !selectedRange.startDate || !selectedRange.endDate) {
+        console.log('🔍 DEBUG: Skipping hybrid data load - all time or no dates');
         setExtensionData(null);
         return;
       }
 
       const startDateStr = formatLocalDate(selectedRange.startDate);
       const endDateStr = formatLocalDate(selectedRange.endDate);
+
+      console.log('🔍 DEBUG: Loading hybrid data with exact dates:', {
+        rangeType: selectedRange.rangeType,
+        originalStartDate: selectedRange.startDate.toISOString(),
+        originalEndDate: selectedRange.endDate.toISOString(),
+        startDateStr,
+        endDateStr,
+        today: new Date().toISOString().split('T')[0]
+      });
 
       try {
         console.log('🔄 Loading hybrid data for date range:', startDateStr, 'to', endDateStr);
@@ -173,6 +195,13 @@ const DeepFocusPage: React.FC = () => {
         
         // Check if we have meaningful data for this range
         const hasData = hybridData.timeMetrics.onScreenTime > 0 || hybridData.siteUsage.length > 0;
+        
+        console.log('🔍 DEBUG: Hybrid data analysis:', {
+          hasData,
+          onScreenTime: hybridData.timeMetrics.onScreenTime,
+          siteUsageCount: hybridData.siteUsage.length,
+          siteUsage: hybridData.siteUsage
+        });
         
         if (hasData) {
           // Convert to the format expected by the UI
@@ -415,6 +444,15 @@ const DeepFocusPage: React.FC = () => {
 
   // Calculate filtered deep focus sessions based on date range
   const filteredDeepFocusSessions = useMemo(() => {
+    console.log('🔍 DEBUG: filteredDeepFocusSessions calculation started:', {
+      selectedRangeType: selectedRange.rangeType,
+      selectedStartDate: selectedRange.startDate?.toISOString(),
+      selectedEndDate: selectedRange.endDate?.toISOString(),
+      selectedStartFormatted: selectedRange.startDate ? formatLocalDate(selectedRange.startDate) : null,
+      selectedEndFormatted: selectedRange.endDate ? formatLocalDate(selectedRange.endDate) : null,
+      deepFocusSessionsCount: deepFocusSessions.length
+    });
+    
     if (selectedRange.rangeType === 'all time') {
       return deepFocusSessions;
     }
@@ -427,6 +465,15 @@ const DeepFocusPage: React.FC = () => {
     startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(selectedRange.endDate);
     endDate.setHours(23, 59, 59, 999);
+    
+    console.log('🔍 DEBUG: Session filtering with dates:', {
+      originalStartDate: selectedRange.startDate.toISOString(),
+      originalEndDate: selectedRange.endDate.toISOString(),
+      adjustedStartDate: startDate.toISOString(),
+      adjustedEndDate: endDate.toISOString(),
+      adjustedStartFormatted: formatLocalDate(startDate),
+      adjustedEndFormatted: formatLocalDate(endDate)
+    });
     
     return deepFocusSessions.filter(session => {
       const sessionDate = new Date(session.createdAt);
@@ -760,29 +807,54 @@ const DeepFocusPage: React.FC = () => {
 
   // Handle date range selection
   const handleDateRangeSelect = (range: string) => {
-    const end = new Date();
+    // Create robust today dates using local timezone
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    const end = new Date(today);
     end.setHours(23, 59, 59, 999); // Set to end of today
-    const start = new Date();
+    const start = new Date(today);
+    start.setHours(0, 0, 0, 0); // Set to start of today
+    
     let type: RangeType = 'today';
+    
+    console.log('🔍 DEBUG: Date range selection started:', {
+      range,
+      systemDate: new Date().toISOString(),
+      systemDateLocal: new Date().toLocaleDateString(),
+      todayNormalized: today.toISOString(),
+      initialEnd: end.toISOString(),
+      initialStart: start.toISOString()
+    });
     
     switch(range) {
       case 'Today':
-        // Set to start of today
-        start.setHours(0, 0, 0, 0);
         type = 'today';
+        
+        console.log('🔍 DEBUG: Today range created:', {
+          startDate: start.toISOString(),
+          startDateLocal: start.toLocaleDateString(),
+          endDate: end.toISOString(),
+          endDateLocal: end.toLocaleDateString(),
+          startFormatted: formatLocalDate(start),
+          endFormatted: formatLocalDate(end)
+        });
+        
         setSelectedRange({ startDate: start, endDate: end, rangeType: type });
         break;
       case 'Last 7 Days':
-        start.setDate(end.getDate() - 6); // -6 to include today = 7 days
-        start.setHours(0, 0, 0, 0);
+        const start7 = new Date(today);
+        start7.setDate(today.getDate() - 6); // -6 to include today = 7 days
+        start7.setHours(0, 0, 0, 0);
         type = 'last 7 days';
-        setSelectedRange({ startDate: start, endDate: end, rangeType: type });
+        setSelectedRange({ startDate: start7, endDate: end, rangeType: type });
         break;
       case 'Last 30 Days':
-        start.setDate(end.getDate() - 29); // -29 to include today = 30 days
-        start.setHours(0, 0, 0, 0);
+        const start30 = new Date(today);
+        start30.setDate(today.getDate() - 29); // -29 to include today = 30 days
+        start30.setHours(0, 0, 0, 0);
         type = 'last 30 days';
-        setSelectedRange({ startDate: start, endDate: end, rangeType: type });
+        setSelectedRange({ startDate: start30, endDate: end, rangeType: type });
         break;
       case 'Custom Range':
         setShowDatePicker(true);
