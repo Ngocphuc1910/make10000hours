@@ -19,7 +19,7 @@ export const debugExtensionCommunication = {
     console.log('📡 Testing postMessage communication...');
     
     try {
-      const result = await ExtensionDataService.testPostMessageConnection();
+      const result = await ExtensionDataService.testConnection();
       console.log('PostMessage test result:', result);
       return result;
     } catch (error) {
