@@ -99,51 +99,52 @@ class ActivityDetector {
         return;
       }
 
-      // Handle EXTENSION_PING messages
-      if (event.data?.type === 'EXTENSION_PING' && event.data?.source?.includes('make10000hours')) {
-        console.log('🔄 Received EXTENSION_PING from web app, responding...');
+      // Handle EXTENSION_REQUEST messages (new simplified method)
+      if (event.data?.type === 'EXTENSION_REQUEST') {
+        console.log('🔄 Received EXTENSION_REQUEST from web app');
         
-        // Respond with EXTENSION_PONG to confirm extension is online
-        window.postMessage({
-          type: 'EXTENSION_PONG',
-          messageId: event.data.messageId, // Include original messageId for proper matching
-          payload: { status: 'online', timestamp: Date.now() },
-          source: 'focus-time-tracker-extension'
-        }, '*');
-        
-        // Also send the legacy status message for backward compatibility
-        window.postMessage({
-          type: 'EXTENSION_STATUS',
-          payload: { status: 'online', timestamp: Date.now() },
-          source: 'make10000hours-extension'
-        }, '*');
+        try {
+          const response = await chrome.runtime.sendMessage(event.data.payload);
+          
+          // Send response back to web app
+          window.postMessage({
+            extensionResponseId: event.data.messageId,
+            response: response
+          }, '*');
+          
+        } catch (error) {
+          console.error('❌ Failed to forward request to extension:', error);
+          
+          // Send error response back to web app
+          window.postMessage({
+            extensionResponseId: event.data.messageId,
+            response: { success: false, error: error.message }
+          }, '*');
+        }
         return;
       }
 
-      // Add guard to prevent processing duplicate messages
-      const messageId = `${event.data?.type}_${Date.now()}`;
-      if (this.lastProcessedMessage === messageId) {
-        console.log('🔄 Skipping duplicate message:', messageId);
+      // Handle EXTENSION_PING messages (keep for backward compatibility)
+      if (event.data?.type === 'EXTENSION_PING' && event.data?.source?.includes('make10000hours')) {
+        console.log('🔄 Received EXTENSION_PING from web app, responding...');
+        
+        window.postMessage({
+          type: 'EXTENSION_PONG',
+          messageId: event.data.messageId,
+          payload: { status: 'online', timestamp: Date.now() },
+          source: 'focus-time-tracker-extension'
+        }, '*');
         return;
       }
-      this.lastProcessedMessage = messageId;
 
       // Handle SET_USER_ID messages
       if (event.data?.type === 'SET_USER_ID' && event.data?.source?.includes('make10000hours')) {
         console.log('🔄 Received SET_USER_ID from web app:', event.data.payload);
         
         try {
-          console.log('🔍 DEBUG: Forwarding SET_USER_ID to extension background');
           const response = await chrome.runtime.sendMessage({
             type: 'SET_USER_ID',
             payload: event.data.payload
-          });
-          
-          console.log('✅ User ID forwarded to extension:', response);
-          console.log('🔍 DEBUG: User sync response details:', {
-            success: response?.success,
-            userId: response?.userId,
-            error: response?.error
           });
           
           window.postMessage({
@@ -165,13 +166,11 @@ class ActivityDetector {
 
       // Handle RECORD_OVERRIDE_SESSION messages from web app
       if (event.data?.type === 'RECORD_OVERRIDE_SESSION' && event.data?.source?.includes('make10000hours')) {
-        // Only process messages originating from web app (not extension)
         if (event.data.payload?.source === 'extension') {
-          return; // Skip messages that originated from extension to prevent loops
+          return;
         }
         
         console.log('📝 Forwarding override session from web app to extension');
-        console.log('🔍 Override session payload:', event.data.payload);
         
         try {
           const response = await chrome.runtime.sendMessage({
@@ -179,9 +178,6 @@ class ActivityDetector {
             payload: event.data.payload
           });
           
-          console.log('✅ Override session recorded:', response);
-          
-          // Send confirmation back to web app
           window.postMessage({
             type: 'RECORD_OVERRIDE_SESSION_RESPONSE',
             payload: { success: true },
@@ -191,7 +187,6 @@ class ActivityDetector {
         } catch (error) {
           console.error('❌ Failed to record override session:', error);
           
-          // Send error back to web app
           window.postMessage({
             type: 'RECORD_OVERRIDE_SESSION_RESPONSE',
             payload: { success: false, error: error.message },

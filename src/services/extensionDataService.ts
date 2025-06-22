@@ -26,9 +26,9 @@ class ExtensionCircuitBreaker {
   private failureCount = 0;
   private lastFailureTime = 0;
   private state: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED';
-  private readonly FAILURE_THRESHOLD = 3;
-  private readonly TIMEOUT = 30000; // 30 seconds
-  private readonly RETRY_TIMEOUT = 5000; // 5 seconds
+  private readonly FAILURE_THRESHOLD = 5;
+  private readonly TIMEOUT = 60000;
+  private readonly RETRY_TIMEOUT = 10000;
 
   static getInstance(): ExtensionCircuitBreaker {
     if (!ExtensionCircuitBreaker.instance) {
@@ -69,40 +69,66 @@ class ExtensionCircuitBreaker {
     
     if (this.failureCount >= this.FAILURE_THRESHOLD) {
       this.state = 'OPEN';
-      console.log('🚫 Extension circuit breaker OPEN - preventing further calls for 30s');
+      console.log(`🚫 Extension circuit breaker OPEN - preventing further calls for ${this.TIMEOUT/1000}s`);
     }
   }
 
   isOpen(): boolean {
     return this.state === 'OPEN';
   }
+
+  getStatus(): { state: string; failureCount: number; timeUntilRetry: number } {
+    const now = Date.now();
+    const timeUntilRetry = this.state === 'OPEN' ? 
+      Math.max(0, this.TIMEOUT - (now - this.lastFailureTime)) : 0;
+    
+    return {
+      state: this.state,
+      failureCount: this.failureCount,
+      timeUntilRetry
+    };
+  }
 }
 
 class ExtensionDataService {
-  // Extension ID will be dynamically detected or set
   private static extensionId: string | null = null;
   private static circuitBreaker = ExtensionCircuitBreaker.getInstance();
 
   static isExtensionInstalled(): boolean {
-    // Re-enabled for testing - check if Chrome extension API is available
-    console.log('🔄 ExtensionDataService: Checking Chrome extension API availability');
-    const isAvailable = typeof (window as any).chrome !== 'undefined' && 
+    return typeof (window as any).chrome !== 'undefined' && 
            !!(window as any).chrome.runtime;
-    console.log('🔄 Chrome extension API available:', isAvailable);
-    return isAvailable;
-    
-    // Original implementation (commented out):
-    // return typeof (window as any).chrome !== 'undefined' && 
-    //        !!(window as any).chrome.runtime;
   }
 
-  // Alternative method: Use window postMessage to communicate with content script
+  static async sendMessage(message: any): Promise<any> {
+    if (!this.isExtensionInstalled()) {
+      throw new Error('Extension not installed');
+    }
+
+    if (!this.circuitBreaker.canExecute()) {
+      throw new Error('Extension communication temporarily disabled - circuit breaker open');
+    }
+    
+    try {
+      // Use only postMessage method for reliability
+      const response = await this.sendMessageViaContentScript(message);
+      this.circuitBreaker.onSuccess();
+      return response;
+    } catch (error) {
+      this.circuitBreaker.onFailure();
+      if (!this.circuitBreaker.isOpen()) {
+        console.error('Extension communication failed:', error);
+      }
+      throw error;
+    }
+  }
+
+  // Simplified content script communication
   static async sendMessageViaContentScript(message: any): Promise<any> {
     return new Promise((resolve, reject) => {
       const messageId = Math.random().toString(36);
       const timeoutId = setTimeout(() => {
         window.removeEventListener('message', responseHandler);
-        reject(new Error('Content script communication timeout'));
+        reject(new Error('Extension communication timeout'));
       }, 5000);
 
       const responseHandler = (event: MessageEvent) => {
@@ -115,165 +141,10 @@ class ExtensionDataService {
 
       window.addEventListener('message', responseHandler);
       
-      // Send message to content script
       window.postMessage({
         type: 'EXTENSION_REQUEST',
         messageId,
         payload: message
-      }, '*');
-    });
-  }
-
-  static async sendMessage(message: any): Promise<any> {
-    if (!this.isExtensionInstalled()) {
-      throw new Error('Extension not installed');
-    }
-
-    // Check circuit breaker before attempting communication
-    if (!this.circuitBreaker.canExecute()) {
-      throw new Error('Extension communication temporarily disabled - circuit breaker open');
-    }
-    
-    try {
-      // Method 1: Try via content script (most reliable for externally_connectable)
-      try {
-        const response = await this.sendMessageViaContentScript(message);
-        if (response && response.success !== false) {
-          this.circuitBreaker.onSuccess();
-          return response;
-        }
-      } catch (error) {
-        console.log('Content script method failed, trying direct methods...');
-      }
-
-      // Method 2: Try sending without extension ID (for injected content scripts)
-      try {
-        const response = await (window as any).chrome.runtime.sendMessage(message);
-        if (response && response.success !== false) {
-          this.circuitBreaker.onSuccess();
-          return response;
-        }
-      } catch (error) {
-        console.log('Direct message failed, trying extension ID methods...');
-      }
-
-             // Method 3: Try with known extension ID patterns
-      const possibleIds = await this.detectExtensionIds();
-      for (const id of possibleIds) {
-        try {
-          const response = await (window as any).chrome.runtime.sendMessage(id, message);
-          if (response && response.success !== false) {
-            this.extensionId = id; // Cache successful ID
-            console.log('Extension connected with ID:', id);
-            this.circuitBreaker.onSuccess();
-            return response;
-          }
-        } catch (error) {
-          continue; // Try next ID
-        }
-      }
-
-      throw new Error('Could not establish connection with Focus Time Tracker extension');
-    } catch (error) {
-      this.circuitBreaker.onFailure();
-      if (!this.circuitBreaker.isOpen()) {
-        console.error('Extension communication failed:', error);
-      }
-      throw error;
-    }
-  }
-
-  // Try to detect extension IDs
-  static async detectExtensionIds(): Promise<string[]> {
-    const ids: string[] = [];
-    
-    // Method 1: Try to query extension management (if available)
-    try {
-      if ((window as any).chrome?.management) {
-        const extensions = await (window as any).chrome.management.getAll();
-        const focusExtension = extensions.find((ext: any) => 
-          ext.name.includes('Focus') || ext.name.includes('Tracker')
-        );
-        if (focusExtension) {
-          ids.push(focusExtension.id);
-        }
-      }
-    } catch (error) {
-      // Management API might not be available
-    }
-
-    // Method 2: Try common development extension ID patterns
-    // Chrome generates predictable IDs for unpacked extensions
-    ids.push(
-      'kbfnbcaeplbcioakkpcpgfkobkghlhen', // Common dev pattern
-      'fmkadmapgofadopljbjfkapdkoienihi', // Another common pattern
-      'lmhkpmbekcpmknklioeibfkpmmfibljd'  // Yet another pattern
-    );
-
-    return ids;
-  }
-
-  static setExtensionId(id: string) {
-    this.extensionId = id;
-  }
-
-  static resetCircuitBreaker(): void {
-    this.circuitBreaker.reset();
-  }
-
-  // Test connection method
-  static async testConnection(): Promise<boolean> {
-    try {
-      console.log('🔍 Testing extension connection...');
-      
-      // Method 1: Try postMessage approach (most reliable for web pages)
-      const isPostMessageAvailable = await this.testPostMessageConnection();
-      if (isPostMessageAvailable) {
-        console.log('✅ Extension connected via postMessage');
-        return true;
-      }
-      
-      // Method 2: Try direct chrome.runtime approach
-      const response = await this.sendMessage({ type: 'GET_TODAY_STATS' });
-      const isConnected = response && response.success !== false;
-      console.log('🔗 Extension connection test result:', isConnected);
-      return isConnected;
-    } catch (error) {
-      console.log('❌ Extension connection test failed:', error);
-      return false;
-    }
-  }
-
-  // Test postMessage connection
-  static async testPostMessageConnection(): Promise<boolean> {
-    return new Promise((resolve) => {
-      const messageId = Math.random().toString(36);
-      let resolved = false;
-      
-      const timeoutId = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          window.removeEventListener('message', responseHandler);
-          resolve(false);
-        }
-      }, 2000);
-
-      const responseHandler = (event: MessageEvent) => {
-        if (event.data?.type === 'EXTENSION_PONG' && event.data?.messageId === messageId && !resolved) {
-          resolved = true;
-          clearTimeout(timeoutId);
-          window.removeEventListener('message', responseHandler);
-          resolve(true);
-        }
-      };
-
-      window.addEventListener('message', responseHandler);
-      
-      // Send ping message
-      window.postMessage({
-        type: 'EXTENSION_PING',
-        messageId,
-        source: 'make10000hours-webapp'
       }, '*');
     });
   }
@@ -408,6 +279,25 @@ class ExtensionDataService {
       'linkedin.com': '#0A66C2'
     };
     return colorMap[domain] || '#6B7280';
+  }
+
+  static resetCircuitBreaker(): void {
+    this.circuitBreaker.reset();
+  }
+
+  static getCircuitBreakerStatus() {
+    return this.circuitBreaker.getStatus();
+  }
+
+  // Simplified connection test
+  static async testConnection(): Promise<boolean> {
+    try {
+      this.resetCircuitBreaker();
+      const response = await this.sendMessage({ type: 'GET_TODAY_STATS' });
+      return response && response.success !== false;
+    } catch (error) {
+      return false;
+    }
   }
 }
 

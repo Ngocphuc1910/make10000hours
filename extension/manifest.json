@@ -72,8 +72,18 @@
       "https://localhost:*/*",
       "http://127.0.0.1:*/*",
       "https://127.0.0.1:*/*",
+      "http://0.0.0.0:*/*",
+      "https://0.0.0.0:*/*",
+      "http://*.local:*/*",
+      "https://*.local:*/*",
+      "http://*.localhost:*/*",
+      "https://*.localhost:*/*",
       "https://make10000hours.com/*",
-      "https://www.make10000hours.com/*"
+      "https://www.make10000hours.com/*",
+      "https://*.vercel.app/*",
+      "https://*.netlify.app/*",
+      "https://*.web.app/*",
+      "https://*.firebaseapp.com/*"
     ]
   }
 } 

@@ -175,6 +175,16 @@ interface DeepFocusStore extends DeepFocusData {
   overrideSessions: OverrideSession[];
   recordOverrideSession: (domain: string, duration: number) => Promise<void>;
   loadOverrideSessions: (userId: string, startDate?: Date, endDate?: Date) => Promise<void>;
+  // Manual retry method for users
+  retryBackup: () => Promise<void>;
+  // Get current sync status including circuit breaker info
+  getSyncStatus: () => {
+    isBackingUp: boolean;
+    lastBackupTime: Date | null;
+    backupError: string | null;
+    circuitBreaker: { state: string };
+    canRetry: boolean;
+  };
 }
 
 export const useDeepFocusStore = create<DeepFocusStore>()(
@@ -231,7 +241,6 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         return;
       }
 
-      // Circuit breaker will handle connection testing
       const extensionResponse = await ExtensionDataService.getTodayStats();
       
       if (extensionResponse.success === false) {
@@ -247,7 +256,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         isExtensionConnected: true
       });
     } catch (error) {
-      // Circuit breaker handles error logging
+      console.error('Extension data loading failed:', error);
       set({ isExtensionConnected: false });
     }
   },
@@ -935,7 +944,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         const extensionResponse = await Promise.race([
           ExtensionDataService.getTodayStats(),
           new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error('Extension backup timeout')), 5000)
+            setTimeout(() => reject(new Error('Extension backup timeout')), 15000)
           )
         ]);
         
@@ -947,7 +956,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         console.log('💾 Saving backup data to Firebase...');
         await siteUsageService.backupDayData(user.uid, today, extensionResponse.data || extensionResponse);
         
-        set({ lastBackupTime: new Date() });
+        set({ lastBackupTime: new Date(), backupError: null });
         console.log('✅ Successfully backed up today\'s data');
       } catch (error) {
         console.error('❌ Failed to backup today\'s data:', error);
@@ -1101,6 +1110,33 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         console.error('❌ Failed to get backup status:', error);
         return { lastSyncDate: null, totalDays: 0 };
       }
+    },
+
+    // Manual retry method for users
+    retryBackup: async () => {
+      console.log('🔄 Manual backup retry triggered');
+      
+      // Reset circuit breaker to allow fresh attempt
+      ExtensionDataService.resetCircuitBreaker();
+      
+      // Wait a moment then trigger backup
+      setTimeout(() => {
+        get().backupTodayData();
+      }, 1000);
+    },
+
+    // Get current sync status including circuit breaker info
+    getSyncStatus: () => {
+      const state = get();
+      const circuitBreakerStatus = ExtensionDataService.getCircuitBreakerStatus();
+      
+      return {
+        isBackingUp: state.isBackingUp,
+        lastBackupTime: state.lastBackupTime,
+        backupError: state.backupError,
+        circuitBreaker: circuitBreakerStatus,
+        canRetry: !state.isBackingUp && circuitBreakerStatus.state !== 'OPEN'
+      };
     },
 
     // Hybrid data fetching for date ranges (Firebase + Extension)
