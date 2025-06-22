@@ -122,29 +122,35 @@ export const Header: React.FC = () => {
 
   // Handle date range selection
   const handleDateRangeSelect = (range: string) => {
-    const end = new Date();
+    // Create robust today dates using local timezone (SAME FIX AS DEEP FOCUS PAGE)
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    const end = new Date(today);
     end.setHours(23, 59, 59, 999); // Set to end of today
-    const start = new Date();
+    const start = new Date(today);
+    start.setHours(0, 0, 0, 0); // Set to start of today
+    
     let type: RangeType = 'today';
     
     switch(range) {
       case 'Today':
-        // Set to start of today
-        start.setHours(0, 0, 0, 0);
         type = 'today';
         setSelectedRange({ startDate: start, endDate: end, rangeType: type });
         break;
       case 'Last 7 Days':
-        start.setDate(end.getDate() - 6); // -6 to include today = 7 days
-        start.setHours(0, 0, 0, 0);
+        const start7 = new Date(today);
+        start7.setDate(today.getDate() - 6); // -6 to include today = 7 days
+        start7.setHours(0, 0, 0, 0);
         type = 'last 7 days';
-        setSelectedRange({ startDate: start, endDate: end, rangeType: type });
+        setSelectedRange({ startDate: start7, endDate: end, rangeType: type });
         break;
       case 'Last 30 Days':
-        start.setDate(end.getDate() - 29); // -29 to include today = 30 days
-        start.setHours(0, 0, 0, 0);
+        const start30 = new Date(today);
+        start30.setDate(today.getDate() - 29); // -29 to include today = 30 days
+        start30.setHours(0, 0, 0, 0);
         type = 'last 30 days';
-        setSelectedRange({ startDate: start, endDate: end, rangeType: type });
+        setSelectedRange({ startDate: start30, endDate: end, rangeType: type });
         break;
       case 'Custom Range':
         setShowDatePicker(true);
