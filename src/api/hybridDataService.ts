@@ -70,13 +70,19 @@ class HybridDataService {
 
       // 2. Get current date from Extension (live data)
       if (currentDate) {
+        console.log('🎯 TODAY DETECTED - Attempting to fetch extension data...');
         try {
           if (ExtensionDataService.isExtensionInstalled()) {
+            console.log('🔌 Extension is installed, fetching today stats...');
             const extensionResponse = await ExtensionDataService.getTodayStats();
+            console.log('📊 Extension response:', extensionResponse);
+            
             if (extensionResponse.success !== false) {
               const extensionData = extensionResponse.data || extensionResponse;
               result[today] = this.convertExtensionToHybrid(extensionData);
-              console.log('✅ Extension data loaded for today:', today);
+              console.log('✅ Extension data loaded for today:', today, result[today]);
+            } else {
+              console.warn('⚠️ Extension returned unsuccessful response:', extensionResponse);
             }
           } else {
             console.log('⚠️ Extension not available for current date');
@@ -94,6 +100,8 @@ class HybridDataService {
             console.warn('⚠️ Firebase fallback also failed');
           }
         }
+      } else {
+        console.log('❌ TODAY NOT DETECTED - Extension data will not be fetched for current date');
       }
 
       // 3. Future dates - check Firebase first (for test data), then empty
@@ -170,7 +178,6 @@ class HybridDataService {
   private static categorizedDates(startDate: string, endDate: string, today: string) {
     const start = new Date(startDate);
     const end = new Date(endDate);
-    const todayDate = new Date(today);
     
     const pastDates: string[] = [];
     const futureDates: string[] = [];
@@ -180,12 +187,7 @@ class HybridDataService {
       startDate,
       endDate, 
       today,
-      systemDate: new Date().toISOString().split('T')[0],
-      todayComparison: {
-        '2025-06-11 < today': '2025-06-11' < today,
-        '2025-06-11 === today': '2025-06-11' === today,
-        'today value': today
-      }
+      systemDate: new Date().toISOString().split('T')[0]
     });
 
     // Generate all dates in range
@@ -196,8 +198,7 @@ class HybridDataService {
       const day = String(current.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
       
-      console.log(`📅 Processing date: ${dateStr}, today: ${today}, comparison: ${dateStr} < ${today} = ${dateStr < today}`);
-      
+      // Simple string comparison - more reliable than Date normalization
       if (dateStr < today) {
         pastDates.push(dateStr);
         console.log(`✅ Added to pastDates: ${dateStr}`);
@@ -212,7 +213,7 @@ class HybridDataService {
       current.setDate(current.getDate() + 1);
     }
 
-    console.log('📊 Final categorization:', { pastDates, currentDate, futureDates });
+    console.log('📊 Final categorization:', { pastDates, currentDate, futureDates, todayString: today });
 
     return { pastDates, currentDate, futureDates };
   }
