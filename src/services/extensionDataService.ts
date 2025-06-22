@@ -37,6 +37,13 @@ class ExtensionCircuitBreaker {
     return ExtensionCircuitBreaker.instance;
   }
 
+  reset(): void {
+    this.failureCount = 0;
+    this.state = 'CLOSED';
+    this.lastFailureTime = 0;
+    console.log('🔄 Extension circuit breaker RESET');
+  }
+
   canExecute(): boolean {
     const now = Date.now();
     
@@ -208,6 +215,10 @@ class ExtensionDataService {
 
   static setExtensionId(id: string) {
     this.extensionId = id;
+  }
+
+  static resetCircuitBreaker(): void {
+    this.circuitBreaker.reset();
   }
 
   // Test connection method
