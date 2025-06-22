@@ -119,6 +119,14 @@ const DeepFocusPage: React.FC = () => {
   
   // User sync hook - ensures extension knows current user ID
 
+  // Add function to reset extension communication
+  const resetExtensionConnection = async () => {
+    console.log('🔄 Resetting extension connection...');
+    const { default: ExtensionDataService } = await import('../../services/extensionDataService');
+    ExtensionDataService.resetCircuitBreaker();
+    await loadExtensionData();
+    console.log('✅ Extension connection reset complete');
+  };
 
   // State for extension-loaded data
   const [extensionData, setExtensionData] = useState<{
@@ -1371,6 +1379,14 @@ const DeepFocusPage: React.FC = () => {
                         isExtensionConnected ? 'bg-green-500' : 'bg-yellow-500'
                       }`} />
                       {isExtensionConnected ? 'Extension Connected' : 'Extension Offline'}
+                      {!isExtensionConnected && (
+                        <button
+                          onClick={resetExtensionConnection}
+                          className="ml-2 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                        >
+                          Reset
+                        </button>
+                      )}
                     </div>
                     <button
                       onClick={() => {
