@@ -10,6 +10,14 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
 
+  // Debug logging for pie chart data
+  console.log('🥧 UsagePieChart received data:', {
+    dataLength: data?.length || 0,
+    data: data?.slice(0, 3), // Log first 3 entries
+    totalTime: data?.reduce((sum, site) => sum + site.timeSpent, 0) || 0,
+    isEmpty: !data || data.length === 0
+  });
+
   // Helper function to format time
   const formatTime = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
@@ -34,6 +42,26 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
     const rootElement = document.documentElement;
     const bgPrimary = getComputedStyle(rootElement).getPropertyValue('--bg-primary').trim();
     const isDarkMode = bgPrimary === '#141414' || rootElement.classList.contains('dark') || rootElement.getAttribute('data-theme') === 'dark';
+
+    // Handle empty data case
+    if (!data || data.length === 0) {
+      console.warn('🥧 UsagePieChart: No data available, showing empty chart');
+      const emptyOption = {
+        animation: false,
+        graphic: {
+          type: 'text',
+          left: 'center',
+          top: 'middle',
+          style: {
+            text: 'No site usage data available',
+            fontSize: 16,
+            fill: isDarkMode ? '#a1a1aa' : '#666'
+          }
+        }
+      };
+      chartInstance.current.setOption(emptyOption);
+      return;
+    }
 
     // Default EChart colors for top 5 sites
     const defaultColors = [
