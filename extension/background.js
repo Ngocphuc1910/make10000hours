@@ -1950,19 +1950,28 @@ class FocusTimeTracker {
   broadcastFocusStateChange(isActive) {
     console.log(`🔄 Broadcasting focus state change: ${isActive}`);
     
+    const focusState = {
+      isActive,
+      isVisible: isActive,
+      isFocused: isActive
+    };
+
     // Send to all tabs with content scripts
     chrome.tabs.query({}, (tabs) => {
       tabs.forEach(tab => {
         if (tab.id && this.isTrackableUrl(tab.url)) {
           chrome.tabs.sendMessage(tab.id, {
             type: 'FOCUS_STATE_CHANGED',
-            payload: { isActive }
+            payload: focusState
           }).catch(() => {
             // Ignore errors for tabs without content scripts
           });
         }
       });
     });
+
+    // Forward directly to web app for redundancy
+    this.forwardToWebApp('EXTENSION_FOCUS_STATE_CHANGED', focusState);
 
     // Store the latest focus state for popup to query when it opens
     this.latestFocusState = isActive;
