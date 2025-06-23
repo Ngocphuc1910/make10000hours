@@ -123,11 +123,7 @@ const DeepFocusPage: React.FC = () => {
   const dateRangeInputRef = useRef<HTMLInputElement>(null);
   const datePickerRef = useRef<FlatpickrInstance | null>(null);
 
-  // Unified extension sync (replaces multiple overlapping hooks)
-  const { refreshData } = useExtensionSync();
-  
-  // Global Deep Focus sync for consistent state across all pages
-  useGlobalDeepFocusSync();
+  // Global Deep Focus sync handled by App.tsx to prevent duplication
   
   // User sync hook - ensures extension knows current user ID
 
@@ -228,14 +224,7 @@ const DeepFocusPage: React.FC = () => {
 
 
 
-  // Critical Debug: Check store data
-  console.log('🔍 CRITICAL DEBUG - Store Data Check:', {
-    dailyUsageFromStore: dailyUsage,
-    dailyUsageLength: dailyUsage?.length || 0,
-    selectedRangeType: selectedRange.rangeType,
-    extensionDataExists: !!extensionData,
-    hasStoreData: Array.isArray(dailyUsage) && dailyUsage.length > 0
-  });
+  // Store data validation (logging removed to reduce console noise)
 
   // Helper function to check if a date string is within the selected range
   const isDateInRange = (dateStr: string): boolean => {
@@ -243,12 +232,7 @@ const DeepFocusPage: React.FC = () => {
       return true;
     }
 
-    console.log('🔍 Date range check:', {
-      dateStr,
-      rangeType: selectedRange.rangeType,
-      startDate: selectedRange.startDate?.toISOString(),
-      endDate: selectedRange.endDate?.toISOString()
-    });
+    // Date range validation (logging removed to reduce console noise)
 
     // Parse date string using timezone-safe approach
     let dateToCheck: Date;
@@ -271,13 +255,7 @@ const DeepFocusPage: React.FC = () => {
     
     const isInRange = checkLocalDate >= startLocalDate && checkLocalDate <= endLocalDate;
     
-    console.log('📅 Date comparison (FIXED):', {
-      dateStr,
-      parsedDate: formatLocalDate(checkLocalDate),
-      startDate: formatLocalDate(startLocalDate),
-      endDate: formatLocalDate(endLocalDate),
-      isInRange
-    });
+    // Date comparison result (logging removed to reduce console noise)
 
     return isInRange;
   };
@@ -405,14 +383,7 @@ const DeepFocusPage: React.FC = () => {
         // Handle both Chrome extension messages and window messages
         const messageData = event.data || event;
         
-        // Debug: Log all incoming messages
-        console.log('📥 Message received in DeepFocusPage:', {
-          type: messageData?.type,
-          source: event.source === window ? 'window' : 'other',
-          origin: event.origin,
-          hasPayload: !!messageData?.payload,
-          fullData: messageData
-        });
+        // Process incoming extension messages (debug logging removed to reduce console noise)
         
         // Handle extension status messages
         if (messageData?.type === 'EXTENSION_STATUS' && messageData?.source?.includes('extension')) {
@@ -1736,7 +1707,6 @@ const DeepFocusPage: React.FC = () => {
                     <button
                       onClick={() => {
                         loadExtensionData();
-                        refreshData();
                       }}
                       className="p-1 text-text-secondary hover:text-text-primary transition-colors duration-200"
                       title="Refresh extension data"

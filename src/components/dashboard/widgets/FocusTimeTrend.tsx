@@ -27,23 +27,12 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export const FocusTimeTrend: React.FC = () => {
+export const FocusTimeTrend: React.FC = React.memo(() => {
   const { workSessions, focusTimeView, setFocusTimeView, selectedRange } = useDashboardStore();
   
-  console.log('FocusTimeTrend render - workSessions:', workSessions.length, 'view:', focusTimeView, 'selectedRange:', selectedRange);
-  console.log('FocusTimeTrend - selectedRange details:', {
-    rangeType: selectedRange.rangeType,
-    startDate: selectedRange.startDate?.toISOString(),
-    endDate: selectedRange.endDate?.toISOString(),
-    startDateString: selectedRange.startDate?.toDateString(),
-    endDateString: selectedRange.endDate?.toDateString()
-  });
+  // FocusTimeTrend render tracking (logging removed to reduce console noise)
   
-  // Debug: Log all work sessions
-  console.log('All work sessions available:', workSessions);
-  if (workSessions.length === 0) {
-    console.log('❌ NO WORK SESSIONS FOUND - This is why no data is showing!');
-  }
+  // Work sessions availability check (logging removed to reduce console noise)
   
   // Filter work sessions based on selected date range
   const filteredWorkSessions = useMemo(() => {
@@ -102,17 +91,9 @@ export const FocusTimeTrend: React.FC = () => {
   
   // Comprehensive data processing that handles all view types
   const chartData = useMemo(() => {
-    console.log('Processing chart data, filteredSessions:', filteredWorkSessions.length, 'focusTimeView:', focusTimeView);
-    console.log('ChartData - selectedRange being used:', {
-      rangeType: selectedRange.rangeType,
-      startDate: selectedRange.startDate?.toISOString(),
-      endDate: selectedRange.endDate?.toISOString()
-    });
-    console.log('All work sessions:', workSessions.map(s => ({ date: s.date, duration: s.duration })));
-    console.log('Filtered work sessions:', filteredWorkSessions.map(s => ({ date: s.date, duration: s.duration })));
+    // Process chart data for visualization (logging removed to reduce console noise)
     
     if (!filteredWorkSessions.length) {
-      console.log('No filtered work sessions available');
       return [];
     }
     
@@ -120,10 +101,7 @@ export const FocusTimeTrend: React.FC = () => {
       // First, aggregate all sessions by normalized date
       const timeByDate: Record<string, number> = {};
       
-      console.log('Aggregating sessions for chart data:', {
-        totalFilteredSessions: filteredWorkSessions.length,
-        sessions: filteredWorkSessions.map(s => ({ date: s.date, duration: s.duration }))
-      });
+      // Aggregate sessions for chart data (logging removed to reduce console noise)
       
       // Filter out break sessions and aggregate by date
       filteredWorkSessions
@@ -138,7 +116,7 @@ export const FocusTimeTrend: React.FC = () => {
           }
           timeByDate[normalizedDate] += duration;
           
-          console.log(`Added ${duration} minutes to ${normalizedDate}`);
+          // Track session duration (logging removed to reduce console noise)
         });
       
       console.log('Time by date aggregated:', timeByDate);
@@ -470,7 +448,7 @@ export const FocusTimeTrend: React.FC = () => {
         }
       }
       
-      console.log('Generated chart data for', focusTimeView, ':', days);
+      // Chart data generation completed (logging removed to reduce console noise)
       return days;
     } catch (error) {
       console.error('Error processing chart data:', error);
@@ -480,7 +458,6 @@ export const FocusTimeTrend: React.FC = () => {
 
   // Handle time unit change
   const handleTimeUnitChange = (unit: TimeUnit) => {
-    console.log('Changing focus time view to:', unit);
     setFocusTimeView(unit);
   };
 
@@ -549,7 +526,7 @@ export const FocusTimeTrend: React.FC = () => {
       else interval = Math.floor(dataLength / 12); // For longer ranges, show ~12 labels max
     }
     
-    console.log(`Label interval calculation: dataLength=${dataLength}, view=${focusTimeView}, interval=${interval}`);
+    // Label interval calculation for chart display (logging removed to reduce console noise)
     return interval;
   };
 
@@ -694,4 +671,4 @@ export const FocusTimeTrend: React.FC = () => {
       </div>
     </Card>
   );
-}; 
+}); 

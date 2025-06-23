@@ -647,7 +647,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
                   setTimeout(() => reject(new Error('Block site timeout')), 1000)
                 )
               ]);
-              console.log('🚫 Blocked site in extension:', site.url);
+              // Site blocked in extension (logging removed to reduce console noise)
             } catch (error) {
               console.warn('⚠️ Failed to block site in extension (continuing anyway):', site.url, error);
             }
@@ -749,7 +749,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
                   setTimeout(() => reject(new Error('Unblock site timeout')), 1000)
                 )
               ]);
-              console.log('✅ Unblocked site in extension:', site.url);
+              // Site unblocked in extension (logging removed to reduce console noise)
             } catch (error) {
               console.warn('⚠️ Failed to unblock site in extension (continuing anyway):', site.url, error);
             }
