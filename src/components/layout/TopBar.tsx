@@ -15,7 +15,6 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toggleFocusMode, isLeftSidebarOpen, toggleLeftSidebar } = useUIStore();
-  useExtensionSync(); // Bidirectional extension sync
   
   // Get page title based on current route
   const getPageTitle = () => {

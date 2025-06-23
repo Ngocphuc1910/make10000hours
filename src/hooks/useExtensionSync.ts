@@ -56,7 +56,7 @@ export const useExtensionSync = () => {
 
   // Reduced frequency auto-refresh (circuit breaker will prevent spam)
   useEffect(() => {
-    const interval = setInterval(debouncedLoadExtensionData, 60000); // Every 60 seconds instead of 30
+    const interval = setInterval(debouncedLoadExtensionData, 300000); // Every 5 minutes instead of 1 minute
     return () => clearInterval(interval);
   }, [debouncedLoadExtensionData]);
 

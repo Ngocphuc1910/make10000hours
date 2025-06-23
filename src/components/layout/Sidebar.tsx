@@ -22,14 +22,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const navigate = useNavigate();
   const { user, signOut } = useUserStore();
 
-  // Debug logging for sidebar state changes
-  useEffect(() => {
-    console.log('🔧 Sidebar Component: State changed', { 
-      isLeftSidebarOpen, 
-      pathname: location.pathname,
-      timestamp: new Date().toISOString() 
-    });
-  }, [isLeftSidebarOpen, location.pathname]);
+  // Sidebar state tracking (logging removed to reduce console noise)
 
   const navItems: NavItem[] = [
     {

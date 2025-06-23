@@ -27,8 +27,7 @@ export const ProjectsPage: React.FC = () => {
   const projects = useTaskStore(state => state.projects);
   const tasks = useTaskStore(state => state.tasks);
   
-  // Deep Focus state management
-    useExtensionSync(); // Bidirectional extension sync
+  // Deep Focus state management handled globally in App.tsx
 
   // Save view type to localStorage whenever it changes
   useEffect(() => {

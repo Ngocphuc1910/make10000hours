@@ -5,11 +5,11 @@ import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useDashboardStore } from '../../../store/useDashboardStore';
 
-export const TopProjects: React.FC = () => {
+export const TopProjects: React.FC = React.memo(() => {
   const { workSessions, selectedRange } = useDashboardStore();
   const { projects, tasks } = useTaskStore();
   
-  console.log('TopProjects render - workSessions:', workSessions.length, 'selectedRange:', selectedRange);
+  // TopProjects render tracking (logging removed to reduce console noise)
   
   // Filter work sessions based on selected date range (same logic as FocusTimeTrend)
   const filteredWorkSessions = useMemo(() => {
@@ -36,7 +36,7 @@ export const TopProjects: React.FC = () => {
 
   // Calculate project focus time from filtered work sessions
   const projectsWithFilteredTime = useMemo(() => {
-    console.log('Calculating project time from filtered sessions:', filteredWorkSessions.length);
+    // Calculate project time from filtered sessions (logging removed to reduce console noise)
     
     // Group filtered work sessions by project, excluding break sessions
     const projectTimeMap = new Map<string, number>();
@@ -48,10 +48,10 @@ export const TopProjects: React.FC = () => {
         const current = projectTimeMap.get(session.projectId) || 0;
         projectTimeMap.set(session.projectId, current + duration);
         
-        console.log(`Added ${duration} minutes to project ${session.projectId}`);
+        // Track project session duration (logging removed to reduce console noise)
       });
     
-    console.log('Project time map:', Object.fromEntries(projectTimeMap));
+    // Project time aggregation completed (logging removed to reduce console noise)
     
     // Convert projects to dashboard format with filtered time data
     return projects
@@ -317,4 +317,4 @@ export const TopProjects: React.FC = () => {
       </div>
     </Card>
   );
-}; 
+}); 

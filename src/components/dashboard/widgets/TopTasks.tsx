@@ -6,13 +6,13 @@ import { useUserStore } from '../../../store/userStore';
 import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
 import { taskToDashboardTask, type DashboardTask } from '../../../utils/dashboardAdapter';
 
-export const TopTasks: React.FC = () => {
+export const TopTasks: React.FC = React.memo(() => {
   const { workSessions, selectedRange } = useDashboardStore();
   const { tasks, projects } = useTaskStore();
   const { user } = useUserStore();
   const [isLoading, setIsLoading] = useState(false);
   
-  console.log('TopTasks render - workSessions:', workSessions.length, 'selectedRange:', selectedRange);
+  // TopTasks render tracking (logging removed to reduce console noise)
   
   // Filter work sessions based on selected date range (same logic as other components)
   const filteredWorkSessions = useMemo(() => {
@@ -39,7 +39,7 @@ export const TopTasks: React.FC = () => {
 
   // Calculate task focus time from filtered work sessions
   const displayTasks = useMemo(() => {
-    console.log('Calculating task time from filtered sessions:', filteredWorkSessions.length);
+    // Calculate task time from filtered sessions (logging removed to reduce console noise)
     
     if (!user || filteredWorkSessions.length === 0) {
       return [];
@@ -55,10 +55,10 @@ export const TopTasks: React.FC = () => {
         const current = taskTimeMap.get(session.taskId) || 0;
         taskTimeMap.set(session.taskId, current + duration);
         
-        console.log(`Added ${duration} minutes to task ${session.taskId}`);
+        // Track task session duration (logging removed to reduce console noise)
       });
     
-    console.log('Task time map:', Object.fromEntries(taskTimeMap));
+    // Task time aggregation completed (logging removed to reduce console noise)
     
     // Convert to dashboard tasks with filtered time data
     return Array.from(taskTimeMap.entries())
@@ -174,4 +174,4 @@ export const TopTasks: React.FC = () => {
       </div>
     </Card>
   );
-}; 
+}); 

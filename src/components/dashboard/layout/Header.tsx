@@ -25,7 +25,6 @@ export const Header: React.FC = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const { selectedRange, setSelectedRange } = useDashboardStore();
   const { toggleFocusMode, isLeftSidebarOpen, toggleLeftSidebar } = useUIStore();
-  useExtensionSync(); // Bidirectional extension sync
   const dateFilterRef = useRef<HTMLDivElement>(null);
   const dateRangeInputRef = useRef<HTMLInputElement>(null);
   const datePickerRef = useRef<FlatpickrInstance | null>(null);
