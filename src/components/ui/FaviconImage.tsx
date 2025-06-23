@@ -20,6 +20,8 @@ const FaviconImage: React.FC<FaviconImageProps> = ({
   onLoad,
   onError
 }) => {
+  // Ensure we always have a valid fallback icon
+  const validFallbackIcon = fallbackIcon || FaviconService.getDomainIcon(domain);
   const [faviconUrl, setFaviconUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -91,7 +93,7 @@ const FaviconImage: React.FC<FaviconImageProps> = ({
     return () => {
       mounted = false;
     };
-  }, [domain, size, onLoad, onError, fallbackIcon]);
+  }, [domain, size, onLoad, onError, validFallbackIcon]);
 
   // Show loading placeholder or fallback icon
   if (isLoading || showFallback || !faviconUrl) {
@@ -100,7 +102,7 @@ const FaviconImage: React.FC<FaviconImageProps> = ({
         className={`flex items-center justify-center bg-gray-100 rounded ${className}`}
         style={{ width: size, height: size }}
       >
-        <Icon name={fallbackIcon} className="text-gray-600" size={Math.floor(size * 0.6)} />
+        <Icon name={validFallbackIcon} className="text-gray-600" size={Math.floor(size * 0.6)} />
       </div>
     );
   }
