@@ -371,13 +371,30 @@ class PopupManager {
    * Update UI elements with current state
    */
   updateUI() {
+    // Update header with focus mode status
     this.updateHeader();
+    
+    // Update user info section
     this.updateUserInfo();
+    
+    // Update stats overview
     this.updateStatsOverview();
+    
+    // Update current session info
     this.updateCurrentSession();
-    this.updateActivityStatus();
+    
+    // Update top sites
     this.updateTopSites();
-    this.updateActionButtons();
+
+    // Update focus mode button text
+    const focusModeBtn = document.getElementById('focus-mode-toggle');
+    if (focusModeBtn) {
+      const isFocusModeActive = this.currentState?.focusStats?.focusMode || false;
+      const btnText = focusModeBtn.querySelector('.btn-text');
+      if (btnText) {
+        btnText.textContent = isFocusModeActive ? 'Disable Focus Mode' : 'Enable Focus Mode';
+      }
+    }
   }
 
   /**
