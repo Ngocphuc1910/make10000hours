@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import Sidebar from '../layout/Sidebar';
 import { useDeepFocusStore } from '../../store/deepFocusStore';
 import { useExtensionSync } from '../../hooks/useExtensionSync';
-import { useEnhancedDeepFocusSync } from '../../hooks/useEnhancedDeepFocusSync';
+import { useGlobalDeepFocusSync } from '../../hooks/useGlobalDeepFocusSync';
 import { useExtensionDateRange } from '../../hooks/useExtensionDateRange';
 import { useDashboardStore } from '../../store/useDashboardStore';
 import { useUserStore } from '../../store/userStore';
@@ -124,6 +124,9 @@ const DeepFocusPage: React.FC = () => {
 
   // Unified extension sync (replaces multiple overlapping hooks)
   const { refreshData } = useExtensionSync();
+  
+  // Global Deep Focus sync for consistent state across all pages
+  useGlobalDeepFocusSync();
   
   // User sync hook - ensures extension knows current user ID
 
