@@ -3,6 +3,7 @@ import { Icon } from './Icon';
 import CustomCheckbox from './CustomCheckbox';
 import FaviconImage from './FaviconImage';
 import { BlockedSite } from '../../types/deepFocus';
+import { useCachedSiteUsage } from '../../hooks/useCachedSiteUsage';
 
 interface AddSiteModalProps {
   isOpen: boolean;
@@ -15,23 +16,37 @@ interface AvailableSite {
   url: string;
   icon: string;
   backgroundColor: string;
-  timeSpent: string;
 }
 
-const availableSites: AvailableSite[] = [
-  { name: 'YouTube', url: 'youtube.com', icon: 'ri-youtube-fill', backgroundColor: '#FF0000', timeSpent: '7h 29m' },
-  { name: 'Facebook', url: 'facebook.com', icon: 'ri-facebook-fill', backgroundColor: '#1877F2', timeSpent: '4h 15m' },
-  { name: 'Instagram', url: 'instagram.com', icon: 'ri-instagram-fill', backgroundColor: '#E4405F', timeSpent: '3h 42m' },
-  { name: 'LinkedIn', url: 'linkedin.com', icon: 'ri-linkedin-fill', backgroundColor: '#0A66C2', timeSpent: '2h 18m' },
-  { name: 'Twitter', url: 'twitter.com', icon: 'ri-twitter-fill', backgroundColor: '#1DA1F2', timeSpent: '1h 45m' }
-];
-
 const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites }) => {
+  const { siteUsage, isLoading, loadUsageData } = useCachedSiteUsage();
   const [method, setMethod] = useState<'visited' | 'manual'>('visited');
   const [selectedSites, setSelectedSites] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [manualUrl, setManualUrl] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
+  
+  // Load cached usage data when modal opens
+  useEffect(() => {
+    if (isOpen && method === 'visited' && siteUsage.length === 0 && !isLoading) {
+      loadUsageData();
+    }
+  }, [isOpen, method, siteUsage.length, isLoading, loadUsageData]);
+  
+  // Transform cached site usage data
+  const availableSites = siteUsage.map(site => ({
+    name: site.name,
+    url: site.url,
+    icon: site.icon,
+    backgroundColor: site.backgroundColor
+  }));
+
+  // Filter sites based on search term
+  const filteredSites = availableSites.filter(site => 
+    site.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    site.url.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   // Handle modal animations
   useEffect(() => {
@@ -45,6 +60,7 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
         setSelectedSites(new Set());
         setSelectAll(false);
         setManualUrl('');
+        setSearchTerm('');
         setMethod('visited');
         setIsAnimating(false);
       }, 300);
@@ -65,12 +81,12 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
       newSelected.add(url);
     }
     setSelectedSites(newSelected);
-    setSelectAll(newSelected.size === availableSites.length);
+    setSelectAll(newSelected.size === filteredSites.length);
   };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedSites(new Set(availableSites.map(site => site.url)));
+      setSelectedSites(new Set(filteredSites.map(site => site.url)));
     } else {
       setSelectedSites(new Set());
     }
@@ -129,25 +145,27 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
       }}
     >
       <div 
-        className={`bg-background-secondary rounded-2xl p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col shadow-2xl border border-border transition-all duration-300 ${
+        className={`bg-background-primary rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl transition-all duration-300 ${
           isOpen 
             ? 'scale-100 opacity-100 translate-y-0' 
             : 'scale-95 opacity-0 translate-y-4'
         }`}
+        style={{ maxHeight: '85vh' }}
       >
-        <div className="flex justify-between items-center mb-6">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6 flex-shrink-0">
           <h2 className="text-2xl font-bold text-text-primary">Add Site to Block</h2>
           <button 
             onClick={onClose} 
-            className="text-text-secondary hover:text-text-primary transition-colors duration-200 p-1 rounded-full hover:bg-background-container"
+            className="text-text-secondary hover:text-text-primary transition-colors"
           >
             <Icon name="close-line" className="w-6 h-6" />
           </button>
         </div>
 
-        {/* Method Selection with Custom Radio Buttons */}
-        <div className="flex gap-6 mb-6">
-          <label className="flex items-center gap-2 cursor-pointer group">
+        {/* Radio Button Selection */}
+        <div className="flex gap-6 mb-6 flex-shrink-0">
+          <label className="flex items-center gap-2 cursor-pointer hover:opacity-75 transition-opacity">
             <input
               type="radio"
               name="addSiteMethod"
@@ -158,18 +176,16 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
             />
             <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
               method === 'visited' 
-                ? 'border-[#BB5F5A] scale-110' 
-                : 'border-border group-hover:border-text-secondary'
+                ? 'border-[#BB5F5A] bg-transparent' 
+                : 'border-border'
             }`}>
-              <div className={`w-2.5 h-2.5 rounded-full bg-[#BB5F5A] transition-all duration-200 ${
-                method === 'visited' ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
+              <div className={`w-2.5 h-2.5 rounded-full bg-[#BB5F5A] transition-opacity duration-200 ${
+                method === 'visited' ? 'opacity-100' : 'opacity-0'
               }`}></div>
             </div>
-            <span className={`text-base transition-colors duration-200 ${
-              method === 'visited' ? 'text-text-primary font-medium' : 'text-text-secondary'
-            }`}>Select visited sites</span>
+            <span className="text-base text-text-primary">Select visited sites</span>
           </label>
-          <label className="flex items-center gap-2 cursor-pointer group">
+          <label className="flex items-center gap-2 cursor-pointer hover:opacity-75 transition-opacity">
             <input
               type="radio"
               name="addSiteMethod"
@@ -180,110 +196,142 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
             />
             <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
               method === 'manual' 
-                ? 'border-[#BB5F5A] scale-110' 
-                : 'border-border group-hover:border-text-secondary'
+                ? 'border-[#BB5F5A] bg-transparent' 
+                : 'border-border'
             }`}>
-              <div className={`w-2.5 h-2.5 rounded-full bg-[#BB5F5A] transition-all duration-200 ${
-                method === 'manual' ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
+              <div className={`w-2.5 h-2.5 rounded-full bg-[#BB5F5A] transition-opacity duration-200 ${
+                method === 'manual' ? 'opacity-100' : 'opacity-0'
               }`}></div>
             </div>
-            <span className={`text-base transition-colors duration-200 ${
-              method === 'manual' ? 'text-text-primary font-medium' : 'text-text-secondary'
-            }`}>Input site URL</span>
+            <span className="text-base text-text-primary">Input site URL</span>
           </label>
         </div>
 
-        {/* Content with smooth transitions */}
-        <div className="flex-1 overflow-hidden">
-          <div className={`transition-all duration-300 ${method === 'visited' ? 'opacity-100 transform-none' : 'opacity-0 -translate-x-4 pointer-events-none absolute'}`}>
-            <div className="flex items-center gap-3 mb-4 pb-4 border-b border-border">
-              <CustomCheckbox
-                checked={selectAll}
-                onChange={handleSelectAll}
-              />
-              <span className="text-base font-medium text-text-primary">Select all sites</span>
-              {selectedSites.size > 0 && (
-                <span className="text-sm text-[#BB5F5A] font-medium animate-pulse">
-                  {selectedSites.size} selected
-                </span>
-              )}
-            </div>
-            <div className="space-y-4 max-h-[320px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-background-container">
-              {availableSites.map((site, index) => (
-                <div 
-                  key={site.url} 
-                  className={`flex items-center gap-3 p-2 rounded-lg transition-all duration-200 hover:bg-background-container ${
-                    selectedSites.has(site.url) ? 'bg-[#BB5F5A]/5 ring-1 ring-[#BB5F5A]/20' : ''
-                  }`}
-                  style={{ animationDelay: `${index * 50}ms` }}
-                >
-                  <CustomCheckbox
-                    checked={selectedSites.has(site.url)}
-                    onChange={() => handleSiteToggle(site.url)}
-                  />
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="transform transition-transform duration-200 hover:scale-105">
-                      <FaviconImage 
-                        domain={site.url} 
-                        size={40}
-                        className="shadow-sm border border-border"
-                        fallbackIcon={site.icon}
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-text-primary">{site.name}</div>
-                      <div className="text-sm text-text-secondary">{site.url}</div>
-                    </div>
-                    <div className="text-sm text-text-secondary font-medium">{site.timeSpent}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className={`transition-all duration-300 ${method === 'manual' ? 'opacity-100 transform-none' : 'opacity-0 translate-x-4 pointer-events-none absolute'}`}>
-            <div className="relative mb-4">
-              <input
-                type="text"
-                value={manualUrl}
-                onChange={(e) => setManualUrl(e.target.value)}
-                className="w-full px-4 py-3 text-base border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#BB5F5A] focus:border-transparent transition-all duration-200 hover:border-text-secondary bg-background-primary text-text-primary"
-                placeholder="https://www.facebook.com/"
-              />
-              {manualUrl && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                </div>
-              )}
-            </div>
-            {urlPreview && (
-              <div className="mt-4 flex items-center gap-3 p-3 bg-background-container rounded-lg transition-all duration-300 hover:bg-background-primary">
-                <div className="w-10 h-10 bg-text-secondary rounded-lg flex items-center justify-center text-white">
-                  <Icon name="ri-global-line" className="text-xl" />
-                </div>
-                <div>
-                  <div className="font-medium text-text-primary">{urlPreview.name}</div>
-                  <div className="text-sm text-text-secondary">{urlPreview.domain}</div>
+        {/* Content Container with proper height management */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* Visited Sites Section */}
+          {method === 'visited' && (
+            <div className="flex flex-col min-h-0">
+              {/* Search Box */}
+              <div className="relative mb-4 flex-shrink-0">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#BB5F5A] focus:border-transparent bg-background-container text-text-primary placeholder-text-secondary"
+                  placeholder="Search sites..."
+                />
+                <div className="absolute left-3 top-2.5 flex items-center h-5 text-text-secondary pointer-events-none">
+                  <i className="ri-search-line text-base"></i>
                 </div>
               </div>
-            )}
-          </div>
+
+              {/* Site List with Select All as first item */}
+              <div className="flex-1 min-h-0">
+                <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#BB5F5A]"></div>
+                      <span className="ml-3 text-text-secondary">Loading sites...</span>
+                    </div>
+                  ) : filteredSites.length === 0 ? (
+                    <div className="text-center py-8 text-text-secondary">
+                      <i className="ri-global-line text-5xl mx-auto mb-3 opacity-50 block"></i>
+                      <p>No sites found</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Select All Item */}
+                      <div 
+                        className="add-site-modal-item flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer"
+                        onClick={() => handleSelectAll(!selectAll)}
+                      >
+                        <CustomCheckbox
+                          checked={selectAll}
+                          onChange={handleSelectAll}
+                        />
+                        <span className="text-base font-medium text-text-primary">Select all sites</span>
+                        {selectedSites.size > 0 && (
+                          <span className="text-sm text-[#BB5F5A] font-medium ml-auto">
+                            {selectedSites.size} selected
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Site Items */}
+                      {filteredSites.map((site) => (
+                        <div 
+                          key={site.url} 
+                          className="add-site-modal-item flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer"
+                          onClick={() => handleSiteToggle(site.url)}
+                        >
+                          <CustomCheckbox
+                            checked={selectedSites.has(site.url)}
+                            onChange={() => handleSiteToggle(site.url)}
+                          />
+                          <div className="flex items-center gap-3 flex-1 min-w-0 pointer-events-none">
+                            <div className="flex-shrink-0">
+                              <FaviconImage 
+                                domain={site.url} 
+                                size={32}
+                                fallbackIcon={site.icon}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-text-primary truncate">{site.name}</div>
+                              <div className="text-sm text-text-secondary truncate">{site.url}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Manual Input Section */}
+          {method === 'manual' && (
+            <div className="flex-1">
+              <div className="relative mb-4">
+                <input
+                  type="text"
+                  value={manualUrl}
+                  onChange={(e) => setManualUrl(e.target.value)}
+                  className="w-full px-4 py-3 text-base border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#BB5F5A] focus:border-transparent bg-background-container text-text-primary placeholder-text-secondary"
+                  placeholder="https://www.facebook.com/"
+                />
+              </div>
+              {urlPreview && (
+                <div className="mt-4 flex items-center gap-3 p-3 bg-background-container rounded-lg">
+                  <div className="w-10 h-10 bg-[#1877F2] rounded-lg flex items-center justify-center">
+                    <Icon name="global-line" className="text-xl text-white" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-text-primary">{urlPreview.name}</div>
+                    <div className="text-sm text-text-secondary">{urlPreview.domain}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Actions with improved styling */}
-        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-border">
+        {/* Actions */}
+        <div className="flex justify-end gap-3 mt-6 flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-6 py-2 border border-border rounded-lg text-text-primary hover:bg-background-container font-medium transition-all duration-200 hover:border-text-secondary active:scale-95"
+            className="px-6 py-2 border border-border rounded-lg text-text-secondary hover:bg-background-container hover:text-text-primary font-medium transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleAddSites}
             disabled={selectedCount === 0}
-            className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 active:scale-95 ${
+            className={`px-6 py-2 rounded-lg font-medium transition-colors ${
               selectedCount > 0
-                ? 'bg-[#BB5F5A] text-white hover:bg-[#BB5F5A]/90 shadow-lg hover:shadow-xl'
+                ? 'bg-[#BB5F5A] text-white hover:bg-[#A54F4A]'
                 : 'bg-background-container text-text-secondary cursor-not-allowed'
             }`}
           >
