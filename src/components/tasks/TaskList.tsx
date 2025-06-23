@@ -136,7 +136,10 @@ export const TaskList: React.FC<TaskListProps> = ({
         <TimeSpent />
       </div>
       
-      <div className={`flex-1 overflow-y-auto ${compactView ? 'compact-view' : ''}`} ref={scrollContainerRef}>
+      <div 
+        className={`flex-1 overflow-y-auto scrollbar-thin ${compactView ? 'compact-view' : ''}`} 
+        ref={scrollContainerRef}
+      >
         <div className="p-4">
           <div className="space-y-3" id="taskList" ref={taskListRef}>
             <TaskListSorted />
