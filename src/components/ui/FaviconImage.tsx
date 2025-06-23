@@ -20,10 +20,12 @@ const FaviconImage: React.FC<FaviconImageProps> = ({
   onLoad,
   onError
 }) => {
+  // Ensure we always have a valid fallback icon
+  const validFallbackIcon = fallbackIcon || FaviconService.getDomainIcon(domain);
   const [faviconUrl, setFaviconUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
-  const [isDefault, setIsDefault] = useState(false);
+  const [showFallback, setShowFallback] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -32,25 +34,54 @@ const FaviconImage: React.FC<FaviconImageProps> = ({
       try {
         setIsLoading(true);
         setHasError(false);
+        setShowFallback(false);
         
-        const result = await FaviconService.getFaviconUrl(domain, { size });
+        // Try to get real favicon from Google's service only
+        const cleanDomain = FaviconService.cleanDomain(domain);
+        const googleUrl = `https://www.google.com/s2/favicons?domain=${cleanDomain}&sz=${size * 2}`;
         
+        // Test if the favicon loads successfully
+        const isValid = await new Promise<boolean>((resolve) => {
+          const img = new Image();
+          const timeoutId = setTimeout(() => {
+            resolve(false);
+          }, 2000); // 2 second timeout for faster fallback
+
+          img.onload = () => {
+            clearTimeout(timeoutId);
+            // Check if it's not a default empty favicon
+            if (img.width > 16 || img.height > 16) {
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          };
+
+          img.onerror = () => {
+            clearTimeout(timeoutId);
+            resolve(false);
+          };
+
+          img.src = googleUrl;
+        });
+
         if (mounted) {
-          setFaviconUrl(result.url);
-          setIsDefault(result.isDefault);
-          setIsLoading(false);
-          onLoad?.();
+          if (isValid) {
+            setFaviconUrl(googleUrl);
+            setIsLoading(false);
+            onLoad?.();
+          } else {
+            setShowFallback(true);
+            setIsLoading(false);
+            onError?.();
+          }
         }
       } catch (error) {
         if (mounted) {
           setHasError(true);
           setIsLoading(false);
+          setShowFallback(true);
           onError?.();
-          
-          // Generate fallback
-          const fallback = FaviconService.getFallbackFavicon(domain, size);
-          setFaviconUrl(fallback.url);
-          setIsDefault(true);
         }
       }
     };
@@ -62,16 +93,16 @@ const FaviconImage: React.FC<FaviconImageProps> = ({
     return () => {
       mounted = false;
     };
-  }, [domain, size, onLoad, onError]);
+  }, [domain, size, onLoad, onError, validFallbackIcon]);
 
-  // Show loading placeholder
-  if (isLoading || !faviconUrl) {
+  // Show loading placeholder or fallback icon
+  if (isLoading || showFallback || !faviconUrl) {
     return (
       <div 
-        className={`flex items-center justify-center bg-gray-100 rounded favicon-loading ${className}`}
+        className={`flex items-center justify-center bg-gray-100 rounded ${className}`}
         style={{ width: size, height: size }}
       >
-        <Icon name={fallbackIcon} className="text-gray-400" size={Math.floor(size * 0.6)} />
+        <Icon name={validFallbackIcon} className="text-gray-600" size={Math.floor(size * 0.6)} />
       </div>
     );
   }
@@ -88,25 +119,16 @@ const FaviconImage: React.FC<FaviconImageProps> = ({
         alt={`${domain} favicon`}
         width={size}
         height={size}
-        className={`favicon-image ${isDefault ? 'rounded' : ''}`}
+        className={`favicon-image`}
         style={{ 
           objectFit: 'contain',
           maxWidth: size,
           maxHeight: size
         }}
         onError={(e) => {
-          // If image fails to load, show fallback icon
-          const target = e.target as HTMLImageElement;
-          target.style.display = 'none';
-          
-          // Create fallback icon element
-          const container = target.parentElement;
-          if (container && !container.querySelector('.favicon-fallback')) {
-            const fallbackDiv = document.createElement('div');
-            fallbackDiv.className = `favicon-fallback flex items-center justify-center bg-gray-100 rounded w-full h-full`;
-            fallbackDiv.innerHTML = `<i class="ri-global-line text-gray-400" style="font-size: ${Math.floor(size * 0.6)}px;"></i>`;
-            container.appendChild(fallbackDiv);
-          }
+          // If image fails to load, show fallback icon instead
+          setShowFallback(true);
+          setHasError(true);
         }}
       />
     </div>
