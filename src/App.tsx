@@ -334,7 +334,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  console.log('App component rendered');
+  // App component render tracking removed to reduce console noise
 
   // Wrap PomodoroPage with MainLayout
   const PomodoroPageWithLayout = () => (

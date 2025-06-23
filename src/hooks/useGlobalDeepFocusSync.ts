@@ -72,7 +72,7 @@ export const useGlobalDeepFocusSync = () => {
     window.addEventListener('message', handleExtensionFocusChange);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    console.log('✅ Global Deep Focus sync initialized');
+    // Global Deep Focus sync initialized (logging removed to reduce console noise)
 
     // Cleanup
     return () => {

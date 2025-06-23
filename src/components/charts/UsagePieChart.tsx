@@ -10,13 +10,7 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
 
-  // Debug logging for pie chart data
-  console.log('🥧 UsagePieChart received data:', {
-    dataLength: data?.length || 0,
-    data: data?.slice(0, 3), // Log first 3 entries
-    totalTime: data?.reduce((sum, site) => sum + site.timeSpent, 0) || 0,
-    isEmpty: !data || data.length === 0
-  });
+  // Pie chart data processing (debug logging removed to reduce console noise)
 
   // Helper function to format time
   const formatTime = (minutes: number): string => {
