@@ -175,7 +175,7 @@ const DeepFocusPage: React.FC = () => {
       endDate: selectedRange.endDate?.toISOString()
     });
 
-    // Parse date string (assuming format like '12/05' or full date)
+    // Parse date string using timezone-safe approach
     let dateToCheck: Date;
     if (dateStr.includes('/') && dateStr.split('/').length === 2) {
       // Format like '12/05' - assume current year
@@ -183,16 +183,24 @@ const DeepFocusPage: React.FC = () => {
       const currentYear = new Date().getFullYear();
       dateToCheck = new Date(currentYear, parseInt(month) - 1, parseInt(day));
     } else {
-      dateToCheck = new Date(dateStr);
+      // For full date strings, parse as local date to avoid timezone conversion
+      const normalizedDateStr = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+      const [year, month, day] = normalizedDateStr.split('-').map(Number);
+      dateToCheck = new Date(year, month - 1, day);
     }
 
-    const isInRange = dateToCheck >= selectedRange.startDate && dateToCheck <= selectedRange.endDate;
+    // Compare using local date components to avoid timezone issues
+    const checkLocalDate = new Date(dateToCheck.getFullYear(), dateToCheck.getMonth(), dateToCheck.getDate());
+    const startLocalDate = new Date(selectedRange.startDate.getFullYear(), selectedRange.startDate.getMonth(), selectedRange.startDate.getDate());
+    const endLocalDate = new Date(selectedRange.endDate.getFullYear(), selectedRange.endDate.getMonth(), selectedRange.endDate.getDate());
     
-    console.log('📅 Date comparison:', {
+    const isInRange = checkLocalDate >= startLocalDate && checkLocalDate <= endLocalDate;
+    
+    console.log('📅 Date comparison (FIXED):', {
       dateStr,
-      parsedDate: dateToCheck.toISOString().split('T')[0],
-      startDate: selectedRange.startDate?.toISOString().split('T')[0],
-      endDate: selectedRange.endDate?.toISOString().split('T')[0],
+      parsedDate: formatLocalDate(checkLocalDate),
+      startDate: formatLocalDate(startLocalDate),
+      endDate: formatLocalDate(endLocalDate),
       isInRange
     });
 
@@ -520,7 +528,7 @@ const DeepFocusPage: React.FC = () => {
         const days = [];
         
         if (selectedRange.rangeType === 'today') {
-          const today = new Date().toISOString().split('T')[0];
+          const today = formatLocalDate(new Date());
           days.push({
             date: today,
             onScreenTime: totalOnScreenTime,
@@ -542,7 +550,7 @@ const DeepFocusPage: React.FC = () => {
             .forEach(session => {
               const sessionDate = new Date(session.date);
               if (sessionDate >= startDate && sessionDate <= endDate) {
-                const dateKey = sessionDate.toISOString().split('T')[0];
+                const dateKey = formatLocalDate(sessionDate);
                 if (!dailySessionData[dateKey]) {
                   dailySessionData[dateKey] = { workingTime: 0, deepFocusTime: 0, onScreenTime: 0 };
                 }
@@ -556,7 +564,7 @@ const DeepFocusPage: React.FC = () => {
             .forEach(session => {
               const sessionDate = new Date(session.createdAt);
               if (sessionDate >= startDate && sessionDate <= endDate) {
-                const dateKey = sessionDate.toISOString().split('T')[0];
+                const dateKey = formatLocalDate(sessionDate);
                 if (!dailySessionData[dateKey]) {
                   dailySessionData[dateKey] = { workingTime: 0, deepFocusTime: 0, onScreenTime: 0 };
                 }
@@ -566,13 +574,13 @@ const DeepFocusPage: React.FC = () => {
           
           // Distribute site usage proportionally across days with actual session data
           const daysWithData = Object.keys(dailySessionData);
-          const totalDaysInRange = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          const totalDaysInRange = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
           
-          // Generate days for the entire range
+          // Generate days for the entire range (inclusive of both start and end dates)
           for (let i = 0; i < totalDaysInRange; i++) {
             const currentDate = new Date(startDate);
             currentDate.setDate(startDate.getDate() + i);
-            const dateStr = currentDate.toISOString().split('T')[0];
+            const dateStr = formatLocalDate(currentDate);
             
             const sessionData = dailySessionData[dateStr];
             
@@ -1518,7 +1526,9 @@ const DeepFocusPage: React.FC = () => {
                   </button>
                 </div>
               </div>
-              <div className="w-full h-72">
+              <div className={`w-full transition-all duration-500 ${
+                isLeftSidebarOpen ? 'h-72' : 'h-80'
+              }`}>
                 <UsageLineChart data={filteredDailyUsage} />
               </div>
             </div>
