@@ -19,6 +19,7 @@ interface TaskState {
   initializeStore: () => Promise<void>;
   addTask: (taskData: Omit<Task, 'id' | 'order' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   updateTask: (taskId: string, taskData: Partial<Task>) => Promise<void>;
+  updateTaskLocally: (taskIdx: number, updates: Partial<Task>) => void;
   deleteTask: (id: string) => Promise<void>;
   toggleTaskCompletion: (taskId: string, context?: string) => Promise<Task | null>;
   updateTaskStatus: (taskId: string, status: Task['status']) => Promise<void>;
@@ -312,6 +313,16 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       console.error('Error updating task:', error);
       throw error;
     }
+  },
+
+  updateTaskLocally: (taskIdx, updates) => {
+    const { tasks } = get();
+    tasks[taskIdx] = {
+      ...tasks[taskIdx],
+      ...updates,
+      updatedAt: new Date()
+    };
+    set({ tasks: [...tasks] });
   },
   
   deleteTask: async (id) => {
