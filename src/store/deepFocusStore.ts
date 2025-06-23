@@ -196,15 +196,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
     deepFocusTime: 770,
     overrideTime: 770
   },
-  dailyUsage: [
-    { date: '12/05', onScreenTime: 120, workingTime: 100, deepFocusTime: 80 },
-    { date: '13/05', onScreenTime: 160, workingTime: 140, deepFocusTime: 120 },
-    { date: '14/05', onScreenTime: 190, workingTime: 170, deepFocusTime: 150 },
-    { date: '15/05', onScreenTime: 120, workingTime: 100, deepFocusTime: 80 },
-    { date: '16/05', onScreenTime: 110, workingTime: 90, deepFocusTime: 70 },
-    { date: '17/05', onScreenTime: 150, workingTime: 130, deepFocusTime: 110 },
-    { date: '18/05', onScreenTime: 170, workingTime: 150, deepFocusTime: 130 }
-  ],
+  dailyUsage: [], // Removed mock data to test real data loading
   siteUsage: mockSiteUsage,
   blockedSites: mockBlockedSites,
   isExtensionConnected: false,
