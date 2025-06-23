@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useDrag } from 'react-dnd';
 import { CalendarEvent, DragItem } from '../types';
 import { formatTimeForDisplay, getEventDurationMinutes } from '../utils';
+import { useTaskStore } from '../../../store/taskStore';
 
 interface DraggableEventProps {
   event: CalendarEvent;
@@ -11,6 +12,7 @@ interface DraggableEventProps {
   className?: string;
   sourceView?: string;
   onResize?: (event: CalendarEvent, direction: 'top' | 'bottom', newTime: Date) => void;
+  onResizeMove?: (taskIdx: number, direction: 'top' | 'bottom', newTime: Date) => void;
 }
 
 export const DraggableEvent: React.FC<DraggableEventProps> = ({
@@ -20,7 +22,8 @@ export const DraggableEvent: React.FC<DraggableEventProps> = ({
   children,
   className = '',
   sourceView = 'week',
-  onResize
+  onResize,
+  onResizeMove,
 }) => {
   // Use useRef to store alt key state for immediate access during drag
   const altPressedRef = React.useRef(false);
@@ -34,6 +37,16 @@ export const DraggableEvent: React.FC<DraggableEventProps> = ({
   // State to track if resize handles are hovered
   const [isTopHandleHovered, setIsTopHandleHovered] = useState(false);
   const [isBottomHandleHovered, setIsBottomHandleHovered] = useState(false);
+  const [selectedTaskIdx, setSelectedTaskIdx] = useState<number>(-1);
+  const [timeoutClick, setTimeoutClick] = useState<NodeJS.Timeout | null>(null);
+  // Create a ref to track the latest selectedTaskIdx value
+  const selectedTaskIdxRef = useRef<number>(-1);
+  const { tasks } = useTaskStore();
+  
+  // Update the ref whenever selectedTaskIdx changes
+  React.useEffect(() => {
+    selectedTaskIdxRef.current = selectedTaskIdx;
+  }, [selectedTaskIdx]);
   
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -100,12 +113,11 @@ export const DraggableEvent: React.FC<DraggableEventProps> = ({
   });
 
   // Function to calculate time from pixel movement
-  const calculateTimeFromPixels = (pixelDelta: number, isAllDay: boolean) => {
+  const calculateTimeFromPixels = (oldMinutes: number, pixelDelta: number, isAllDay: boolean) => {
     if (isAllDay) return 0; // No resize for all-day events
-
-    // Calculate minutes based on pixel movement (assuming 60px = 1 hour)
-    const minutesPerPixel = 60 / 60; // 60 minutes / 60 pixels
-    return pixelDelta * minutesPerPixel;
+    // Round up to the nearest 5 minutes
+    const roundedMinutes = Math.ceil((pixelDelta + oldMinutes) / 5) * 5; // Round to nearest 5 minutes
+    return roundedMinutes;
   };
 
   // Resize handlers
@@ -113,6 +125,12 @@ export const DraggableEvent: React.FC<DraggableEventProps> = ({
     e.stopPropagation(); // Prevent event click
     
     if (event.isAllDay || event.isDraggable === false) return;
+
+    const foundIdx = tasks.findIndex(task => task.id === event.taskId);
+    if (foundIdx === -1) return; // Event not found in tasks
+    setSelectedTaskIdx(foundIdx);
+    // Also update the ref immediately for any handlers that might fire before the effect
+    selectedTaskIdxRef.current = foundIdx;
     
     // Set resize state
     isResizingRef.current = true;
@@ -131,15 +149,46 @@ export const DraggableEvent: React.FC<DraggableEventProps> = ({
     // Calculate delta in pixels
     const deltaY = e.clientY - initialClientYRef.current;
     
-    // Convert pixel movement to minutes
-    const minutesDelta = calculateTimeFromPixels(deltaY, event.isAllDay);
+    // Create new time based on direction
+    let newTime = new Date();
+    if (resizeDirectionRef.current === 'top') {
+      // Adjusting start time - add minutes to original start time
+      newTime = new Date(initialEventRef.current.start);
+      const newMinutes = calculateTimeFromPixels(newTime.getMinutes(), deltaY, event.isAllDay);
+      newTime.setMinutes(newMinutes);
+      
+      // Ensure new start time isn't after end time
+      if (newTime < initialEventRef.current.end) {
+        // Use the ref value instead of the state variable
+        onResizeMove?.(selectedTaskIdxRef.current, 'top', newTime);
+      }
+    } else {
+      // Adjusting end time - add minutes to original end time
+      newTime = new Date(initialEventRef.current.end);
+      const newMinutes = calculateTimeFromPixels(newTime.getMinutes(), deltaY, event.isAllDay);
+      newTime.setMinutes(newMinutes);
+      
+      // Ensure new end time isn't before start time
+      if (newTime > initialEventRef.current.start) {
+        // Use the ref value instead of the state variable
+        onResizeMove?.(selectedTaskIdxRef.current, 'bottom', newTime);
+      }
+    }
+  };
+  
+  const handleResizeEnd = (e: MouseEvent) => {
+    if (!isResizingRef.current || !resizeDirectionRef.current || !initialEventRef.current) return;
+    // Finalize resize
+    // Calculate delta in pixels
+    const deltaY = e.clientY - initialClientYRef.current;
     
     // Create new time based on direction
     let newTime = new Date();
     if (resizeDirectionRef.current === 'top') {
       // Adjusting start time - add minutes to original start time
       newTime = new Date(initialEventRef.current.start);
-      newTime.setMinutes(newTime.getMinutes() + minutesDelta);
+      const newMinutes = calculateTimeFromPixels(newTime.getMinutes(), deltaY, event.isAllDay);
+      newTime.setMinutes(newMinutes);
       
       // Ensure new start time isn't after end time
       if (newTime < initialEventRef.current.end) {
@@ -148,16 +197,19 @@ export const DraggableEvent: React.FC<DraggableEventProps> = ({
     } else {
       // Adjusting end time - add minutes to original end time
       newTime = new Date(initialEventRef.current.end);
-      newTime.setMinutes(newTime.getMinutes() + minutesDelta);
+      const newMinutes = calculateTimeFromPixels(newTime.getMinutes(), deltaY, event.isAllDay);
+      newTime.setMinutes(newMinutes);
       
       // Ensure new end time isn't before start time
       if (newTime > initialEventRef.current.start) {
         onResize?.(event, 'bottom', newTime);
       }
+
+      setTimeoutClick(setTimeout(() => {
+        setTimeoutClick(null);
+      }, 200));
     }
-  };
-  
-  const handleResizeEnd = () => {
+
     isResizingRef.current = false;
     resizeDirectionRef.current = null;
     initialEventRef.current = null;
@@ -170,7 +222,7 @@ export const DraggableEvent: React.FC<DraggableEventProps> = ({
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     // Only trigger click if not resizing
-    if (!isResizingRef.current) {
+    if (!isResizingRef.current && !timeoutClick) {
       onClick?.(event);
     }
   };
