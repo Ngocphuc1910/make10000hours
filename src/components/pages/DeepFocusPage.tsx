@@ -95,11 +95,18 @@ const DeepFocusPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedRange, setSelectedRange] = useState<DateRange>({
-    startDate: null,
-    endDate: null,
-    rangeType: 'all time'
-  });
+  // Initialize with today's range using same logic as handleDateRangeSelect
+  const getTodayRange = (): DateRange => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const start = new Date(today);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(today);
+    end.setHours(23, 59, 59, 999);
+    return { startDate: start, endDate: end, rangeType: 'today' };
+  };
+  
+  const [selectedRange, setSelectedRange] = useState<DateRange>(getTodayRange());
   
   // Temporary dates for custom range
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -211,8 +218,8 @@ const DeepFocusPage: React.FC = () => {
   useEffect(() => {
     const loadHybridDateData = async () => {
       if (selectedRange.rangeType === 'all time') {
-        console.log('🔍 DEBUG: All time selected - clearing extension data');
-        setExtensionData(null);
+        console.log('🔍 DEBUG: All time selected - loading all extension data');
+        await loadExtensionData();
         return;
       }
       
@@ -614,10 +621,11 @@ const DeepFocusPage: React.FC = () => {
       return generatedDailyUsage;
     }
     
-    // For "all time", always return store data without filtering
+    // For "all time", use extension data if available, otherwise store data
     if (selectedRange.rangeType === 'all time') {
-      console.log('✅ Using store data (all time):', dailyUsage);
-      return dailyUsage;
+      const dataToUse = extensionData?.dailyUsage || dailyUsage;
+      console.log('✅ Using data for all time:', dataToUse);
+      return dataToUse;
     }
     
     // Only apply date filtering for specific ranges with valid dates
@@ -1118,7 +1126,7 @@ const DeepFocusPage: React.FC = () => {
         console.log('✅ Populating extensionData from store for line chart');
         setExtensionData({
           siteUsage: siteUsage,
-          dailyUsage: [], // Will be generated from site usage
+          dailyUsage: dailyUsage.length > 0 ? dailyUsage : [], // Use existing dailyUsage if available
           timeMetrics: timeMetrics
         });
       }
@@ -1132,7 +1140,7 @@ const DeepFocusPage: React.FC = () => {
       console.log('🔄 Updating extensionData from store siteUsage for all time view');
       setExtensionData({
         siteUsage: siteUsage,
-        dailyUsage: [], // Will be generated from site usage  
+        dailyUsage: dailyUsage.length > 0 ? dailyUsage : [], // Use existing dailyUsage if available  
         timeMetrics: timeMetrics
       });
     }
