@@ -107,31 +107,60 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
-/* Custom scrollbar styles */
+/* Scrollbar styles for task lists */
 .scrollbar-thin {
   scrollbar-width: thin;
-}
-
-.scrollbar-thumb-gray-300::-webkit-scrollbar-thumb {
-  background-color: var(--border-color);
-  border-radius: 4px;
-}
-
-.scrollbar-track-gray-100::-webkit-scrollbar-track {
-  background-color: var(--bg-primary);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  transition: all 0.3s ease;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
 }
 
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: var(--border-color);
-  border-radius: 4px;
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 6px;
 }
 
-.scrollbar-thin::-webkit-scrollbar-track {
-  background-color: var(--bg-primary);
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 6px;
+  transition: background-color 0.3s ease;
+}
+
+.scrollbar-thin:hover::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-active);
+}
+
+/* Dark mode scrollbar styles */
+[data-theme="dark"] .scrollbar-thin {
+  scrollbar-color: var(--scrollbar-thumb-dark) var(--scrollbar-track-dark);
+}
+
+[data-theme="dark"] .scrollbar-thin::-webkit-scrollbar-track {
+  background-color: var(--scrollbar-track-dark);
+}
+
+[data-theme="dark"] .scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-dark);
+}
+
+[data-theme="dark"] .scrollbar-thin:hover::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-hover-dark);
+}
+
+[data-theme="dark"] .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-active-dark);
+}
+
+/* Task list container specific styles */
+.task-list-container {
+  position: relative;
 }
 
 :where([class^="ri-"])::before {
@@ -166,6 +195,12 @@ code {
   --text-secondary: #6b7280;
   --border-color: #e5e7eb;
   
+  /* Scrollbar variables - Light theme */
+  --scrollbar-track: #f1f1f1;
+  --scrollbar-thumb: rgba(156, 163, 175, 0.2);
+  --scrollbar-thumb-hover: rgba(156, 163, 175, 0.4);
+  --scrollbar-thumb-active: rgba(156, 163, 175, 0.6);
+  
   /* Task card colors - Light mode - Pure white */
   --task-todo-bg: #ffffff;
   --task-todo-border: #e5e7eb;
@@ -184,12 +219,18 @@ code {
 
 [data-theme="dark"] {
   /* Dark theme variables - Custom dark gray */
-  --bg-primary: #191919;
-  --bg-secondary: #191919;
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #242424;
   --bg-container: #2a2a2a;
-  --text-primary: #ffffff;
-  --text-secondary: #888888;
+  --text-primary: #e5e7eb;
+  --text-secondary: #9ca3af;
   --border-color: #404040; /* Improved visibility from #2a2a2a */
+  
+  /* Scrollbar variables - Dark theme */
+  --scrollbar-track-dark: rgba(26, 26, 26, 0.8);
+  --scrollbar-thumb-dark: rgba(64, 64, 64, 0.6);
+  --scrollbar-thumb-hover-dark: rgba(75, 75, 75, 0.8);
+  --scrollbar-thumb-active-dark: rgba(90, 90, 90, 1);
   
   /* Task card colors - Dark mode - Subtle greys */
   --task-todo-bg: #1e1e1e;
@@ -456,19 +497,15 @@ code {
   z-index: 5;
 }
 
-.task-list-container {
-  position: relative;
-}
-
 /* Thin auto-hiding scrollbars for task columns */
 .task-list-container {
   scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
+  scrollbar-color: transparent var(--bg-container);
   transition: scrollbar-color 0.3s ease;
 }
 
 .task-list-container:hover {
-  scrollbar-color: #cbd5e180 transparent;
+  scrollbar-color: var(--border-color) var(--bg-container);
 }
 
 .task-list-container::-webkit-scrollbar {
@@ -476,12 +513,12 @@ code {
 }
 
 .task-list-container::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--bg-container);
 }
 
 .task-list-container::-webkit-scrollbar-thumb {
   background-color: transparent;
-  border-radius: 2px;
+  border-radius: 4px;
   transition: background-color 0.3s ease;
 }
 
@@ -490,6 +527,23 @@ code {
 }
 
 .task-list-container::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-secondary);
+}
+
+/* Dark mode overrides for task list scrollbars */
+[data-theme="dark"] .task-list-container {
+  scrollbar-color: transparent var(--bg-container);
+}
+
+[data-theme="dark"] .task-list-container:hover {
+  scrollbar-color: var(--text-secondary) var(--bg-container);
+}
+
+[data-theme="dark"] .task-list-container:hover::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+}
+
+[data-theme="dark"] .task-list-container::-webkit-scrollbar-thumb:hover {
   background-color: var(--text-secondary);
 }
 
