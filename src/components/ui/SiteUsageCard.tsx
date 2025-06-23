@@ -24,7 +24,7 @@ const SiteUsageCard: React.FC<SiteUsageCardProps> = ({ site, formatTime, color, 
             <FaviconImage 
               domain={site.url} 
               size={32}
-              className="shadow-sm border border-border"
+              className="shadow-sm"
               fallbackIcon={site.icon}
             />
           </div>
