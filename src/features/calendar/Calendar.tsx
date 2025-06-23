@@ -68,7 +68,7 @@ export const Calendar: React.FC = () => {
   // Old drag state - removed since we have new drag-to-create system
 
   // Get tasks and projects from task store
-  const { tasks, projects, addTask, updateTask, setEditingTaskId: setStoreEditingTaskId, deleteTask } = useTaskStore();
+  const { tasks, projects, addTask, updateTask, setEditingTaskId: setStoreEditingTaskId, deleteTask, updateTaskLocally } = useTaskStore();
   const { user } = useUserStore();
 
   // Merge calendar events with task events
@@ -585,6 +585,24 @@ export const Calendar: React.FC = () => {
     });
   }, [calendarEvents, tasks, updateTask]);
 
+  const handleEventResizeMove = (taskIdx: number, direction: 'top' | 'bottom', newTime: Date) => {
+    // Handle task events
+    const task = tasks[taskIdx];
+    if (!task) return;
+
+    // Update the task preview without saving
+    const updatedTask: Partial<Task> = {};
+    
+    if (direction === 'top') {
+      updatedTask.scheduledStartTime = newTime.toTimeString().substring(0, 5);
+    } else {
+      updatedTask.scheduledEndTime = newTime.toTimeString().substring(0, 5);
+    }
+    
+    // Update the task in the store temporarily for preview
+    updateTaskLocally(taskIdx, updatedTask);
+  }
+
   // Old drag functions - removed since we have new drag-to-create system in DayView/WeekView
 
   // Old drag logic - removed since we have new drag-to-create system
@@ -767,6 +785,7 @@ export const Calendar: React.FC = () => {
               onDragCreate={handleDragCreate}
               onEventDrop={handleEventDrop}
               onEventResize={handleEventResize}
+              onEventResizeMove={handleEventResizeMove}
               clearDragIndicator={clearDragIndicator}
             />
           )}
