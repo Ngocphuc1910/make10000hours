@@ -14,6 +14,8 @@ interface WeekViewProps {
   onMouseDown?: (e: React.MouseEvent<HTMLElement>) => void;
   onDragCreate?: (start: Date, end: Date) => void;
   onEventDrop?: (item: DragItem, dropResult: DropResult) => void;
+  onEventResize?: (event: CalendarEvent, direction: 'top' | 'bottom', newTime: Date) => void;
+  onEventResizeMove?: (event: CalendarEvent, direction: 'top' | 'bottom', deltaMinutes: number) => void;
   clearDragIndicator?: boolean;
 }
 
@@ -38,6 +40,8 @@ export const WeekView: React.FC<WeekViewProps> = ({
   onMouseDown,
   onDragCreate,
   onEventDrop,
+  onEventResize,
+  onEventResizeMove,
   clearDragIndicator
 }) => {
   const { projects } = useTaskStore();
@@ -446,6 +450,8 @@ export const WeekView: React.FC<WeekViewProps> = ({
                   event={event}
                   onClick={onEventClick}
                   sourceView="week"
+                  onResize={onEventResize}
+                  // onResizeMove={onEventResizeMove}
                   className={`rounded absolute ${
                     event.isTask ? 'border-l-4' : ''
                   }`}
