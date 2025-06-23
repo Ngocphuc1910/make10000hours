@@ -218,13 +218,13 @@ code {
 }
 
 [data-theme="dark"] {
-  /* Dark theme variables - Custom dark gray */
+  /* Dark theme variables */
   --bg-primary: #1a1a1a;
   --bg-secondary: #242424;
   --bg-container: #2a2a2a;
   --text-primary: #e5e7eb;
   --text-secondary: #9ca3af;
-  --border-color: #404040; /* Improved visibility from #2a2a2a */
+  --border-color: #404040;
   
   /* Scrollbar variables - Dark theme */
   --scrollbar-track-dark: rgba(26, 26, 26, 0.8);
@@ -1059,7 +1059,8 @@ code {
 [data-theme="dark"] .pomodoro-page-container .main-layout-container,
 [data-theme="dark"] .pomodoro-page-container #timerSection,
 [data-theme="dark"] .pomodoro-page-container #rightSidebar,
-[data-theme="dark"] .pomodoro-page-container .bg-background-primary {
+[data-theme="dark"] .pomodoro-page-container .bg-background-primary,
+[data-theme="dark"] .pomodoro-page-container .top-bar-header {
   background-color: #141414 !important;
 }
 
@@ -1067,7 +1068,8 @@ code {
 .dark .pomodoro-page-container .main-layout-container,
 .dark .pomodoro-page-container #timerSection,
 .dark .pomodoro-page-container #rightSidebar,
-.dark .pomodoro-page-container .bg-background-primary {
+.dark .pomodoro-page-container .bg-background-primary,
+.dark .pomodoro-page-container .top-bar-header {
   background-color: #141414 !important;
 }
 
@@ -1549,6 +1551,15 @@ input[type="radio"][name="addSiteMethod"]:focus + div {
 [data-theme="dark"] .bg-background-primary button.hover\:bg-background-container:hover,
 .dark .bg-background-primary button.hover\:bg-background-container:hover {
   background-color: rgba(42, 42, 42, 0.8) !important;
+}
+
+/* Dark mode header consistency */
+[data-theme="dark"] .text-text-primary {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .border-border {
+  border-color: var(--border-color);
 }
 
 
