@@ -3,6 +3,7 @@ import { Icon } from './Icon';
 import CustomCheckbox from './CustomCheckbox';
 import FaviconImage from './FaviconImage';
 import { BlockedSite } from '../../types/deepFocus';
+import { useDeepFocusStore } from '../../store/deepFocusStore';
 
 interface AddSiteModalProps {
   isOpen: boolean;
@@ -18,20 +19,24 @@ interface AvailableSite {
   timeSpent: string;
 }
 
-const availableSites: AvailableSite[] = [
-  { name: 'YouTube', url: 'youtube.com', icon: 'ri-youtube-fill', backgroundColor: '#FF0000', timeSpent: '7h 29m' },
-  { name: 'Facebook', url: 'facebook.com', icon: 'ri-facebook-fill', backgroundColor: '#1877F2', timeSpent: '4h 15m' },
-  { name: 'Instagram', url: 'instagram.com', icon: 'ri-instagram-fill', backgroundColor: '#E4405F', timeSpent: '3h 42m' },
-  { name: 'LinkedIn', url: 'linkedin.com', icon: 'ri-linkedin-fill', backgroundColor: '#0A66C2', timeSpent: '2h 18m' },
-  { name: 'Twitter', url: 'twitter.com', icon: 'ri-twitter-fill', backgroundColor: '#1DA1F2', timeSpent: '1h 45m' }
-];
+
 
 const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites }) => {
+  const { siteUsage } = useDeepFocusStore();
   const [method, setMethod] = useState<'visited' | 'manual'>('visited');
   const [selectedSites, setSelectedSites] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [manualUrl, setManualUrl] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
+  
+  // Use real site usage data instead of hardcoded data
+  const availableSites = siteUsage.slice(0, 10).map(site => ({
+    name: site.name,
+    url: site.url,
+    icon: site.icon,
+    backgroundColor: site.backgroundColor,
+    timeSpent: `${Math.floor(site.timeSpent / 60)}h ${site.timeSpent % 60}m`
+  }));
 
   // Handle modal animations
   useEffect(() => {
@@ -225,8 +230,8 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
                     <div className="transform transition-transform duration-200 hover:scale-105">
                       <FaviconImage 
                         domain={site.url} 
-                        size={40}
-                        className="shadow-sm border border-border"
+                        size={32}
+                        className="shadow-sm"
                         fallbackIcon={site.icon}
                       />
                     </div>

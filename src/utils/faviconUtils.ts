@@ -273,6 +273,45 @@ export class FaviconService {
       domains: Array.from(this.cache.keys())
     };
   }
+
+  /**
+   * Get appropriate fallback icon for a domain
+   */
+  static getDomainIcon(domain: string): string {
+    const iconMap: Record<string, string> = {
+      'instagram.com': 'ri-instagram-line',
+      'facebook.com': 'ri-facebook-line', 
+      'youtube.com': 'ri-youtube-line',
+      'twitter.com': 'ri-twitter-line',
+      'linkedin.com': 'ri-linkedin-line',
+      'github.com': 'ri-github-line',
+      'google.com': 'ri-google-line',
+      'tiktok.com': 'ri-music-line',
+      'reddit.com': 'ri-reddit-line',
+      'pinterest.com': 'ri-pinterest-line',
+      'snapchat.com': 'ri-snapchat-line',
+      'whatsapp.com': 'ri-whatsapp-line',
+      'telegram.org': 'ri-telegram-line',
+      'discord.com': 'ri-discord-line',
+      'zoom.us': 'ri-video-line',
+      'netflix.com': 'ri-netflix-line',
+      'amazon.com': 'ri-amazon-line'
+    };
+
+    // Check exact match first
+    if (iconMap[domain]) {
+      return iconMap[domain];
+    }
+
+    // Check partial matches
+    for (const [site, icon] of Object.entries(iconMap)) {
+      if (domain.includes(site.split('.')[0])) {
+        return icon;
+      }
+    }
+
+    return 'ri-global-line';
+  }
 }
 
 /**

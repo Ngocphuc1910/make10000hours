@@ -66,6 +66,7 @@ const DeepFocusPage: React.FC = () => {
     toggleBlockedSite, 
     removeBlockedSite, 
     addBlockedSite,
+    loadBlockedSites,
     loadExtensionData,
     blockSiteInExtension,
     unblockSiteInExtension,
@@ -155,8 +156,7 @@ const DeepFocusPage: React.FC = () => {
   // Add state to track extension status
   const [extensionStatus, setExtensionStatus] = useState<'unknown' | 'online' | 'offline'>('unknown');
   
-  // State to control debug controls visibility
-  const [showDebugControls, setShowDebugControls] = useState(false);
+
 
   // Debug: Track selectedRange changes
   useEffect(() => {
@@ -170,19 +170,7 @@ const DeepFocusPage: React.FC = () => {
     });
   }, [selectedRange]);
 
-  // Keyboard shortcut to toggle debug controls (Ctrl/Cmd + Shift + D)
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'D') {
-        event.preventDefault();
-        setShowDebugControls(prev => !prev);
-        console.log('🔧 Debug controls toggled:', !showDebugControls);
-      }
-    };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showDebugControls]);
 
   // Load Firebase data when date range changes
   useEffect(() => {
@@ -230,6 +218,15 @@ const DeepFocusPage: React.FC = () => {
 
     loadFirebaseData();
   }, [user?.uid, selectedRange, siteUsageService]);
+
+  // Load blocked sites when user is available
+  useEffect(() => {
+    if (user?.uid) {
+      loadBlockedSites(user.uid);
+    }
+  }, [user?.uid, loadBlockedSites]);
+
+
 
   // Critical Debug: Check store data
   console.log('🔍 CRITICAL DEBUG - Store Data Check:', {
@@ -1082,7 +1079,7 @@ const DeepFocusPage: React.FC = () => {
     const site = blockedSites.find(s => s.id === id);
     if (!site) return;
 
-    toggleBlockedSite(id);
+    await toggleBlockedSite(id);
     
     // Sync with extension
     try {
@@ -1100,7 +1097,7 @@ const DeepFocusPage: React.FC = () => {
     const site = blockedSites.find(s => s.id === id);
     if (!site) return;
 
-    removeBlockedSite(id);
+    await removeBlockedSite(id);
     
     // Unblock in extension
     try {
@@ -1111,8 +1108,8 @@ const DeepFocusPage: React.FC = () => {
   };
 
   const handleAddBlockedSites = async (sites: Array<Omit<import('../../types/deepFocus').BlockedSite, 'id'>>) => {
-    sites.forEach(async (site) => {
-      addBlockedSite(site);
+    for (const site of sites) {
+      await addBlockedSite(site);
       
       // Block in extension
       try {
@@ -1120,7 +1117,7 @@ const DeepFocusPage: React.FC = () => {
       } catch (error) {
         console.error('Failed to block site in extension:', error);
       }
-    });
+    }
   };
 
   // Format date for display
@@ -1905,80 +1902,32 @@ const DeepFocusPage: React.FC = () => {
                           </>
                         )}
                         
-                        {/* Debug Section - Toggle for visibility */}
-                        {showDebugControls && (
-                          <div className="bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-300">
-                            <div className="flex items-center justify-between mb-3">
-                              <h3 className="text-sm font-semibold text-gray-700">Debug Controls</h3>
-                              <button
-                                onClick={() => setShowDebugControls(false)}
-                                className="text-gray-400 hover:text-gray-600 transition-colors"
-                                title="Hide Debug Controls"
-                              >
-                                <Icon name="close-line" className="w-4 h-4" />
-                              </button>
-                            </div>
-                            
-                            {/* Extension Status */}
-                            <div className="mb-3 p-2 bg-white rounded border">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium">Extension Status:</span>
-                                <span className={`px-2 py-1 text-xs rounded font-medium ${
-                                  extensionStatus === 'online' ? 'bg-green-100 text-green-800' :
-                                  extensionStatus === 'offline' ? 'bg-red-100 text-red-800' :
-                                  'bg-yellow-100 text-yellow-800'
-                                }`}>
-                                  {extensionStatus.toUpperCase()}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex gap-2 flex-wrap">
-                              <button
-                                onClick={() => (window as any).debugOverrideSession?.testUserSync()}
-                                className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                                title="Test User Sync"
-                              >
-                                Test User Sync
-                              </button>
-                              <button
-                                onClick={() => (window as any).debugOverrideSession?.testExtensionMessage()}
-                                className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
-                                title="Test Extension Message"
-                              >
-                                Test Extension Msg
-                              </button>
-                              <button
-                                onClick={() => (window as any).debugOverrideSession?.testCreateSession()}
-                                className="px-3 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
-                                title="Test Direct Create"
-                              >
-                                Test Direct Create
-                              </button>
-                              <button
-                                onClick={() => {
-                                  console.log('🧪 Testing production override session...');
-                                  const testMessage = {
-                                    type: 'RECORD_OVERRIDE_SESSION',
-                                    payload: {
-                                      domain: 'production-test.com',
-                                      duration: 5,
-                                      userId: user?.uid,
-                                      timestamp: Date.now(),
-                                      source: 'test'
-                                    },
-                                    source: 'make10000hours-extension'
-                                  };
-                                  window.postMessage(testMessage, '*');
-                                  console.log('📤 Production test message sent:', testMessage);
-                                }}
-                                className="px-3 py-1 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200"
-                                title="Test Production Override"
-                              >
-                                Test Prod Override
-                              </button>
-                            </div>
-                          </div>
-                        )}
+                        {/* Fix Icons Button - Temporary for migration */}
+                        <button
+                          onClick={async () => {
+                            try {
+                              console.log('🔧 Fixing blocked sites icons...');
+                              if (user?.uid) {
+                                const { fixBlockedSitesIcons } = await import('../../../scripts/fixBlockedSitesIcons');
+                                const fixedCount = await fixBlockedSitesIcons(user.uid);
+                                console.log('✅ Icon fix completed:', fixedCount, 'sites fixed');
+                                
+                                // Reload blocked sites to update UI
+                                await loadBlockedSites(user.uid);
+                                
+                                // Show user feedback
+                                alert(`Fixed ${fixedCount} blocked sites with proper icons!`);
+                              }
+                            } catch (error) {
+                              console.error('❌ Failed to fix icons:', error);
+                              alert('Failed to fix icons. Check console for details.');
+                            }
+                          }}
+                          className="p-1 text-orange-500 hover:text-orange-600 transition-colors duration-200"
+                          title="Fix Missing Icons (one-time migration)"
+                        >
+                          <Icon name="tools-line" className="w-4 h-4" />
+                        </button>
                       </>
                     )}
                   </div>
