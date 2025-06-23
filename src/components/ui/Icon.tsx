@@ -49,7 +49,18 @@ import {
   Link,
   Bug,
   AlertTriangle,
-  TestTube
+  TestTube,
+  Instagram,
+  Linkedin,
+  Twitter,
+  Youtube,
+  MessageCircle,
+  Music,
+  ShoppingCart,
+  Video,
+  Mail,
+  Zap,
+  Wrench
 } from 'lucide-react';
 
 interface IconProps {
@@ -103,11 +114,32 @@ const iconMap = {
   // Missing icons that were causing errors
   'error-warning-line': AlertTriangle,
   'test-tube-line': TestTube,
-  // Remix icon compatibility
+  'tools-line': Wrench,
+  // Remix icon compatibility - Basic icons
   'ri-global-line': Globe,
   'ri-github-line': Github,
   'ri-facebook-line': Facebook,
   'ri-file-list-line': FileText,
+  // Social Media Icons
+  'ri-instagram-line': Instagram,
+  'ri-linkedin-line': Linkedin,
+  'ri-twitter-line': Twitter,
+  'ri-youtube-line': Youtube,
+  'ri-linkedin-box-line': Linkedin, // Alternative LinkedIn icon
+  // Communication & Media
+  'ri-discord-line': MessageCircle,
+  'ri-telegram-line': MessageCircle,
+  'ri-whatsapp-line': MessageCircle,
+  'ri-snapchat-line': MessageCircle,
+  'ri-music-line': Music,
+  'ri-video-line': Video,
+  'ri-mail-line': Mail,
+  // Commerce & Others
+  'ri-amazon-line': ShoppingCart,
+  'ri-netflix-line': Video,
+  'ri-reddit-line': MessageCircle,
+  'ri-pinterest-line': Globe,
+  'ri-google-line': Globe,
   // Debug icons
   'flask-line': Beaker,
   'links-line': Link,

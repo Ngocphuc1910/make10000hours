@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Icon } from './Icon';
 import CustomSwitch from './CustomSwitch';
 import FaviconImage from './FaviconImage';
+import { FaviconService } from '../../utils/faviconUtils';
 import { BlockedSite } from '../../types/deepFocus';
 
 interface AnimatedSiteCardProps {
@@ -12,6 +13,9 @@ interface AnimatedSiteCardProps {
 
 const AnimatedSiteCard: React.FC<AnimatedSiteCardProps> = ({ site, onToggle, onRemove }) => {
   const [isRemoving, setIsRemoving] = useState(false);
+
+  // Use exact same fallback logic as working SiteUsageCard
+  const fallbackIcon = site.icon;
 
   const handleRemove = () => {
     setIsRemoving(true);
@@ -31,9 +35,9 @@ const AnimatedSiteCard: React.FC<AnimatedSiteCardProps> = ({ site, onToggle, onR
         <div className="mr-4 transition-all duration-200">
           <FaviconImage 
             domain={site.url} 
-            size={40}
-            className="shadow-sm border border-border"
-            fallbackIcon={site.icon}
+            size={32}
+            className="shadow-sm"
+            fallbackIcon={fallbackIcon}
           />
         </div>
         <span className="font-medium text-text-primary">{site.name}</span>

@@ -7,6 +7,7 @@ import { deepFocusSessionService } from '../api/deepFocusSessionService';
 import { siteUsageService } from '../api/siteUsageService';
 import HybridDataService from '../api/hybridDataService';
 import { overrideSessionService, OverrideSession } from '../api/overrideSessionService';
+import { blockedSitesService } from '../api/blockedSitesService';
 
 // Mock data with exact colors from AI design
 const mockSiteUsage: SiteUsage[] = [
@@ -129,9 +130,10 @@ interface DeepFocusStore extends DeepFocusData {
   totalSessionsCount: number;
   totalFocusTime: number; // in minutes
   unsubscribe: (() => void) | null;
-  toggleBlockedSite: (id: string) => void;
-  removeBlockedSite: (id: string) => void;
-  addBlockedSite: (site: Omit<BlockedSite, 'id'>) => void;
+  toggleBlockedSite: (id: string) => Promise<void>;
+  removeBlockedSite: (id: string) => Promise<void>;
+  addBlockedSite: (site: Omit<BlockedSite, 'id'>) => Promise<void>;
+  loadBlockedSites: (userId: string) => Promise<void>;
   loadExtensionData: () => Promise<void>;
   loadAllTimeDailyUsage: () => Promise<void>;
   blockSiteInExtension: (domain: string) => Promise<void>;
@@ -199,7 +201,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
   },
   dailyUsage: [], // Removed mock data to test real data loading
   siteUsage: mockSiteUsage,
-  blockedSites: mockBlockedSites,
+  blockedSites: [], // Will be loaded from Firebase
   isExtensionConnected: false,
   isDeepFocusActive: false,
   currentSessionId: null,
@@ -321,25 +323,48 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
     }
   },
 
-  toggleBlockedSite: (id) =>
-    set((state) => ({
-      blockedSites: state.blockedSites.map((site) =>
-        site.id === id ? { ...site, isActive: !site.isActive } : site
-      )
-    })),
+  toggleBlockedSite: async (id) => {
+    const { useUserStore } = await import('./userStore');
+    const user = useUserStore.getState().user;
+    if (user?.uid) {
+      await blockedSitesService.toggleBlockedSite(user.uid, id);
+      await get().loadBlockedSites(user.uid);
+    }
+  },
 
-  removeBlockedSite: (id) =>
-    set((state) => ({
-      blockedSites: state.blockedSites.filter((site) => site.id !== id)
-    })),
+  removeBlockedSite: async (id) => {
+    const { useUserStore } = await import('./userStore');
+    const user = useUserStore.getState().user;
+    if (user?.uid) {
+      await blockedSitesService.removeBlockedSite(user.uid, id);
+      await get().loadBlockedSites(user.uid);
+    }
+  },
 
-  addBlockedSite: (site) =>
-    set((state) => ({
-      blockedSites: [
-        ...state.blockedSites,
-        { ...site, id: Date.now().toString() + Math.random().toString(36).substr(2, 9) }
-      ]
-    })),
+  addBlockedSite: async (site) => {
+    const { useUserStore } = await import('./userStore');
+    const user = useUserStore.getState().user;
+    
+    if (user?.uid) {
+      try {
+        await blockedSitesService.addBlockedSite(user.uid, site);
+        await get().loadBlockedSites(user.uid);
+      } catch (error) {
+        console.error('Error in addBlockedSite:', error);
+      }
+    } else {
+      console.error('No user logged in, cannot add blocked site');
+    }
+  },
+
+  loadBlockedSites: async (userId: string) => {
+    try {
+      const sites = await blockedSitesService.getUserBlockedSites(userId);
+      set({ blockedSites: sites });
+    } catch (error) {
+      console.error('Failed to load blocked sites:', error);
+    }
+  },
 
   loadFocusStatus: async () => {
     try {
