@@ -9,9 +9,8 @@ import DayView from './DayView';
 import MonthView from './MonthView';
 import Icon from '../../components/ui/Icon';
 import { Tooltip } from '../../components/ui/Tooltip';
-import { useDeepFocusStore } from '../../store/deepFocusStore';
-import { useEnhancedDeepFocusSync } from '../../hooks/useEnhancedDeepFocusSync';
 import { useExtensionSync } from '../../hooks/useExtensionSync';
+import { DeepFocusSwitch } from '../../components/ui/DeepFocusSwitch';
 import { useUIStore } from '../../store/uiStore';
 // EventDialog import removed - using TaskForm for all calendar interactions
 
@@ -81,12 +80,6 @@ export const Calendar: React.FC = () => {
   const location = useLocation();
   const { isLeftSidebarOpen, toggleLeftSidebar } = useUIStore();
 
-  const {
-    isDeepFocusActive,
-    enableDeepFocus,
-    disableDeepFocus
-  } = useDeepFocusStore();
-  useEnhancedDeepFocusSync(); // Enhanced sync with activity detection and extension sync
   useExtensionSync(); // Bidirectional extension sync
 
   // Handle URL query parameters for view selection
@@ -560,45 +553,12 @@ export const Calendar: React.FC = () => {
                 </div>
               </button>
             </div>
-            <h2 className={`text-lg font-semibold transition-all duration-500 ${isDeepFocusActive
-                ? 'bg-gradient-to-r from-[rgb(187,95,90)] via-[rgb(236,72,153)] to-[rgb(251,146,60)] bg-clip-text text-transparent font-bold'
-                : 'text-text-primary'
-              }`}>
-              {format(currentDate, 'MMMM yyyy')}
-            </h2>
-
-            {/* Deep Focus Switch */}
-            <div className="ml-4 flex items-center">
-              <label className="relative inline-flex items-center cursor-pointer group">
-                <input
-                  type="checkbox"
-                  className="sr-only peer"
-                  checked={isDeepFocusActive}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      enableDeepFocus();
-                    } else {
-                      disableDeepFocus();
-                    }
-                  }}
-                />
-                <div className={`w-[120px] h-[33px] flex items-center rounded-full transition-all duration-500 relative ${isDeepFocusActive
-                    ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]'
-                    : 'bg-gray-100/80 border-0 justify-end pr-[10.5px]'
-                  }`}>
-                  <span className={`text-sm font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${isDeepFocusActive
-                      ? 'text-white font-semibold [text-shadow:0_0_12px_rgba(255,255,255,0.5)]'
-                      : 'text-gray-600 font-semibold'
-                    }`}>
-                    {isDeepFocusActive ? 'Deep Focus' : 'Focus Off'}
-                  </span>
-                </div>
-                <div className={`absolute w-6 h-6 bg-white rounded-full shadow-lg transition-all duration-500 ${isDeepFocusActive
-                    ? 'left-[calc(100%-27px)] shadow-[0_6px_20px_rgba(187,95,90,0.2)]'
-                    : 'left-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.1)]'
-                  }`}></div>
-              </label>
-            </div>
+            <DeepFocusSwitch 
+              size="medium" 
+              showLabel={false} 
+              showPageTitle={true} 
+              pageTitle={format(currentDate, 'MMMM yyyy')}
+            />
           </div>
 
           {/* Right Section - View Controls and Navigation Icons */}

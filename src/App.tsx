@@ -19,6 +19,7 @@ import { useTaskStore } from './store/taskStore';
 import { useUIStore } from './store/uiStore';
 import { useThemeStore } from './store/themeStore';
 import { useUserSync } from './hooks/useUserSync';
+import { useGlobalDeepFocusSync } from './hooks/useGlobalDeepFocusSync';
 import SettingsPage from './components/pages/SettingsPage';
 import { formatTime } from './utils/timeUtils';
 import { trackPageView, setAnalyticsUserId } from './utils/analytics';
@@ -244,6 +245,9 @@ const App: React.FC = () => {
 
   // Global user sync with extension
   useUserSync();
+
+  // Global Deep Focus sync for consistent state across all pages
+  useGlobalDeepFocusSync();
 
   // Global timer interval - runs regardless of current page
   useEffect(() => {
