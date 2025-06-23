@@ -189,7 +189,7 @@ code {
   --bg-container: #2a2a2a;
   --text-primary: #ffffff;
   --text-secondary: #888888;
-  --border-color: #2a2a2a;
+  --border-color: #404040; /* Improved visibility from #2a2a2a */
   
   /* Task card colors - Dark mode - Subtle greys */
   --task-todo-bg: #1e1e1e;
@@ -1397,6 +1397,104 @@ code {
 
 .dark label div.bg-gray-100\/80 span.text-gray-600 {
   color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* AddSiteModal - Clean and Consistent Hover States */
+/* Base hover state for modal items */
+.add-site-modal-item {
+  transition: background-color 0.2s ease;
+}
+
+.add-site-modal-item:hover {
+  background-color: var(--background-container) !important;
+}
+
+/* Dark mode support */
+[data-theme="dark"] .add-site-modal-item:hover,
+.dark .add-site-modal-item:hover {
+  background-color: rgba(42, 42, 42, 0.8) !important;
+}
+
+/* Radio button styling - consistent with theme */
+input[type="radio"][name="addSiteMethod"] + div {
+  transition: border-color 0.2s ease;
+  border-color: var(--border-color);
+}
+
+input[type="radio"][name="addSiteMethod"] + div:hover {
+  border-color: rgba(187, 95, 90, 0.6);
+}
+
+/* Radio button selected state - same color in all themes */
+input[type="radio"][name="addSiteMethod"]:checked + div {
+  border-color: #BB5F5A !important;
+}
+
+input[type="radio"][name="addSiteMethod"]:checked + div .w-2\.5 {
+  background-color: #BB5F5A !important;
+}
+
+/* Dark mode radio buttons */
+[data-theme="dark"] input[type="radio"][name="addSiteMethod"] + div,
+.dark input[type="radio"][name="addSiteMethod"] + div {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] input[type="radio"][name="addSiteMethod"] + div:hover,
+.dark input[type="radio"][name="addSiteMethod"] + div:hover {
+  border-color: rgba(187, 95, 90, 0.7);
+}
+
+/* Ensure selected state is consistent across themes */
+[data-theme="dark"] input[type="radio"][name="addSiteMethod"]:checked + div,
+.dark input[type="radio"][name="addSiteMethod"]:checked + div {
+  border-color: #BB5F5A !important;
+}
+
+[data-theme="dark"] input[type="radio"][name="addSiteMethod"]:checked + div .w-2\.5,
+.dark input[type="radio"][name="addSiteMethod"]:checked + div .w-2\.5 {
+  background-color: #BB5F5A !important;
+}
+
+/* Focus states for accessibility */
+input[type="radio"][name="addSiteMethod"]:focus + div {
+  box-shadow: 0 0 0 2px rgba(187, 95, 90, 0.2);
+  outline: none;
+}
+
+/* Checkbox consistency - maintain default behavior but ensure proper contrast */
+.add-site-modal-item .custom-checkbox {
+  background-color: transparent;
+  transition: all 0.2s ease;
+}
+
+/* Preserve checkbox states during item hover */
+.add-site-modal-item:hover .custom-checkbox:checked {
+  background-color: #BB5F5A !important;
+  border-color: #BB5F5A !important;
+}
+
+.add-site-modal-item:hover .custom-checkbox:not(:checked) {
+  background-color: transparent;
+  border-color: var(--border-color);
+}
+
+/* Dark mode checkbox adjustments */
+[data-theme="dark"] .add-site-modal-item:hover .custom-checkbox:not(:checked),
+.dark .add-site-modal-item:hover .custom-checkbox:not(:checked) {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Button hover consistency - prevent conflicting styles */
+.add-site-modal-item button,
+.add-site-modal-item input {
+  background-color: transparent !important;
+}
+
+/* Ensure modal buttons use consistent styling */
+[data-theme="dark"] .bg-background-primary button.hover\:bg-background-container:hover,
+.dark .bg-background-primary button.hover\:bg-background-container:hover {
+  background-color: rgba(42, 42, 42, 0.8) !important;
 }
 
 

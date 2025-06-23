@@ -1,33 +1,48 @@
 import { useEffect } from 'react';
 import { useDeepFocusStore } from '../store/deepFocusStore';
+import { useUserStore } from '../store/userStore';
 
-export const useDeepFocusSync = () => {
-  const { syncFocusStatus, loadFocusStatus } = useDeepFocusStore();
+/**
+ * Global Deep Focus synchronization hook
+ * Replaces individual component-level focus state management
+ * Provides centralized extension message handling for all pages
+ */
+export const useGlobalDeepFocusSync = () => {
+  const { 
+    syncFocusStatus, 
+    loadFocusStatus,
+    isDeepFocusActive,
+    enableDeepFocus,
+    disableDeepFocus
+  } = useDeepFocusStore();
+  
+  const { isInitialized: isUserInitialized } = useUserStore();
 
   useEffect(() => {
-    // Don't automatically load focus status on mount to avoid overriding persisted state
-    // The extension sync hook handles initial loading and syncing
-    
-    // Listen for focus changes from other components
+    // Wait for user authentication to initialize
+    if (!isUserInitialized) {
+      console.log('🔐 Global sync waiting for user authentication...');
+      return;
+    }
+
+    // Listen for focus changes from other components (internal state sync)
     const handleFocusChange = (event: CustomEvent) => {
       const { isActive } = event.detail;
+      console.log('🔄 Internal focus change event:', isActive);
       syncFocusStatus(isActive);
     };
 
     // Listen for real-time focus state changes from extension
     const handleExtensionFocusChange = (event: MessageEvent) => {
-      // Check each validation condition
       if (event.data?.type === 'EXTENSION_FOCUS_STATE_CHANGED') {
         const hasExtensionId = !!event.data?.extensionId;
         const hasPayload = !!event.data?.payload;
-        const isActiveType = typeof event.data.payload?.isActive;
         const isActiveBoolean = typeof event.data.payload?.isActive === 'boolean';
         
-        console.log('🔍 Validation check:', {
+        console.log('🔍 Extension message validation:', {
           type: event.data.type,
           hasExtensionId,
           hasPayload, 
-          isActiveType,
           isActiveBoolean,
           allValid: hasExtensionId && hasPayload && isActiveBoolean
         });
@@ -40,17 +55,14 @@ export const useDeepFocusSync = () => {
       }
     };
 
-    // Listen for page visibility changes - only sync if coming from hidden state
-    // This prevents unnecessary syncing that might override persisted state
+    // Handle page visibility changes - sync when coming back from hidden state
     let wasHidden = document.hidden;
     const handleVisibilityChange = () => {
       if (!document.hidden && wasHidden) {
-        // Page was hidden and is now visible - only load if extension might have changed
-        // Don't override persisted state unnecessarily
+        console.log('📖 Page became visible - checking for extension state updates');
         setTimeout(() => {
-          // Only load if we detect potential extension state drift
           loadFocusStatus();
-        }, 500); // Small delay to avoid conflicts with other sync mechanisms
+        }, 500);
       }
       wasHidden = document.hidden;
     };
@@ -60,11 +72,27 @@ export const useDeepFocusSync = () => {
     window.addEventListener('message', handleExtensionFocusChange);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    console.log('✅ Global Deep Focus sync initialized');
+
     // Cleanup
     return () => {
       window.removeEventListener('deepFocusChanged', handleFocusChange as EventListener);
       window.removeEventListener('message', handleExtensionFocusChange);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [syncFocusStatus, loadFocusStatus]);
+  }, [syncFocusStatus, loadFocusStatus, isUserInitialized]);
+
+  // Return deep focus state and control functions for components to use
+  return {
+    isDeepFocusActive,
+    enableDeepFocus,
+    disableDeepFocus,
+    toggleDeepFocus: async () => {
+      if (isDeepFocusActive) {
+        await disableDeepFocus();
+      } else {
+        await enableDeepFocus();
+      }
+    }
+  };
 }; 

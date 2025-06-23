@@ -595,20 +595,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
       
     case 'FOCUS_STATE_CHANGED':
-      // Update local state and forward to web app if present
+      // Update local state
       activityDetector.isActive = message.payload.isActive;
-      activityDetector.isPageVisible = message.payload.isVisible;
-      activityDetector.isWindowFocused = message.payload.isFocused;
       if (message.payload.isActive) {
         activityDetector.showFocusIndicator();
       } else {
         activityDetector.hideFocusIndicator();
       }
       
-      // Forward to web app
+      // Forward to web app with extension ID as source
       window.postMessage({
         type: 'EXTENSION_FOCUS_STATE_CHANGED',
-        payload: { isActive: message.payload.isActive, isVisible: message.payload.isVisible, isFocused: message.payload.isFocused }
+        payload: {
+          isActive: message.payload.isActive,
+          isVisible: message.payload.isActive,
+          isFocused: message.payload.isActive
+        },
+        source: chrome.runtime.id,
+        extensionId: chrome.runtime.id
       }, '*');
       
       sendResponse({ success: true });

@@ -15,6 +15,8 @@ const SiteUsageCard: React.FC<SiteUsageCardProps> = ({ site, formatTime, color, 
   const progressBarColor = color || site.backgroundColor;
   // Use the provided percentage or fallback to site's percentage
   const displayPercentage = percentage !== undefined ? percentage : site.percentage;
+  
+
 
   return (
     <div>
@@ -24,7 +26,7 @@ const SiteUsageCard: React.FC<SiteUsageCardProps> = ({ site, formatTime, color, 
             <FaviconImage 
               domain={site.url} 
               size={32}
-              className="shadow-sm border border-border"
+              className="shadow-sm"
               fallbackIcon={site.icon}
             />
           </div>
