@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
 import { DailyUsage } from '../../types/deepFocus';
+import { formatMinutesToHoursMinutes } from '../../utils/timeFormat';
 
 interface UsageLineChartProps {
   data: DailyUsage[];
@@ -13,11 +14,46 @@ const UsageLineChart: React.FC<UsageLineChartProps> = ({ data }) => {
   useEffect(() => {
     if (!chartRef.current) return;
 
+    // Debug logging for chart data
+    console.log('📊 UsageLineChart received data:', {
+      dataLength: data?.length || 0,
+      data: data?.slice(0, 5), // Log first 5 entries for better debugging
+      totalOnScreenTime: data?.reduce((sum, item) => sum + item.onScreenTime, 0) || 0,
+      isEmpty: !data || data.length === 0,
+      sampleData: data?.[0] // Show structure of first item
+    });
+
+    // Properly dispose existing instance before creating new one
+    if (chartInstance.current) {
+      chartInstance.current.dispose();
+      chartInstance.current = null;
+    }
+
     // Initialize chart
     chartInstance.current = echarts.init(chartRef.current);
 
     // Detect dark mode by checking CSS variable
     const isDarkMode = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim() === '#141414';
+
+    // Handle empty data case
+    if (!data || data.length === 0) {
+      console.warn('📊 UsageLineChart: No data available, showing empty chart');
+      const emptyOption = {
+        animation: false,
+        graphic: {
+          type: 'text',
+          left: 'center',
+          top: 'middle',
+          style: {
+            text: 'No usage data available',
+            fontSize: 16,
+            fill: isDarkMode ? '#a1a1aa' : '#666'
+          }
+        }
+      };
+      chartInstance.current.setOption(emptyOption);
+      return;
+    }
 
     // Prepare data for ECharts format
     const dates = data.map(item => item.date);
@@ -33,8 +69,28 @@ const UsageLineChart: React.FC<UsageLineChartProps> = ({ data }) => {
         borderColor: isDarkMode ? '#404040' : '#e2e8f0',
         borderWidth: 1,
         borderRadius: 8,
+        extraCssText: 'min-width: 200px; white-space: nowrap;',
         textStyle: {
           color: isDarkMode ? '#ffffff' : '#1f2937'
+        },
+        formatter: function (params: any) {
+          if (!params || params.length === 0) return '';
+          
+          let tooltip = `<div style="font-weight: 600; margin-bottom: 4px;">${params[0].axisValue}</div>`;
+          
+          params.forEach((param: any) => {
+            const color = param.color;
+            const seriesName = param.seriesName;
+            const dailyValue = formatMinutesToHoursMinutes(param.value || 0);
+            
+            tooltip += `<div style="display: flex; align-items: center; margin: 2px 0;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: ${color}; margin-right: 8px;"></span>
+              <span style="color: ${isDarkMode ? '#a1a1aa' : '#6b7280'};">${seriesName}</span>
+              <span style="margin-left: auto; font-weight: 600; color: ${isDarkMode ? '#ffffff' : '#1f2937'};">${dailyValue}</span>
+            </div>`;
+          });
+          
+          return tooltip;
         }
       },
       legend: {
@@ -84,7 +140,10 @@ const UsageLineChart: React.FC<UsageLineChartProps> = ({ data }) => {
           }
         },
         axisLabel: {
-          color: isDarkMode ? '#a1a1aa' : '#666'
+          color: isDarkMode ? '#a1a1aa' : '#666',
+          formatter: function (value: number) {
+            return formatMinutesToHoursMinutes(value);
+          }
         }
       },
       series: [
@@ -160,6 +219,7 @@ const UsageLineChart: React.FC<UsageLineChartProps> = ({ data }) => {
       window.removeEventListener('resize', handleResize);
       if (chartInstance.current) {
         chartInstance.current.dispose();
+        chartInstance.current = null;
       }
     };
   }, [data]);
