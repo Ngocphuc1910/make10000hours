@@ -420,6 +420,20 @@ const DeepFocusPage: React.FC = () => {
           setExtensionStatus(messageData.payload?.status || 'unknown');
           return;
         }
+
+        // Handle extension focus state changes
+        if (messageData?.type === 'EXTENSION_FOCUS_STATE_CHANGED' && messageData?.extensionId) {
+          console.log('🔄 Extension focus state change received:', messageData.payload?.isActive);
+          if (messageData.payload && typeof messageData.payload.isActive === 'boolean') {
+            // Update the focus state in the store using the correct function
+            if (messageData.payload.isActive) {
+              enableDeepFocus();
+            } else {
+              disableDeepFocus();
+            }
+          }
+          return;
+        }
         
         if (messageData?.type === 'RECORD_OVERRIDE_SESSION' && 
             (messageData?.source?.includes('make10000hours') || 
