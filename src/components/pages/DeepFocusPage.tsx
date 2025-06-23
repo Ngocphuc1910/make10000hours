@@ -151,6 +151,9 @@ const DeepFocusPage: React.FC = () => {
   
   // Add state to track extension status
   const [extensionStatus, setExtensionStatus] = useState<'unknown' | 'online' | 'offline'>('unknown');
+  
+  // State to control debug controls visibility
+  const [showDebugControls, setShowDebugControls] = useState(false);
 
   // Debug: Track selectedRange changes
   useEffect(() => {
@@ -163,6 +166,20 @@ const DeepFocusPage: React.FC = () => {
       todayForReference: new Date().toISOString().split('T')[0]
     });
   }, [selectedRange]);
+
+  // Keyboard shortcut to toggle debug controls (Ctrl/Cmd + Shift + D)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'D') {
+        event.preventDefault();
+        setShowDebugControls(prev => !prev);
+        console.log('🔧 Debug controls toggled:', !showDebugControls);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showDebugControls]);
 
   // Load Firebase data when date range changes
   useEffect(() => {
@@ -1284,10 +1301,10 @@ const DeepFocusPage: React.FC = () => {
   }, [siteUsage, timeMetrics, selectedRange.rangeType]);
 
   return (
-    <div className="deep-focus-page-container flex h-screen overflow-hidden bg-background-primary dark:bg-[#141414]">
+    <div className="deep-focus-page-container flex h-screen bg-background-primary dark:bg-[#141414]">
       <Sidebar />
       
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header - Productivity Insights Style */}
         <div className={`h-16 border-b border-border flex items-center justify-between px-4 bg-background-secondary transition-all duration-500 relative`}>
           <div className="flex items-center">
@@ -1871,10 +1888,19 @@ const DeepFocusPage: React.FC = () => {
                           </>
                         )}
                         
-                        {/* Debug Section - Enabled for testing */}
-                        {true && (
+                        {/* Debug Section - Toggle for visibility */}
+                        {showDebugControls && (
                           <div className="bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-300">
-                            <h3 className="text-sm font-semibold text-gray-700 mb-3">Debug Controls</h3>
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="text-sm font-semibold text-gray-700">Debug Controls</h3>
+                              <button
+                                onClick={() => setShowDebugControls(false)}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                                title="Hide Debug Controls"
+                              >
+                                <Icon name="close-line" className="w-4 h-4" />
+                              </button>
+                            </div>
                             
                             {/* Extension Status */}
                             <div className="mb-3 p-2 bg-white rounded border">
