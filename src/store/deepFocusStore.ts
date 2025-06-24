@@ -750,7 +750,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
             }
           }
 
-          // Clear timers
+          // Clear timers immediately to prevent memory leaks
           if (state.timer) {
             clearInterval(state.timer);
           }
@@ -779,9 +779,9 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           if (ExtensionDataService.isExtensionInstalled()) {
             console.log('📡 Attempting to disable focus mode in extension...');
             try {
-              // Add timeout to prevent hanging
+              // Add shorter timeout for tab closure scenarios
               const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Extension communication timeout')), 3000)
+                setTimeout(() => reject(new Error('Extension communication timeout')), 1000)
               );
               
               await Promise.race([
@@ -790,16 +790,15 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
               ]);
               console.log('✅ Extension focus mode disabled');
 
-              // Try to unblock sites in extension
+              // Try to unblock sites in extension with shorter timeout
               for (const site of updatedSites) {
                 try {
                   await Promise.race([
                     state.unblockSiteInExtension(site.url),
                     new Promise((_, reject) => 
-                      setTimeout(() => reject(new Error('Unblock site timeout')), 1000)
+                      setTimeout(() => reject(new Error('Unblock site timeout')), 500)
                     )
                   ]);
-                  // Site unblocked in extension (logging removed to reduce console noise)
                 } catch (error) {
                   console.warn('⚠️ Failed to unblock site in extension (continuing anyway):', site.url, error);
                 }
@@ -807,19 +806,12 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
             } catch (error) {
               console.warn('⚠️ Extension communication failed (Deep Focus still disabled locally):', error);
             }
-          } else {
-            console.log('⚠️ Extension not installed, Deep Focus disabled in web app only');
           }
 
           // Notify all subscribers that focus mode is now inactive
           window.dispatchEvent(new CustomEvent('deepFocusChanged', { 
             detail: { isActive: false } 
           }));
-
-          // Try to sync with extension (but don't wait for it)
-          get().syncWithExtension(false).catch(error => {
-            console.warn('⚠️ Extension sync failed (continuing anyway):', error);
-          });
 
           console.log('✅ Deep Focus disabled successfully - all sites are now unblocked');
         } catch (error) {
@@ -1383,11 +1375,35 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
     }),
     {
       name: 'deep-focus-storage',
+      // Only persist necessary data, exclude active state
       partialize: (state) => ({
-        isDeepFocusActive: state.isDeepFocusActive,
-        blockedSites: state.blockedSites,
-        autoSessionManagement: state.autoSessionManagement
-      })
+        ...state,
+        isDeepFocusActive: false, // Always reset to false when persisting
+        activeSessionId: null,
+        activeSessionStartTime: null,
+        activeSessionDuration: 0,
+        activeSessionElapsedSeconds: 0,
+        timer: null,
+        secondTimer: null,
+        isSessionPaused: false,
+        pausedAt: null,
+        totalPausedTime: 0
+      }),
+      // Ensure deep focus is disabled when store is rehydrated
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.isDeepFocusActive = false;
+          state.activeSessionId = null;
+          state.activeSessionStartTime = null;
+          state.activeSessionDuration = 0;
+          state.activeSessionElapsedSeconds = 0;
+          state.timer = null;
+          state.secondTimer = null;
+          state.isSessionPaused = false;
+          state.pausedAt = null;
+          state.totalPausedTime = 0;
+        }
+      }
     }
   )
 ); 
