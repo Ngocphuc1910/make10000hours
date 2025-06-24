@@ -191,6 +191,8 @@ interface DeepFocusStore extends DeepFocusData {
   // new flag
   hasRecoveredSession: boolean;
   recoveryInProgress: boolean;
+  isReloading: boolean;
+  setReloading: (isReloading: boolean) => void;
 }
 
 export const useDeepFocusStore = create<DeepFocusStore>()(
@@ -228,6 +230,9 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       totalPausedTime: 0,
       autoSessionManagement: true,
       overrideSessions: [],
+      isReloading: false,
+
+      setReloading: (isReloading: boolean) => set({ isReloading }),
 
       loadExtensionData: async () => {
         try {
@@ -1375,35 +1380,20 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
     }),
     {
       name: 'deep-focus-storage',
-      // Only persist necessary data, exclude active state
       partialize: (state) => ({
         ...state,
-        isDeepFocusActive: false, // Always reset to false when persisting
-        activeSessionId: null,
-        activeSessionStartTime: null,
-        activeSessionDuration: 0,
-        activeSessionElapsedSeconds: 0,
-        timer: null,
+        isDeepFocusActive: state.isReloading ? state.isDeepFocusActive : false,
+        activeSessionId: state.isReloading ? state.activeSessionId : null,
+        activeSessionStartTime: state.isReloading ? state.activeSessionStartTime : null,
+        activeSessionDuration: state.isReloading ? state.activeSessionDuration : 0,
+        activeSessionElapsedSeconds: state.isReloading ? state.activeSessionElapsedSeconds : 0,
+        timer: null, // Always reset timers
         secondTimer: null,
-        isSessionPaused: false,
-        pausedAt: null,
-        totalPausedTime: 0
-      }),
-      // Ensure deep focus is disabled when store is rehydrated
-      onRehydrateStorage: () => (state) => {
-        if (state) {
-          state.isDeepFocusActive = false;
-          state.activeSessionId = null;
-          state.activeSessionStartTime = null;
-          state.activeSessionDuration = 0;
-          state.activeSessionElapsedSeconds = 0;
-          state.timer = null;
-          state.secondTimer = null;
-          state.isSessionPaused = false;
-          state.pausedAt = null;
-          state.totalPausedTime = 0;
-        }
-      }
+        isSessionPaused: state.isReloading ? state.isSessionPaused : false,
+        pausedAt: state.isReloading ? state.pausedAt : null,
+        totalPausedTime: state.isReloading ? state.totalPausedTime : 0,
+        isReloading: false // Reset after persistence
+      })
     }
   )
 ); 
