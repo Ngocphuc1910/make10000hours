@@ -15,7 +15,7 @@ interface DateTimeContextValue {
 const DateTimeContext = createContext<DateTimeContextValue | undefined>(undefined);
 
 export const DateTimeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [isTimeIncluded, setIsTimeIncluded] = useState(false);
 
