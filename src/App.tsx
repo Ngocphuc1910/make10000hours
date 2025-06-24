@@ -350,18 +350,21 @@ const App: React.FC = () => {
     const handleBeforeUnload = async (event: BeforeUnloadEvent) => {
       const deepFocusStore = useDeepFocusStore.getState();
       if (deepFocusStore.isDeepFocusActive) {
-        // Add a confirmation dialog
-        event.preventDefault();
-        event.returnValue = 'You have an active Deep Focus session. Are you sure you want to leave?';
+        // Set reloading flag based on navigation type
+        const isReloading = window.performance?.navigation?.type === 1 || 
+          (window.performance?.getEntriesByType('navigation')[0] as PerformanceNavigationTiming)?.type === 'reload';
         
-        try {
+        deepFocusStore.setReloading(isReloading);
+        
+        // Only complete session if actually closing (not reloading)
+        if (!isReloading) {
+          event.preventDefault();
+          event.returnValue = '';
           await deepFocusStore.disableDeepFocus();
-        } catch (error) {
-          console.error('Failed to end deep focus session:', error);
         }
       }
     };
-    
+
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
