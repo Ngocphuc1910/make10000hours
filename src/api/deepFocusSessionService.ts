@@ -9,7 +9,8 @@ import {
   onSnapshot, 
   getDocs,
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  increment
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { DeepFocusSession } from '../types/models';
@@ -61,13 +62,8 @@ class DeepFocusSessionService {
       const sessionData = sessionDoc.docs[0].data();
       const startTime = sessionData.startTime?.toDate() || new Date();
       
-      // ✅ TRUST THE INCREMENTAL DURATION - don't recalculate
-      const existingDuration = sessionData.duration || 0;
-      
-      // Only fallback to calculation if no incremental duration exists (edge case)
-      const finalDuration = existingDuration > 0 
-        ? existingDuration 
-        : Math.round((endTime.getTime() - startTime.getTime()) / (1000 * 60));
+      // Trust the incremental duration completely – no timestamp fallback
+      const finalDuration = sessionData.duration || 0;
       
       await updateDoc(sessionRef, {
         endTime: serverTimestamp(),
@@ -78,7 +74,7 @@ class DeepFocusSessionService {
 
       console.log('Deep Focus session ended:', sessionId, 
         'Duration:', finalDuration, 'minutes', 
-        '(used incremental:', existingDuration > 0 ? 'YES' : 'NO, calculated fallback', ')');
+        '(incremental only)');
       
       return {
         id: sessionId,
@@ -339,13 +335,7 @@ class DeepFocusSessionService {
         const startTime = data.startTime?.toDate() || new Date();
         const now = new Date();
         
-        // ✅ TRUST THE INCREMENTAL DURATION - don't recalculate
-        const existingDuration = data.duration || 0;
-        
-        // Only fallback to calculation if no incremental duration exists
-        const finalDuration = existingDuration > 0 
-          ? existingDuration 
-          : Math.round((now.getTime() - startTime.getTime()) / (1000 * 60));
+        const finalDuration = data.duration || 0; // no recalculation
         
         // End the orphaned session
         await updateDoc(doc(db, this.collectionName, docSnapshot.id), {
@@ -357,8 +347,7 @@ class DeepFocusSessionService {
         
         cleanedCount++;
         console.log('🧹 Cleaned up orphaned session:', docSnapshot.id, 
-          'Duration:', finalDuration, 'minutes',
-          '(used incremental:', existingDuration > 0 ? 'YES' : 'NO, calculated fallback', ')');
+          'Duration:', finalDuration, 'minutes', '(incremental only)');
       }
       
       if (cleanedCount > 0) {
@@ -369,6 +358,22 @@ class DeepFocusSessionService {
     } catch (error) {
       console.error('❌ Error cleaning up orphaned sessions:', error);
       return 0;
+    }
+  }
+
+  /**
+   * Atomically add minutes to an active deep focus session
+   */
+  async incrementSessionDuration(sessionId: string, minutes: number = 1): Promise<void> {
+    try {
+      if (minutes <= 0) return; // guard – nothing to add
+      const sessionRef = doc(db, this.collectionName, sessionId);
+      await updateDoc(sessionRef, {
+        duration: increment(minutes),
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error incrementing Deep Focus session duration:', error);
     }
   }
 }
