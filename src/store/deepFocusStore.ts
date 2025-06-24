@@ -1440,20 +1440,29 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
     }),
     {
       name: 'deep-focus-storage',
-      partialize: (state) => ({
-        ...state,
-        isDeepFocusActive: state.isReloading ? state.isDeepFocusActive : false,
-        activeSessionId: state.isReloading ? state.activeSessionId : null,
-        activeSessionStartTime: state.isReloading ? state.activeSessionStartTime : null,
-        activeSessionDuration: state.isReloading ? state.activeSessionDuration : 0,
-        activeSessionElapsedSeconds: state.isReloading ? state.activeSessionElapsedSeconds : 0,
-        timer: null, // Always reset timers
-        secondTimer: null,
-        isSessionPaused: state.isReloading ? state.isSessionPaused : false,
-        pausedAt: state.isReloading ? state.pausedAt : null,
-        totalPausedTime: state.isReloading ? state.totalPausedTime : 0,
-        isReloading: false // Reset after persistence
-      })
+      partialize: (state) => {
+        // Get the stored state first
+        const storedState = localStorage.getItem('deep-focus-storage');
+        const parsedState = storedState ? JSON.parse(storedState) : null;
+        
+        // If we have stored state and this is a new tab (no active session), use the stored state
+        const shouldUseStoredState = parsedState && !state.activeSessionId && parsedState.isDeepFocusActive;
+        
+        return {
+          ...state,
+          isDeepFocusActive: shouldUseStoredState ? parsedState.isDeepFocusActive : state.isDeepFocusActive,
+          activeSessionId: shouldUseStoredState ? parsedState.activeSessionId : state.activeSessionId,
+          activeSessionStartTime: shouldUseStoredState ? new Date(parsedState.activeSessionStartTime) : state.activeSessionStartTime,
+          activeSessionDuration: shouldUseStoredState ? parsedState.activeSessionDuration : state.activeSessionDuration,
+          activeSessionElapsedSeconds: shouldUseStoredState ? parsedState.activeSessionElapsedSeconds : state.activeSessionElapsedSeconds,
+          timer: null, // Always reset timers
+          secondTimer: null,
+          isSessionPaused: shouldUseStoredState ? parsedState.isSessionPaused : state.isSessionPaused,
+          pausedAt: shouldUseStoredState && parsedState.pausedAt ? new Date(parsedState.pausedAt) : state.pausedAt,
+          totalPausedTime: shouldUseStoredState ? parsedState.totalPausedTime : state.totalPausedTime,
+          isReloading: false // Reset after persistence
+        };
+      }
     }
   )
 ); 
