@@ -1017,6 +1017,7 @@ class FocusTimeTracker {
       tabId: null,
       domain: null,
       startTime: null,
+      savedTime: 0,
       isActive: false
     };
     this.saveInterval = null;
@@ -1140,12 +1141,14 @@ class FocusTimeTracker {
    */
   async handleTabUpdated(tabId, changeInfo, tab) {
     try {
-      console.log('📝 Tab updated:', { tabId, status: changeInfo.status, url: tab.url });
+      // Only log when status changes or URL changes
+      if (changeInfo.status || changeInfo.url) {
+        console.log('📝 Tab updated:', { tabId, status: changeInfo.status, url: tab.url });
+      }
       
       // Only track when tab is complete and is the active tab
       if (changeInfo.status === 'complete' && tab.active && tab.url) {
         const domain = this.extractDomain(tab.url);
-        console.log('🌐 Extracted domain:', domain);
         
         // If domain changed, restart tracking
         if (this.currentSession.tabId === tabId && this.currentSession.domain !== domain) {
@@ -1654,6 +1657,7 @@ class FocusTimeTracker {
         tabId: tab.id,
         domain: domain,
         startTime: now,
+        savedTime: 0,
         isActive: true
       };
 
@@ -1681,13 +1685,14 @@ class FocusTimeTracker {
       }
 
       const now = Date.now();
-      const timeSpent = now - this.currentSession.startTime;
+      const timeSpent = now - this.currentSession.startTime + (this.currentSession.savedTime || 0);
       const domain = this.currentSession.domain;
 
-      // Only save if spent more than 1 second
+      // Only save if spent more than 1 second and round down to nearest second
       if (timeSpent > 1000 && domain) {
-        await this.storageManager.saveTimeEntry(domain, timeSpent, 1);
-        console.log(`Stopped tracking: ${domain}, Time: ${this.storageManager.formatTime(timeSpent)}`);
+        const roundedTime = Math.floor(timeSpent / 1000) * 1000; // Round to nearest second
+        await this.storageManager.saveTimeEntry(domain, roundedTime, 1);
+        console.log(`Stopped tracking: ${domain}, Time: ${this.storageManager.formatTime(roundedTime)}`);
       }
 
       await this.stateManager.dispatch({
@@ -1698,6 +1703,7 @@ class FocusTimeTracker {
         tabId: null,
         domain: null,
         startTime: null,
+        savedTime: 0,
         isActive: false
       };
     } catch (error) {
@@ -1710,10 +1716,13 @@ class FocusTimeTracker {
    */
   async pauseTracking() {
     if (this.currentSession.isActive) {
-      const timeSpent = Date.now() - this.currentSession.startTime;
-      if (timeSpent > 1000) {
-        await this.storageManager.saveTimeEntry(this.currentSession.domain, timeSpent, 0);
+      const activeDuration = Date.now() - this.currentSession.startTime;
+      const totalDuration = (this.currentSession.savedTime || 0) + activeDuration;
+      if (totalDuration > 1000) {
+        await this.storageManager.saveTimeEntry(this.currentSession.domain, totalDuration, 0);
       }
+      // Reset savedTime since we've persisted it
+      this.currentSession.savedTime = 0;
       this.currentSession.isActive = false;
       this.currentSession.startTime = null;
     }
@@ -1751,14 +1760,22 @@ class FocusTimeTracker {
         const grossTimeSpent = now - this.currentSession.startTime;
         const netTimeSpent = grossTimeSpent - this.totalPausedTime;
         
-        // Only save positive net time
-        if (netTimeSpent > 1000) {
-          await this.storageManager.saveTimeEntry(this.currentSession.domain, netTimeSpent, 0);
+        // Only save if we have at least 1 minute of activity
+        if (netTimeSpent >= 60000) {
+          const minutesToSave = Math.floor(netTimeSpent / 60000) * 60000;
+          await this.storageManager.saveTimeEntry(this.currentSession.domain, minutesToSave, 0);
+          
+          // Update accumulated savedTime and reset counters
+          this.currentSession.savedTime = (this.currentSession.savedTime || 0) + minutesToSave;
+          const remainder = netTimeSpent - minutesToSave;
+          // Preserve remainder for continuous counting
+          this.currentSession.startTime = now - remainder;
+          this.totalPausedTime = 0;
+          
           console.log('💾 Session saved:', {
             domain: this.currentSession.domain,
-            grossTime: this.storageManager.formatTime(grossTimeSpent),
-            pausedTime: this.storageManager.formatTime(this.totalPausedTime),
-            netTime: this.storageManager.formatTime(netTimeSpent)
+            savedMinutes: this.storageManager.formatTime(this.currentSession.savedTime),
+            remainingTime: this.storageManager.formatTime(netTimeSpent - minutesToSave)
           });
         }
       }

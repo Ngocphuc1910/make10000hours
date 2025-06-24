@@ -5,63 +5,22 @@
 
 class TimeUtils {
   /**
-   * Format milliseconds to human readable time (e.g., "2h 34m", "45s")
+   * Format milliseconds into a human readable string
+   * Focuses on minute-based display
    */
-  static formatTime(milliseconds, format = 'short') {
-    if (!milliseconds || milliseconds < 0) {
-      return '0s';
+  static formatTime(milliseconds) {
+    // For very short durations (less than 1 minute), show as "< 1m"
+    if (milliseconds < 60000) {
+      return '< 1m';
     }
 
-    const seconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(seconds / 60);
+    const minutes = Math.round(milliseconds / 60000);
     const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    switch (format) {
-      case 'short':
-        if (days > 0) {
-          return `${days}d ${hours % 24}h`;
-        } else if (hours > 0) {
-          return `${hours}h ${minutes % 60}m`;
-        } else if (minutes > 0) {
-          return `${minutes}m ${seconds % 60}s`;
-        } else {
-          return `${seconds}s`;
-        }
-
-      case 'medium':
-        if (days > 0) {
-          return `${days} day${days > 1 ? 's' : ''} ${hours % 24} hour${hours % 24 !== 1 ? 's' : ''}`;
-        } else if (hours > 0) {
-          return `${hours} hour${hours > 1 ? 's' : ''} ${minutes % 60} minute${minutes % 60 !== 1 ? 's' : ''}`;
-        } else if (minutes > 0) {
-          return `${minutes} minute${minutes > 1 ? 's' : ''} ${seconds % 60} second${seconds % 60 !== 1 ? 's' : ''}`;
-        } else {
-          return `${seconds} second${seconds !== 1 ? 's' : ''}`;
-        }
-
-      case 'long':
-        const parts = [];
-        if (days > 0) parts.push(`${days} day${days > 1 ? 's' : ''}`);
-        if (hours % 24 > 0) parts.push(`${hours % 24} hour${hours % 24 !== 1 ? 's' : ''}`);
-        if (minutes % 60 > 0) parts.push(`${minutes % 60} minute${minutes % 60 !== 1 ? 's' : ''}`);
-        if (seconds % 60 > 0 && !days && !hours) parts.push(`${seconds % 60} second${seconds % 60 !== 1 ? 's' : ''}`);
-        
-        return parts.length > 0 ? parts.join(', ') : '0 seconds';
-
-      case 'clock':
-        const paddedHours = hours.toString().padStart(2, '0');
-        const paddedMinutes = (minutes % 60).toString().padStart(2, '0');
-        const paddedSeconds = (seconds % 60).toString().padStart(2, '0');
         
         if (hours > 0) {
-          return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
+      return `${hours}h ${minutes % 60}m`;
         } else {
-          return `${paddedMinutes}:${paddedSeconds}`;
-        }
-
-      default:
-        return this.formatTime(milliseconds, 'short');
+      return `${minutes}m`;
     }
   }
 

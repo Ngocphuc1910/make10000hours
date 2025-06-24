@@ -547,8 +547,20 @@ class PopupManager {
         if (siteIcon) siteIcon.textContent = this.getSiteIcon(domain);
         if (siteName) siteName.textContent = domain;
         if (siteTime && startTime) {
-          const elapsed = Date.now() - startTime;
-          siteTime.textContent = `Active for ${this.formatTime(elapsed)}`;
+          const saved = this.currentState?.currentSession?.savedTime || 0;
+          const elapsed = saved + (Date.now() - startTime);
+          const minutes = Math.floor(elapsed / 60000);
+          const seconds = Math.floor((elapsed % 60000) / 1000);
+          
+          // Format time display
+          let activeText = 'Active for ';
+          if (minutes > 0) {
+            activeText += `${minutes}m `;
+          }
+          if (seconds > 0 || minutes === 0) {
+            activeText += `${seconds}s`;
+          }
+          siteTime.textContent = activeText;
         }
 
         // Remove dashed border when active
@@ -557,24 +569,19 @@ class PopupManager {
 
       // Update timer
       if (sessionTimer && startTime) {
-        const elapsed = Date.now() - startTime;
-        sessionTimer.textContent = this.formatTime(elapsed, 'clock');
+        const saved = this.currentState?.currentSession?.savedTime || 0;
+        const elapsed = saved + (Date.now() - startTime);
+        const minutes = Math.floor(elapsed / 60000);
+        const seconds = Math.floor((elapsed % 60000) / 1000);
+        sessionTimer.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
       }
     } else {
       // No active session
       if (currentSite) {
-        const siteIcon = currentSite.querySelector('.site-icon');
-        const siteName = currentSite.querySelector('.site-name');
+        currentSite.style.border = '2px dashed var(--border-color)';
         const siteTime = currentSite.querySelector('.site-time');
-        
-        if (siteIcon) siteIcon.textContent = '🌐';
-        if (siteName) siteName.textContent = 'No active site';
-        if (siteTime) siteTime.textContent = 'Not tracking';
-
-        // Restore dashed border
-        currentSite.style.border = '2px dashed var(--gray-300)';
+        if (siteTime) siteTime.textContent = 'Not active';
       }
-
       if (sessionTimer) {
         sessionTimer.textContent = '00:00';
       }
@@ -1010,30 +1017,30 @@ class PopupManager {
   /**
    * Format time in milliseconds to human readable string
    */
-  formatTime(milliseconds, format = 'short') {
-    if (!milliseconds || milliseconds < 0) return '0s';
-
-    const seconds = Math.floor(milliseconds / 1000);
+  formatTime(ms, format = 'compact') {
+    if (!ms) return '0s';
+    
+    const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
-
-    switch (format) {
-      case 'clock':
-        if (hours > 0) {
-          return `${hours.toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
-        } else {
-          return `${minutes.toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
-        }
-      case 'short':
-      default:
-        if (hours > 0) {
-          return `${hours}h ${minutes % 60}m`;
-        } else if (minutes > 0) {
-          return `${minutes}m`;
-        } else {
-          return `${seconds}s`;
-        }
+    
+    if (format === 'clock') {
+      return `${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
     }
+    
+    // For times less than 1 minute, show seconds
+    if (minutes < 1) {
+      return `${seconds}s`;
+    }
+    
+    // For times less than 1 hour, show minutes
+    if (hours < 1) {
+      return `${minutes}m`;
+    }
+    
+    // For times over 1 hour
+    const mins = minutes % 60;
+    return `${hours}h ${mins}m`;
   }
 
   /**
