@@ -498,6 +498,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
           <textarea
             autoFocus
             ref={titleInputRef}
+            id="task-title"
+            name="title"
             className={`w-full text-lg font-medium text-text-primary px-0 py-0.5 bg-transparent focus:outline-none border-none resize-none overflow-hidden ${titleError ? 'ring-2 ring-red-200' : ''}`}
             placeholder="Task name"
             value={title}
@@ -515,6 +517,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
           
           <textarea
             ref={descriptionRef}
+            id="task-description"
+            name="description"
             className="w-full text-sm text-text-secondary px-0 py-1 bg-transparent border-none focus:outline-none resize-none"
             placeholder="Description"
             value={description}
@@ -540,6 +544,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                       <input
                         ref={newProjectInputRef}
                         type="text"
+                        id="new-project-name"
+                        name="newProjectName"
                         className={`bg-transparent border-none focus:outline-none p-0 text-xs ${projectError ? 'ring-2 ring-red-200' : ''}`}
                         placeholder="Enter project name"
                         value={newProjectName}
@@ -562,6 +568,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                   <>
                     <select
                       ref={projectSelectRef}
+                      id="task-project"
+                      name="projectId"
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       value={projectId}
                       onChange={(e) => handleProjectChange(e.target.value)}
@@ -605,6 +613,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                       <input
                         ref={timeSpentRef}
                         type="number"
+                        id="time-spent"
+                        name="timeSpent"
                         className="w-7 text-center bg-transparent border-none focus:outline-none p-0 text-xs"
                         placeholder="0"
                         min="0"
@@ -621,6 +631,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                   <input
                     ref={timeEstimatedRef}
                     type="number"
+                    id="time-estimated"
+                    name="timeEstimated"
                     className="w-7 text-center bg-transparent border-none focus:outline-none p-0 text-xs"
                     placeholder="0"
                     min="0"
