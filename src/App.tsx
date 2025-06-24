@@ -31,6 +31,7 @@ import { ChatButton } from './components/chat/ChatButton';
 import DataSyncPage from './components/pages/DataSyncPage';
 import { ChatIntegrationService } from './services/chatIntegration';
 import { useDeepFocusStore } from './store/deepFocusStore';
+import { useGlobalShortcuts } from './hooks/useGlobalShortcuts';
 
 // Import test utilities in development mode
 if (process.env.NODE_ENV === 'development') {
@@ -105,6 +106,7 @@ const SupportPage = () => (
 const GlobalKeyboardShortcuts: React.FC = () => {
   const setIsAddingTask = useTaskStore(state => state.setIsAddingTask);
   const { isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar } = useUIStore();
+  const { toggleDeepFocus } = useGlobalDeepFocusSync();
   const navigate = useNavigate();
 
   // Global keyboard shortcuts
@@ -129,6 +131,14 @@ const GlobalKeyboardShortcuts: React.FC = () => {
         shiftKey: event.shiftKey,
         altKey: event.altKey
       });
+      
+      // Check for Shift + D to toggle deep focus mode (only if not typing in form elements)
+      if (event.shiftKey && (event.key === 'D' || event.key === 'd') && !isTypingInFormElement) {
+        console.log('🔑 Shift+D detected - toggling deep focus mode');
+        event.preventDefault();
+        toggleDeepFocus();
+        return;
+      }
       
       // Debug logging for Alt key combinations
       if (event.altKey) {
@@ -207,7 +217,7 @@ const GlobalKeyboardShortcuts: React.FC = () => {
       }
       
       // Check for D to navigate to Calendar Day view (only if not typing in form elements)
-      if ((event.key === 'D' || event.key === 'd') && !isTypingInFormElement) {
+      if ((event.key === 'D' || event.key === 'd') && !isTypingInFormElement && !event.shiftKey) {
         console.log('🔑 D detected - navigating to Calendar Day view');
         event.preventDefault();
         navigate('/calendar?view=day');
@@ -235,9 +245,9 @@ const GlobalKeyboardShortcuts: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar, setIsAddingTask, navigate]);
+  }, [isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar, setIsAddingTask, navigate, toggleDeepFocus]);
 
-  return null; // This component renders nothing
+  return null;
 };
 
 const App: React.FC = () => {
@@ -385,6 +395,9 @@ const App: React.FC = () => {
       <DataSyncPage />
     </MainLayout>
   );
+
+  // Add this line near the top of the component
+  useGlobalShortcuts();
 
   // CRITICAL: Don't render main app until user authentication is initialized
   // This prevents the brief "logged out" flash during Firebase auth restoration
