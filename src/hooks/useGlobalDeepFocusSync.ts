@@ -27,7 +27,7 @@ export const useGlobalDeepFocusSync = () => {
         return;
       }
 
-      console.log('🚀 IMMEDIATE Global Deep Focus initialization for reload session recovery...');
+      console.log('🚀 IMMEDIATE Global Deep Focus initialization for reload/new tab session recovery...');
       
       try {
         // First, load the focus status which handles session recovery/restart
@@ -35,41 +35,34 @@ export const useGlobalDeepFocusSync = () => {
         console.log('✅ Global Focus status loaded, checking for active session recovery...');
         
         // Import the service directly to avoid circular dependencies
-        const deepFocusSessionService = await import('../api/deepFocusSessionService').then(m => m.deepFocusSessionService);
+        const { deepFocusSessionService } = await import('../api/deepFocusSessionService');
         
-        // If we still don't have an active session but deep focus is active, force recovery
+        // Check if we need to recover a session (either from reload or new tab)
         const currentState = useDeepFocusStore.getState();
-        if (currentState.isDeepFocusActive && !currentState.activeSessionId && !currentState.recoveryInProgress) {
-          console.log('🔄 Forcing immediate session recovery...');
-          
-          // Clean up any orphaned sessions first
-          const cleaned = await deepFocusSessionService.cleanupOrphanedSessions(user.uid);
-          if (cleaned > 0) {
-            console.log(`🧹 Cleaned up ${cleaned} orphaned sessions`);
-          }
-          
-          // Start a new session immediately
-          const newSessionId = await deepFocusSessionService.startSession(user.uid);
-          console.log('✅ IMMEDIATE session recovery completed:', newSessionId);
-          
-          // Reload sessions to update UI
-          await useDeepFocusStore.getState().loadDeepFocusSessions(user.uid);
-          
-          // Notify extension immediately of the new session state
-          try {
-            const ExtensionDataService = await import('../services/extensionDataService').then(m => m.default);
-            await ExtensionDataService.enableFocusMode();
-            console.log('🔄 Extension notified of immediate session recovery');
-          } catch (extError) {
-            console.warn('⚠️ Could not notify extension of immediate session recovery:', extError);
-          }
+        const storedState = localStorage.getItem('deep-focus-storage');
+        const parsedState = storedState ? JSON.parse(storedState) : null;
+        
+        // If there's an active session in storage but not in current state, we're in a new tab
+        const isNewTab = parsedState?.isDeepFocusActive && !currentState.activeSessionId;
+        
+        if (isNewTab) {
+          console.log('📱 New tab detected, syncing deep focus state...');
+          useDeepFocusStore.setState({
+            isDeepFocusActive: parsedState.isDeepFocusActive,
+            activeSessionId: parsedState.activeSessionId,
+            activeSessionStartTime: new Date(parsedState.activeSessionStartTime),
+            activeSessionDuration: parsedState.activeSessionDuration,
+            activeSessionElapsedSeconds: parsedState.activeSessionElapsedSeconds,
+            isSessionPaused: parsedState.isSessionPaused,
+            pausedAt: parsedState.pausedAt ? new Date(parsedState.pausedAt) : null,
+            totalPausedTime: parsedState.totalPausedTime
+          });
         }
       } catch (error) {
-        console.error('❌ Failed to initialize deep focus state immediately:', error);
+        console.error('❌ Error during deep focus initialization:', error);
       }
     };
 
-    // Run immediately without delay
     initializeDeepFocusState();
   }, [user?.uid, isUserInitialized, loadFocusStatus]);
 
