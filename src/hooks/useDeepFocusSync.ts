@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useDeepFocusStore } from '../store/deepFocusStore';
 
 export const useDeepFocusSync = () => {
-  const { syncFocusStatus, loadFocusStatus } = useDeepFocusStore();
+  const { syncFocusStatus, loadFocusStatus, syncCompleteFocusState } = useDeepFocusStore();
 
   useEffect(() => {
     // Don't automatically load focus status on mount to avoid overriding persisted state
@@ -15,27 +15,37 @@ export const useDeepFocusSync = () => {
     };
 
     // Listen for real-time focus state changes from extension
-    const handleExtensionFocusChange = (event: MessageEvent) => {
+    const handleExtensionFocusChange = async (event: MessageEvent) => {
       // Check each validation condition
       if (event.data?.type === 'EXTENSION_FOCUS_STATE_CHANGED') {
         const hasExtensionId = !!event.data?.extensionId;
         const hasPayload = !!event.data?.payload;
         const isActiveType = typeof event.data.payload?.isActive;
         const isActiveBoolean = typeof event.data.payload?.isActive === 'boolean';
+        const hasBlockedSites = Array.isArray(event.data.payload?.blockedSites);
         
-        console.log('🔍 Validation check:', {
+        console.log('🔍 Extension focus change validation:', {
           type: event.data.type,
           hasExtensionId,
           hasPayload, 
           isActiveType,
           isActiveBoolean,
-          allValid: hasExtensionId && hasPayload && isActiveBoolean
+          hasBlockedSites,
+          blockedSites: event.data.payload?.blockedSites,
+          allValid: hasExtensionId && hasPayload && isActiveBoolean && hasBlockedSites
         });
         
         // Verify message is from our extension with proper structure
-        if (hasExtensionId && hasPayload && isActiveBoolean) {
-          console.log('🔄 Real-time focus state change from extension:', event.data.payload.isActive);
-          syncFocusStatus(event.data.payload.isActive);
+        if (hasExtensionId && hasPayload && isActiveBoolean && hasBlockedSites) {
+          console.log('🔄 Real-time focus state change from extension:', event.data.payload);
+          const { isActive, blockedSites = [] } = event.data.payload;
+          
+          // Ensure we have the complete blocked sites list
+          if (isActive && blockedSites.length === 0) {
+            console.warn('⚠️ Warning: Extension enabled but no blocked sites provided');
+          }
+          
+          await syncCompleteFocusState(isActive, blockedSites);
         }
       }
     };
@@ -66,5 +76,5 @@ export const useDeepFocusSync = () => {
       window.removeEventListener('message', handleExtensionFocusChange);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [syncFocusStatus, loadFocusStatus]);
+  }, [syncFocusStatus, loadFocusStatus, syncCompleteFocusState]);
 }; 
