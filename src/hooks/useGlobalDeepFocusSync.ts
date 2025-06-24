@@ -13,7 +13,8 @@ export const useGlobalDeepFocusSync = () => {
     loadFocusStatus,
     isDeepFocusActive,
     enableDeepFocus,
-    disableDeepFocus
+    disableDeepFocus,
+    syncCompleteFocusState
   } = useDeepFocusStore();
   
   const { isInitialized: isUserInitialized, user } = useUserStore();
@@ -87,24 +88,30 @@ export const useGlobalDeepFocusSync = () => {
     };
 
     // Listen for real-time focus state changes from extension
-    const handleExtensionFocusChange = (event: MessageEvent) => {
+    const handleExtensionFocusChange = async (event: MessageEvent) => {
       if (event.data?.type === 'EXTENSION_FOCUS_STATE_CHANGED') {
         const hasExtensionId = !!event.data?.extensionId;
         const hasPayload = !!event.data?.payload;
         const isActiveBoolean = typeof event.data.payload?.isActive === 'boolean';
+        const hasBlockedSites = Array.isArray(event.data.payload?.blockedSites);
         
         console.log('🔍 Extension message validation:', {
           type: event.data.type,
           hasExtensionId,
           hasPayload, 
           isActiveBoolean,
-          allValid: hasExtensionId && hasPayload && isActiveBoolean
+          hasBlockedSites,
+          blockedSites: event.data.payload?.blockedSites,
+          allValid: hasExtensionId && hasPayload && isActiveBoolean && hasBlockedSites
         });
         
         // Verify message is from our extension with proper structure
         if (hasExtensionId && hasPayload && isActiveBoolean) {
-          console.log('🔄 Real-time focus state change from extension:', event.data.payload.isActive);
-          syncFocusStatus(event.data.payload.isActive);
+          console.log('🔄 Real-time focus state change from extension:', event.data.payload);
+          const { isActive, blockedSites = [] } = event.data.payload;
+          
+          // Use syncCompleteFocusState instead of syncFocusStatus
+          await syncCompleteFocusState(isActive, blockedSites);
         }
       }
     };

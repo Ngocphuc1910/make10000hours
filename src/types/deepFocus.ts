@@ -1,3 +1,5 @@
+import { DeepFocusSession } from './models';
+
 export interface SiteUsage {
   id: string;
   name: string;
@@ -37,4 +39,38 @@ export interface DeepFocusData {
   dailyUsage: DailyUsage[];
   siteUsage: SiteUsage[];
   blockedSites: BlockedSite[];
+}
+
+export interface DeepFocusStore {
+  isDeepFocusActive: boolean;
+  blockedSites: BlockedSite[];
+  isExtensionConnected: boolean;
+  activeSessionId: string | null;
+  activeSessionStartTime: Date | null;
+  activeSessionDuration: number;
+  activeSessionElapsedSeconds: number;
+  timer: NodeJS.Timer | null;
+  secondTimer: NodeJS.Timer | null;
+  hasRecoveredSession: boolean;
+  recoveryInProgress: boolean;
+  deepFocusSessions: DeepFocusSession[];
+  totalSessionsCount: number;
+  totalFocusTime: number;
+  autoSessionManagement: boolean;
+  isSessionPaused: boolean;
+  
+  // Methods
+  initializeFocusSync: () => Promise<void>;
+  syncFocusStatus: (isActive: boolean) => void;
+  syncCompleteFocusState: (isActive: boolean, blockedSites: string[]) => Promise<void>;
+  enableDeepFocus: () => Promise<void>;
+  disableDeepFocus: () => Promise<void>;
+  toggleDeepFocus: () => Promise<void>;
+  syncWithExtension: (isActive: boolean) => Promise<void>;
+  loadDeepFocusSessions: (userId: string, startDate?: Date, endDate?: Date) => Promise<void>;
+  subscribeToSessions: (userId: string) => () => void;
+  pauseSessionOnInactivity: (inactivityDuration: number) => void;
+  resumeSessionOnActivity: () => void;
+  setAutoSessionManagement: (enabled: boolean) => void;
+  loadFocusStatus: () => Promise<void>;
 } 

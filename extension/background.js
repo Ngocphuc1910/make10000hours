@@ -650,11 +650,24 @@ class BlockingManager {
         this.focusStartTime = Date.now();
         this.blockedAttempts = 0;
         await this.updateBlockingRules();
-        console.log('🎯 Focus mode ENABLED');
+        
+        // Get current blocked sites list
+        const blockedSites = Array.from(this.blockedSites);
+        console.log('🔒 Focus mode ENABLED with blocked sites:', blockedSites);
+        
+        // Broadcast focus state with blocked sites
+        if (this.tracker) {
+          this.tracker.broadcastFocusStateChange(true);
+        }
       } else {
         this.focusStartTime = null;
         await this.clearBlockingRules();
-        console.log('🎯 Focus mode DISABLED');
+        console.log('🔓 Focus mode DISABLED');
+        
+        // Broadcast focus state change
+        if (this.tracker) {
+          this.tracker.broadcastFocusStateChange(false);
+        }
       }
       
       // Save state
@@ -663,7 +676,8 @@ class BlockingManager {
       return {
         success: true,
         focusMode: this.focusMode,
-        focusStartTime: this.focusStartTime
+        focusStartTime: this.focusStartTime,
+        blockedSites: Array.from(this.blockedSites)
       };
     } catch (error) {
       console.error('Error toggling focus mode:', error);
@@ -1967,11 +1981,18 @@ class FocusTimeTracker {
   broadcastFocusStateChange(isActive) {
     console.log(`🔄 Broadcasting focus state change: ${isActive}`);
     
+    // Get current blocked sites from BlockingManager
+    const blockedSites = Array.from(this.blockingManager.blockedSites || new Set());
+    console.log('📋 Current blocked sites in extension:', blockedSites);
+    
     const focusState = {
       isActive,
       isVisible: isActive,
-      isFocused: isActive
+      isFocused: isActive,
+      blockedSites // Include blocked sites list
     };
+
+    console.log('📤 Broadcasting full focus state:', focusState);
 
     // Send to all tabs with content scripts
     chrome.tabs.query({}, (tabs) => {
@@ -1989,9 +2010,6 @@ class FocusTimeTracker {
 
     // Forward directly to web app for redundancy
     this.forwardToWebApp('EXTENSION_FOCUS_STATE_CHANGED', focusState);
-
-    // Store the latest focus state for popup to query when it opens
-    this.latestFocusState = isActive;
   }
 
   /**
