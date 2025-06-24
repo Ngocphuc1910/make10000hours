@@ -98,25 +98,24 @@ class BlockedPage {
     });
 
     document.getElementById('openPopupBtn').addEventListener('click', () => {
-      chrome.runtime.sendMessage({ type: 'OPEN_POPUP' });
+      // Open deep focus page in a new tab
+      window.open('https://make10000hours.com/#/deep-focus', '_blank');
     });
 
     document.getElementById('overrideBtn').addEventListener('click', () => {
       this.handleOverride();
     });
 
-    document.getElementById('debugBtn').addEventListener('click', () => {
+    // Debug info can be toggled by clicking the timer
+    document.getElementById('sessionTimer').addEventListener('click', () => {
       this.toggleDebugInfo();
     });
   }
 
   toggleDebugInfo() {
     const debugInfo = document.getElementById('debugInfo');
-    if (debugInfo.style.display === 'none') {
-      debugInfo.style.display = 'block';
-    } else {
-      debugInfo.style.display = 'none';
-    }
+    const currentDisplay = window.getComputedStyle(debugInfo).display;
+    debugInfo.style.display = currentDisplay === 'none' ? 'block' : 'none';
   }
 
   async loadFocusStats() {
@@ -126,6 +125,7 @@ class BlockedPage {
         const stats = response.data;
         document.getElementById('focusTime').textContent = this.formatTime(stats.focusTime || 0);
         document.getElementById('blockedAttempts').textContent = stats.blockedAttempts || 0;
+        document.getElementById('overrideTime').textContent = this.formatTime(stats.overrideTime || 0);
       }
     } catch (error) {
       console.error('Error loading focus stats:', error);
@@ -156,9 +156,15 @@ class BlockedPage {
       );
       
       if (confirmed) {
-        // Disable button to prevent duplicate clicks
+        // Disable button and update content
         overrideBtn.disabled = true;
-        overrideBtn.textContent = 'Processing...';
+        const originalContent = overrideBtn.innerHTML;
+        overrideBtn.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+          </svg>
+          Processing...
+        `;
         
         const domain = document.getElementById('blockedSite').textContent;
         const response = await chrome.runtime.sendMessage({ 
@@ -187,7 +193,7 @@ class BlockedPage {
         } else {
           // Re-enable button if override failed
           overrideBtn.disabled = false;
-          overrideBtn.textContent = 'Override (5 min)';
+          overrideBtn.innerHTML = originalContent;
         }
       }
     } catch (error) {
@@ -195,7 +201,13 @@ class BlockedPage {
       // Re-enable button on error
       const overrideBtn = document.getElementById('overrideBtn');
       overrideBtn.disabled = false;
-      overrideBtn.textContent = 'Override (5 min)';
+      overrideBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+        Override (5 min)
+      `;
     }
   }
 
@@ -250,5 +262,5 @@ class BlockedPage {
   }
 }
 
-// Initialize blocked page
+// Initialize the blocked page
 new BlockedPage(); 

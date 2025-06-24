@@ -81,7 +81,9 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
     <Tooltip text="Toggle Deep Focus Mode (Shift + D)" placement="bottom">
       <label className={`relative inline-flex items-center cursor-pointer group ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
         <input 
-          type="checkbox" 
+          type="checkbox"
+          id="deep-focus-toggle"
+          name="deep-focus-toggle" 
           className="sr-only peer" 
           checked={isDeepFocusActive}
           onChange={handleToggle}

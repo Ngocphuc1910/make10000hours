@@ -30,7 +30,8 @@ export const FocusMode: React.FC<FocusModeProps> = ({ className = '' }) => {
   return (
     <div className={`fixed inset-0 bg-black z-50 ${className}`}>
       <button 
-        id="exitFocusMode" 
+        id="exit-focus-mode-btn"
+        name="exit-focus-mode"
         className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all"
         onClick={toggleFocusMode}
         aria-label="Exit Focus Mode"
