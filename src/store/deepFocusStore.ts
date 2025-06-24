@@ -143,6 +143,7 @@ interface DeepFocusStore extends DeepFocusData {
   toggleDeepFocus: () => Promise<void>;
   loadFocusStatus: () => Promise<void>;
   syncFocusStatus: (isActive: boolean) => void;
+  syncCompleteFocusState: (isActive: boolean, blockedSites: string[]) => Promise<void>;
   initializeFocusSync: () => Promise<void>;
   syncWithExtension: (isActive: boolean) => Promise<void>;
   loadDeepFocusSessions: (userId: string, startDate?: Date, endDate?: Date) => Promise<void>;
