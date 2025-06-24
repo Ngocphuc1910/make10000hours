@@ -470,7 +470,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       // New method for initial sync that respects persisted state
       initializeFocusSync: async () => {
         try {
-          console.log('�� Initializing focus sync...');
+          console.log('🔄 Initializing focus sync...');
           
           if (!ExtensionDataService.isExtensionInstalled()) {
             console.log('📱 Extension not installed, skipping focus sync');
@@ -603,6 +603,65 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       // Method to sync focus status without extension call (for internal state sync)
       syncFocusStatus: (isActive: boolean) => {
         set({ isDeepFocusActive: isActive });
+      },
+
+      // Method to sync complete focus state including blocked sites
+      syncCompleteFocusState: async (isActive: boolean, blockedSites: string[]) => {
+        try {
+          console.log('🔄 Syncing complete focus state:', { isActive, blockedSites });
+          
+          // Update focus state
+          set({ isDeepFocusActive: isActive });
+          
+          if (isActive) {
+            // Get current blocked sites
+            const currentSites = get().blockedSites;
+            console.log('📋 Current blocked sites in web app:', currentSites);
+            
+            // Update local blocked sites list - IMPORTANT: Set all sites to active when focus mode is enabled
+            const updatedSites = currentSites.map(site => ({
+              ...site,
+              isActive: true // When focus mode is enabled, activate all sites
+            }));
+            
+            console.log('📝 Updated sites list:', updatedSites);
+            set({ blockedSites: updatedSites });
+            
+            // Ensure extension has all active sites
+            console.log('🔒 Blocking all sites in extension...');
+            for (const site of updatedSites) {
+              try {
+                await Promise.race([
+                  ExtensionDataService.blockSite(site.url),
+                  new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Block site timeout')), 1000)
+                  )
+                ]);
+                console.log('✅ Successfully blocked site:', site.url);
+              } catch (error) {
+                console.warn('⚠️ Failed to block site during sync:', site.url, error);
+              }
+            }
+          } else {
+            // When disabling focus mode, keep the sites list but mark them as inactive
+            const currentSites = get().blockedSites;
+            const updatedSites = currentSites.map(site => ({
+              ...site,
+              isActive: false
+            }));
+            set({ blockedSites: updatedSites });
+          }
+          
+          // Notify all subscribers
+          window.dispatchEvent(new CustomEvent('deepFocusChanged', { 
+            detail: { isActive } 
+          }));
+          
+          console.log('✅ Complete focus state sync successful');
+        } catch (error) {
+          console.error('❌ Failed to sync complete focus state:', error);
+          throw error;
+        }
       },
 
       enableDeepFocus: async () => {
