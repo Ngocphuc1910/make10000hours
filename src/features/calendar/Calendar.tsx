@@ -68,7 +68,7 @@ export const Calendar: React.FC = () => {
   // Old drag state - removed since we have new drag-to-create system
 
   // Get tasks and projects from task store
-  const { tasks, projects, addTask, updateTask, setEditingTaskId: setStoreEditingTaskId, deleteTask } = useTaskStore();
+  const { tasks, projects, addTask, updateTask, setEditingTaskId: setStoreEditingTaskId, deleteTask, updateTaskLocally } = useTaskStore();
   const { user } = useUserStore();
 
   // Merge calendar events with task events
@@ -510,6 +510,98 @@ export const Calendar: React.FC = () => {
     setDragCreateData({ startTime, endTime, status });
     setIsDragCreateTaskOpen(true);
   }, []);
+  
+  // Handle event resize
+  const handleEventResize = useCallback((event: CalendarEvent, direction: 'top' | 'bottom', newTime: Date) => {
+    if (!event.isTask || !event.taskId) {
+      // Handle regular calendar events
+      setCalendarEvents(calendarEvents.map(e => {
+        if (e.id === event.id) {
+          const updatedEvent = { ...e };
+          
+          if (direction === 'top') {
+            updatedEvent.start = newTime;
+          } else {
+            updatedEvent.end = newTime;
+          }
+          
+          return updatedEvent;
+        }
+        return e;
+      }));
+      return;
+    }
+    
+    // Handle task events
+    const task = tasks.find(t => t.id === event.taskId);
+    if (!task) return;
+    
+    // Capture the before state for undo/redo
+    const beforeState = {
+      scheduledDate: task.scheduledDate || null,
+      scheduledStartTime: task.scheduledStartTime || null,
+      scheduledEndTime: task.scheduledEndTime || null,
+      includeTime: task.includeTime || false,
+      status: task.status
+    };
+    
+    // Create updated task data
+    const taskUpdateData: any = {};
+    
+    // Format the time in HH:MM format
+    const formattedTime = newTime.toTimeString().substring(0, 5);
+    
+    if (direction === 'top') {
+      // Update start time
+      taskUpdateData.scheduledStartTime = formattedTime;
+    } else {
+      // Update end time
+      taskUpdateData.scheduledEndTime = formattedTime;
+    }
+    
+    // Capture the after state for undo/redo
+    const afterState = {
+      ...beforeState,
+      scheduledStartTime: direction === 'top' ? formattedTime : beforeState.scheduledStartTime,
+      scheduledEndTime: direction === 'bottom' ? formattedTime : beforeState.scheduledEndTime
+    };
+    
+    // Add to undo stack before making the change
+    const undoRedoAction: UndoRedoState = {
+      taskId: task.id,
+      beforeState,
+      afterState
+    };
+    
+    setUndoStack(prev => [...prev, undoRedoAction]);
+    // Clear redo stack when new action is performed
+    setRedoStack([]);
+    
+    // Update the task
+    updateTask(task.id, taskUpdateData).catch(error => {
+      console.error('Failed to resize task:', error);
+      // Remove the action from undo stack if update failed
+      setUndoStack(prev => prev.slice(0, -1));
+    });
+  }, [calendarEvents, tasks, updateTask]);
+
+  const handleEventResizeMove = (taskIdx: number, direction: 'top' | 'bottom', newTime: Date) => {
+    // Handle task events
+    const task = tasks[taskIdx];
+    if (!task) return;
+
+    // Update the task preview without saving
+    const updatedTask: Partial<Task> = {};
+    
+    if (direction === 'top') {
+      updatedTask.scheduledStartTime = newTime.toTimeString().substring(0, 5);
+    } else {
+      updatedTask.scheduledEndTime = newTime.toTimeString().substring(0, 5);
+    }
+    
+    // Update the task in the store temporarily for preview
+    updateTaskLocally(taskIdx, updatedTask);
+  }
 
   // Old drag functions - removed since we have new drag-to-create system in DayView/WeekView
 
@@ -692,6 +784,8 @@ export const Calendar: React.FC = () => {
               onAllDayClick={handleAllDayClick}
               onDragCreate={handleDragCreate}
               onEventDrop={handleEventDrop}
+              onEventResize={handleEventResize}
+              onEventResizeMove={handleEventResizeMove}
               clearDragIndicator={clearDragIndicator}
             />
           )}
