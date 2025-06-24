@@ -16,8 +16,63 @@ export const useGlobalDeepFocusSync = () => {
     disableDeepFocus
   } = useDeepFocusStore();
   
-  const { isInitialized: isUserInitialized } = useUserStore();
+  const { isInitialized: isUserInitialized, user } = useUserStore();
 
+  // CRITICAL: Initialize deep focus status immediately on mount to handle session recovery
+  useEffect(() => {
+    const initializeDeepFocusState = async () => {
+      if (!user?.uid || !isUserInitialized) {
+        console.log('🔄 Global Deep Focus initialization waiting for user...');
+        return;
+      }
+
+      console.log('🚀 IMMEDIATE Global Deep Focus initialization for reload session recovery...');
+      
+      try {
+        // First, load the focus status which handles session recovery/restart
+        await loadFocusStatus();
+        console.log('✅ Global Focus status loaded, checking for active session recovery...');
+        
+        // Import the service directly to avoid circular dependencies
+        const deepFocusSessionService = await import('../api/deepFocusSessionService').then(m => m.deepFocusSessionService);
+        
+        // If we still don't have an active session but deep focus is active, force recovery
+        const currentState = useDeepFocusStore.getState();
+        if (currentState.isDeepFocusActive && !currentState.activeSessionId && !currentState.recoveryInProgress) {
+          console.log('🔄 Forcing immediate session recovery...');
+          
+          // Clean up any orphaned sessions first
+          const cleaned = await deepFocusSessionService.cleanupOrphanedSessions(user.uid);
+          if (cleaned > 0) {
+            console.log(`🧹 Cleaned up ${cleaned} orphaned sessions`);
+          }
+          
+          // Start a new session immediately
+          const newSessionId = await deepFocusSessionService.startSession(user.uid);
+          console.log('✅ IMMEDIATE session recovery completed:', newSessionId);
+          
+          // Reload sessions to update UI
+          await useDeepFocusStore.getState().loadDeepFocusSessions(user.uid);
+          
+          // Notify extension immediately of the new session state
+          try {
+            const ExtensionDataService = await import('../services/extensionDataService').then(m => m.default);
+            await ExtensionDataService.enableFocusMode();
+            console.log('🔄 Extension notified of immediate session recovery');
+          } catch (extError) {
+            console.warn('⚠️ Could not notify extension of immediate session recovery:', extError);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Failed to initialize deep focus state immediately:', error);
+      }
+    };
+
+    // Run immediately without delay
+    initializeDeepFocusState();
+  }, [user?.uid, isUserInitialized, loadFocusStatus]);
+
+  // Listen for focus changes from other components (internal state sync)
   useEffect(() => {
     // Wait for user authentication to initialize
     if (!isUserInitialized) {
@@ -25,7 +80,6 @@ export const useGlobalDeepFocusSync = () => {
       return;
     }
 
-    // Listen for focus changes from other components (internal state sync)
     const handleFocusChange = (event: CustomEvent) => {
       const { isActive } = event.detail;
       console.log('🔄 Internal focus change event:', isActive);
@@ -71,8 +125,6 @@ export const useGlobalDeepFocusSync = () => {
     window.addEventListener('deepFocusChanged', handleFocusChange as EventListener);
     window.addEventListener('message', handleExtensionFocusChange);
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Global Deep Focus sync initialized (logging removed to reduce console noise)
 
     // Cleanup
     return () => {

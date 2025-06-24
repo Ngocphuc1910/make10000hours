@@ -188,6 +188,9 @@ interface DeepFocusStore extends DeepFocusData {
     circuitBreaker: { state: string };
     canRetry: boolean;
   };
+  // new flag
+  hasRecoveredSession: boolean;
+  recoveryInProgress: boolean;
 }
 
 export const useDeepFocusStore = create<DeepFocusStore>()(
@@ -209,6 +212,8 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
   totalSessionsCount: 0,
   totalFocusTime: 0,
   unsubscribe: null,
+  hasRecoveredSession: false,
+  recoveryInProgress: false,
   activeSessionId: null,
   activeSessionStartTime: null,
   activeSessionDuration: 0,
@@ -381,57 +386,60 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       const currentLocalState = get().isDeepFocusActive;
       
       // Handle active session recovery/restart on page reload
-      if (currentLocalState && !get().activeSessionId) {
+      if (currentLocalState && !get().activeSessionId && !get().recoveryInProgress) {
+        set({recoveryInProgress:true});
         try {
           const { useUserStore } = await import('./userStore');
           const user = useUserStore.getState().user;
           if (user?.uid) {
-            // First, clean up any orphaned sessions (sessions that were never properly ended)
-            console.log('🧹 Cleaning up any orphaned sessions...');
-            const cleanedCount = await deepFocusSessionService.cleanupOrphanedSessions(user.uid);
-            
-            if (cleanedCount > 0) {
-              console.log(`✅ Cleaned up ${cleanedCount} orphaned session(s)`);
+            // Clean up any orphaned sessions first
+            const cleaned = await deepFocusSessionService.cleanupOrphanedSessions(user.uid);
+            if (cleaned > 0) {
+              await get().loadDeepFocusSessions(user.uid);
             }
             
-            // Now start a fresh new session
-            console.log('🆕 Starting fresh session after page reload...');
+            // Start a new session immediately
             const newSessionId = await deepFocusSessionService.startSession(user.uid);
-            const startTime = new Date();
+            const now = new Date();
             
-            set({ 
-              activeSessionId: newSessionId, 
-              activeSessionStartTime: startTime, 
-              activeSessionDuration: 0,
-              activeSessionElapsedSeconds: 0
-            });
-            
-            // Start timers for new session
+            // Start timers for accurate tracking
             const secondTimer = setInterval(() => {
-              const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000);
+              const elapsed = Math.floor((Date.now() - now.getTime()) / 1000);
               set({ activeSessionElapsedSeconds: elapsed });
             }, 1000);
             
             const timer = setInterval(async () => {
-              const duration = Math.floor((Date.now() - startTime.getTime()) / 60000);
-              set({ activeSessionDuration: duration });
-              if (newSessionId) {
-                await deepFocusSessionService.updateSessionDuration(newSessionId, duration);
-                console.log('⏱️ Deep Focus: Updated session duration:', duration, 'minutes (incremental tracking)');
-              }
+              const curDur = get().activeSessionDuration + 1;
+              set({ activeSessionDuration: curDur });
+              await deepFocusSessionService.incrementSessionDuration(newSessionId, 1);
             }, 60000);
             
-            set({ timer, secondTimer });
+            set({
+              activeSessionId: newSessionId,
+              activeSessionStartTime: now,
+              activeSessionDuration: 0,
+              activeSessionElapsedSeconds: 0,
+              timer,
+              secondTimer,
+              hasRecoveredSession: true,
+              recoveryInProgress: false
+            });
             
-            console.log('✅ Started fresh deep focus session:', newSessionId);
+            // Notify extension immediately
+            await ExtensionDataService.enableFocusMode();
+            
+            // Notify all subscribers about the recovered session
+            window.dispatchEvent(new CustomEvent('deepFocusChanged', { 
+              detail: { isActive: true } 
+            }));
           }
         } catch (error) {
           console.error('❌ Failed to handle session recovery/restart:', error);
+          set({recoveryInProgress: false});
         }
       }
       
       // Only update local state if extension state differs AND we don't have a persisted state
-      // This prevents overriding user's persisted preference
       if (focusStatus.focusMode !== currentLocalState) {
         // Check if this is the first load (no persisted state) or if extension was manually changed
         const hasPersistedState = localStorage.getItem('deep-focus-storage');
@@ -555,6 +563,37 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       }));
       
       console.log('✅ Focus sync initialization completed');
+
+      // Ensure session recovery happens immediately on mount (not waiting for visibility change)
+      if (get().isDeepFocusActive && !get().activeSessionId && !get().recoveryInProgress) {
+        set({recoveryInProgress:true});
+        try {
+          const { useUserStore } = await import('./userStore');
+          const user = useUserStore.getState().user;
+          if (user?.uid) {
+            const cleaned = await deepFocusSessionService.cleanupOrphanedSessions(user.uid);
+            if (cleaned>0) {
+              await get().loadDeepFocusSessions(user.uid);
+            }
+            const newId = await deepFocusSessionService.startSession(user.uid);
+            const now = new Date();
+            // start timers same as enableDeepFocus minute-second timers but duplicating minimal lines
+            const secondTimer = setInterval(()=>{
+              const elapsed=Math.floor((Date.now()-now.getTime())/1000);
+              set({activeSessionElapsedSeconds:elapsed});
+            },1000);
+            const timer=setInterval(async()=>{
+              const curDur=get().activeSessionDuration+1;
+              set({activeSessionDuration:curDur});
+              await deepFocusSessionService.incrementSessionDuration(newId,1);
+            },60000);
+            set({activeSessionId:newId,activeSessionStartTime:now,activeSessionDuration:0,activeSessionElapsedSeconds:0,timer,secondTimer,hasRecoveredSession:true,recoveryInProgress:false});
+          }
+        } catch(err){
+          console.error('Immediate recovery failed:',err);
+          set({recoveryInProgress:false});
+        }
+      }
     } catch (error) {
       console.warn('⚠️ Failed to initialize focus sync (continuing without extension):', error);
       // Don't throw - sync failure shouldn't break the app
@@ -568,6 +607,11 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
 
   enableDeepFocus: async () => {
     const state = get();
+    // Guard: if already active, do nothing to prevent duplicate sessions
+    if (state.isDeepFocusActive) {
+      console.log('🟢 enableDeepFocus ignored – already active');
+      return;
+    }
     console.log('🟢 enableDeepFocus called. Current state:', {
       isDeepFocusActive: state.isDeepFocusActive,
       extensionConnected: state.isExtensionConnected,
@@ -597,13 +641,13 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
             set({ activeSessionElapsedSeconds: elapsedSeconds });
           }, 1000);
           
-          // Start minute timer for database updates
+          // Start minute timer for database updates (atomic +1)
           const timer = setInterval(async () => {
-            const duration = Math.floor((Date.now() - startTime.getTime()) / 60000);
-            set({ activeSessionDuration: duration });
+            const currentDuration = get().activeSessionDuration + 1;
+            set({ activeSessionDuration: currentDuration });
             if (sessionId) {
-              await deepFocusSessionService.updateSessionDuration(sessionId, duration);
-              console.log('⏱️ Deep Focus: Updated session duration:', duration, 'minutes (incremental tracking)');
+              await deepFocusSessionService.incrementSessionDuration(sessionId, 1);
+              console.log('⏱️ Deep Focus: +1 minute added to session', sessionId);
             }
           }, 60000);
           
@@ -695,6 +739,17 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         try {
           await deepFocusSessionService.endSession(state.activeSessionId);
           console.log('✅ Deep Focus session ended:', state.activeSessionId);
+
+          // Reload sessions to reflect the just-ended one in UI
+          try {
+            const { useUserStore } = await import('./userStore');
+            const user = useUserStore.getState().user;
+            if (user?.uid) {
+              await get().loadDeepFocusSessions(user.uid);
+            }
+          } catch (e) {
+            console.warn('🔄 Could not refresh deep focus sessions after ending:', e);
+          }
         } catch (error) {
           console.error('❌ Failed to end Deep Focus session:', error);
         }
@@ -934,10 +989,12 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           
           // Resume minute timer for database updates
           timer = setInterval(async () => {
-            const totalElapsed = Math.floor((Date.now() - state.activeSessionStartTime!.getTime()) / 60000);
-            const activeDuration = Math.max(0, totalElapsed - Math.floor(get().totalPausedTime / 60));
-            set({ activeSessionDuration: activeDuration });
-            await deepFocusSessionService.updateSessionDuration(state.activeSessionId!, activeDuration);
+            const currentDuration = get().activeSessionDuration + 1;
+            set({ activeSessionDuration: currentDuration });
+            if (state.activeSessionId) {
+              await deepFocusSessionService.incrementSessionDuration(state.activeSessionId, 1);
+              console.log('⏱️ Deep Focus: +1 minute added to session', state.activeSessionId);
+            }
           }, 60000);
         }
 

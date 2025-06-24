@@ -124,6 +124,7 @@ const DeepFocusPage: React.FC = () => {
   const datePickerRef = useRef<FlatpickrInstance | null>(null);
 
   // Global Deep Focus sync handled by App.tsx to prevent duplication
+  // NOTE: Our immediate initialization (above) takes priority over delayed sync hooks
   
   // User sync hook - ensures extension knows current user ID
 
@@ -151,6 +152,9 @@ const DeepFocusPage: React.FC = () => {
   
   // Add state to track extension status
   const [extensionStatus, setExtensionStatus] = useState<'unknown' | 'online' | 'offline'>('unknown');
+  
+  // Add state to track immediate initialization completion
+  const [immediateInitComplete, setImmediateInitComplete] = useState(false);
   
 
 
@@ -221,6 +225,100 @@ const DeepFocusPage: React.FC = () => {
       loadBlockedSites(user.uid);
     }
   }, [user?.uid, loadBlockedSites]);
+
+  // CRITICAL: Initialize deep focus status immediately on mount to handle session recovery
+  useEffect(() => {
+    const initializeDeepFocusState = async () => {
+      if (!user?.uid) {
+        console.log('🔄 Deep Focus initialization waiting for user...');
+        return;
+      }
+
+      console.log('🚀 IMMEDIATE Deep Focus initialization for reload session recovery...');
+      
+      try {
+        // First, load the focus status which handles session recovery/restart
+        await loadFocusStatus();
+        console.log('✅ Focus status loaded, checking for active session recovery...');
+        
+        // If we still don't have an active session but deep focus is active, force recovery
+        const currentState = useDeepFocusStore.getState();
+        if (currentState.isDeepFocusActive && !currentState.activeSessionId && !currentState.recoveryInProgress) {
+          console.log('🔄 Deep Focus active but no session - forcing immediate recovery...');
+          
+          // Import the service directly to avoid circular dependencies
+          const deepFocusSessionService = await import('../../api/deepFocusSessionService').then(m => m.deepFocusSessionService);
+          
+          // Clean up any orphaned sessions first
+          const cleanedCount = await deepFocusSessionService.cleanupOrphanedSessions(user.uid);
+          if (cleanedCount > 0) {
+            console.log(`✅ Cleaned up ${cleanedCount} orphaned session(s) during immediate recovery`);
+          }
+          
+          // Start a new session immediately
+          const newSessionId = await deepFocusSessionService.startSession(user.uid);
+          const startTime = new Date();
+          
+          // Update store with new session
+          const { activeSessionId, activeSessionStartTime, activeSessionDuration, activeSessionElapsedSeconds, timer, secondTimer } = useDeepFocusStore.getState();
+          
+          // Clear any existing timers
+          if (timer) clearInterval(timer);
+          if (secondTimer) clearInterval(secondTimer);
+          
+          // Create new timers
+          const newSecondTimer = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000);
+            useDeepFocusStore.setState({ activeSessionElapsedSeconds: elapsed });
+          }, 1000);
+          
+          const newTimer = setInterval(async () => {
+            const currentDuration = useDeepFocusStore.getState().activeSessionDuration + 1;
+            useDeepFocusStore.setState({ activeSessionDuration: currentDuration });
+            if (newSessionId) {
+              await deepFocusSessionService.incrementSessionDuration(newSessionId, 1);
+              console.log('⏱️ Deep Focus: +1 minute added to session', newSessionId);
+            }
+          }, 60000);
+          
+          // Update store with new session state
+          useDeepFocusStore.setState({
+            activeSessionId: newSessionId,
+            activeSessionStartTime: startTime,
+            activeSessionDuration: 0,
+            activeSessionElapsedSeconds: 0,
+            timer: newTimer,
+            secondTimer: newSecondTimer,
+            hasRecoveredSession: true,
+            recoveryInProgress: false
+          });
+          
+          console.log('✅ IMMEDIATE session recovery completed:', newSessionId);
+          
+          // Reload sessions to update UI
+          await loadDeepFocusSessions(user.uid);
+          
+          // Notify extension immediately of the new session state
+          try {
+            const ExtensionDataService = await import('../../services/extensionDataService').then(m => m.default);
+            await ExtensionDataService.enableFocusMode();
+            console.log('🔄 Extension notified of immediate session recovery');
+          } catch (extError) {
+            console.warn('⚠️ Could not notify extension of immediate session recovery:', extError);
+          }
+        }
+             } catch (error) {
+        console.error('❌ Failed to initialize deep focus state immediately:', error);
+      } finally {
+        // Mark initialization as complete regardless of success/failure
+        setImmediateInitComplete(true);
+        console.log('🏁 IMMEDIATE initialization phase completed');
+      }
+    };
+
+    // Run immediately without delay
+    initializeDeepFocusState();
+  }, [user?.uid, loadFocusStatus, loadDeepFocusSessions]); // Add dependencies
 
 
 
@@ -1220,9 +1318,45 @@ const DeepFocusPage: React.FC = () => {
     }
   };
 
-  // Extension status detection
+  // Extension status detection (immediate)
   useEffect(() => {
-    // Add response listener for extension ping
+    const initializeExtensionStatus = async () => {
+      // Immediate status check
+      console.log('📡 IMMEDIATE extension status check...');
+      
+      try {
+        // Import extension service to test connection immediately
+        const ExtensionDataService = await import('../../services/extensionDataService').then(m => m.default);
+        
+        if (!ExtensionDataService.isExtensionInstalled()) {
+          setExtensionStatus('offline');
+          console.log('📱 Extension not installed');
+          return;
+        }
+
+        // Test connection with short timeout
+        const isConnected = await Promise.race([
+          ExtensionDataService.testConnection(),
+          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1000))
+        ]);
+
+        if (isConnected) {
+          setExtensionStatus('online');
+          console.log('✅ Extension IMMEDIATELY available');
+        } else {
+          setExtensionStatus('offline');
+          console.log('⚠️ Extension not responding immediately');
+        }
+      } catch (error) {
+        setExtensionStatus('offline');
+        console.log('❌ Extension status check failed:', error);
+      }
+    };
+
+    // Run immediate check
+    initializeExtensionStatus();
+
+    // Also set up the ping system as backup
     const handleExtensionPing = (event: MessageEvent) => {
       if (event.data?.type === 'EXTENSION_PONG' && event.data?.source === 'focus-time-tracker-extension') {
         console.log('✅ Extension responded to ping - marking as online');
@@ -1232,21 +1366,26 @@ const DeepFocusPage: React.FC = () => {
 
     window.addEventListener('message', handleExtensionPing);
     
-    // Set timeout to mark extension as offline if no response
+    // Set timeout to mark extension as offline if no response (only if still unknown)
     const timeout = setTimeout(() => {
-      if (extensionStatus === 'unknown') {
-        console.log('⚠️ Extension status timeout - marking as offline');
-        setExtensionStatus('offline');
-      }
-    }, 3000); // 3 second timeout
+      setExtensionStatus(current => {
+        if (current === 'unknown') {
+          console.log('⚠️ Extension status timeout - marking as offline');
+          return 'offline';
+        }
+        return current;
+      });
+    }, 3000);
 
-    // Send a ping to check if extension is available
-    console.log('📡 Sending extension ping...');
-    window.postMessage({
-      type: 'EXTENSION_PING',
-      payload: { timestamp: Date.now() },
-      source: 'make10000hours-webapp'
-    }, '*');
+    // Send a ping to check if extension is available (backup method)
+    setTimeout(() => {
+      console.log('📡 Sending extension ping (backup check)...');
+      window.postMessage({
+        type: 'EXTENSION_PING',
+        payload: { timestamp: Date.now() },
+        source: 'make10000hours-webapp'
+      }, '*');
+    }, 100);
 
     return () => {
       clearTimeout(timeout);
