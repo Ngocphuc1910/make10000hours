@@ -30,6 +30,7 @@ import { LoadingScreen } from './components/ui/LoadingScreen';
 import { ChatButton } from './components/chat/ChatButton';
 import DataSyncPage from './components/pages/DataSyncPage';
 import { ChatIntegrationService } from './services/chatIntegration';
+import { useDeepFocusStore } from './store/deepFocusStore';
 
 // Import test utilities in development mode
 if (process.env.NODE_ENV === 'development') {
@@ -332,6 +333,27 @@ const App: React.FC = () => {
       // Force page reload to start with fresh data
       window.location.reload();
     }
+  }, []);
+
+  // Handle tab/browser closure for deep focus sessions
+  useEffect(() => {
+    const handleBeforeUnload = async (event: BeforeUnloadEvent) => {
+      const deepFocusStore = useDeepFocusStore.getState();
+      if (deepFocusStore.isDeepFocusActive) {
+        // Add a confirmation dialog
+        event.preventDefault();
+        event.returnValue = 'You have an active Deep Focus session. Are you sure you want to leave?';
+        
+        try {
+          await deepFocusStore.disableDeepFocus();
+        } catch (error) {
+          console.error('Failed to end deep focus session:', error);
+        }
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
   // App component render tracking removed to reduce console noise
