@@ -27,6 +27,9 @@ class PopupManager {
       // Initialize analytics UI component
       if (window.AnalyticsUI) {
         this.analyticsUI = new window.AnalyticsUI();
+        console.log('✅ Analytics UI initialized successfully');
+      } else {
+        console.warn('⚠️ Analytics UI component not available - analytics features will be disabled');
       }
 
       // Get initial state and stats - always get fresh focus state
@@ -51,11 +54,13 @@ class PopupManager {
           this.currentState.focusStats = {};
         }
         this.currentState.focusStats.focusMode = focusStateResponse.data.focusMode;
+        console.log('🔄 Popup initialized with fresh focus state:', focusStateResponse.data.focusMode);
       }
 
       // Store user info
       if (userInfoResponse?.success) {
         this.userInfo = userInfoResponse.data;
+        console.log('👤 User info loaded:', this.userInfo);
       }
 
       // Update UI with initial data
@@ -65,13 +70,14 @@ class PopupManager {
       // Set up tab system
       this.setupTabs();
 
-      // Set up periodic updates with reduced frequency
+      // Set up periodic updates
       this.updateInterval = setInterval(() => {
-        // Only refresh if popup is visible
-        if (document.visibilityState === 'visible') {
-          this.refreshState();
-        }
-      }, 5000); // Check every 5 seconds instead of 2
+        this.refreshState();
+        // Also refresh focus state specifically to catch changes from web app
+        this.refreshFocusState();
+        // Also refresh user info to catch changes from web app
+        this.refreshUserInfo();
+      }, 2000); // Check every 2 seconds
 
       // Set up event listeners
       this.setupEventListeners();
@@ -82,10 +88,12 @@ class PopupManager {
           this.todayStats = message.payload;
           this.updateUI();
         } else if (message.type === 'FOCUS_STATE_CHANGED') {
+          console.log('🔄 Focus state changed externally:', message.payload.isActive);
           // Update local state and UI without triggering another toggle
           this.currentState.focusStats.focusMode = message.payload.isActive;
           this.updateUI();
         } else if (message.type === 'USER_INFO_UPDATED') {
+          console.log('👤 User info updated:', message.payload);
           this.userInfo = message.payload;
           this.updateUserInfo();
         }
