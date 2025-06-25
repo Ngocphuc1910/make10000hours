@@ -42,4 +42,7 @@ temp-env-source.txt
 environment-config.md
 test-chatbot.html
 
+# Firebase Admin SDK
+make10000hours-firebase-adminsdk-*.json
+
 dist/
