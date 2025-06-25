@@ -2,6 +2,38 @@
  * Debug utilities for Deep Focus functionality
  */
 
+// Debug configuration type
+interface DebugConfig {
+  deepFocus: boolean;
+  timerSync: boolean;
+  dataSync: boolean;
+  userSync: boolean;
+}
+
+// Debug logger implementation
+export const debugLogger = {
+  config: {
+    deepFocus: false,
+    timerSync: false,
+    dataSync: false,
+    userSync: false
+  } as DebugConfig,
+
+  getConfig() {
+    return this.config;
+  },
+
+  setConfig(category: keyof DebugConfig, enabled: boolean) {
+    this.config[category] = enabled;
+  },
+
+  log(category: keyof DebugConfig, ...args: any[]) {
+    if (this.config[category]) {
+      console.log(`[${category}]`, ...args);
+    }
+  }
+};
+
 export const debugDeepFocus = {
   /**
    * Clear all localStorage to reset app state
@@ -66,7 +98,8 @@ export const debugDeepFocus = {
   }
 };
 
-// Make it available globally for debugging
+// Make debug utilities available globally for debugging
 if (typeof window !== 'undefined') {
   (window as any).debugDeepFocus = debugDeepFocus;
+  (window as any).debugLogger = debugLogger;
 } 
