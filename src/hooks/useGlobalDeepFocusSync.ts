@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useDeepFocusStore } from '../store/deepFocusStore';
 import { useUserStore } from '../store/userStore';
+import { debugDeepFocus, debugGeneral } from '../utils/debugUtils';
 
 /**
  * Global Deep Focus synchronization hook
@@ -18,21 +19,30 @@ export const useGlobalDeepFocusSync = () => {
   } = useDeepFocusStore();
   
   const { isInitialized: isUserInitialized, user } = useUserStore();
+  
+  // Add refs to track state changes and prevent circular updates
+  const lastSyncTime = useRef(0);
+  const lastExtensionUpdate = useRef(0);
+  const syncInProgress = useRef(false);
 
   // CRITICAL: Initialize deep focus status immediately on mount to handle session recovery
   useEffect(() => {
     const initializeDeepFocusState = async () => {
-      if (!user?.uid || !isUserInitialized) {
-        console.log('🔄 Global Deep Focus initialization waiting for user...');
+      if (!user?.uid || !isUserInitialized || syncInProgress.current) {
         return;
       }
 
-      console.log('🚀 IMMEDIATE Global Deep Focus initialization for reload/new tab session recovery...');
-      
       try {
+        syncInProgress.current = true;
+        
         // First, load the focus status which handles session recovery/restart
         await loadFocusStatus();
-        console.log('✅ Global Focus status loaded, checking for active session recovery...');
+        
+        // Only log completion with essential info
+        debugDeepFocus('✅ Deep Focus initialization completed', {
+          userId: user.uid,
+          isActive: useDeepFocusStore.getState().isDeepFocusActive
+        });
         
         // Import the service directly to avoid circular dependencies
         const { deepFocusSessionService } = await import('../api/deepFocusSessionService');
@@ -46,7 +56,11 @@ export const useGlobalDeepFocusSync = () => {
         const isNewTab = parsedState?.isDeepFocusActive && !currentState.activeSessionId;
         
         if (isNewTab) {
-          console.log('📱 New tab detected, syncing deep focus state...');
+          debugDeepFocus('📱 New tab detected, syncing state', {
+            activeSession: parsedState.activeSessionId,
+            isActive: parsedState.isDeepFocusActive
+          });
+          
           useDeepFocusStore.setState({
             isDeepFocusActive: parsedState.isDeepFocusActive,
             activeSessionId: parsedState.activeSessionId,
@@ -60,6 +74,8 @@ export const useGlobalDeepFocusSync = () => {
         }
       } catch (error) {
         console.error('❌ Error during deep focus initialization:', error);
+      } finally {
+        syncInProgress.current = false;
       }
     };
 
@@ -70,41 +86,53 @@ export const useGlobalDeepFocusSync = () => {
   useEffect(() => {
     // Wait for user authentication to initialize
     if (!isUserInitialized) {
-      console.log('🔐 Global sync waiting for user authentication...');
+      debugGeneral('🔐 Global sync waiting for user authentication...');
       return;
     }
 
     const handleFocusChange = (event: CustomEvent) => {
       const { isActive } = event.detail;
-      console.log('🔄 Internal focus change event:', isActive);
+      const now = Date.now();
+      
+      // Prevent rapid re-syncs
+      if (now - lastSyncTime.current < 1000) {
+        return;
+      }
+      
+      lastSyncTime.current = now;
+      debugDeepFocus('🔄 Internal focus change event:', isActive);
       syncFocusStatus(isActive);
     };
 
     // Listen for real-time focus state changes from extension
     const handleExtensionFocusChange = async (event: MessageEvent) => {
       if (event.data?.type === 'EXTENSION_FOCUS_STATE_CHANGED') {
+        const now = Date.now();
+        
+        // Prevent rapid re-syncs from extension
+        if (now - lastExtensionUpdate.current < 1000) {
+          return;
+        }
+        
+        lastExtensionUpdate.current = now;
+        
         const hasExtensionId = !!event.data?.extensionId;
         const hasPayload = !!event.data?.payload;
         const isActiveBoolean = typeof event.data.payload?.isActive === 'boolean';
         const hasBlockedSites = Array.isArray(event.data.payload?.blockedSites);
         
-        console.log('🔍 Extension message validation:', {
-          type: event.data.type,
-          hasExtensionId,
-          hasPayload, 
-          isActiveBoolean,
-          hasBlockedSites,
-          blockedSites: event.data.payload?.blockedSites,
-          allValid: hasExtensionId && hasPayload && isActiveBoolean && hasBlockedSites
-        });
-        
         // Verify message is from our extension with proper structure
-        if (hasExtensionId && hasPayload && isActiveBoolean) {
-          console.log('🔄 Real-time focus state change from extension:', event.data.payload);
+        if (hasExtensionId && hasPayload && isActiveBoolean && !syncInProgress.current) {
+          debugDeepFocus('🔄 Real-time focus state change from extension:', event.data.payload);
           const { isActive, blockedSites = [] } = event.data.payload;
           
-          // Use syncCompleteFocusState instead of syncFocusStatus
-          await syncCompleteFocusState(isActive, blockedSites);
+          syncInProgress.current = true;
+          try {
+            // Use syncCompleteFocusState instead of syncFocusStatus
+            await syncCompleteFocusState(isActive, blockedSites);
+          } finally {
+            syncInProgress.current = false;
+          }
         }
       }
     };
@@ -113,9 +141,19 @@ export const useGlobalDeepFocusSync = () => {
     let wasHidden = document.hidden;
     const handleVisibilityChange = () => {
       if (!document.hidden && wasHidden) {
-        console.log('📖 Page became visible - checking for extension state updates');
+        const now = Date.now();
+        
+        // Prevent rapid re-syncs on visibility change
+        if (now - lastSyncTime.current < 1000) {
+          return;
+        }
+        
+        lastSyncTime.current = now;
+        debugGeneral('📖 Page became visible - checking for extension state updates');
         setTimeout(() => {
-          loadFocusStatus();
+          if (!syncInProgress.current) {
+            loadFocusStatus();
+          }
         }, 500);
       }
       wasHidden = document.hidden;
@@ -140,10 +178,19 @@ export const useGlobalDeepFocusSync = () => {
     enableDeepFocus,
     disableDeepFocus,
     toggleDeepFocus: async () => {
-      if (isDeepFocusActive) {
-        await disableDeepFocus();
-      } else {
-        await enableDeepFocus();
+      if (syncInProgress.current) {
+        return;
+      }
+      
+      syncInProgress.current = true;
+      try {
+        if (isDeepFocusActive) {
+          await disableDeepFocus();
+        } else {
+          await enableDeepFocus();
+        }
+      } finally {
+        syncInProgress.current = false;
       }
     }
   };

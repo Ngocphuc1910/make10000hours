@@ -32,6 +32,8 @@ import DataSyncPage from './components/pages/DataSyncPage';
 import { ChatIntegrationService } from './services/chatIntegration';
 import { useDeepFocusStore } from './store/deepFocusStore';
 import { useGlobalShortcuts } from './hooks/useGlobalShortcuts';
+import DebugControls from './components/debug/DebugControls';
+import { debugKeyboard } from './utils/debugUtils';
 
 // Import test utilities in development mode
 if (process.env.NODE_ENV === 'development') {
@@ -113,7 +115,7 @@ const GlobalKeyboardShortcuts: React.FC = () => {
 
   // Global keyboard shortcuts
   useEffect(() => {
-    console.log('🔧 GlobalKeyboardShortcuts: Component mounted and event listener attached');
+    debugKeyboard('🔧 GlobalKeyboardShortcuts: Component mounted and event listener attached');
     
     const handleKeyDown = (event: KeyboardEvent) => {
       // Check if user is typing in a form element
@@ -124,7 +126,7 @@ const GlobalKeyboardShortcuts: React.FC = () => {
                                    target.getAttribute('role') === 'textbox';
       
       // Debug logging for any key press
-      console.log('🔑 Key pressed:', {
+      debugKeyboard('🔑 Key pressed:', {
         key: event.key,
         code: event.code,
         target: target.tagName,
@@ -140,7 +142,7 @@ const GlobalKeyboardShortcuts: React.FC = () => {
         const isPomodoroPage = location.pathname === '/pomodoro' || location.pathname === '/';
         if (isPomodoroPage && enableStartPauseBtn) {
           event.preventDefault();
-          console.log('🔑 Space detected - toggling pomodoro timer');
+          debugKeyboard('🔑 Space detected - toggling pomodoro timer');
           if (isRunning) {
             pause();
           } else {
@@ -152,7 +154,7 @@ const GlobalKeyboardShortcuts: React.FC = () => {
       
       // Check for Shift + D to toggle deep focus mode (only if not typing in form elements)
       if (event.shiftKey && (event.key === 'D' || event.key === 'd') && !isTypingInFormElement) {
-        console.log('🔑 Shift+D detected - toggling deep focus mode');
+        debugKeyboard('🔑 Shift+D detected - toggling deep focus mode');
         event.preventDefault();
         toggleDeepFocus();
         return;
@@ -160,7 +162,7 @@ const GlobalKeyboardShortcuts: React.FC = () => {
       
       // Debug logging for Alt key combinations
       if (event.altKey) {
-        console.log('Alt key pressed with:', {
+        debugKeyboard('Alt key pressed with:', {
           key: event.key,
           code: event.code,
           keyCode: event.keyCode,
@@ -173,7 +175,7 @@ const GlobalKeyboardShortcuts: React.FC = () => {
       
       // Check for Shift + N to create new task (only if not typing in form elements)
       if (event.shiftKey && event.key === 'N' && !isTypingInFormElement) {
-        console.log('🔑 Shift+N detected - creating new task');
+        debugKeyboard('🔑 Shift+N detected - creating new task');
         event.preventDefault();
         
         // Ensure the right sidebar is open to show tasks
@@ -187,14 +189,14 @@ const GlobalKeyboardShortcuts: React.FC = () => {
       
       // Check for Cmd + \ to toggle right sidebar
       if (event.metaKey && (event.key === '\\' || event.key === '|')) {
-        console.log('🔑 Cmd+\\ detected - toggling right sidebar');
+        debugKeyboard('🔑 Cmd+\\ detected - toggling right sidebar');
         event.preventDefault();
         toggleRightSidebar();
       }
       
       // Check for Alt/Option + \ to toggle left sidebar
       if (event.altKey && (event.key === '\\' || event.key === '|' || event.code === 'Backslash')) {
-        console.log('🔑 Alt+\\ detected - toggling left sidebar');
+        debugKeyboard('🔑 Alt+\\ detected - toggling left sidebar');
         event.preventDefault();
         toggleLeftSidebar();
       }
@@ -372,10 +374,40 @@ const App: React.FC = () => {
         const isReloading = window.performance?.navigation?.type === 1 || 
           (window.performance?.getEntriesByType('navigation')[0] as PerformanceNavigationTiming)?.type === 'reload';
         
+        console.log('🔄 [RELOAD DEBUG] beforeunload handler triggered:', {
+          isReloading,
+          activeSessionId: deepFocusStore.activeSessionId,
+          isDeepFocusActive: deepFocusStore.isDeepFocusActive
+        });
+        
         deepFocusStore.setReloading(isReloading);
         
-        // Only complete session if actually closing (not reloading)
-        if (!isReloading) {
+        // For page reload: complete current session but keep Deep Focus state
+        // For page close: end Deep Focus completely
+        if (isReloading) {
+          // On reload: only end the session, don't change Deep Focus state
+          if (deepFocusStore.activeSessionId) {
+            try {
+              const { deepFocusSessionService } = await import('./api/deepFocusSessionService');
+              await deepFocusSessionService.endSession(deepFocusStore.activeSessionId);
+              console.log('🔄 [RELOAD DEBUG] Completed session for page reload:', deepFocusStore.activeSessionId);
+              
+              // Clear timers to prevent memory leaks
+              const state = deepFocusStore;
+              if (state.timer) {
+                clearInterval(state.timer);
+              }
+              if (state.secondTimer) {
+                clearInterval(state.secondTimer);
+              }
+              
+            } catch (error) {
+              console.error('❌ [RELOAD DEBUG] Failed to complete session on reload:', error);
+            }
+          }
+        } else {
+          // On close: end Deep Focus completely and prevent leaving
+          console.log('🔄 [RELOAD DEBUG] Tab/window closing - ending Deep Focus completely');
           event.preventDefault();
           event.returnValue = '';
           await deepFocusStore.disableDeepFocus();
@@ -447,6 +479,7 @@ const App: React.FC = () => {
       </AnalyticsWrapper>
       <ToastContainer />
       <ChatButton />
+      <DebugControls />
     </Router>
   );
 }
