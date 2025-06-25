@@ -108,6 +108,8 @@ const GlobalKeyboardShortcuts: React.FC = () => {
   const { isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar } = useUIStore();
   const { toggleDeepFocus } = useGlobalDeepFocusSync();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { start, pause, isRunning, enableStartPauseBtn } = useTimerStore();
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -131,6 +133,22 @@ const GlobalKeyboardShortcuts: React.FC = () => {
         shiftKey: event.shiftKey,
         altKey: event.altKey
       });
+
+      // Handle space bar for Pomodoro Timer start/pause
+      if (event.code === 'Space' && !isTypingInFormElement) {
+        // Only handle space if we're on the pomodoro page and start/pause is enabled
+        const isPomodoroPage = location.pathname === '/pomodoro' || location.pathname === '/';
+        if (isPomodoroPage && enableStartPauseBtn) {
+          event.preventDefault();
+          console.log('🔑 Space detected - toggling pomodoro timer');
+          if (isRunning) {
+            pause();
+          } else {
+            start();
+          }
+          return;
+        }
+      }
       
       // Check for Shift + D to toggle deep focus mode (only if not typing in form elements)
       if (event.shiftKey && (event.key === 'D' || event.key === 'd') && !isTypingInFormElement) {
@@ -245,7 +263,7 @@ const GlobalKeyboardShortcuts: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar, setIsAddingTask, navigate, toggleDeepFocus]);
+  }, [isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar, setIsAddingTask, navigate, toggleDeepFocus, location, start, pause, isRunning, enableStartPauseBtn]);
 
   return null;
 };
