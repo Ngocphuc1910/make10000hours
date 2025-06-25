@@ -1,5 +1,4 @@
 // Chrome Extension types
-import { debugExtension } from '../utils/debugUtils';
 
 interface ExtensionTimeData {
   totalTime: number;
@@ -39,15 +38,10 @@ class ExtensionCircuitBreaker {
   }
 
   reset(): void {
-    const previousState = this.state;
     this.failureCount = 0;
     this.state = 'CLOSED';
     this.lastFailureTime = 0;
-    
-    // Only log when state actually changes
-    if (previousState !== 'CLOSED') {
-      debugExtension('🔄 Extension circuit breaker state changed:', previousState, '→ CLOSED');
-    }
+    console.log('🔄 Extension circuit breaker RESET');
   }
 
   canExecute(): boolean {
@@ -55,9 +49,7 @@ class ExtensionCircuitBreaker {
     
     if (this.state === 'OPEN') {
       if (now - this.lastFailureTime >= this.TIMEOUT) {
-        const previousState = this.state;
         this.state = 'HALF_OPEN';
-        debugExtension('🔄 Extension circuit breaker state changed:', previousState, '→ HALF_OPEN');
         return true;
       }
       return false;
@@ -67,24 +59,17 @@ class ExtensionCircuitBreaker {
   }
 
   onSuccess(): void {
-    const previousState = this.state;
     this.failureCount = 0;
     this.state = 'CLOSED';
-    
-    // Only log when state actually changes
-    if (previousState !== 'CLOSED') {
-      debugExtension('✅ Extension circuit breaker state changed:', previousState, '→ CLOSED');
-    }
   }
 
   onFailure(): void {
     this.failureCount++;
     this.lastFailureTime = Date.now();
     
-    if (this.failureCount >= this.FAILURE_THRESHOLD && this.state !== 'OPEN') {
-      const previousState = this.state;
+    if (this.failureCount >= this.FAILURE_THRESHOLD) {
       this.state = 'OPEN';
-      debugExtension('🚫 Extension circuit breaker state changed:', previousState, '→ OPEN');
+      console.log(`🚫 Extension circuit breaker OPEN - preventing further calls for ${this.TIMEOUT/1000}s`);
     }
   }
 
