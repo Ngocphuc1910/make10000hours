@@ -58,21 +58,14 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
   const handleToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled) return;
     
-    console.log('🔄 [SWITCH DEBUG] Deep Focus switch toggled:', {
-      checked: e.target.checked,
-      currentState: isDeepFocusActive
-    });
-    
     try {
       if (e.target.checked) {
-        console.log('🟢 [SWITCH DEBUG] Calling enableDeepFocus...');
         await enableDeepFocus();
       } else {
-        console.log('🔴 [SWITCH DEBUG] Calling disableDeepFocus...');
         await disableDeepFocus();
       }
     } catch (error) {
-      console.error('❌ [SWITCH DEBUG] Failed to toggle Deep Focus:', error);
+      console.error('Failed to toggle Deep Focus:', error);
       
       // Reset the checkbox to its previous state if the operation failed
       setTimeout(() => {
