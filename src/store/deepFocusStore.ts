@@ -8,6 +8,7 @@ import { siteUsageService } from '../api/siteUsageService';
 import HybridDataService from '../api/hybridDataService';
 import { overrideSessionService, OverrideSession } from '../api/overrideSessionService';
 import { blockedSitesService } from '../api/blockedSitesService';
+import { debugDeepFocus, debugSession, debugGeneral } from '../utils/debugUtils';
 
 // Mock data with exact colors from AI design
 const mockSiteUsage: SiteUsage[] = [
@@ -373,6 +374,100 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       },
 
       loadFocusStatus: async () => {
+        // --- Handle page reload: start new session if Deep Focus is still active ---
+        const state = get();
+        
+        // Only log debug info if this is a reload scenario
+        if (state.isReloading) {
+          debugSession('🔄 [RELOAD DEBUG] loadFocusStatus called during reload:', {
+            isReloading: state.isReloading,
+            isDeepFocusActive: state.isDeepFocusActive,
+            activeSessionId: state.activeSessionId,
+            recoveryInProgress: state.recoveryInProgress
+          });
+        }
+
+        // If this is a reload and Deep Focus is active but no session exists, start recovery
+        if (state.isReloading && state.isDeepFocusActive && !state.activeSessionId && !state.recoveryInProgress) {
+          debugSession('🔄 [RELOAD DEBUG] Page reload detected with Deep Focus active - starting session recovery');
+          set({
+            recoveryInProgress: true,
+            isReloading: false
+          });
+          
+          try {
+            const { useUserStore } = await import('./userStore');
+            const user = useUserStore.getState().user;
+            
+            if (user?.uid) {
+              debugSession('🔄 [RELOAD DEBUG] Creating new session for user after reload');
+              
+              // Clean up any orphaned sessions first
+              const cleaned = await deepFocusSessionService.cleanupOrphanedSessions(user.uid);
+              if (cleaned > 0) {
+                debugSession('🔄 [RELOAD DEBUG] Cleaned up orphaned sessions:', cleaned);
+                await get().loadDeepFocusSessions(user.uid);
+              }
+              
+              // Start a new session immediately
+              const newSessionId = await deepFocusSessionService.startSession(user.uid);
+              const now = new Date();
+              
+              debugSession('🔄 [RELOAD DEBUG] New session created:', newSessionId);
+              
+              // Start timers for accurate tracking
+              const secondTimer = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - now.getTime()) / 1000);
+                set({ activeSessionElapsedSeconds: elapsed });
+              }, 1000);
+              
+              const timer = setInterval(async () => {
+                const curDur = get().activeSessionDuration + 1;
+                set({ activeSessionDuration: curDur });
+                await deepFocusSessionService.incrementSessionDuration(newSessionId, 1);
+                debugSession('⏱️ [RELOAD DEBUG] Deep Focus: +1 minute added to session', newSessionId);
+              }, 60000);
+              
+              set({
+                activeSessionId: newSessionId,
+                activeSessionStartTime: now,
+                activeSessionDuration: 0,
+                activeSessionElapsedSeconds: 0,
+                timer,
+                secondTimer,
+                hasRecoveredSession: true,
+                recoveryInProgress: false
+              });
+              
+              debugSession('🔄 [RELOAD DEBUG] Session recovery completed successfully');
+              
+              // Notify extension and components
+              try {
+                if (ExtensionDataService.isExtensionInstalled()) {
+                  await ExtensionDataService.enableFocusMode();
+                  debugSession('🔄 [RELOAD DEBUG] Extension notified of session recovery');
+                }
+              } catch (error) {
+                console.warn('⚠️ [RELOAD DEBUG] Failed to notify extension:', error);
+              }
+              
+              // Notify all subscribers about the recovered session
+              window.dispatchEvent(new CustomEvent('deepFocusChanged', { 
+                detail: { isActive: true } 
+              }));
+              
+              return; // Exit early since we handled the reload case
+            }
+          } catch (error) {
+            console.error('❌ [RELOAD DEBUG] Failed to recover session after reload:', error);
+            set({ recoveryInProgress: false });
+          }
+        } else if (state.isReloading) {
+          // Just clear the reload flag if we don't need recovery
+          debugSession('🔄 [RELOAD DEBUG] Clearing reload flag');
+          set({ isReloading: false });
+        }
+
         try {
           if (!ExtensionDataService.isExtensionInstalled()) {
             return;
@@ -667,15 +762,18 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
 
       enableDeepFocus: async () => {
         const state = get();
-        // Guard: if already active, do nothing to prevent duplicate sessions
-        if (state.isDeepFocusActive) {
-          console.log('🟢 enableDeepFocus ignored – already active');
+        // Guard: if already active and has a session, do nothing to prevent duplicate sessions
+        // But allow if it's active without a session (recovery scenario)
+        if (state.isDeepFocusActive && state.activeSessionId) {
+          debugDeepFocus('🟢 [ENABLE DEBUG] enableDeepFocus ignored – already active with session');
           return;
         }
-        console.log('🟢 enableDeepFocus called. Current state:', {
+        debugDeepFocus('🟢 [ENABLE DEBUG] enableDeepFocus called. Current state:', {
           isDeepFocusActive: state.isDeepFocusActive,
           extensionConnected: state.isExtensionConnected,
-          activeSessionId: state.activeSessionId
+          activeSessionId: state.activeSessionId,
+          isReloading: state.isReloading,
+          recoveryInProgress: state.recoveryInProgress
         });
         
         try {
@@ -688,10 +786,10 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
             console.log('🔍 User state for session:', user ? { uid: user.uid, email: user.email } : 'No user');
             
             if (user?.uid) {
-              console.log('📝 Starting Deep Focus session for user:', user.uid);
+              debugSession('📝 [ENABLE DEBUG] Starting Deep Focus session for user:', user.uid);
               sessionId = await deepFocusSessionService.startSession(user.uid);
               startTime = new Date();
-              console.log('✅ Deep Focus session started:', sessionId);
+              debugSession('✅ [ENABLE DEBUG] Deep Focus session started:', sessionId);
               
               set({ activeSessionId: sessionId, activeSessionStartTime: startTime, activeSessionDuration: 0, activeSessionElapsedSeconds: 0 });
               
@@ -787,10 +885,12 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
 
       disableDeepFocus: async () => {
         const state = get();
-        console.log('🔴 disableDeepFocus called. Current state:', {
+        debugDeepFocus('🔴 [DISABLE DEBUG] disableDeepFocus called. Current state:', {
           isDeepFocusActive: state.isDeepFocusActive,
           extensionConnected: state.isExtensionConnected,
-          activeSessionId: state.activeSessionId
+          activeSessionId: state.activeSessionId,
+          isReloading: state.isReloading,
+          recoveryInProgress: state.recoveryInProgress
         });
         
         try {
@@ -798,7 +898,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           if (state.activeSessionId) {
             try {
               await deepFocusSessionService.endSession(state.activeSessionId);
-              console.log('✅ Deep Focus session ended:', state.activeSessionId);
+              debugSession('✅ [DISABLE DEBUG] Deep Focus session ended:', state.activeSessionId);
 
               // Reload sessions to reflect the just-ended one in UI
               try {
@@ -1460,7 +1560,8 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           isSessionPaused: shouldUseStoredState ? parsedState.isSessionPaused : state.isSessionPaused,
           pausedAt: shouldUseStoredState && parsedState.pausedAt ? new Date(parsedState.pausedAt) : state.pausedAt,
           totalPausedTime: shouldUseStoredState ? parsedState.totalPausedTime : state.totalPausedTime,
-          isReloading: false // Reset after persistence
+          // Preserve isReloading flag so page-load logic can distinguish reload vs fresh tab
+          isReloading: state.isReloading
         };
       }
     }
