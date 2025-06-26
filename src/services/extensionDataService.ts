@@ -25,10 +25,14 @@ class ExtensionCircuitBreaker {
   private static instance: ExtensionCircuitBreaker;
   private failureCount = 0;
   private lastFailureTime = 0;
+  private lastResetTime = 0;
   private state: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED';
   private readonly FAILURE_THRESHOLD = 5;
   private readonly TIMEOUT = 60000;
   private readonly RETRY_TIMEOUT = 10000;
+  private readonly MIN_RESET_INTERVAL = 30000; // Prevent reset spam
+  private lastLogTime = 0;
+  private readonly LOG_THROTTLE = 5000; // Throttle logs to every 5 seconds
 
   static getInstance(): ExtensionCircuitBreaker {
     if (!ExtensionCircuitBreaker.instance) {
@@ -37,11 +41,27 @@ class ExtensionCircuitBreaker {
     return ExtensionCircuitBreaker.instance;
   }
 
+  private throttledLog(message: string): void {
+    const now = Date.now();
+    if (now - this.lastLogTime >= this.LOG_THROTTLE) {
+      console.log(message);
+      this.lastLogTime = now;
+    }
+  }
+
   reset(): void {
+    const now = Date.now();
+    
+    // Prevent reset spam - only allow reset if enough time has passed
+    if (now - this.lastResetTime < this.MIN_RESET_INTERVAL && this.state === 'CLOSED') {
+      return; // Skip reset if called too frequently
+    }
+    
     this.failureCount = 0;
     this.state = 'CLOSED';
     this.lastFailureTime = 0;
-    console.log('🔄 Extension circuit breaker RESET');
+    this.lastResetTime = now;
+    this.throttledLog('🔄 Extension circuit breaker RESET');
   }
 
   canExecute(): boolean {
@@ -69,7 +89,7 @@ class ExtensionCircuitBreaker {
     
     if (this.failureCount >= this.FAILURE_THRESHOLD) {
       this.state = 'OPEN';
-      console.log(`🚫 Extension circuit breaker OPEN - preventing further calls for ${this.TIMEOUT/1000}s`);
+      this.throttledLog(`🚫 Extension circuit breaker OPEN - preventing further calls for ${this.TIMEOUT/1000}s`);
     }
   }
 
@@ -93,16 +113,42 @@ class ExtensionCircuitBreaker {
 class ExtensionDataService {
   private static extensionId: string | null = null;
   private static circuitBreaker = ExtensionCircuitBreaker.getInstance();
+  private static lastCallTimes = new Map<string, number>(); // Track by message type
+  private static readonly CALL_DEBOUNCE_MS = 500; // Reduced from 1000ms
+  private static readonly CRITICAL_DEBOUNCE_MS = 200; // For focus mode and blocking operations
 
   static isExtensionInstalled(): boolean {
     return typeof (window as any).chrome !== 'undefined' && 
            !!(window as any).chrome.runtime;
   }
 
+  private static isCriticalOperation(message: any): boolean {
+    const criticalTypes = [
+      'ENABLE_FOCUS_MODE',
+      'DISABLE_FOCUS_MODE', 
+      'BLOCK_SITE',
+      'UNBLOCK_SITE',
+      'GET_FOCUS_STATE'
+    ];
+    return criticalTypes.includes(message.type);
+  }
+
   static async sendMessage(message: any): Promise<any> {
     if (!this.isExtensionInstalled()) {
       throw new Error('Extension not installed');
     }
+
+    // Smart debouncing based on message type
+    const now = Date.now();
+    const messageType = message.type || 'unknown';
+    const lastCallTime = this.lastCallTimes.get(messageType) || 0;
+    const debounceTime = this.isCriticalOperation(message) ? 
+      this.CRITICAL_DEBOUNCE_MS : this.CALL_DEBOUNCE_MS;
+    
+    if (now - lastCallTime < debounceTime) {
+      throw new Error(`Extension call debounced - ${messageType} too frequent`);
+    }
+    this.lastCallTimes.set(messageType, now);
 
     if (!this.circuitBreaker.canExecute()) {
       throw new Error('Extension communication temporarily disabled - circuit breaker open');
@@ -282,17 +328,20 @@ class ExtensionDataService {
   }
 
   static resetCircuitBreaker(): void {
-    this.circuitBreaker.reset();
+    // Only allow manual reset if circuit breaker is actually open or has failures
+    const status = this.circuitBreaker.getStatus();
+    if (status.state === 'OPEN' || status.failureCount > 0) {
+      this.circuitBreaker.reset();
+    }
   }
 
   static getCircuitBreakerStatus() {
     return this.circuitBreaker.getStatus();
   }
 
-  // Simplified connection test
+  // Simplified connection test - doesn't auto-reset circuit breaker
   static async testConnection(): Promise<boolean> {
     try {
-      this.resetCircuitBreaker();
       const response = await this.sendMessage({ type: 'GET_TODAY_STATS' });
       return response && response.success !== false;
     } catch (error) {
