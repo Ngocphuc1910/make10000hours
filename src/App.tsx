@@ -103,6 +103,8 @@ const SupportPage = () => (
 );
 
 // Global keyboard shortcuts component - must be inside Router context
+let isGlobalShortcutsInitialized = false;
+
 const GlobalKeyboardShortcuts: React.FC = () => {
   const setIsAddingTask = useTaskStore(state => state.setIsAddingTask);
   const { isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar } = useUIStore();
@@ -113,6 +115,12 @@ const GlobalKeyboardShortcuts: React.FC = () => {
 
   // Global keyboard shortcuts
   useEffect(() => {
+    // Prevent multiple initialization
+    if (isGlobalShortcutsInitialized) {
+      return;
+    }
+    
+    isGlobalShortcutsInitialized = true;
     console.log('🔧 GlobalKeyboardShortcuts: Component mounted and event listener attached');
     
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -123,17 +131,6 @@ const GlobalKeyboardShortcuts: React.FC = () => {
                                    target.isContentEditable ||
                                    target.getAttribute('role') === 'textbox';
       
-      // Debug logging for any key press
-      console.log('🔑 Key pressed:', {
-        key: event.key,
-        code: event.code,
-        target: target.tagName,
-        isTypingInFormElement,
-        metaKey: event.metaKey,
-        shiftKey: event.shiftKey,
-        altKey: event.altKey
-      });
-
       // Handle space bar for Pomodoro Timer start/pause
       if (event.code === 'Space' && !isTypingInFormElement) {
         // Only handle space if we're on the pomodoro page and start/pause is enabled
@@ -156,19 +153,6 @@ const GlobalKeyboardShortcuts: React.FC = () => {
         event.preventDefault();
         toggleDeepFocus();
         return;
-      }
-      
-      // Debug logging for Alt key combinations
-      if (event.altKey) {
-        console.log('Alt key pressed with:', {
-          key: event.key,
-          code: event.code,
-          keyCode: event.keyCode,
-          altKey: event.altKey,
-          shiftKey: event.shiftKey,
-          ctrlKey: event.ctrlKey,
-          metaKey: event.metaKey
-        });
       }
       
       // Check for Shift + N to create new task (only if not typing in form elements)
@@ -262,6 +246,7 @@ const GlobalKeyboardShortcuts: React.FC = () => {
     // Cleanup
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      isGlobalShortcutsInitialized = false; // Reset flag on cleanup
     };
   }, [isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar, setIsAddingTask, navigate, toggleDeepFocus, location, start, pause, isRunning, enableStartPauseBtn]);
 
