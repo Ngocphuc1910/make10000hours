@@ -18,6 +18,19 @@ export const useDeepFocusSync = () => {
     const handleExtensionFocusChange = async (event: MessageEvent) => {
       // Check each validation condition
       if (event.data?.type === 'EXTENSION_FOCUS_STATE_CHANGED') {
+        // Validate user context - only process if it's for current user
+        const { useUserStore } = await import('../store/userStore');
+        const currentUser = useUserStore.getState().user;
+        
+        // Skip if no current user or if message is for different user
+        if (!currentUser?.uid || 
+            (event.data.payload.targetUserId && event.data.payload.targetUserId !== currentUser.uid)) {
+          console.log('🚫 Ignoring extension focus change - different user context:', {
+            currentUser: currentUser?.uid,
+            targetUser: event.data.payload.targetUserId
+          });
+          return;
+        }
         const hasExtensionId = !!event.data?.extensionId;
         const hasPayload = !!event.data?.payload;
         const isActiveType = typeof event.data.payload?.isActive;

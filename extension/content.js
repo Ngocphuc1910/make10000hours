@@ -603,13 +603,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         activityDetector.hideFocusIndicator();
       }
       
-      // Forward to web app with extension ID as source
+      // Get current user ID from page to validate if this change applies
+      const getCurrentUserId = () => {
+        try {
+          const userStorage = localStorage.getItem('user-store');
+          if (userStorage) {
+            const parsed = JSON.parse(userStorage);
+            return parsed?.state?.user?.uid || null;
+          }
+        } catch (error) {
+          console.warn('Failed to get current user ID:', error);
+        }
+        return null;
+      };
+      
+      const currentUserId = getCurrentUserId();
+      
+      // Forward to web app with extension ID as source and user validation
       window.postMessage({
         type: 'EXTENSION_FOCUS_STATE_CHANGED',
         payload: {
           isActive: message.payload.isActive,
           isVisible: message.payload.isActive,
-          isFocused: message.payload.isActive
+          isFocused: message.payload.isActive,
+          blockedSites: message.payload.blockedSites || [],
+          targetUserId: currentUserId // Include current user for validation
         },
         source: chrome.runtime.id,
         extensionId: chrome.runtime.id

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import './App.css';
 import './typography.css';
 import './styles.css';
@@ -32,6 +32,7 @@ import DataSyncPage from './components/pages/DataSyncPage';
 import { ChatIntegrationService } from './services/chatIntegration';
 import { useDeepFocusStore } from './store/deepFocusStore';
 import { useGlobalShortcuts } from './hooks/useGlobalShortcuts';
+import { testDeepFocusFixes } from './utils/testDeepFocusFix';
 
 // Import test utilities in development mode
 if (process.env.NODE_ENV === 'development') {
@@ -104,20 +105,44 @@ const SupportPage = () => (
 
 // Global keyboard shortcuts component - must be inside Router context
 let isGlobalShortcutsInitialized = false;
+let globalCleanupFn: (() => void) | null = null;
 
-const GlobalKeyboardShortcuts: React.FC = () => {
-  const setIsAddingTask = useTaskStore(state => state.setIsAddingTask);
-  const { isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar } = useUIStore();
-  const { toggleDeepFocus } = useGlobalDeepFocusSync();
-  const navigate = useNavigate();
+const GlobalKeyboardShortcuts: React.FC = React.memo(() => {
   const location = useLocation();
-  const { start, pause, isRunning, enableStartPauseBtn } = useTimerStore();
+  const navigate = useNavigate();
+  const { 
+    isRightSidebarOpen, 
+    toggleRightSidebar, 
+    toggleLeftSidebar 
+  } = useUIStore();
+  const { setIsAddingTask } = useTaskStore();
+  const { toggleDeepFocus } = useGlobalDeepFocusSync();
+  const { start, pause, isRunning } = useTimerStore();
+  const enableStartPauseBtn = useTimerStore(state => state.enableStartPauseBtn);
 
-  // Global keyboard shortcuts
+  // Memoize navigation functions to prevent unnecessary re-renders
+  const navigateToRoute = useCallback((route: string) => {
+    navigate(route);
+  }, [navigate]);
+
+  const handleNewTask = useCallback(() => {
+    if (!isRightSidebarOpen) {
+      toggleRightSidebar();
+    }
+    setIsAddingTask(true);
+  }, [isRightSidebarOpen, toggleRightSidebar, setIsAddingTask]);
+
+  const handleTimerToggle = useCallback(() => {
+    if (isRunning) {
+      pause();
+    } else {
+      start();
+    }
+  }, [isRunning, pause, start]);
+
   useEffect(() => {
-    // Prevent multiple initialization
     if (isGlobalShortcutsInitialized) {
-      return;
+      return globalCleanupFn || undefined;
     }
     
     isGlobalShortcutsInitialized = true;
@@ -138,11 +163,7 @@ const GlobalKeyboardShortcuts: React.FC = () => {
         if (isPomodoroPage && enableStartPauseBtn) {
           event.preventDefault();
           console.log('🔑 Space detected - toggling pomodoro timer');
-          if (isRunning) {
-            pause();
-          } else {
-            start();
-          }
+          handleTimerToggle();
           return;
         }
       }
@@ -159,14 +180,7 @@ const GlobalKeyboardShortcuts: React.FC = () => {
       if (event.shiftKey && event.key === 'N' && !isTypingInFormElement) {
         console.log('🔑 Shift+N detected - creating new task');
         event.preventDefault();
-        
-        // Ensure the right sidebar is open to show tasks
-        if (!isRightSidebarOpen) {
-          toggleRightSidebar();
-        }
-        
-        // Trigger new task creation
-        setIsAddingTask(true);
+        handleNewTask();
       }
       
       // Check for Cmd + \ to toggle right sidebar
@@ -183,60 +197,63 @@ const GlobalKeyboardShortcuts: React.FC = () => {
         toggleLeftSidebar();
       }
       
-      // Check for P to navigate to Pomodoro Timer (only if not typing in form elements)
-      if ((event.key === 'P' || event.key === 'p') && !isTypingInFormElement) {
-        console.log('🔑 P detected - navigating to Pomodoro Timer');
-        event.preventDefault();
-        navigate('/pomodoro');
-      }
-      
-      // Check for C to navigate to Calendar (only if not typing in form elements)
-      if ((event.key === 'C' || event.key === 'c') && !isTypingInFormElement) {
-        console.log('🔑 C detected - navigating to Calendar');
-        event.preventDefault();
-        navigate('/calendar');
-      }
-      
-      // Check for T to navigate to Task Management (only if not typing in form elements)
-      if ((event.key === 'T' || event.key === 't') && !isTypingInFormElement) {
-        console.log('🔑 T detected - navigating to Task Management');
-        event.preventDefault();
-        navigate('/projects');
-      }
-      
-      // Check for I to navigate to Productivity Insights (only if not typing in form elements)
-      if ((event.key === 'I' || event.key === 'i') && !isTypingInFormElement) {
-        console.log('🔑 I detected - navigating to Productivity Insights');
-        event.preventDefault();
-        navigate('/dashboard');
-      }
-      
-      // Check for F to navigate to Deep Focus (only if not typing in form elements)
-      if ((event.key === 'F' || event.key === 'f') && !isTypingInFormElement) {
-        console.log('🔑 F detected - navigating to Deep Focus');
-        event.preventDefault();
-        navigate('/deep-focus');
-      }
-      
-      // Check for D to navigate to Calendar Day view (only if not typing in form elements)
-      if ((event.key === 'D' || event.key === 'd') && !isTypingInFormElement && !event.shiftKey) {
-        console.log('🔑 D detected - navigating to Calendar Day view');
-        event.preventDefault();
-        navigate('/calendar?view=day');
-      }
-      
-      // Check for W to navigate to Calendar Week view (only if not typing in form elements)
-      if ((event.key === 'W' || event.key === 'w') && !isTypingInFormElement) {
-        console.log('🔑 W detected - navigating to Calendar Week view');
-        event.preventDefault();
-        navigate('/calendar?view=week');
-      }
-      
-      // Check for M to navigate to Calendar Month view (only if not typing in form elements)
-      if ((event.key === 'M' || event.key === 'm') && !isTypingInFormElement) {
-        console.log('🔑 M detected - navigating to Calendar Month view');
-        event.preventDefault();
-        navigate('/calendar?view=month');
+      // Navigation shortcuts (only if not typing in form elements)
+      if (!isTypingInFormElement) {
+        // Check for P to navigate to Pomodoro Timer
+        if ((event.key === 'P' || event.key === 'p')) {
+          console.log('🔑 P detected - navigating to Pomodoro Timer');
+          event.preventDefault();
+          navigateToRoute('/pomodoro');
+        }
+        
+        // Check for C to navigate to Calendar
+        if ((event.key === 'C' || event.key === 'c')) {
+          console.log('🔑 C detected - navigating to Calendar');
+          event.preventDefault();
+          navigateToRoute('/calendar');
+        }
+        
+        // Check for T to navigate to Task Management
+        if ((event.key === 'T' || event.key === 't')) {
+          console.log('🔑 T detected - navigating to Task Management');
+          event.preventDefault();
+          navigateToRoute('/projects');
+        }
+        
+        // Check for I to navigate to Productivity Insights
+        if ((event.key === 'I' || event.key === 'i')) {
+          console.log('🔑 I detected - navigating to Productivity Insights');
+          event.preventDefault();
+          navigateToRoute('/dashboard');
+        }
+        
+        // Check for F to navigate to Deep Focus
+        if ((event.key === 'F' || event.key === 'f')) {
+          console.log('🔑 F detected - navigating to Deep Focus');
+          event.preventDefault();
+          navigateToRoute('/deep-focus');
+        }
+        
+        // Check for D to navigate to Calendar Day view (only if not Shift+D)
+        if ((event.key === 'D' || event.key === 'd') && !event.shiftKey) {
+          console.log('🔑 D detected - navigating to Calendar Day view');
+          event.preventDefault();
+          navigateToRoute('/calendar?view=day');
+        }
+        
+        // Check for W to navigate to Calendar Week view
+        if ((event.key === 'W' || event.key === 'w')) {
+          console.log('🔑 W detected - navigating to Calendar Week view');
+          event.preventDefault();
+          navigateToRoute('/calendar?view=week');
+        }
+        
+        // Check for M to navigate to Calendar Month view
+        if ((event.key === 'M' || event.key === 'm')) {
+          console.log('🔑 M detected - navigating to Calendar Month view');
+          event.preventDefault();
+          navigateToRoute('/calendar?view=month');
+        }
       }
     };
 
@@ -244,14 +261,27 @@ const GlobalKeyboardShortcuts: React.FC = () => {
     document.addEventListener('keydown', handleKeyDown);
 
     // Cleanup
-    return () => {
+    const cleanup = () => {
       document.removeEventListener('keydown', handleKeyDown);
       isGlobalShortcutsInitialized = false; // Reset flag on cleanup
+      globalCleanupFn = null;
     };
-  }, [isRightSidebarOpen, toggleRightSidebar, toggleLeftSidebar, setIsAddingTask, navigate, toggleDeepFocus, location, start, pause, isRunning, enableStartPauseBtn]);
+    globalCleanupFn = cleanup;
+    return cleanup;
+  }, [
+    // Only include essential dependencies that should trigger re-initialization
+    location.pathname,
+    enableStartPauseBtn,
+    toggleDeepFocus,
+    // Remove other memoized functions to prevent unnecessary re-renders
+    // They're already memoized and stable, so no need to include as dependencies
+  ]);
 
   return null;
-};
+});
+
+// Add display name for debugging
+GlobalKeyboardShortcuts.displayName = 'GlobalKeyboardShortcuts';
 
 const App: React.FC = () => {
   const { initialize, user, isLoading, isInitialized } = useUserStore();
@@ -411,10 +441,15 @@ const App: React.FC = () => {
     return <LoadingScreen title="Make10000hours" subtitle="Setting up your workspace..." />;
   }
 
+  // Make test utility available globally for console debugging
+  if (typeof window !== 'undefined') {
+    (window as any).testDeepFocusFixes = testDeepFocusFixes;
+  }
+
   return (
     <Router>
       <GlobalTabTitleUpdater />
-      <GlobalKeyboardShortcuts />
+      <GlobalKeyboardShortcuts key="global-shortcuts" />
       <AnalyticsWrapper>
         <Routes>
           <Route path="/" element={<PomodoroPageWithLayout />} />
