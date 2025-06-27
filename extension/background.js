@@ -1302,6 +1302,47 @@ class FocusTimeTracker {
           sendResponse(addResult);
           break;
 
+        case 'BLOCK_MULTIPLE_SITES':
+          try {
+            const domains = message.payload?.domains || [];
+            if (!Array.isArray(domains) || domains.length === 0) {
+              sendResponse({ success: false, error: 'Invalid domains array' });
+              break;
+            }
+            
+            console.log('📦 Batch blocking multiple sites:', domains);
+            const results = [];
+            let successCount = 0;
+            let failureCount = 0;
+            
+            // Block all sites in batch
+            for (const domain of domains) {
+              try {
+                const result = await this.blockingManager.addBlockedSite(domain);
+                results.push({ domain, success: result.success, error: result.error });
+                if (result.success) {
+                  successCount++;
+                } else {
+                  failureCount++;
+                }
+              } catch (error) {
+                results.push({ domain, success: false, error: error.message });
+                failureCount++;
+              }
+            }
+            
+            console.log(`✅ Batch blocking completed: ${successCount} success, ${failureCount} failed`);
+            sendResponse({ 
+              success: true, 
+              results,
+              summary: { successCount, failureCount, total: domains.length }
+            });
+          } catch (error) {
+            console.error('❌ Batch blocking failed:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
         case 'REMOVE_BLOCKED_SITE':
           const removeResult = await this.blockingManager.removeBlockedSite(message.payload?.domain);
           sendResponse(removeResult);

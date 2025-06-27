@@ -196,6 +196,66 @@ interface DeepFocusStore extends DeepFocusData {
   setReloading: (isReloading: boolean) => void;
 }
 
+// Helper function to get user-specific storage key
+// Cached storage key to prevent store re-initialization
+let cachedStorageKey = 'deep-focus-storage-anonymous';
+let lastKnownUserId: string | null = null;
+
+// Extension call deduplication
+let inFlightExtensionCalls = new Set<string>();
+const deduplicateExtensionCall = async (callId: string, fn: () => Promise<void>) => {
+  if (inFlightExtensionCalls.has(callId)) {
+    return; // Skip duplicate call
+  }
+  inFlightExtensionCalls.add(callId);
+  try {
+    await fn();
+  } finally {
+    inFlightExtensionCalls.delete(callId);
+  }
+};
+
+const getUserSpecificStorageKey = () => {
+  try {
+    const userStorage = localStorage.getItem('user-store');
+    if (userStorage) {
+      const parsed = JSON.parse(userStorage);
+      const userId = parsed?.state?.user?.uid;
+      
+      // Only update cache if user actually changed and we haven't set it yet
+      if (userId && userId !== lastKnownUserId && cachedStorageKey === 'deep-focus-storage-anonymous') {
+        lastKnownUserId = userId;
+        cachedStorageKey = `deep-focus-storage-${userId}`;
+        console.log('🔑 Storage key updated for user:', userId);
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to get user ID for deep focus storage:', error);
+  }
+  return cachedStorageKey;
+};
+
+// Helper function to clear storage when user changes
+const clearPreviousUserStorage = () => {
+  // Get all localStorage keys that match our pattern
+  const keys = Object.keys(localStorage);
+  const deepFocusKeys = keys.filter(key => 
+    key.startsWith('deep-focus-storage-') && 
+    key !== cachedStorageKey
+  );
+  
+  // Clear old user storage but keep current user's data
+  deepFocusKeys.forEach(key => {
+    if (!key.includes('anonymous')) { // Keep anonymous as fallback
+      try {
+        localStorage.removeItem(key);
+      } catch (error) {
+        console.warn('Failed to clear old deep focus storage:', error);
+      }
+    }
+  });
+};
+
 export const useDeepFocusStore = create<DeepFocusStore>()(
   persist(
     (set, get) => ({
@@ -587,67 +647,137 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       },
 
       // Method to sync complete focus state including blocked sites
-      syncCompleteFocusState: async (isActive: boolean, blockedSites: string[]) => {
+      syncCompleteFocusState: async (isActive: boolean, blockedSites: string[] = []) => {
+        console.log('🔄 Syncing complete focus state:', { isActive, blockedSites: blockedSites.length });
+        
         try {
-          console.log('🔄 Complete focus state sync:', { isActive, blockedSites });
-          
-          // Update the main focus state first
-          set({ isDeepFocusActive: isActive });
-          
+          // Authentication guard - prevent sync if user not authenticated
+          const { useUserStore } = await import('./userStore');
+          const user = useUserStore.getState().user;
+          if (!user?.uid) {
+            console.warn('⚠️ User not authenticated - skipping focus state sync');
+            return;
+          }
+
           if (isActive) {
-            // Process blocked sites with better error handling
-            const existingSites = get().blockedSites;
-            const updatedSites = existingSites.map(site => ({
+            // Enable focus mode
+            const currentState = get();
+            let sessionId = currentState.activeSessionId;
+            let startTime = currentState.activeSessionStartTime || new Date();
+
+            // Start a new session if we don't have one
+            if (!sessionId) {
+              try {
+                sessionId = await deepFocusSessionService.startSession(user.uid);
+                startTime = new Date();
+                console.log('✅ New Deep Focus session started:', sessionId);
+                
+                set({ 
+                  activeSessionId: sessionId, 
+                  activeSessionStartTime: startTime, 
+                  activeSessionDuration: 0, 
+                  activeSessionElapsedSeconds: 0 
+                });
+                
+                // Start timers
+                const secondTimer = setInterval(() => {
+                  const elapsedSeconds = Math.floor((Date.now() - startTime.getTime()) / 1000);
+                  set({ activeSessionElapsedSeconds: elapsedSeconds });
+                }, 1000);
+                
+                const timer = setInterval(async () => {
+                  const currentDuration = get().activeSessionDuration + 1;
+                  set({ activeSessionDuration: currentDuration });
+                  if (sessionId) {
+                    await deepFocusSessionService.incrementSessionDuration(sessionId, 1);
+                  }
+                }, 60000);
+                
+                set({ timer, secondTimer });
+              } catch (error) {
+                console.error('❌ Failed to start Deep Focus session:', error);
+              }
+            }
+
+            // Update local state with active sites
+            const updatedSites = get().blockedSites.map(site => ({
               ...site,
-              isActive: blockedSites.includes(site.url)
+              isActive: blockedSites.length > 0 ? blockedSites.includes(site.url) : true
             }));
             
-            // Add any new sites from extension that aren't in our local list
-            const existingUrls = existingSites.map(s => s.url);
-            const newSites = blockedSites
-              .filter(url => !existingUrls.includes(url))
-              .map(url => ({
-                id: Math.random().toString(36),
-                name: url.replace(/^https?:\/\//, '').replace(/^www\./, ''),
-                url,
-                icon: 'ri-global-line',
-                backgroundColor: '#3B82F6',
-                isActive: true
-              }));
-            
-            set({ blockedSites: [...updatedSites, ...newSites] });
-            
-            // Sync sites to extension with batching and error tolerance
-            const sitesToBlock = [...updatedSites, ...newSites].filter(site => site.isActive);
-            let successCount = 0;
-            let failureCount = 0;
-            
-            for (const site of sitesToBlock) {
-              try {
-                await Promise.race([
-                  ExtensionDataService.blockSite(site.url),
-                  new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Block site timeout')), 2000)
-                  )
-                ]);
-                successCount++;
-              } catch (error) {
-                failureCount++;
-                if (failureCount <= 3) { // Only log first few failures to avoid spam
-                  console.warn(`⚠️ Failed to block site during sync: ${site.url}`, error);
+            set({ 
+              isDeepFocusActive: true,
+              blockedSites: updatedSites
+            });
+
+            // Use batch blocking for better performance and fewer API calls
+            if (ExtensionDataService.isExtensionInstalled()) {
+              const sitesToBlock = updatedSites.filter(site => site.isActive).map(site => site.url);
+              
+              if (sitesToBlock.length > 0) {
+                try {
+                  console.log(`📦 Batch blocking ${sitesToBlock.length} sites...`);
+                  const batchResult = await ExtensionDataService.blockMultipleSites(sitesToBlock);
+                  
+                  if (batchResult.success && batchResult.summary) {
+                    const { successCount, failureCount } = batchResult.summary;
+                    console.log(`✅ Batch blocking completed: ${successCount} sites blocked, ${failureCount} failed`);
+                    
+                    if (failureCount > 0) {
+                      console.warn(`⚠️ ${failureCount} sites failed to block, but continuing...`);
+                    }
+                  } else {
+                    console.warn('⚠️ Batch blocking failed, falling back to individual blocking');
+                    // Fallback to individual blocking with error tolerance
+                    let successCount = 0;
+                    let failureCount = 0;
+                    
+                    for (const site of sitesToBlock) {
+                      try {
+                        await Promise.race([
+                          ExtensionDataService.blockSite(site),
+                          new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Block site timeout')), 2000)
+                          )
+                        ]);
+                        successCount++;
+                      } catch (error) {
+                        failureCount++;
+                        if (failureCount <= 3) {
+                          console.warn(`⚠️ Failed to block site during fallback: ${site}`, error);
+                        }
+                      }
+                    }
+                    
+                    if (failureCount > 3) {
+                      console.warn(`⚠️ ${failureCount} additional sites failed to block (suppressed logs)`);
+                    }
+                    
+                    console.log(`✅ Fallback blocking completed: ${successCount} sites blocked, ${failureCount} failed`);
+                  }
+                } catch (error) {
+                  console.warn('⚠️ Both batch and fallback blocking failed:', error);
                 }
               }
             }
+
+            console.log('✅ Focus state sync completed');
+          } else {
+            // Disable focus mode - update local state and clear timers
+            const currentState = get();
             
-            if (failureCount > 3) {
-              console.warn(`⚠️ ${failureCount} additional sites failed to block (suppressed logs)`);
+            // Clear any active timers
+            if (currentState.timer) {
+              clearInterval(currentState.timer);
+            }
+            if (currentState.secondTimer) {
+              clearInterval(currentState.secondTimer);
             }
             
-            console.log(`✅ Focus state sync completed: ${successCount} sites blocked, ${failureCount} failed`);
-          } else {
-            // Just update local state when disabling
+            // Update all state for disabled focus mode
             const updatedSites = get().blockedSites.map(site => ({ ...site, isActive: false }));
             set({ 
+              isDeepFocusActive: false, // CRITICAL: Set this to false for proper UI sync
               blockedSites: updatedSites,
               activeSessionId: null,
               activeSessionStartTime: null,
@@ -655,9 +785,11 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
               activeSessionElapsedSeconds: 0,
               isSessionPaused: false,
               pausedAt: null,
-              totalPausedTime: 0
+              totalPausedTime: 0,
+              timer: null,
+              secondTimer: null
             });
-            console.log('✅ Focus state disabled');
+            console.log('✅ Focus state disabled - isDeepFocusActive set to false');
           }
         } catch (error) {
           console.error('❌ Failed to sync complete focus state:', error);
@@ -666,12 +798,21 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
 
       enableDeepFocus: async () => {
         const state = get();
-        // Guard: if already active, do nothing to prevent duplicate sessions
-        if (state.isDeepFocusActive) {
-          console.log('🟢 enableDeepFocus ignored – already active');
+        
+        // Authentication guard - prevent operation if user not authenticated
+        const { useUserStore } = await import('./userStore');
+        const user = useUserStore.getState().user;
+        if (!user?.uid) {
+          console.warn('⚠️ User not authenticated - cannot enable deep focus');
           return;
         }
-        console.log('🟢 enableDeepFocus called. Current state:', {
+        
+        // Guard: if already active, do nothing to prevent duplicate sessions
+        if (state.isDeepFocusActive) {
+          console.log('🟢 enableDeepFocus ignored – already active for user:', user.uid);
+          return;
+        }
+        console.log('🟢 enableDeepFocus called for user:', user.uid, 'Current state:', {
           isDeepFocusActive: state.isDeepFocusActive,
           extensionConnected: state.isExtensionConnected,
           activeSessionId: state.activeSessionId
@@ -726,52 +867,48 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
             blockedSites: updatedSites
           });
 
-          // Try to enable focus mode in extension (but don't block the UI if it fails)
+          // Try to enable focus mode in extension
           if (ExtensionDataService.isExtensionInstalled()) {
-            console.log('📡 Attempting to enable focus mode in extension...');
-            try {
-              // Add timeout to prevent hanging
-              const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Extension communication timeout')), 3000)
-              );
-              
-              await Promise.race([
-                ExtensionDataService.enableFocusMode(),
-                timeoutPromise
-              ]);
-              console.log('✅ Extension focus mode enabled');
-              
-              // Try to block sites in extension
-              for (const site of updatedSites) {
-                try {
-                  await Promise.race([
-                    state.blockSiteInExtension(site.url),
-                    new Promise((_, reject) => 
-                      setTimeout(() => reject(new Error('Block site timeout')), 1000)
-                    )
-                  ]);
-                  // Site blocked in extension (logging removed to reduce console noise)
-                } catch (error) {
-                  console.warn('⚠️ Failed to block site in extension (continuing anyway):', site.url, error);
+            deduplicateExtensionCall('enable-focus', async () => {
+              console.log('📡 Attempting to enable focus mode in extension...');
+              try {
+                await ExtensionDataService.enableFocusMode();
+                console.log('✅ Extension focus mode enabled');
+                
+                // Use batch blocking instead of individual calls to prevent debouncing errors
+                const activeSites = updatedSites.filter(site => site.isActive);
+                const sitesToBlock = activeSites.map(site => site.url);
+                
+                if (sitesToBlock.length > 0) {
+                  try {
+                    console.log(`📦 Batch blocking ${sitesToBlock.length} sites during enable...`);
+                    const batchResult = await ExtensionDataService.blockMultipleSites(sitesToBlock);
+                    
+                    if (batchResult.success && batchResult.summary) {
+                      const { successCount, failureCount } = batchResult.summary;
+                      console.log(`✅ Batch blocking during enable completed: ${successCount} sites blocked, ${failureCount} failed`);
+                    } else {
+                      console.warn('⚠️ Batch blocking during enable failed, continuing anyway');
+                    }
+                  } catch (error) {
+                    console.warn('⚠️ Batch blocking during enable failed (continuing anyway):', error);
+                  }
                 }
+              } catch (error) {
+                console.warn('⚠️ Extension communication failed (Deep Focus still enabled locally):', error);
               }
-            } catch (error) {
-              console.warn('⚠️ Extension communication failed (Deep Focus still enabled locally):', error);
-            }
+            });
           } else {
             console.log('⚠️ Extension not installed, Deep Focus enabled in web app only');
           }
 
           // Notify all subscribers that focus mode is now active
           window.dispatchEvent(new CustomEvent('deepFocusChanged', { 
-            detail: { isActive: true } 
+            detail: { isActive: true, fromExtension: false } 
           }));
 
-          // Try to sync with extension (but don't wait for it)
-          get().syncWithExtension(true).catch(error => {
-            console.warn('⚠️ Extension sync failed (continuing anyway):', error);
-          });
-
+          // Skip redundant extension sync to prevent feedback loops
+          // Extension communication already handled above in deduplicateExtensionCall
           console.log('✅ Deep Focus enabled successfully - all sites are now blocked', sessionId ? `Session ID: ${sessionId}` : '');
         } catch (error) {
           console.error('❌ Failed to enable Deep Focus:', error);
@@ -786,7 +923,16 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
 
       disableDeepFocus: async () => {
         const state = get();
-        console.log('🔴 disableDeepFocus called. Current state:', {
+        
+        // Authentication guard - prevent operation if user not authenticated
+        const { useUserStore } = await import('./userStore');
+        const user = useUserStore.getState().user;
+        if (!user?.uid) {
+          console.warn('⚠️ User not authenticated - cannot disable deep focus');
+          return;
+        }
+        
+        console.log('🔴 disableDeepFocus called for user:', user.uid, 'Current state:', {
           isDeepFocusActive: state.isDeepFocusActive,
           extensionConnected: state.isExtensionConnected,
           activeSessionId: state.activeSessionId
@@ -839,42 +985,31 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
             totalPausedTime: 0
           });
 
-          // Try to disable focus mode in extension (but don't block the UI if it fails)
+          // Try to disable focus mode in extension
           if (ExtensionDataService.isExtensionInstalled()) {
-            console.log('📡 Attempting to disable focus mode in extension...');
-            try {
-              // Add shorter timeout for tab closure scenarios
-              const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Extension communication timeout')), 1000)
-              );
-              
-              await Promise.race([
-                ExtensionDataService.disableFocusMode(),
-                timeoutPromise
-              ]);
-              console.log('✅ Extension focus mode disabled');
+            deduplicateExtensionCall('disable-focus', async () => {
+              console.log('📡 Attempting to disable focus mode in extension...');
+              try {
+                await ExtensionDataService.disableFocusMode();
+                console.log('✅ Extension focus mode disabled');
 
-              // Try to unblock sites in extension with shorter timeout
-              for (const site of updatedSites) {
-                try {
-                  await Promise.race([
-                    state.unblockSiteInExtension(site.url),
-                    new Promise((_, reject) => 
-                      setTimeout(() => reject(new Error('Unblock site timeout')), 500)
-                    )
-                  ]);
-                } catch (error) {
-                  console.warn('⚠️ Failed to unblock site in extension (continuing anyway):', site.url, error);
+                // Unblock all sites at once
+                for (const site of updatedSites) {
+                  try {
+                    await state.unblockSiteInExtension(site.url);
+                  } catch (error) {
+                    console.warn('⚠️ Failed to unblock site in extension (continuing anyway):', site.url, error);
+                  }
                 }
+              } catch (error) {
+                console.warn('⚠️ Extension communication failed (Deep Focus still disabled locally):', error);
               }
-            } catch (error) {
-              console.warn('⚠️ Extension communication failed (Deep Focus still disabled locally):', error);
-            }
+            });
           }
 
           // Notify all subscribers that focus mode is now inactive
           window.dispatchEvent(new CustomEvent('deepFocusChanged', { 
-            detail: { isActive: false } 
+            detail: { isActive: false, fromExtension: false } 
           }));
 
           console.log('✅ Deep Focus disabled successfully - all sites are now unblocked');
@@ -1438,27 +1573,12 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       }
     }),
     {
-      name: 'deep-focus-storage',
+      name: getUserSpecificStorageKey(),
       partialize: (state) => {
-        // Get the stored state first
-        const storedState = localStorage.getItem('deep-focus-storage');
-        const parsedState = storedState ? JSON.parse(storedState) : null;
-        
-        // If we have stored state and this is a new tab (no active session), use the stored state
-        const shouldUseStoredState = parsedState && !state.activeSessionId && parsedState.isDeepFocusActive;
-        
         return {
           ...state,
-          isDeepFocusActive: shouldUseStoredState ? parsedState.isDeepFocusActive : state.isDeepFocusActive,
-          activeSessionId: shouldUseStoredState ? parsedState.activeSessionId : state.activeSessionId,
-          activeSessionStartTime: shouldUseStoredState ? new Date(parsedState.activeSessionStartTime) : state.activeSessionStartTime,
-          activeSessionDuration: shouldUseStoredState ? parsedState.activeSessionDuration : state.activeSessionDuration,
-          activeSessionElapsedSeconds: shouldUseStoredState ? parsedState.activeSessionElapsedSeconds : state.activeSessionElapsedSeconds,
           timer: null, // Always reset timers
           secondTimer: null,
-          isSessionPaused: shouldUseStoredState ? parsedState.isSessionPaused : state.isSessionPaused,
-          pausedAt: shouldUseStoredState && parsedState.pausedAt ? new Date(parsedState.pausedAt) : state.pausedAt,
-          totalPausedTime: shouldUseStoredState ? parsedState.totalPausedTime : state.totalPausedTime,
           isReloading: false // Reset after persistence
         };
       }

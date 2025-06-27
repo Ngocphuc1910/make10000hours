@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useDeepFocusStore } from '../store/deepFocusStore';
 import { useUserStore } from '../store/userStore';
 
@@ -93,7 +93,7 @@ export const useGlobalDeepFocusSync = () => {
     }
 
     let lastMessageTime = 0;
-    const MESSAGE_DEBOUNCE = 200; // Reduced from 500ms to 200ms for faster response
+    const MESSAGE_DEBOUNCE = 500; // Increased from 200ms for better stability
 
     const handleFocusChange = (event: CustomEvent) => {
       const now = Date.now();
@@ -104,7 +104,10 @@ export const useGlobalDeepFocusSync = () => {
       
       const { isActive } = event.detail;
       console.log('🔄 Internal focus change event:', isActive);
-      syncFocusStatus(isActive);
+      // Only sync if change comes from internal webapp actions, not extension
+      if (!event.detail.fromExtension) {
+        syncFocusStatus(isActive);
+      }
     };
 
     // Listen for real-time focus state changes from extension
@@ -119,14 +122,14 @@ export const useGlobalDeepFocusSync = () => {
         const hasExtensionId = !!event.data?.extensionId;
         const hasPayload = !!event.data?.payload;
         const isActiveBoolean = typeof event.data.payload?.isActive === 'boolean';
-        const hasBlockedSites = Array.isArray(event.data.payload?.blockedSites);
         
         // Verify message is from our extension with proper structure
         if (hasExtensionId && hasPayload && isActiveBoolean) {
           console.log('🔄 Real-time focus state change from extension:', event.data.payload);
           const { isActive, blockedSites = [] } = event.data.payload;
           
-          // Use syncCompleteFocusState instead of syncFocusStatus
+          // Use syncCompleteFocusState for extension-originated changes
+          // This prevents the webapp from trying to sync back to extension
           await syncCompleteFocusState(isActive, blockedSites);
         }
       }
@@ -137,7 +140,7 @@ export const useGlobalDeepFocusSync = () => {
     let lastVisibilityChange = 0;
     const handleVisibilityChange = () => {
       const now = Date.now();
-      if (now - lastVisibilityChange < 1000) {
+      if (now - lastVisibilityChange < 2000) { // Increased to 2 seconds
         return; // Debounce visibility changes
       }
       lastVisibilityChange = now;
@@ -146,7 +149,7 @@ export const useGlobalDeepFocusSync = () => {
         console.log('📖 Page became visible - checking for extension state updates');
         setTimeout(() => {
           loadFocusStatus();
-        }, 500);
+        }, 1000); // Increased delay for stability
       }
       wasHidden = document.hidden;
     };
@@ -164,17 +167,20 @@ export const useGlobalDeepFocusSync = () => {
     };
   }, [syncFocusStatus, loadFocusStatus, isUserInitialized, hasInitialized]);
 
+  // Memoize toggleDeepFocus to prevent infinite re-renders
+  const toggleDeepFocus = useCallback(async () => {
+    if (isDeepFocusActive) {
+      await disableDeepFocus();
+    } else {
+      await enableDeepFocus();
+    }
+  }, [isDeepFocusActive, enableDeepFocus, disableDeepFocus]);
+
   // Return deep focus state and control functions for components to use
   return {
     isDeepFocusActive,
     enableDeepFocus,
     disableDeepFocus,
-    toggleDeepFocus: async () => {
-      if (isDeepFocusActive) {
-        await disableDeepFocus();
-      } else {
-        await enableDeepFocus();
-      }
-    }
+    toggleDeepFocus
   };
 }; 
