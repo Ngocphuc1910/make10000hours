@@ -1,6 +1,28 @@
 import { useEffect } from 'react';
 import { useUserStore } from '../store/userStore';
 
+// Helper function to clear storage when user changes
+const clearPreviousUserStorage = () => {
+  // Get all localStorage keys that match our pattern
+  const keys = Object.keys(localStorage);
+  const deepFocusKeys = keys.filter(key => 
+    key.startsWith('deep-focus-storage-') && 
+    !key.includes('anonymous')
+  );
+  
+  // Clear old user storage
+  deepFocusKeys.forEach(key => {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.warn('Failed to clear old deep focus storage:', error);
+    }
+  });
+};
+
+// Track last synced user to prevent unnecessary operations
+let lastUserId: string | null = null;
+
 /**
  * Hook to sync authenticated user ID with Chrome extension
  * This ensures the extension knows which user to associate override sessions with
@@ -21,16 +43,22 @@ export const useUserSync = () => {
         displayName: user.displayName || ''
       };
 
-      console.log('🔍 DEBUG: Starting user sync with extension:', payload);
+      console.log('🔍 DEBUG: Starting user sync with extension for user:', user.uid);
 
       try {
+        // Clear previous user storage for clean state isolation (only if user changed)
+        if (lastUserId !== user.uid) {
+          clearPreviousUserStorage();
+          lastUserId = user.uid;
+        }
+        
         // Send user ID to extension via window message
         window.postMessage({
           type: 'SET_USER_ID',
           payload,
           source: 'make10000hours'
         }, '*');
-        console.log('📤 DEBUG: Sent SET_USER_ID via window.postMessage');
+        console.log('📤 DEBUG: Sent SET_USER_ID via window.postMessage for user:', user.uid);
 
         // Also try Chrome extension API if available
         if (typeof (window as any).chrome !== 'undefined' && 

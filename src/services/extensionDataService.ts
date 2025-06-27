@@ -128,7 +128,10 @@ class ExtensionDataService {
       'DISABLE_FOCUS_MODE', 
       'BLOCK_SITE',
       'UNBLOCK_SITE',
-      'GET_FOCUS_STATE'
+      'GET_FOCUS_STATE',
+      'ADD_BLOCKED_SITE',
+      'REMOVE_BLOCKED_SITE',
+      'BLOCK_MULTIPLE_SITES' // Add batch blocking as critical operation
     ];
     return criticalTypes.includes(message.type);
   }
@@ -242,6 +245,55 @@ class ExtensionDataService {
       type: 'ADD_BLOCKED_SITE', 
       payload: { domain } 
     });
+  }
+
+  static async blockMultipleSites(domains: string[]): Promise<{ success: boolean; results: any[]; summary: any }> {
+    if (!domains || domains.length === 0) {
+      return { success: true, results: [], summary: { successCount: 0, failureCount: 0, total: 0 } };
+    }
+    
+    try {
+      // Try batch blocking first
+      const response = await this.sendMessage({ 
+        type: 'BLOCK_MULTIPLE_SITES', 
+        payload: { domains } 
+      });
+      
+      // Ensure response has the expected structure
+      if (response && response.success && !response.summary) {
+        response.summary = { 
+          successCount: response.results?.filter((r: any) => r.success).length || 0,
+          failureCount: response.results?.filter((r: any) => !r.success).length || 0,
+          total: domains.length 
+        };
+      }
+      
+      return response;
+    } catch (error) {
+      console.warn('⚠️ Batch blocking failed, falling back to individual blocking:', error);
+      
+      // Fallback to individual blocking
+      const results = [];
+      let successCount = 0;
+      let failureCount = 0;
+      
+      for (const domain of domains) {
+        try {
+          await this.blockSite(domain);
+          results.push({ domain, success: true });
+          successCount++;
+        } catch (err) {
+          results.push({ domain, success: false, error: err instanceof Error ? err.message : String(err) });
+          failureCount++;
+        }
+      }
+      
+      return { 
+        success: successCount > 0, 
+        results,
+        summary: { successCount, failureCount, total: domains.length }
+      };
+    }
   }
 
   static async unblockSite(domain: string): Promise<void> {
