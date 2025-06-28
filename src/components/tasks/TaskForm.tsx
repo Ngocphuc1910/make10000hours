@@ -453,6 +453,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
     }
   };
 
+  const handleTimeSpentKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      // Always save the task (both creation and editing end here)
+      handleSave();
+    }
+  };
+
   const handleTimeEstimatedKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -623,6 +631,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                           setTimeSpent(e.target.value);
                           setTimeSpentError(false);
                         }}
+                        onKeyDown={handleTimeSpentKeyDown}
                       />
                       <span className="text-text-secondary">/</span>
                     </>
