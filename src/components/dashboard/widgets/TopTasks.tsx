@@ -152,7 +152,7 @@ export const TopTasks: React.FC = React.memo(() => {
           const formattedTime = formatMinutesToHoursAndMinutes(task.totalFocusTime);
           
           return (
-            <div key={task.id} className="flex items-center justify-between py-2 border-b border-border">
+            <div key={task.id} className="flex items-center py-2 border-b border-border">
               <div className="flex items-center">
                 <div className="w-5 h-5 flex items-center justify-center text-text-secondary mr-3">
                   {index + 1}.
@@ -163,10 +163,6 @@ export const TopTasks: React.FC = React.memo(() => {
                     <span className="text-xs text-text-secondary">{project.name} • {formattedTime}</span>
                   </div>
                 </div>
-              </div>
-              <div className={`flex items-center text-xs font-medium ${task.completed ? 'text-green-600' : 'text-yellow-600'}`}>
-                <div className={`w-2 h-2 rounded-full ${task.completed ? 'bg-green-500' : 'bg-yellow-500'} mr-1`}></div>
-                <span>{task.completed ? 'Completed' : 'To do'}</span>
               </div>
             </div>
           );
