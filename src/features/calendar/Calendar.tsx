@@ -192,6 +192,14 @@ export const Calendar: React.FC = () => {
       }
 
       switch (event.key.toLowerCase()) {
+        case 'q':
+          event.preventDefault();
+          handleNavigate('prev');
+          break;
+        case 'e':
+          event.preventDefault();
+          handleNavigate('next');
+          break;
         case 'arrowleft':
           event.preventDefault();
           handleNavigate('prev');
