@@ -281,7 +281,6 @@ const DeepFocusPage: React.FC = () => {
             activeSessionDuration: 0,
             activeSessionElapsedSeconds: 0,
             timer: newTimer,
-            secondTimer: newSecondTimer,
             hasRecoveredSession: true,
             recoveryInProgress: false
           });
