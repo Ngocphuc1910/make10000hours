@@ -8,6 +8,7 @@ import { siteUsageService } from '../api/siteUsageService';
 import HybridDataService from '../api/hybridDataService';
 import { overrideSessionService, OverrideSession } from '../api/overrideSessionService';
 import { blockedSitesService } from '../api/blockedSitesService';
+import { useUserStore } from './userStore';
 
 // Mock data with exact colors from AI design
 const mockSiteUsage: SiteUsage[] = [
@@ -800,7 +801,6 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         const state = get();
         
         // Authentication guard - prevent operation if user not authenticated
-        const { useUserStore } = await import('./userStore');
         const user = useUserStore.getState().user;
         if (!user?.uid) {
           console.warn('⚠️ User not authenticated - cannot enable deep focus');
@@ -823,7 +823,6 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           let sessionId: string | null = null;
           let startTime = new Date();
           try {
-            const { useUserStore } = await import('./userStore');
             const user = useUserStore.getState().user;
             console.log('🔍 User state for session:', user ? { uid: user.uid, email: user.email } : 'No user');
             
@@ -835,12 +834,6 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
               
               set({ activeSessionId: sessionId, activeSessionStartTime: startTime, activeSessionDuration: 0, activeSessionElapsedSeconds: 0 });
               
-              // Start second timer for real-time display
-              const secondTimer = setInterval(() => {
-                const elapsedSeconds = Math.floor((Date.now() - startTime.getTime()) / 1000);
-                set({ activeSessionElapsedSeconds: elapsedSeconds });
-              }, 1000);
-              
               // Start minute timer for database updates (atomic +1)
               const timer = setInterval(async () => {
                 const currentDuration = get().activeSessionDuration + 1;
@@ -851,7 +844,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
                 }
               }, 60000);
               
-              set({ timer, secondTimer });
+              set({ timer });
             } else {
               console.warn('⚠️ No user found, skipping session creation');
             }
@@ -925,7 +918,6 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         const state = get();
         
         // Authentication guard - prevent operation if user not authenticated
-        const { useUserStore } = await import('./userStore');
         const user = useUserStore.getState().user;
         if (!user?.uid) {
           console.warn('⚠️ User not authenticated - cannot disable deep focus');
@@ -944,17 +936,6 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
             try {
               await deepFocusSessionService.endSession(state.activeSessionId);
               console.log('✅ Deep Focus session ended:', state.activeSessionId);
-
-              // Reload sessions to reflect the just-ended one in UI
-              try {
-                const { useUserStore } = await import('./userStore');
-                const user = useUserStore.getState().user;
-                if (user?.uid) {
-                  await get().loadDeepFocusSessions(user.uid);
-                }
-              } catch (e) {
-                console.warn('🔄 Could not refresh deep focus sessions after ending:', e);
-              }
             } catch (error) {
               console.error('❌ Failed to end Deep Focus session:', error);
             }

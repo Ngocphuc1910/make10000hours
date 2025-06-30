@@ -76,7 +76,6 @@ const DeepFocusPage: React.FC = () => {
     loadFocusStatus,
     activeSessionId,
     activeSessionDuration,
-    activeSessionElapsedSeconds,
     initializeDailyBackup,
     isBackingUp,
     lastBackupTime,
@@ -260,17 +259,11 @@ const DeepFocusPage: React.FC = () => {
           const startTime = new Date();
           
           // Update store with new session
-          const { activeSessionId, activeSessionStartTime, activeSessionDuration, activeSessionElapsedSeconds, timer, secondTimer } = useDeepFocusStore.getState();
+          const { activeSessionId, activeSessionStartTime, activeSessionDuration, timer, secondTimer } = useDeepFocusStore.getState();
           
           // Clear any existing timers
           if (timer) clearInterval(timer);
           if (secondTimer) clearInterval(secondTimer);
-          
-          // Create new timers
-          const newSecondTimer = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000);
-            useDeepFocusStore.setState({ activeSessionElapsedSeconds: elapsed });
-          }, 1000);
           
           const newTimer = setInterval(async () => {
             const currentDuration = useDeepFocusStore.getState().activeSessionDuration + 1;
@@ -912,7 +905,7 @@ const DeepFocusPage: React.FC = () => {
   // Calculate total deep focus time from filtered sessions
   const filteredDeepFocusTime = useMemo(() => {
     const totalTime = filteredDeepFocusSessions
-      .filter(session => session.status === 'completed' && session.duration)
+      .filter(session => session.duration)
       .reduce((total, session) => total + (session.duration || 0), 0);
     
     // Debug logging
