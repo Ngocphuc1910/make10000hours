@@ -1,5 +1,5 @@
 /**
- * Popup Script for Focus Time Tracker Extension
+ * Popup Script for Make10000hours Extension
  * Handles UI interactions and communication with background script
  */
 
@@ -11,7 +11,7 @@ class PopupManager {
     this.sessionTimer = null;
     this.updateInterval = null;
     this.analyticsUI = null;
-    this.currentTab = 'overview';
+    this.currentTab = 'site-usage'; // Updated for new 2-tab system
     
     this.initialize();
   }
@@ -103,19 +103,19 @@ class PopupManager {
    * Set up event listeners for UI elements
    */
   setupEventListeners() {
-    // Focus mode toggle
-    const focusModeBtn = document.getElementById('focus-mode-toggle');
-    if (focusModeBtn) {
-      console.log('🔧 Focus mode button found, adding listener');
-      focusModeBtn.addEventListener('click', () => {
-        console.log('🔧 Focus mode button clicked');
+    // Focus mode toggle (new switch in header)
+    const focusModeSwitch = document.querySelector('#focus-mode-toggle');
+    if (focusModeSwitch) {
+      console.log('🔧 Focus mode switch found, adding listener');
+      focusModeSwitch.addEventListener('change', () => {
+        console.log('🔧 Focus mode switch toggled');
         this.toggleFocusMode();
       });
     } else {
-      console.error('❌ Focus mode button not found!');
+      console.error('❌ Focus mode switch not found!');
     }
 
-    // Block current site button
+    // Block current site button (moved to header)
     const blockCurrentBtn = document.getElementById('block-current-site');
     if (blockCurrentBtn) {
       console.log('🔧 Block current site button found, adding listener');
@@ -127,43 +127,31 @@ class PopupManager {
       console.error('❌ Block current site button not found!');
     }
 
-    // Manage blocked sites
-    const manageBlockedBtn = document.getElementById('manageBlockedBtn');
-    if (manageBlockedBtn) {
-      manageBlockedBtn.addEventListener('click', () => this.showManageBlockedSites());
+    // Add site to block button
+    const addSiteBtn = document.getElementById('add-site-btn');
+    if (addSiteBtn) {
+      addSiteBtn.addEventListener('click', () => this.showAddSiteModal());
     }
 
-    // Settings button
+    // Settings button (legacy support)
     const settingsBtn = document.getElementById('settings-btn');
     if (settingsBtn) {
       settingsBtn.addEventListener('click', () => this.openSettings());
     }
 
-    // Export data button
+    // Export data button (legacy support)
     const exportBtn = document.getElementById('export-data-btn');
     if (exportBtn) {
       exportBtn.addEventListener('click', () => this.exportData());
     }
 
-    // Auto-management toggle
-    const autoMgmtToggle = document.getElementById('auto-management-toggle');
-    if (autoMgmtToggle) {
-      autoMgmtToggle.addEventListener('change', (e) => this.toggleAutoManagement(e.target.checked));
-    }
-
-    // View all sites
+    // View all sites button (now "View progress")
     const viewAllBtn = document.getElementById('view-all-btn');
     if (viewAllBtn) {
       viewAllBtn.addEventListener('click', () => this.viewAllSites());
     }
 
-    // View all blocked sites
-    const viewAllBlockedBtn = document.getElementById('viewAllBlockedBtn');
-    if (viewAllBlockedBtn) {
-      viewAllBlockedBtn.addEventListener('click', () => this.showAllBlockedSites());
-    }
-
-    // Help and feedback
+    // Help and feedback (legacy support)
     const helpBtn = document.getElementById('help-btn');
     if (helpBtn) {
       helpBtn.addEventListener('click', () => this.showHelp());
@@ -201,7 +189,7 @@ class PopupManager {
   }
 
   /**
-   * Set up tab system
+   * Set up tab system (updated for 2 tabs)
    */
   setupTabs() {
     const tabButtons = document.querySelectorAll('.tab-btn');
@@ -229,7 +217,7 @@ class PopupManager {
   }
 
   /**
-   * Switch to a specific tab
+   * Switch to a specific tab (updated for new tab names)
    */
   switchTab(tabName) {
     // Update current tab
@@ -254,108 +242,12 @@ class PopupManager {
    */
   initializeTabContent(tabName) {
     switch (tabName) {
-      case 'analytics':
-        this.initializeAnalytics();
+      case 'site-usage':
+        this.updateTopSites();
         break;
-      case 'goals':
-        this.initializeGoals();
+      case 'blocking-sites':
+        this.updateBlockedSitesList();
         break;
-    }
-  }
-
-  /**
-   * Initialize analytics dashboard
-   */
-  initializeAnalytics() {
-    if (!this.analyticsUI) return;
-
-    const analyticsContainer = document.getElementById('analytics-dashboard');
-    if (analyticsContainer && !analyticsContainer.hasChildNodes()) {
-      this.analyticsUI.createAnalyticsDashboard('analytics-dashboard', {
-        showPeriodSelector: true,
-        showSummaryCards: true,
-        showTrends: true,
-        showCategoryBreakdown: true,
-        showTopSites: true
-      });
-    }
-  }
-
-  /**
-   * Initialize productivity goals
-   */
-  initializeGoals() {
-    if (!this.analyticsUI) return;
-
-    const goalsContainer = document.getElementById('productivity-goals-widget');
-    if (goalsContainer && !goalsContainer.hasChildNodes()) {
-      this.analyticsUI.createProductivityGoals('productivity-goals-widget');
-    }
-  }
-
-  /**
-   * Refresh state from background script
-   */
-  async refreshState() {
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: 'GET_CURRENT_STATE'
-      });
-
-      if (response?.success) {
-        this.currentState = response.data;
-        this.updateUI();
-      }
-    } catch (error) {
-      console.error('Error refreshing state:', error);
-    }
-  }
-
-  /**
-   * Refresh focus state specifically to catch changes from web app
-   */
-  async refreshFocusState() {
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: 'GET_FOCUS_STATE'
-      });
-
-      if (response?.success) {
-        const currentFocusMode = this.currentState?.focusStats?.focusMode || false;
-        const newFocusMode = response.data.focusMode;
-        
-        // Only update if state actually changed to avoid unnecessary UI updates
-        if (currentFocusMode !== newFocusMode) {
-          console.log('🔄 Focus state changed, updating popup UI:', newFocusMode);
-          if (!this.currentState.focusStats) {
-            this.currentState.focusStats = {};
-          }
-          this.currentState.focusStats.focusMode = newFocusMode;
-          this.updateUI();
-        }
-      }
-    } catch (error) {
-      console.debug('Could not refresh focus state:', error);
-    }
-  }
-
-  /**
-   * Refresh user info from background
-   */
-  async refreshUserInfo() {
-    try {
-      const response = await this.sendMessage('GET_USER_INFO');
-      if (response?.success) {
-        // Only update if the user info has changed
-        const newUserInfo = response.data;
-        if (JSON.stringify(this.userInfo) !== JSON.stringify(newUserInfo)) {
-          this.userInfo = newUserInfo;
-          this.updateUserInfo();
-          console.log('👤 User info refreshed:', this.userInfo);
-        }
-      }
-    } catch (error) {
-      console.error('Error refreshing user info:', error);
     }
   }
 
@@ -363,243 +255,136 @@ class PopupManager {
    * Update UI elements with current state
    */
   updateUI() {
-    // Update header with focus mode status
-    this.updateHeader();
-    
     // Update user info section
     this.updateUserInfo();
     
-    // Update stats overview
+    // Update stats overview (new 3-card layout)
     this.updateStatsOverview();
     
-    // Update current session info
-    this.updateCurrentSession();
+    // Update focus mode switch state
+    this.updateFocusModeSwitch();
     
-    // Update top sites
-    this.updateTopSites();
-
-    // Update focus mode button text
-    const focusModeBtn = document.getElementById('focus-mode-toggle');
-    if (focusModeBtn) {
-      const isFocusModeActive = this.currentState?.focusStats?.focusMode || false;
-      const btnText = focusModeBtn.querySelector('.btn-text');
-      if (btnText) {
-        btnText.textContent = isFocusModeActive ? 'Disable Focus Mode' : 'Enable Focus Mode';
-      }
-    }
+    // Update active tab content
+    this.initializeTabContent(this.currentTab);
   }
 
   /**
-   * Update header with tracking status and focus mode
+   * Update focus mode switch and title to reflect current state (Web App Style)
    */
-  updateHeader() {
-    const header = document.querySelector('.header');
-    if (!header) return;
+  updateFocusModeSwitch() {
+    const focusModeSwitch = document.querySelector('#focus-mode-toggle');
+    const switchContainer = document.querySelector('.switch-container');
+    const switchToggle = document.querySelector('.switch-toggle');
+    const switchText = document.querySelector('.switch-text');
+    const animatedTitle = document.querySelector('.animated-title');
 
-    const trackingStatus = this.currentState?.currentSession?.isActive ? 'Tracking' : 'Idle';
-    const focusMode = this.currentState?.focusStats?.focusMode || false;
-    
-    // Update tracking indicator
-    const indicator = header.querySelector('.tracking-indicator');
-    if (indicator) {
-      indicator.textContent = trackingStatus;
-      indicator.className = `tracking-indicator ${this.currentState?.currentSession?.isActive ? 'active' : 'idle'}`;
+    if (focusModeSwitch) {
+      const isFocusModeActive = this.currentState?.focusStats?.focusMode || false;
+      focusModeSwitch.checked = isFocusModeActive;
+
+      // Update container classes
+      if (switchContainer) {
+        switchContainer.className = `switch-container ${isFocusModeActive ? 'active' : 'inactive'}`;
     }
 
-    // Update focus mode indicator
-    let focusIndicator = header.querySelector('.focus-indicator');
-    if (!focusIndicator) {
-      focusIndicator = document.createElement('div');
-      focusIndicator.className = 'focus-indicator';
-      header.appendChild(focusIndicator);
+      // Update toggle classes
+      if (switchToggle) {
+        switchToggle.className = `switch-toggle ${isFocusModeActive ? 'active' : 'inactive'}`;
+      }
+
+      // Update text content and classes
+      if (switchText) {
+        switchText.textContent = isFocusModeActive ? 'Deep Focus' : 'Focus Off';
+        switchText.className = `switch-text ${isFocusModeActive ? 'active' : 'inactive'}`;
     }
     
-    if (focusMode) {
-      focusIndicator.innerHTML = `
-        <span class="focus-icon">🎯</span>
-        <span class="focus-text">Focus Mode</span>
-      `;
-      focusIndicator.className = 'focus-indicator active';
+      // Update Make10000hours title animation (Web App Style)
+      if (animatedTitle) {
+        if (isFocusModeActive) {
+          animatedTitle.classList.add('active');
     } else {
-      focusIndicator.innerHTML = `
-        <span class="focus-icon">⭕</span>
-        <span class="focus-text">Distracted</span>
-      `;
-      focusIndicator.className = 'focus-indicator inactive';
+          animatedTitle.classList.remove('active');
+        }
+      }
+
+      console.log('🔧 Focus switch and Make10000hours title updated:', isFocusModeActive);
     }
   }
 
   /**
-   * Update user info display
+   * Update user info display (simplified for new design)
    */
   updateUserInfo() {
     const userInfoElement = document.getElementById('user-info');
     const noUserInfoElement = document.getElementById('no-user-info');
     const userNameElement = document.getElementById('user-name');
-    const userEmailElement = document.getElementById('user-email');
-    const userAvatarElement = document.getElementById('user-avatar-text');
-    const syncIndicatorElement = document.getElementById('sync-indicator');
 
     if (this.userInfo && this.userInfo.userId) {
       // Show user info
       if (userInfoElement) userInfoElement.classList.remove('hidden');
       if (noUserInfoElement) noUserInfoElement.classList.add('hidden');
 
-      // Update user details
-      const displayName = this.userInfo.displayName || this.userInfo.userEmail || 'Anonymous';
-      const email = this.userInfo.userEmail || this.userInfo.userId;
-      
+      // Update user name
+      const displayName = this.userInfo.displayName || this.userInfo.userEmail || 'User';
       if (userNameElement) userNameElement.textContent = displayName;
-      if (userEmailElement) userEmailElement.textContent = email;
-      
-      // Generate avatar initials
-      if (userAvatarElement) {
-        const initials = displayName
-          .split(' ')
-          .map(name => name.charAt(0))
-          .join('')
-          .substring(0, 2)
-          .toUpperCase();
-        userAvatarElement.textContent = initials || '?';
-      }
 
-      // Update sync indicator
-      if (syncIndicatorElement) {
-        syncIndicatorElement.classList.remove('offline');
-        syncIndicatorElement.title = 'Connected to web app';
-      }
-
-      console.log('👤 User info displayed:', { displayName, email });
+      console.log('👤 User info displayed:', { displayName });
     } else {
-      // Show no user info
+      // Show anonymous info
       if (userInfoElement) userInfoElement.classList.add('hidden');
       if (noUserInfoElement) noUserInfoElement.classList.remove('hidden');
 
-      // Update sync indicator
-      if (syncIndicatorElement) {
-        syncIndicatorElement.classList.add('offline');
-        syncIndicatorElement.title = 'Not connected to web app';
-      }
-
-      console.log('👤 No user info available');
+      console.log('👤 Anonymous user');
     }
   }
 
   /**
-   * Update stats overview cards
+   * Update stats overview cards (new 3-card design)
    */
   updateStatsOverview() {
     if (!this.todayStats) return;
 
-    // Total time
+    // Total screen time
     const totalTimeEl = document.getElementById('total-time');
     if (totalTimeEl) {
       totalTimeEl.textContent = this.formatTime(this.todayStats.totalTime || 0);
     }
 
-    // Sites visited
-    const sitesVisitedEl = document.getElementById('sites-visited');
-    if (sitesVisitedEl) {
-      sitesVisitedEl.textContent = this.todayStats.sitesVisited || 0;
+    // Deep focus time
+    const deepFocusTimeEl = document.getElementById('deep-focus-time');
+    if (deepFocusTimeEl) {
+      const focusTime = this.currentState?.focusStats?.focusTime || 0;
+      deepFocusTimeEl.textContent = this.formatTime(focusTime);
     }
 
-    // Productivity score
-    const productivityScoreEl = document.getElementById('productivity-score');
-    if (productivityScoreEl) {
-      const score = this.todayStats.productivityScore || 0;
-      productivityScoreEl.textContent = `${score}%`;
-      
-      // Color code the score
-      if (score >= 70) {
-        productivityScoreEl.style.color = 'var(--success-color)';
-      } else if (score >= 40) {
-        productivityScoreEl.style.color = 'var(--warning-color)';
-      } else {
-        productivityScoreEl.style.color = 'var(--error-color)';
-      }
+    // Override time
+    const overrideTimeEl = document.getElementById('override-time');
+    if (overrideTimeEl) {
+      const overrideTime = this.currentState?.focusStats?.overrideTime || 0;
+      overrideTimeEl.textContent = this.formatTime(overrideTime);
     }
   }
 
   /**
-   * Update current session display
-   */
-  updateCurrentSession() {
-    const currentSite = document.getElementById('current-site');
-    const sessionTimer = document.getElementById('session-timer');
-    
-    if (this.currentState?.tracking && this.currentState?.currentSession?.domain) {
-      const { domain, startTime } = this.currentState.currentSession;
-      
-      // Update site info
-      if (currentSite) {
-        const siteIcon = currentSite.querySelector('.site-icon');
-        const siteName = currentSite.querySelector('.site-name');
-        const siteTime = currentSite.querySelector('.site-time');
-        
-        if (siteIcon) siteIcon.textContent = this.getSiteIcon(domain);
-        if (siteName) siteName.textContent = domain;
-        if (siteTime && startTime) {
-          const saved = this.currentState?.currentSession?.savedTime || 0;
-          const elapsed = saved + (Date.now() - startTime);
-          const minutes = Math.floor(elapsed / 60000);
-          const seconds = Math.floor((elapsed % 60000) / 1000);
-          
-          // Format time display
-          let activeText = 'Active for ';
-          if (minutes > 0) {
-            activeText += `${minutes}m `;
-          }
-          if (seconds > 0 || minutes === 0) {
-            activeText += `${seconds}s`;
-          }
-          siteTime.textContent = activeText;
-        }
-
-        // Remove dashed border when active
-        currentSite.style.border = '2px solid var(--primary-color)';
-      }
-
-      // Update timer
-      if (sessionTimer && startTime) {
-        const saved = this.currentState?.currentSession?.savedTime || 0;
-        const elapsed = saved + (Date.now() - startTime);
-        const minutes = Math.floor(elapsed / 60000);
-        const seconds = Math.floor((elapsed % 60000) / 1000);
-        sessionTimer.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-      }
-    } else {
-      // No active session
-      if (currentSite) {
-        currentSite.style.border = '2px dashed var(--border-color)';
-        const siteTime = currentSite.querySelector('.site-time');
-        if (siteTime) siteTime.textContent = 'Not active';
-      }
-      if (sessionTimer) {
-        sessionTimer.textContent = '00:00';
-      }
-    }
-  }
-
-  /**
-   * Update top sites list
+   * Update top sites list (new template format)
    */
   async updateTopSites() {
     const sitesListEl = document.getElementById('top-sites-list');
     if (!sitesListEl) return;
 
     try {
-      const response = await this.sendMessage('GET_TOP_SITES', { limit: 5 });
+      const response = await this.sendMessage('GET_TOP_SITES', { limit: 6 });
       
       if (response.success && response.data.length > 0) {
         sitesListEl.innerHTML = '';
         
         response.data.forEach(site => {
-          const siteCard = this.createSiteCard(site);
+          const siteCard = this.createNewSiteCard(site);
           sitesListEl.appendChild(siteCard);
         });
       } else {
         sitesListEl.innerHTML = `
-          <div class="empty-state">
+          <div class="loading-state">
             <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
             <div style="color: var(--text-muted); font-size: 0.875rem;">No sites tracked today</div>
           </div>
@@ -608,36 +393,43 @@ class PopupManager {
     } catch (error) {
       console.error('Error updating top sites:', error);
       sitesListEl.innerHTML = `
-        <div class="error-state">
-          <div style="color: var(--error-color);">Failed to load sites</div>
+        <div class="loading-state">
+          <div style="color: var(--accent-red);">Failed to load sites</div>
         </div>
       `;
     }
   }
 
   /**
-   * Create a site card element
+   * Create a site card element (new template format)
    */
-  createSiteCard(site) {
+  createNewSiteCard(site) {
     const percentage = this.todayStats?.totalTime ? 
       Math.round((site.timeSpent / this.todayStats.totalTime) * 100) : 0;
 
     const card = document.createElement('div');
     card.className = 'site-card';
+    
+    const iconInfo = this.getSiteIconInfo(site.domain);
+    
     card.innerHTML = `
+      <div class="site-card-header">
       <div class="site-card-left">
-        <div class="site-card-icon">${this.getSiteIcon(site.domain)}</div>
+          <div class="site-card-icon ${iconInfo.color}">
+            <i class="${iconInfo.icon}"></i>
+          </div>
         <div class="site-card-info">
           <div class="site-card-name">${site.domain}</div>
-          <div class="site-card-stats">${site.visits} visits</div>
-          <div class="progress-bar">
-            <div class="progress-fill" style="width: ${percentage}%"></div>
-          </div>
+            <div class="site-card-stats">${site.visits} sessions</div>
         </div>
       </div>
       <div class="site-card-right">
         <div class="site-card-time">${this.formatTime(site.timeSpent)}</div>
         <div class="site-card-percentage">${percentage}%</div>
+        </div>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill ${iconInfo.color}" style="width: ${percentage}%"></div>
       </div>
     `;
 
@@ -648,125 +440,193 @@ class PopupManager {
   }
 
   /**
-   * Update action buttons and focus controls
+   * Update blocked sites list
    */
-  updateActionButtons() {
-    const container = document.getElementById('actionButtons');
-    if (!container) return;
+  async updateBlockedSitesList() {
+    const blockedSitesListEl = document.getElementById('blocked-sites-list');
+    if (!blockedSitesListEl) return;
 
-    const focusMode = this.currentState?.focusStats?.focusMode || false;
-    const currentDomain = this.currentState?.currentSession?.domain;
-    const blockedSites = this.currentState?.focusStats?.blockedSites || [];
-    const isCurrentSiteBlocked = currentDomain && blockedSites.includes(currentDomain);
-
-    container.innerHTML = `
-      <div class="action-section">
-        <h3 class="section-title">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/>
-          </svg>
-          Focus Controls
-        </h3>
+    try {
+      const response = await this.sendMessage('GET_BLOCKED_SITES');
+      
+      if (response.success && response.data.length > 0) {
+        blockedSitesListEl.innerHTML = '';
         
-        <div class="focus-mode-toggle">
-          <button id="focus-mode-toggle" class="btn ${focusMode ? 'btn-danger' : 'btn-primary'} btn-large">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              ${focusMode 
-                ? '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/>'
-                : '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>'
-              }
-            </svg>
-            ${focusMode ? 'Stop Focus Session' : 'Start Focus Session'}
-          </button>
-          
-          ${focusMode ? `
-            <div class="focus-stats-mini">
-              <div class="stat">
-                <span class="value">${this.formatTime(this.currentState.focusStats.focusTime || 0, 'clock')}</span>
-                <span class="label">Focus Time</span>
-              </div>
-              <div class="stat">
-                <span class="value">${this.currentState.focusStats.blockedAttempts || 0}</span>
-                <span class="label">Blocked</span>
-              </div>
-            </div>
-          ` : ''}
-        </div>
-      </div>
-
-      <div class="action-section">
-        <h3 class="section-title">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-          </svg>
-          Quick Actions
-        </h3>
-        
-        <div class="action-grid">
-          <button id="block-current-site" class="btn ${isCurrentSiteBlocked ? 'btn-secondary' : 'btn-warning'}" 
-                  ${!currentDomain ? 'disabled' : ''}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/>
-            </svg>
-            ${isCurrentSiteBlocked ? 'Unblock Site' : 'Block Site'}
-          </button>
-          
-          <button id="manageBlockedBtn" class="btn btn-secondary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-            </svg>
-            Manage Blocked Sites
-          </button>
-          
-          <button id="settings-btn" class="btn btn-secondary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-            </svg>
-            Settings
-          </button>
-          
-          <button id="export-data-btn" class="btn btn-secondary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-            </svg>
-            Export Data
-          </button>
-        </div>
-      </div>
-
-      ${blockedSites.length > 0 ? `
-        <div class="action-section">
-          <h3 class="section-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/>
-            </svg>
-            Blocked Sites (${blockedSites.length})
-          </h3>
-          
-          <div class="blocked-sites-list">
-            ${blockedSites.slice(0, 3).map(site => `
-              <div class="blocked-site-item">
-                <span class="site-domain">${site}</span>
-                <button class="btn-icon btn-danger" data-action="unblock" data-domain="${site}">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                  </svg>
-                </button>
-              </div>
-            `).join('')}
-            
-            ${blockedSites.length > 3 ? `
-              <button class="btn btn-link btn-small" id="viewAllBlockedBtn">
-                View all ${blockedSites.length} blocked sites →
-              </button>
-            ` : ''}
+        response.data.forEach(domain => {
+          const blockedSiteItem = this.createBlockedSiteItem(domain);
+          blockedSitesListEl.appendChild(blockedSiteItem);
+        });
+      } else {
+        blockedSitesListEl.innerHTML = `
+          <div class="loading-state">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🛡️</div>
+            <div style="color: var(--text-muted); font-size: 0.875rem;">No blocked sites</div>
           </div>
+        `;
+      }
+    } catch (error) {
+      console.error('Error updating blocked sites:', error);
+      blockedSitesListEl.innerHTML = `
+        <div class="loading-state">
+          <div style="color: var(--accent-red);">Failed to load blocked sites</div>
         </div>
-      ` : ''}
+      `;
+    }
+  }
+
+  /**
+   * Create blocked site item (new template format)
+   */
+  createBlockedSiteItem(domain) {
+    const item = document.createElement('div');
+    item.className = 'blocked-site-item';
+    
+    const iconInfo = this.getSiteIconInfo(domain);
+    
+    item.innerHTML = `
+      <div class="blocked-site-left">
+        <div class="blocked-site-icon ${iconInfo.color}">
+          <i class="${iconInfo.icon}"></i>
+              </div>
+        <div class="blocked-site-name">${domain}</div>
+              </div>
+      <div class="blocked-site-controls">
+        <button class="btn-icon" title="Edit">
+          <i class="ri-edit-line"></i>
+        </button>
+        <button class="btn-icon" title="Delete" data-action="unblock" data-domain="${domain}">
+          <i class="ri-delete-bin-line"></i>
+        </button>
+        <label class="custom-switch">
+          <input type="checkbox" checked>
+          <span class="switch-slider"></span>
+        </label>
+            </div>
     `;
 
+    return item;
+  }
+
+  /**
+   * Get site icon and color info for consistent styling
+   */
+  getSiteIconInfo(domain) {
+    // Enhanced mapping with Remix Icons and colors
+    const iconMap = {
+      'github.com': { icon: 'ri-github-fill', color: 'purple' },
+      'gmail.com': { icon: 'ri-mail-line', color: 'red' },
+      'mail.google.com': { icon: 'ri-mail-line', color: 'red' },
+      'youtube.com': { icon: 'ri-youtube-fill', color: 'red' },
+      'facebook.com': { icon: 'ri-facebook-fill', color: 'blue' },
+      'twitter.com': { icon: 'ri-twitter-fill', color: 'blue' },
+      'linkedin.com': { icon: 'ri-linkedin-fill', color: 'blue' },
+      'reddit.com': { icon: 'ri-reddit-fill', color: 'orange' },
+      'netflix.com': { icon: 'ri-netflix-fill', color: 'red' },
+      'amazon.com': { icon: 'ri-shopping-cart-line', color: 'orange' },
+      'wikipedia.org': { icon: 'ri-book-line', color: 'green' },
+      'google.com': { icon: 'ri-google-fill', color: 'blue' },
+      'instagram.com': { icon: 'ri-instagram-fill', color: 'pink' },
+      'figma.com': { icon: 'ri-shape-line', color: 'purple' },
+      'claude.ai': { icon: 'ri-robot-line', color: 'purple' },
+      'make10000hours.com': { icon: 'ri-focus-3-line', color: 'red' },
+      'firebase.google.com': { icon: 'ri-fire-line', color: 'orange' },
+      'console.firebase.google.com': { icon: 'ri-fire-line', color: 'orange' }
+    };
+
+    // Check for domain matches
+    for (const [site, info] of Object.entries(iconMap)) {
+      if (domain.includes(site)) {
+        return info;
+      }
+    }
+
+    // Default icon and color
+    return { icon: 'ri-global-line', color: 'blue' };
+  }
+
+  /**
+   * Show add site modal
+   */
+  showAddSiteModal() {
+    this.showModal('Add Site to Block', `
+      <div class="add-site-form">
+        <input 
+          type="text" 
+          id="site-input" 
+          placeholder="Enter domain (e.g. youtube.com)" 
+          class="input-field"
+        >
+        <button id="add-site-confirm" class="btn primary">Add</button>
+        </div>
+      <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 1rem;">
+        Enter the domain you want to block. The site will be blocked during focus mode.
+      </p>
+    `);
+
     // Add event listeners
-    this.setupActionButtonListeners();
+    const siteInput = document.getElementById('site-input');
+    const addSiteConfirm = document.getElementById('add-site-confirm');
+
+    if (addSiteConfirm) {
+      addSiteConfirm.addEventListener('click', async () => {
+        const domain = siteInput?.value.trim();
+        if (domain) {
+          await this.addBlockedSite(domain);
+        }
+      });
+    }
+
+    if (siteInput) {
+      siteInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          addSiteConfirm?.click();
+        }
+      });
+      siteInput.focus();
+    }
+  }
+
+  /**
+   * Add site to blocked list
+   */
+  async addBlockedSite(domain) {
+    try {
+      const response = await this.sendMessage('ADD_BLOCKED_SITE', { domain });
+      
+      if (response.success) {
+        this.hideModal();
+        this.showNotification(`${domain} has been blocked`, 'success');
+        // Refresh blocked sites list if on that tab
+        if (this.currentTab === 'blocking-sites') {
+          this.updateBlockedSitesList();
+        }
+      } else {
+        this.showNotification('Failed to block site: ' + response.error, 'error');
+      }
+    } catch (error) {
+      console.error('Error adding blocked site:', error);
+      this.showNotification('Failed to block site', 'error');
+    }
+  }
+
+  /**
+   * Unblock a site
+   */
+  async unblockSite(domain) {
+    try {
+      const response = await this.sendMessage('REMOVE_BLOCKED_SITE', { domain });
+      
+      if (response.success) {
+        this.showNotification(`${domain} has been unblocked`, 'success');
+        // Refresh blocked sites list
+        this.updateBlockedSitesList();
+      } else {
+        this.showNotification('Failed to unblock site: ' + response.error, 'error');
+      }
+    } catch (error) {
+      console.error('Error unblocking site:', error);
+      this.showNotification('Failed to unblock site', 'error');
+    }
   }
 
   /**
@@ -790,12 +650,62 @@ class PopupManager {
         await this.refreshState();
       } else {
         this.showError('Failed to toggle focus mode: ' + response.error);
+        // Revert switch state
+        this.updateFocusModeSwitch();
       }
     } catch (error) {
       console.error('Error toggling focus mode:', error);
       this.showError('Failed to toggle focus mode');
+      // Revert switch state
+      this.updateFocusModeSwitch();
     } finally {
       this.hideLoading();
+    }
+  }
+
+  /**
+   * Toggle blocking for the current site
+   */
+  async toggleCurrentSiteBlock() {
+    try {
+      this.showLoading();
+      
+      const response = await this.sendMessage('BLOCK_CURRENT_SITE');
+      
+      if (response.success) {
+        this.showNotification(
+          `Site ${response.domain} has been blocked`,
+          'success'
+        );
+        
+        // Refresh state to update UI
+        await this.refreshState();
+      } else {
+        this.showError('Failed to block site: ' + response.error);
+      }
+    } catch (error) {
+      console.error('Error toggling site block:', error);
+      this.showError('Failed to block site');
+    } finally {
+      this.hideLoading();
+    }
+  }
+
+  /**
+   * Refresh state from background script
+   */
+  async refreshState() {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'GET_CURRENT_STATE'
+      });
+
+      if (response?.success) {
+        this.currentState = response.data;
+        this.updateUI();
+      }
+    } catch (error) {
+      console.error('Error refreshing state:', error);
     }
   }
 
@@ -867,12 +777,8 @@ class PopupManager {
    * View all sites (opens detailed view)
    */
   viewAllSites() {
-    // For now, just show a modal with all sites
-    // In Phase 3, this would open a comprehensive analytics view
-    this.showModal('All Sites Today', `
-      <p>Detailed analytics view coming in Phase 3!</p>
-      <p>For now, you can see your top 5 sites in the main popup.</p>
-    `);
+    // Open the main web app
+    chrome.tabs.create({ url: 'https://make10000hours.com' });
   }
 
   /**
@@ -882,9 +788,13 @@ class PopupManager {
     const percentage = this.todayStats?.totalTime ? 
       Math.round((site.timeSpent / this.todayStats.totalTime) * 100) : 0;
 
+    const iconInfo = this.getSiteIconInfo(site.domain);
+
     this.showModal(`${site.domain} Details`, `
       <div style="text-align: center;">
-        <div style="font-size: 3rem; margin-bottom: 1rem;">${this.getSiteIcon(site.domain)}</div>
+        <div style="font-size: 3rem; margin-bottom: 1rem;">
+          <i class="${iconInfo.icon}" style="color: var(--accent-${iconInfo.color});"></i>
+        </div>
         <h4 style="margin-bottom: 1rem;">${site.domain}</h4>
         
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
@@ -895,10 +805,10 @@ class PopupManager {
             <div style="font-size: 0.75rem; color: var(--text-muted);">Time Spent</div>
           </div>
           <div style="text-align: center; padding: 1rem; background: var(--bg-secondary); border-radius: 0.5rem;">
-            <div style="font-size: 1.5rem; font-weight: bold; color: var(--accent-color);">
+            <div style="font-size: 1.5rem; font-weight: bold; color: var(--accent-blue);">
               ${site.visits}
             </div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">Visits</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Sessions</div>
           </div>
         </div>
         
@@ -909,7 +819,7 @@ class PopupManager {
         </div>
         
         <div style="margin-top: 1rem;">
-          <button id="block-site-btn" class="btn secondary" style="width: 100%;">
+          <button id="block-site-btn" class="btn primary" style="width: 100%;">
             🚫 Block This Site
           </button>
         </div>
@@ -918,15 +828,7 @@ class PopupManager {
 
     // Add block site handler
     document.getElementById('block-site-btn')?.addEventListener('click', async () => {
-      try {
-        const response = await this.sendMessage('ADD_BLOCKED_SITE', { domain: site.domain });
-        if (response.success) {
-          this.hideModal();
-          this.showNotification(`${site.domain} has been blocked`, 'success');
-        }
-      } catch (error) {
-        this.showNotification('Failed to block site', 'error');
-      }
+      await this.addBlockedSite(site.domain);
     });
   }
 
@@ -935,24 +837,25 @@ class PopupManager {
    */
   showHelp() {
     this.showModal('Help & Guide', `
-      <h4>How Focus Time Tracker Works</h4>
+      <h4>How Make10000hours Focus Tracker Works</h4>
       <ul style="text-align: left; margin: 1rem 0;">
         <li><strong>Automatic Tracking:</strong> Time is tracked when you're active on a tab</li>
-        <li><strong>Focus Mode:</strong> Blocks distracting sites during work sessions</li>
+        <li><strong>Deep Focus Mode:</strong> Blocks distracting sites during work sessions</li>
         <li><strong>Site Blocking:</strong> Add sites to your block list</li>
-        <li><strong>Statistics:</strong> View detailed analytics of your browsing habits</li>
+        <li><strong>Web App Sync:</strong> Data syncs with your Make10000hours account</li>
       </ul>
       
-      <h4>Keyboard Shortcuts</h4>
+      <h4>Features</h4>
       <ul style="text-align: left; margin: 1rem 0;">
-        <li><kbd>Ctrl+Shift+F</kbd> - Toggle Focus Mode</li>
-        <li><kbd>Ctrl+Shift+B</kbd> - Block Current Site</li>
+        <li><strong>Site Usage:</strong> Track where you spend your time</li>
+        <li><strong>Blocking Sites:</strong> Manage your distraction blocklist</li>
+        <li><strong>Progress Tracking:</strong> View detailed analytics on the web app</li>
       </ul>
       
       <p style="margin-top: 1rem;">
-        <strong>Need more help?</strong> Visit our 
-        <a href="#" style="color: var(--primary-color);">documentation</a> 
-        or <a href="#" style="color: var(--primary-color);">contact support</a>.
+        <strong>Need more help?</strong> Visit 
+        <a href="https://make10000hours.com" style="color: var(--primary-color);">make10000hours.com</a> 
+        for detailed analytics and progress tracking.
       </p>
     `);
   }
@@ -962,13 +865,13 @@ class PopupManager {
    */
   showFeedback() {
     this.showModal('Send Feedback', `
-      <p>We'd love to hear from you! Help us improve Focus Time Tracker.</p>
+      <p>We'd love to hear from you! Help us improve Make10000hours Focus Tracker.</p>
       
       <div style="margin: 1rem 0;">
         <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
           Feedback Type:
         </label>
-        <select id="feedback-type" style="width: 100%; padding: 0.5rem; border: 1px solid var(--gray-300); border-radius: 0.25rem;">
+        <select id="feedback-type" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem;">
           <option value="bug">Bug Report</option>
           <option value="feature">Feature Request</option>
           <option value="general">General Feedback</option>
@@ -981,7 +884,7 @@ class PopupManager {
         </label>
         <textarea id="feedback-message" 
           placeholder="Tell us what you think..." 
-          style="width: 100%; height: 100px; padding: 0.5rem; border: 1px solid var(--gray-300); border-radius: 0.25rem; resize: vertical;">
+          style="width: 100%; height: 100px; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.25rem; resize: vertical;">
         </textarea>
       </div>
       
@@ -1010,7 +913,7 @@ class PopupManager {
    * Format time in milliseconds to human readable string
    */
   formatTime(ms, format = 'compact') {
-    if (!ms) return '0s';
+    if (!ms) return '0m';
     
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
@@ -1020,9 +923,9 @@ class PopupManager {
       return `${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
     }
     
-    // For times less than 1 minute, show seconds
+    // For times less than 1 minute, show 0m (not seconds)
     if (minutes < 1) {
-      return `${seconds}s`;
+      return '0m';
     }
     
     // For times less than 1 hour, show minutes
@@ -1033,35 +936,6 @@ class PopupManager {
     // For times over 1 hour
     const mins = minutes % 60;
     return `${hours}h ${mins}m`;
-  }
-
-  /**
-   * Get emoji icon for a domain
-   */
-  getSiteIcon(domain) {
-    // Simple mapping of domains to icons
-    const iconMap = {
-      'github.com': '💻',
-      'mail.google.com': '📧',
-      'youtube.com': '🎥',
-      'facebook.com': '👥',
-      'twitter.com': '🐦',
-      'linkedin.com': '💼',
-      'reddit.com': '🗨️',
-      'netflix.com': '🎬',
-      'amazon.com': '🛒',
-      'wikipedia.org': '📚'
-    };
-
-    // Check if domain matches any known sites
-    for (const [site, icon] of Object.entries(iconMap)) {
-      if (domain.includes(site)) {
-        return icon;
-      }
-    }
-
-    // Default icon for unknown sites
-    return '🌐';
   }
 
   /**
@@ -1145,8 +1019,8 @@ class PopupManager {
       color: white;
       font-weight: 600;
       z-index: 10000;
-      background: ${type === 'success' ? 'var(--success-color)' : 
-                   type === 'error' ? 'var(--error-color)' : 
+      background: ${type === 'success' ? 'var(--accent-green)' : 
+                   type === 'error' ? 'var(--accent-red)' : 
                    'var(--primary-color)'};
       box-shadow: var(--shadow-lg);
       animation: slideIn 0.3s ease;
@@ -1178,15 +1052,7 @@ class PopupManager {
    * Show error message
    */
   showError(message) {
-    const topSitesList = document.getElementById('top-sites-list');
-    if (topSitesList) {
-      topSitesList.innerHTML = `
-        <div class="error-state" style="text-align: center; padding: 2rem; color: var(--error-color);">
-          <div style="font-size: 2rem; margin-bottom: 0.5rem;">⚠️</div>
-          <div>${message}</div>
-        </div>
-      `;
-    }
+    this.showNotification(message, 'error');
   }
 
   /**
@@ -1198,131 +1064,6 @@ class PopupManager {
     }
     if (this.sessionTimer) {
       clearInterval(this.sessionTimer);
-    }
-  }
-
-  /**
-   * Update activity status display
-   */
-  async updateActivityStatus() {
-    try {
-      const response = await this.sendMessage('GET_ACTIVITY_STATE');
-      if (response?.success) {
-        const activityState = response.data;
-        
-        // Update activity indicator
-        const activityDot = document.getElementById('activity-dot');
-        const activityText = document.getElementById('activity-text');
-        const pauseInfo = document.getElementById('pause-info');
-        const pauseDuration = document.getElementById('pause-duration');
-        
-        if (activityDot && activityText) {
-          if (activityState.isSessionPaused) {
-            activityDot.className = 'activity-dot paused';
-            activityText.textContent = 'Paused';
-            
-            if (pauseInfo && pauseDuration) {
-              const pausedFor = activityState.pausedAt ? 
-                Math.round((Date.now() - new Date(activityState.pausedAt).getTime()) / 1000) : 0;
-              pauseDuration.textContent = `Paused for ${this.formatDuration(pausedFor)}`;
-              pauseInfo.classList.remove('hidden');
-            }
-          } else if (activityState.isUserActive) {
-            activityDot.className = 'activity-dot active';
-            activityText.textContent = 'Active';
-            if (pauseInfo) pauseInfo.classList.add('hidden');
-          } else {
-            activityDot.className = 'activity-dot inactive';
-            activityText.textContent = `Idle ${this.formatDuration(activityState.inactivityDuration)}`;
-            if (pauseInfo) pauseInfo.classList.add('hidden');
-          }
-        }
-
-        // Update auto-management toggle
-        const autoMgmtToggle = document.getElementById('auto-management-toggle');
-        if (autoMgmtToggle) {
-          autoMgmtToggle.checked = activityState.autoManagementEnabled;
-        }
-      }
-    } catch (error) {
-      console.error('Error updating activity status:', error);
-    }
-  }
-
-  /**
-   * Toggle auto-management setting
-   */
-  async toggleAutoManagement(enabled) {
-    try {
-      console.log('🔧 Toggling auto-management:', enabled);
-      
-      const response = await this.sendMessage('TOGGLE_AUTO_MANAGEMENT', { enabled });
-      
-      if (response?.success) {
-        console.log('✅ Auto-management toggled successfully');
-        this.showNotification(
-          enabled ? 'Auto-pause enabled' : 'Auto-pause disabled',
-          'success'
-        );
-      } else {
-        console.error('❌ Failed to toggle auto-management:', response?.error);
-        this.showNotification('Failed to update setting', 'error');
-        
-        // Revert toggle state
-        const toggle = document.getElementById('auto-management-toggle');
-        if (toggle) toggle.checked = !enabled;
-      }
-    } catch (error) {
-      console.error('Error toggling auto-management:', error);
-      this.showNotification('Error updating setting', 'error');
-      
-      // Revert toggle state
-      const toggle = document.getElementById('auto-management-toggle');
-      if (toggle) toggle.checked = !enabled;
-    }
-  }
-
-  /**
-   * Format duration in seconds to human readable format
-   */
-  formatDuration(seconds) {
-    if (seconds < 60) {
-      return `${seconds}s`;
-    } else if (seconds < 3600) {
-      const minutes = Math.floor(seconds / 60);
-      return `${minutes}m`;
-    } else {
-      const hours = Math.floor(seconds / 3600);
-      const minutes = Math.floor((seconds % 3600) / 60);
-      return `${hours}h ${minutes}m`;
-    }
-  }
-
-  /**
-   * Toggle blocking for the current site
-   */
-  async toggleCurrentSiteBlock() {
-    try {
-      this.showLoading();
-      
-      const response = await this.sendMessage('BLOCK_CURRENT_SITE');
-      
-      if (response.success) {
-        this.showNotification(
-          `Site ${response.domain} has been blocked`,
-          'success'
-        );
-        
-        // Refresh state to update UI
-        await this.refreshState();
-      } else {
-        this.showError('Failed to block site: ' + response.error);
-      }
-    } catch (error) {
-      console.error('Error toggling site block:', error);
-      this.showError('Failed to block site');
-    } finally {
-      this.hideLoading();
     }
   }
 }

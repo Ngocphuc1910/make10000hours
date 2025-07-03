@@ -3,140 +3,106 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Focus Time Tracker</title>
+  <title>Make10000hours - Deep Focus</title>
   <link rel="stylesheet" href="popup.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.6.0/remixicon.min.css">
 </head>
 <body>
   <div class="popup-container">
     <!-- Header -->
     <header class="popup-header">
-      <div class="header-content">
-        <div class="logo">
-          <span class="logo-icon">🎯</span>
-          <h1 class="logo-text">Focus Tracker</h1>
-        </div>
-        <div class="status-indicators">
-          <div id="tracking-status" class="status-indicator">
-            <span class="status-dot"></span>
-            <span class="status-text">Tracking</span>
-          </div>
-          <div id="focus-mode-indicator" class="status-indicator hidden">
-            <span class="focus-icon">🔒</span>
-            <span class="status-text">Focus Mode</span>
-          </div>
+      <div class="header-top">
+        <div class="title-focus-container">
+          <div class="logo-text animated-title">Make10000hours</div>
+          <label class="deep-focus-switch">
+            <input type="checkbox" id="focus-mode-toggle">
+            <div class="switch-container">
+              <span class="switch-text">Focus Off</span>
+            </div>
+            <div class="switch-toggle"></div>
+          </label>
         </div>
       </div>
       
       <!-- User Info Section -->
       <div class="user-info-section">
         <div id="user-info" class="user-info hidden">
-          <div class="user-avatar">
-            <span id="user-avatar-text" class="avatar-text">?</span>
-          </div>
-          <div class="user-details">
-            <div id="user-name" class="user-name">Not synced</div>
-            <div id="user-email" class="user-email">No user connected</div>
-          </div>
-          <div class="sync-status">
-            <span id="sync-indicator" class="sync-dot"></span>
+          <div class="user-details-container">
+            <div class="user-details-text">
+              <span id="user-name">Ngoc phuc</span>'s today usage:
+            </div>
+            <button id="view-all-btn" class="link-button">
+              View detail progress
+              <i class="ri-arrow-right-s-line"></i>
+            </button>
           </div>
         </div>
         <div id="no-user-info" class="no-user-info">
-          <div class="sync-prompt">
-            <span class="sync-icon">🔗</span>
-            <div class="sync-text">
-              <div class="sync-title">Not connected to web app</div>
-              <div class="sync-subtitle">Open make10000hours.com to sync</div>
-            </div>
+          <div class="user-details-container">
+            <div class="user-details-text">Anonymous's today usage:</div>
+            <button id="view-all-btn" class="link-button">
+              View detail progress
+              <i class="ri-arrow-right-s-line"></i>
+            </button>
           </div>
         </div>
       </div>
     </header>
 
+    <!-- Stats Overview -->
+    <section class="stats-overview">
+      <div class="stat-card blue">
+        <div class="stat-icon">
+          <i class="ri-computer-line"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-label">On Screen Time</div>
+          <div id="total-time" class="stat-value">0h 0m</div>
+        </div>
+      </div>
+      
+      <div class="stat-card red">
+        <div class="stat-icon">
+          <i class="ri-focus-3-line"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-label">Deep Focus Time</div>
+          <div id="deep-focus-time" class="stat-value">0m</div>
+        </div>
+      </div>
+      
+      <div class="stat-card orange">
+        <div class="stat-icon">
+          <i class="ri-time-line"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-label">Override Time</div>
+          <div id="override-time" class="stat-value">0m</div>
+        </div>
+      </div>
+    </section>
+
     <!-- Tab Navigation -->
     <nav class="tab-navigation">
-      <button class="tab-btn active" data-tab="overview">
-        <span class="tab-icon">📊</span>
-        <span class="tab-text">Overview</span>
+      <button class="tab-btn active" data-tab="site-usage">
+        <i class="ri-bar-chart-2-line"></i>
+        <span>Site Usage</span>
       </button>
-      <button class="tab-btn" data-tab="analytics">
-        <span class="tab-icon">📈</span>
-        <span class="tab-text">Analytics</span>
-      </button>
-      <button class="tab-btn" data-tab="goals">
-        <span class="tab-icon">🎯</span>
-        <span class="tab-text">Goals</span>
+      <button class="tab-btn" data-tab="blocking-sites">
+        <i class="ri-shield-line"></i>
+        <span>Blocking Sites</span>
       </button>
     </nav>
 
     <!-- Tab Content -->
     <div class="tab-content">
-      <!-- Overview Tab (existing content) -->
-      <div id="overview-tab" class="tab-pane active">
-        <!-- Today's Stats Overview -->
-        <section class="stats-overview">
-          <div class="stat-card primary">
-            <div class="stat-icon">⏱️</div>
-            <div class="stat-content">
-              <div id="total-time" class="stat-value">0h 0m</div>
-              <div class="stat-label">Today's Total</div>
-            </div>
-          </div>
-          
-          <div class="stat-card secondary">
-            <div class="stat-icon">🌐</div>
-            <div class="stat-content">
-              <div id="sites-visited" class="stat-value">0</div>
-              <div class="stat-label">Sites Visited</div>
-            </div>
-          </div>
-          
-          <div class="stat-card tertiary">
-            <div class="stat-icon">📊</div>
-            <div class="stat-content">
-              <div id="productivity-score" class="stat-value">0%</div>
-              <div class="stat-label">Productivity</div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Current Session -->
-        <section class="current-session">
-          <div class="section-header">
-            <h3>Current Session</h3>
-            <div id="session-timer" class="session-timer">00:00</div>
-          </div>
-          
-          <div id="current-site" class="current-site">
-            <div class="site-info">
-              <div class="site-icon">🌐</div>
-              <div class="site-details">
-                <div class="site-name">No active site</div>
-                <div class="site-time">Not tracking</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Activity Status -->
-          <div id="activity-status" class="activity-status">
-            <div class="activity-indicator">
-              <span id="activity-dot" class="activity-dot active"></span>
-              <span id="activity-text" class="activity-text">Active</span>
-            </div>
-            <div id="pause-info" class="pause-info hidden">
-              <span class="pause-icon">⏸️</span>
-              <span id="pause-duration" class="pause-duration">Paused for 0s</span>
-            </div>
-          </div>
-        </section>
-
-        <!-- Top Sites Today -->
-        <section class="top-sites">
-          <div class="section-header">
-            <h3>Top Sites Today</h3>
-            <button id="view-all-btn" class="view-all-btn">View All</button>
-          </div>
-          
+      <!-- Site Usage Tab -->
+      <div id="site-usage-tab" class="tab-pane active">
+        <div class="tab-content-wrapper">
           <div id="top-sites-list" class="sites-list">
             <!-- Site cards will be populated by JavaScript -->
             <div class="loading-state">
@@ -144,66 +110,65 @@
               <div class="loading-text">Loading stats...</div>
             </div>
           </div>
-        </section>
+        </div>
       </div>
 
-      <!-- Analytics Tab (new enhanced analytics) -->
-      <div id="analytics-tab" class="tab-pane">
-        <div id="analytics-dashboard"></div>
-      </div>
-
-      <!-- Goals Tab (productivity goals) -->
-      <div id="goals-tab" class="tab-pane">
-        <div id="productivity-goals-widget"></div>
+      <!-- Blocking Sites Tab -->
+      <div id="blocking-sites-tab" class="tab-pane">
+        <div class="tab-content-wrapper">
+          <div id="blocked-sites-list" class="blocked-sites-list">
+            <!-- Blocked sites will be populated by JavaScript -->
+          </div>
+          <button id="add-site-btn" class="add-site-btn">
+            <i class="ri-add-line"></i>
+            <span>Add Site to Block</span>
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- Quick Actions -->
-    <section class="quick-actions">
-      <div class="action-buttons">
-        <button id="focus-mode-toggle" class="action-btn primary">
-          <span class="btn-icon">🎯</span>
-          <span class="btn-text">Enable Focus Mode</span>
-        </button>
-        
-        <button id="block-current-site" class="action-btn secondary">
-          <span class="btn-icon">🚫</span>
-          <span class="btn-text">Block Current Site</span>
-        </button>
+    <!-- Hidden Elements for Functionality -->
+    <div class="hidden-elements">
+      <!-- These elements are needed for existing JavaScript functionality -->
+      <div id="tracking-status" class="status-indicator">
+        <span class="status-dot"></span>
+        <span class="status-text">Tracking</span>
       </div>
-      
-      <div class="secondary-actions">
-        <!-- Auto-Management Toggle -->
-        <div class="toggle-container">
-          <label class="toggle-label">
-            <input type="checkbox" id="auto-management-toggle" checked>
-            <span class="toggle-slider"></span>
-            <span class="toggle-text">Auto-pause on inactivity</span>
-          </label>
-        </div>
-
-        <div class="actions-row">
-          <button id="settings-btn" class="secondary-btn">
-            <span class="btn-icon">⚙️</span>
-            Settings
-          </button>
-          
-          <button id="export-data-btn" class="secondary-btn">
-            <span class="btn-icon">📤</span>
-            Export Data
-          </button>
+      <div id="focus-mode-indicator" class="status-indicator hidden">
+        <span class="focus-icon">🔒</span>
+        <span class="status-text">Focus Mode</span>
+      </div>
+      <div id="user-avatar-text" class="avatar-text">?</div>
+      <div id="user-email" class="user-email">No user connected</div>
+      <div id="sync-indicator" class="sync-dot"></div>
+      <div id="sites-visited" class="stat-value">0</div>
+      <div id="productivity-score" class="stat-value">0%</div>
+      <div id="session-timer" class="session-timer">00:00</div>
+      <div id="current-site" class="current-site">
+        <div class="site-info">
+          <div class="site-icon">🌐</div>
+          <div class="site-details">
+            <div class="site-name">No active site</div>
+            <div class="site-time">Not tracking</div>
+          </div>
         </div>
       </div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="popup-footer">
-      <div class="footer-links">
-        <button id="help-btn" class="footer-link">Help</button>
-        <button id="feedback-btn" class="footer-link">Feedback</button>
+      <div id="activity-status" class="activity-status">
+        <div class="activity-indicator">
+          <span id="activity-dot" class="activity-dot active"></span>
+          <span id="activity-text" class="activity-text">Active</span>
+        </div>
+        <div id="pause-info" class="pause-info hidden">
+          <span class="pause-icon">⏸️</span>
+          <span id="pause-duration" class="pause-duration">Paused for 0s</span>
+        </div>
       </div>
-      <div class="version-info">v1.0.0</div>
-    </footer>
+      <input type="checkbox" id="auto-management-toggle" checked>
+      <button id="settings-btn" class="secondary-btn">Settings</button>
+      <button id="export-data-btn" class="secondary-btn">Export Data</button>
+      <button id="help-btn" class="footer-link">Help</button>
+      <button id="feedback-btn" class="footer-link">Feedback</button>
+    </div>
   </div>
 
   <!-- Modals -->
