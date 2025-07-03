@@ -199,7 +199,33 @@
   <script src="/components/chartComponents.js"></script>
   <script src="/components/analyticsUI.js"></script>
   
+  <!-- Utility Scripts -->
+  <script src="/utils/faviconUtils.js"></script>
+  
   <!-- Main Scripts -->
   <script src="popup.js"></script>
+
+  <!-- Site Usage Item Template -->
+  <template id="site-item-template">
+    <div class="site-item">
+      <div class="site-icon-container">
+        <img class="site-icon" src="" alt="" loading="lazy">
+        <div class="site-icon-fallback hidden">
+          <i class="ri-global-line"></i>
+        </div>
+      </div>
+      <div class="site-info">
+        <div class="site-name"></div>
+        <div class="site-sessions"></div>
+        <div class="progress-bar">
+          <div class="progress-fill"></div>
+        </div>
+      </div>
+      <div class="site-stats">
+        <div class="site-duration"></div>
+        <div class="site-percentage"></div>
+      </div>
+    </div>
+  </template>
 </body>
 </html> 
