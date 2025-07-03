@@ -12,6 +12,8 @@ class PopupManager {
     this.updateInterval = null;
     this.analyticsUI = null;
     this.currentTab = 'site-usage'; // Updated for new 2-tab system
+    this.previousStats = null; // Add cache for previous stats
+    this.updateTimeout = null; // Add debounce timeout
     
     this.initialize();
   }
@@ -65,13 +67,13 @@ class PopupManager {
       // Set up tab system
       this.setupTabs();
 
-      // Set up periodic updates with reduced frequency
+      // Set up periodic updates with optimized frequency
       this.updateInterval = setInterval(() => {
-        // Only refresh if popup is visible
-        if (document.visibilityState === 'visible') {
+        // Only refresh if popup is visible and in site-usage tab
+        if (document.visibilityState === 'visible' && this.currentTab === 'site-usage') {
           this.refreshState();
         }
-      }, 5000); // Check every 5 seconds instead of 2
+      }, 15000); // Check every 15 seconds
 
       // Set up event listeners
       this.setupEventListeners();
@@ -228,9 +230,11 @@ class PopupManager {
   }
 
   /**
-   * Switch to a specific tab (updated for new tab names)
+   * Switch to a specific tab with optimized updates
    */
   switchTab(tabName) {
+    const previousTab = this.currentTab;
+    
     // Update current tab
     this.currentTab = tabName;
 
@@ -244,8 +248,25 @@ class PopupManager {
       pane.classList.toggle('active', pane.id === `${tabName}-tab`);
     });
 
-    // Initialize tab content if needed
-    this.initializeTabContent(tabName);
+    // Handle tab-specific updates
+    if (previousTab !== tabName) {
+      // Clear previous interval if switching from site-usage
+      if (previousTab === 'site-usage') {
+        clearInterval(this.updateInterval);
+      }
+      
+      // Initialize new tab content
+      this.initializeTabContent(tabName);
+      
+      // Set up new interval if switching to site-usage
+      if (tabName === 'site-usage') {
+        this.updateInterval = setInterval(() => {
+          if (document.visibilityState === 'visible') {
+            this.refreshState();
+          }
+        }, 15000);
+      }
+    }
   }
 
   /**
@@ -377,7 +398,64 @@ class PopupManager {
   }
 
   /**
-   * Update top sites list (new template format)
+   * Debounce function to prevent rapid updates
+   */
+  debounce(func, wait) {
+    clearTimeout(this.updateTimeout);
+    this.updateTimeout = setTimeout(() => func(), wait);
+  }
+
+  /**
+   * Compare stats to detect changes
+   */
+  haveStatsChanged(newStats, oldStats) {
+    if (!oldStats) return true;
+    
+    // Compare total time
+    if (newStats.totalTime !== oldStats.totalTime) return true;
+    
+    // Compare sites
+    const newSites = newStats.sites || {};
+    const oldSites = oldStats.sites || {};
+    
+    // Check if sites list changed
+    const newDomains = Object.keys(newSites);
+    const oldDomains = Object.keys(oldSites);
+    
+    if (newDomains.length !== oldDomains.length) return true;
+    
+    // Check if any site's data changed
+    return newDomains.some(domain => {
+      const newSite = newSites[domain] || {};
+      const oldSite = oldSites[domain] || {};
+      return newSite.timeSpent !== oldSite.timeSpent || 
+             newSite.visits !== oldSite.visits;
+    });
+  }
+
+  /**
+   * Update specific site card without rebuilding
+   */
+  updateSiteCard(siteElement, siteData, totalTime) {
+    if (!siteElement || !siteData) return;
+
+    const percentage = totalTime ? 
+      Math.round((siteData.timeSpent / totalTime) * 100) : 0;
+
+    // Update only text content and progress bar
+    const durationEl = siteElement.querySelector('.site-duration');
+    const percentageEl = siteElement.querySelector('.site-percentage');
+    const progressFill = siteElement.querySelector('.progress-fill');
+    const sessionsEl = siteElement.querySelector('.site-sessions');
+
+    if (durationEl) durationEl.textContent = this.formatTime(siteData.timeSpent);
+    if (percentageEl) percentageEl.textContent = `${percentage}%`;
+    if (progressFill) progressFill.style.width = `${percentage}%`;
+    if (sessionsEl) sessionsEl.textContent = `${siteData.visits} sessions`;
+  }
+
+  /**
+   * Update top sites list with optimized rendering
    */
   async updateTopSites() {
     const sitesListEl = document.getElementById('top-sites-list');
@@ -387,13 +465,45 @@ class PopupManager {
       const response = await this.sendMessage('GET_TOP_SITES', { limit: 20 });
       
       if (response.success && response.data.length > 0) {
-        sitesListEl.innerHTML = '';
+        const currentSites = response.data;
         
-        for (const site of response.data) {
-          const siteItem = await this.createSiteItem(site);
-          sitesListEl.appendChild(siteItem);
+        // If no previous state, do full render
+        if (!this.previousStats || !sitesListEl.children.length) {
+          sitesListEl.innerHTML = '';
+          for (const site of currentSites) {
+            const siteItem = await this.createSiteItem(site);
+            sitesListEl.appendChild(siteItem);
+          }
+        } else {
+          // Update existing cards
+          const totalTime = this.todayStats?.totalTime || 0;
+          
+          // Get current site elements
+          const siteElements = sitesListEl.querySelectorAll('.site-item');
+          const currentDomains = currentSites.map(site => site.domain);
+          
+          // Update or remove existing elements
+          siteElements.forEach(element => {
+            const domain = element.querySelector('.site-name')?.textContent;
+            const siteData = currentSites.find(site => site.domain === domain);
+            
+            if (siteData) {
+              this.updateSiteCard(element, siteData, totalTime);
+            } else {
+              element.remove();
+            }
+          });
+          
+          // Add new sites
+          for (const site of currentSites) {
+            const exists = sitesListEl.querySelector(`.site-name[text="${site.domain}"]`);
+            if (!exists) {
+              const siteItem = await this.createSiteItem(site);
+              sitesListEl.appendChild(siteItem);
+            }
+          }
         }
-      } else {
+      } else if (!response.success || response.data.length === 0) {
         sitesListEl.innerHTML = `
           <div class="loading-state">
             <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
@@ -401,6 +511,9 @@ class PopupManager {
           </div>
         `;
       }
+      
+      // Update previous stats
+      this.previousStats = this.todayStats;
     } catch (error) {
       console.error('Error updating top sites:', error);
       sitesListEl.innerHTML = `
@@ -870,21 +983,33 @@ class PopupManager {
   }
 
   /**
-   * Refresh state from background script
+   * Refresh state with debouncing and diff checking
    */
   async refreshState() {
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: 'GET_CURRENT_STATE'
-      });
+    this.debounce(async () => {
+      try {
+        const [stateResponse, statsResponse] = await Promise.all([
+          this.sendMessage('GET_CURRENT_STATE'),
+          this.sendMessage('GET_TODAY_STATS')
+        ]);
 
-      if (response?.success) {
-        this.currentState = response.data;
-        this.updateUI();
+        if (statsResponse?.success) {
+          const newStats = statsResponse.data;
+          
+          // Only update if stats have changed
+          if (this.haveStatsChanged(newStats, this.todayStats)) {
+            this.todayStats = newStats;
+            this.updateUI();
+          }
+        }
+
+        if (stateResponse?.success) {
+          this.currentState = stateResponse.data;
+        }
+      } catch (error) {
+        console.error('Error refreshing state:', error);
       }
-    } catch (error) {
-      console.error('Error refreshing state:', error);
-    }
+    }, 200); // 200ms debounce
   }
 
   /**
