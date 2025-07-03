@@ -91,6 +91,7 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
 
     const option = {
       animation: false,
+      graphic: null, // Clear any previous "no data" graphic
       tooltip: {
         trigger: 'item',
         backgroundColor: isDarkMode ? 'rgba(42, 42, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
