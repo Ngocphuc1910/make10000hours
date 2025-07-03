@@ -155,7 +155,8 @@ const DeepFocusPage: React.FC = () => {
   // Add state to track immediate initialization completion
   const [immediateInitComplete, setImmediateInitComplete] = useState(false);
   
-
+  // Add state to track if initial data load was attempted
+  const [initialDataLoadAttempted, setInitialDataLoadAttempted] = useState(false);
 
   // Debug: Track selectedRange changes
   useEffect(() => {
@@ -1415,6 +1416,30 @@ const DeepFocusPage: React.FC = () => {
       });
     }
   }, [siteUsage, timeMetrics, selectedRange.rangeType]);
+
+  // Monitor user authentication completion and trigger initial data load
+  useEffect(() => {
+    if (user?.uid && !initialDataLoadAttempted) {
+      console.log('🔄 User authenticated for first time, triggering initial data load...');
+      setInitialDataLoadAttempted(true);
+      
+      // Trigger data reload for current selected range
+      const loadInitialData = async () => {
+        try {
+          if (selectedRange.startDate && selectedRange.endDate) {
+            const startDateStr = formatLocalDate(selectedRange.startDate);
+            const endDateStr = formatLocalDate(selectedRange.endDate);
+            console.log('🔄 Loading initial data for authenticated user:', { startDateStr, endDateStr });
+            await loadHybridTimeRangeData(startDateStr, endDateStr);
+          }
+        } catch (error) {
+          console.warn('⚠️ Initial data load failed:', error);
+        }
+      };
+      
+      loadInitialData();
+    }
+  }, [user?.uid, selectedRange.startDate, selectedRange.endDate, loadHybridTimeRangeData, initialDataLoadAttempted]);
 
   return (
     <div className="deep-focus-page-container flex h-screen bg-background-primary dark:bg-[#141414]">
