@@ -207,21 +207,24 @@ export class WorkSessionService {
       for (const session of activeSessions) {
         const sessionAge = new Date(session.updatedAt);
         
-        if (sessionAge < cutoffTime) {
-          // Calculate estimated duration based on time since last update
-          const estimatedDuration = Math.round(
-            (cutoffTime.getTime() - new Date(session.startTime || session.createdAt).getTime()) / (1000 * 60)
-          );
-
+              if (sessionAge < cutoffTime) {
+        if (session.duration > 0) {
+          // Meaningful work - complete with existing duration only
           await this.completeSession(
             session.id,
-            Math.max(estimatedDuration, session.duration), // Use whichever is larger
+            session.duration,
             'completed',
-            `Auto-completed after app restart (estimated ${estimatedDuration}m)`
+            `Session completed: ${session.duration}m (app restart cleanup)`
           );
-          
-          cleanedCount++;
+          console.log(`✅ Completed meaningful session: ${session.id} (${session.duration}m)`);
+        } else {
+          // No meaningful work - delete the orphaned session
+          await this.deleteWorkSession(session.id);
+          console.log(`🗑️ Deleted empty orphaned session: ${session.id}`);
         }
+        
+        cleanedCount++;
+      }
       }
 
       return cleanedCount;
