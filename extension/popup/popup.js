@@ -186,6 +186,17 @@ class PopupManager {
         this.unblockSite(domain);
       }
     });
+
+    // Add click handler for Detail Progress buttons
+    ['view-all-btn-logged-in', 'view-all-btn-anonymous'].forEach(btnId => {
+      const button = document.getElementById(btnId);
+      if (button) {
+        button.addEventListener('click', (e) => {
+          e.preventDefault(); // Prevent default navigation
+          chrome.tabs.create({ url: 'https://make10000hours.com/#/deep-focus' });
+        });
+      }
+    });
   }
 
   /**
