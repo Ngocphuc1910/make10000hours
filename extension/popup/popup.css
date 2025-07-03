@@ -124,12 +124,13 @@ body {
 /* Header */
 .popup-header {
   background: var(--bg-primary);
-  padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-sm);
+  padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md);
 }
 
 /* Header Top Section */
 .header-top {
-  margin-bottom: var(--spacing-xl);
+  margin-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .title-focus-container {
@@ -162,9 +163,18 @@ body {
   font-weight: 700;
 }
 
+/* Divider Component */
+.divider {
+  height: 1px;
+  background-color: var(--border-color);
+  width: 100%;
+  margin: 0;
+}
+
 /* User Info Section */
 .user-info-section {
-  margin-bottom: 0;
+  padding: var(--spacing-md) var(--spacing-lg) 0;
+  background: var(--bg-primary);
 }
 
 .user-details-container {
@@ -172,18 +182,24 @@ body {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding-bottom: var(--spacing-xs);
-  padding-right: var(--spacing-sm);
+  gap: var(--spacing-md);
 }
 
 .user-details-text {
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   color: var(--text-primary);
   font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+/* View Progress Link - specific styling */
+.user-info-section .link-button {
+  padding: 4px 0;
 }
 
 .user-info, .no-user-info {
   margin-bottom: 0;
+  width: 100%;
 }
 
 /* Stats Overview */
@@ -191,7 +207,7 @@ body {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-md);
-  padding: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
   margin-top: var(--spacing-xs);
   background: var(--bg-primary);
 }
@@ -270,7 +286,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: var(--spacing-xs);
-  padding: var(--spacing-md) var(--spacing-sm);
+  padding: var(--spacing-md) 0;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -858,13 +874,13 @@ body {
   gap: var(--spacing-xs);
   background: none;
   border: none;
-  padding: 4px 0;
+  padding: 4px var(--spacing-lg) 4px 0;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--primary-color);
   cursor: pointer;
   transition: all 0.2s ease;
-  margin-left: auto;
+  white-space: nowrap;
 }
 
 .link-button:hover {
