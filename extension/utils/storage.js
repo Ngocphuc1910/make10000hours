@@ -442,7 +442,7 @@ class StorageManager {
   /**
    * Get top sites for today
    */
-  async getTopSites(limit = 5) {
+  async getTopSites(limit = 20) {
     const todayStats = await this.getTodayStats();
     
     return Object.values(todayStats.sites || {})

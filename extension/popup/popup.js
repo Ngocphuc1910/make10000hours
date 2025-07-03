@@ -296,7 +296,7 @@ class PopupManager {
       // Update container classes
       if (switchContainer) {
         switchContainer.className = `switch-container ${isFocusModeActive ? 'active' : 'inactive'}`;
-    }
+      }
 
       // Update toggle classes
       if (switchToggle) {
@@ -307,13 +307,13 @@ class PopupManager {
       if (switchText) {
         switchText.textContent = isFocusModeActive ? 'Deep Focus' : 'Focus Off';
         switchText.className = `switch-text ${isFocusModeActive ? 'active' : 'inactive'}`;
-    }
-    
+      }
+      
       // Update Make10000hours title animation (Web App Style)
       if (animatedTitle) {
         if (isFocusModeActive) {
           animatedTitle.classList.add('active');
-    } else {
+        } else {
           animatedTitle.classList.remove('active');
         }
       }
@@ -384,15 +384,15 @@ class PopupManager {
     if (!sitesListEl) return;
 
     try {
-      const response = await this.sendMessage('GET_TOP_SITES', { limit: 6 });
+      const response = await this.sendMessage('GET_TOP_SITES', { limit: 20 });
       
       if (response.success && response.data.length > 0) {
         sitesListEl.innerHTML = '';
         
-        response.data.forEach(site => {
-          const siteCard = this.createNewSiteCard(site);
-          sitesListEl.appendChild(siteCard);
-        });
+        for (const site of response.data) {
+          const siteItem = await this.createSiteItem(site);
+          sitesListEl.appendChild(siteItem);
+        }
       } else {
         sitesListEl.innerHTML = `
           <div class="loading-state">
@@ -412,42 +412,219 @@ class PopupManager {
   }
 
   /**
+   * Get dominant color from an image
+   */
+  async getImageColor(imgUrl) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        
+        ctx.drawImage(img, 0, 0);
+        
+        try {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+          const colors = {};
+          
+          // Sample pixels at regular intervals
+          for (let i = 0; i < imageData.length; i += 16) {
+            const r = imageData[i];
+            const g = imageData[i + 1];
+            const b = imageData[i + 2];
+            const a = imageData[i + 3];
+            
+            if (a < 128) continue; // Skip transparent pixels
+            
+            const rgb = `${r},${g},${b}`;
+            colors[rgb] = (colors[rgb] || 0) + 1;
+          }
+          
+          // Find the most common color
+          let maxCount = 0;
+          let dominantColor = '66,133,244'; // Default blue
+          
+          for (const [rgb, count] of Object.entries(colors)) {
+            if (count > maxCount) {
+              maxCount = count;
+              dominantColor = rgb;
+            }
+          }
+          
+          resolve(`rgb(${dominantColor})`);
+        } catch (error) {
+          console.warn('Error getting image color:', error);
+          resolve(null);
+        }
+      };
+      
+      img.onerror = () => {
+        resolve(null);
+      };
+      
+      img.src = imgUrl;
+    });
+  }
+
+  /**
+   * Get brand color for known domains
+   */
+  getBrandColor(domain) {
+    const brandColors = {
+      'linkedin.com': '#0A66C2',
+      'facebook.com': '#1877F2',
+      'twitter.com': '#1DA1F2',
+      'github.com': '#24292F',
+      'youtube.com': '#FF0000',
+      'instagram.com': '#E4405F',
+      'google.com': '#4285F4',
+      'microsoft.com': '#00A4EF',
+      'apple.com': '#000000',
+      'amazon.com': '#FF9900'
+    };
+
+    // Check exact match first
+    if (brandColors[domain]) {
+      return brandColors[domain];
+    }
+
+    // Check partial matches
+    for (const [site, color] of Object.entries(brandColors)) {
+      if (domain.includes(site.split('.')[0])) {
+        return color;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Create a site card element (new template format)
    */
-  createNewSiteCard(site) {
+  async createSiteItem(site) {
+    const template = document.getElementById('site-item-template');
+    const siteItem = template.content.cloneNode(true);
+    
+    // Set site icon with new favicon service
+    const icon = siteItem.querySelector('.site-icon');
+    const fallbackIcon = siteItem.querySelector('.site-icon-fallback');
+    const progressFill = siteItem.querySelector('.progress-fill');
+    
+    try {
+      // Add loading state
+      icon.classList.add('loading');
+      
+      // Get favicon URL using our service
+      const faviconResult = await FaviconService.getFaviconUrl(site.domain, { size: 32 });
+      
+      // Try to get brand color first
+      let progressColor = this.getBrandColor(site.domain);
+      
+      if (faviconResult.isDefault) {
+        // Show fallback with Remix icon
+        icon.classList.add('error');
+        fallbackIcon.classList.remove('hidden');
+        const iconClass = FaviconService.getDomainIcon(site.domain);
+        fallbackIcon.querySelector('i').className = iconClass;
+        
+        // If no brand color, use the fallback color
+        if (!progressColor) {
+          progressColor = FaviconService.getColorForDomain(site.domain);
+        }
+      } else {
+        // Show the favicon
+        icon.src = faviconResult.url;
+        icon.classList.remove('loading');
+        fallbackIcon.classList.add('hidden');
+        
+        // If no brand color, try to extract from favicon
+        if (!progressColor) {
+          progressColor = await this.getImageColor(faviconResult.url) || FaviconService.getColorForDomain(site.domain);
+        }
+      }
+      
+      // Apply the color to progress bar
+      progressFill.style.backgroundColor = progressColor;
+    } catch (error) {
+      console.warn('Failed to load favicon:', error);
+      // Show fallback on error
+      icon.classList.add('error');
+      fallbackIcon.classList.remove('hidden');
+      progressFill.style.backgroundColor = FaviconService.getColorForDomain(site.domain);
+    }
+    
+    // Set site info
+    siteItem.querySelector('.site-name').textContent = site.domain;
+    siteItem.querySelector('.site-sessions').textContent = `${site.visits} sessions`;
+    
+    // Calculate percentage
     const percentage = this.todayStats?.totalTime ? 
       Math.round((site.timeSpent / this.todayStats.totalTime) * 100) : 0;
-
-    const card = document.createElement('div');
-    card.className = 'site-card';
     
-    const iconInfo = this.getSiteIconInfo(site.domain);
+    // Set site stats
+    siteItem.querySelector('.site-duration').textContent = this.formatTime(site.timeSpent);
+    siteItem.querySelector('.site-percentage').textContent = `${percentage}%`;
     
-    card.innerHTML = `
-      <div class="site-card-header">
-      <div class="site-card-left">
-          <div class="site-card-icon ${iconInfo.color}">
-            <i class="${iconInfo.icon}"></i>
-          </div>
-        <div class="site-card-info">
-          <div class="site-card-name">${site.domain}</div>
-            <div class="site-card-stats">${site.visits} sessions</div>
-        </div>
-      </div>
-      <div class="site-card-right">
-        <div class="site-card-time">${this.formatTime(site.timeSpent)}</div>
-        <div class="site-card-percentage">${percentage}%</div>
-        </div>
-      </div>
-      <div class="progress-bar">
-        <div class="progress-fill ${iconInfo.color}" style="width: ${percentage}%"></div>
-      </div>
-    `;
+    // Set progress bar width
+    progressFill.style.width = `${percentage}%`;
+    
+    return siteItem;
+  }
 
-    // Add click handler for site details
-    card.addEventListener('click', () => this.showSiteDetails(site));
+  /**
+   * Get site icon and color info for consistent styling
+   */
+  getDomainIcon(domain) {
+    // Enhanced mapping with Remix Icons and colors
+    const iconMap = {
+      'github.com': 'ri-github-fill',
+      'gmail.com': 'ri-mail-line',
+      'mail.google.com': 'ri-mail-line',
+      'youtube.com': 'ri-youtube-fill',
+      'facebook.com': 'ri-facebook-fill',
+      'twitter.com': 'ri-twitter-fill',
+      'linkedin.com': 'ri-linkedin-fill',
+      'reddit.com': 'ri-reddit-fill',
+      'netflix.com': 'ri-netflix-fill',
+      'amazon.com': 'ri-shopping-cart-line',
+      'wikipedia.org': 'ri-book-line',
+      'google.com': 'ri-google-fill',
+      'instagram.com': 'ri-instagram-fill',
+      'figma.com': 'ri-shape-line',
+      'claude.ai': 'ri-robot-line',
+      'make10000hours.com': 'ri-focus-3-line',
+      'firebase.google.com': 'ri-fire-line',
+      'console.firebase.google.com': 'ri-fire-line'
+    };
 
-    return card;
+    // Check for domain matches
+    for (const [site, icon] of Object.entries(iconMap)) {
+      if (domain.includes(site)) {
+        return icon;
+      }
+    }
+
+    // Default icon and color
+    return 'ri-global-line';
+  }
+
+  /**
+   * Get site class for consistent styling
+   */
+  getDomainClass(domain) {
+    const domainMap = {
+      'linkedin.com': 'linkedin',
+      'make10000hours.com': 'make10000hours',
+      'ycombinator.com': 'ycombinator',
+      'copilot.microsoft.com': 'copilot',
+      'readdy.ai': 'readdy',
+      'facebook.com': 'facebook'
+    };
+    return domainMap[domain] || 'default';
   }
 
   /**
@@ -463,10 +640,10 @@ class PopupManager {
       if (response.success && response.data.length > 0) {
         blockedSitesListEl.innerHTML = '';
         
-        response.data.forEach(domain => {
-          const blockedSiteItem = this.createBlockedSiteItem(domain);
+        for (const domain of response.data) {
+          const blockedSiteItem = await this.createBlockedSiteItem(domain);
           blockedSitesListEl.appendChild(blockedSiteItem);
-        });
+        }
       } else {
         blockedSitesListEl.innerHTML = `
           <div class="loading-state">
@@ -488,71 +665,61 @@ class PopupManager {
   /**
    * Create blocked site item (new template format)
    */
-  createBlockedSiteItem(domain) {
+  async createBlockedSiteItem(domain) {
     const item = document.createElement('div');
     item.className = 'blocked-site-item';
     
-    const iconInfo = this.getSiteIconInfo(domain);
-    
-    item.innerHTML = `
-      <div class="blocked-site-left">
-        <div class="blocked-site-icon ${iconInfo.color}">
-          <i class="${iconInfo.icon}"></i>
-              </div>
-        <div class="blocked-site-name">${domain}</div>
-              </div>
-      <div class="blocked-site-controls">
-        <button class="btn-icon" title="Edit">
-          <i class="ri-edit-line"></i>
-        </button>
-        <button class="btn-icon" title="Delete" data-action="unblock" data-domain="${domain}">
-          <i class="ri-delete-bin-line"></i>
-        </button>
-        <label class="custom-switch">
-          <input type="checkbox" checked>
-          <span class="switch-slider"></span>
-        </label>
-            </div>
-    `;
-
-    return item;
-  }
-
-  /**
-   * Get site icon and color info for consistent styling
-   */
-  getSiteIconInfo(domain) {
-    // Enhanced mapping with Remix Icons and colors
-    const iconMap = {
-      'github.com': { icon: 'ri-github-fill', color: 'purple' },
-      'gmail.com': { icon: 'ri-mail-line', color: 'red' },
-      'mail.google.com': { icon: 'ri-mail-line', color: 'red' },
-      'youtube.com': { icon: 'ri-youtube-fill', color: 'red' },
-      'facebook.com': { icon: 'ri-facebook-fill', color: 'blue' },
-      'twitter.com': { icon: 'ri-twitter-fill', color: 'blue' },
-      'linkedin.com': { icon: 'ri-linkedin-fill', color: 'blue' },
-      'reddit.com': { icon: 'ri-reddit-fill', color: 'orange' },
-      'netflix.com': { icon: 'ri-netflix-fill', color: 'red' },
-      'amazon.com': { icon: 'ri-shopping-cart-line', color: 'orange' },
-      'wikipedia.org': { icon: 'ri-book-line', color: 'green' },
-      'google.com': { icon: 'ri-google-fill', color: 'blue' },
-      'instagram.com': { icon: 'ri-instagram-fill', color: 'pink' },
-      'figma.com': { icon: 'ri-shape-line', color: 'purple' },
-      'claude.ai': { icon: 'ri-robot-line', color: 'purple' },
-      'make10000hours.com': { icon: 'ri-focus-3-line', color: 'red' },
-      'firebase.google.com': { icon: 'ri-fire-line', color: 'orange' },
-      'console.firebase.google.com': { icon: 'ri-fire-line', color: 'orange' }
-    };
-
-    // Check for domain matches
-    for (const [site, info] of Object.entries(iconMap)) {
-      if (domain.includes(site)) {
-        return info;
-      }
+    try {
+      // Get favicon for blocked site
+      const faviconResult = await FaviconService.getFaviconUrl(domain, { size: 32 });
+      const iconHtml = faviconResult.isDefault ? 
+        `<div class="blocked-site-icon"><i class="${FaviconService.getDomainIcon(domain)}"></i></div>` :
+        `<div class="blocked-site-icon"><img src="${faviconResult.url}" alt="${domain}" class="site-icon"></div>`;
+      
+      item.innerHTML = `
+        <div class="blocked-site-left">
+          ${iconHtml}
+          <div class="blocked-site-name">${domain}</div>
+        </div>
+        <div class="blocked-site-controls">
+          <button class="btn-icon" title="Edit">
+            <i class="ri-edit-line"></i>
+          </button>
+          <button class="btn-icon" title="Delete" data-action="unblock" data-domain="${domain}">
+            <i class="ri-delete-bin-line"></i>
+          </button>
+          <label class="custom-switch">
+            <input type="checkbox" checked>
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+      `;
+    } catch (error) {
+      console.warn('Failed to create blocked site item:', error);
+      // Fallback to simple version without favicon
+      item.innerHTML = `
+        <div class="blocked-site-left">
+          <div class="blocked-site-icon">
+            <i class="ri-global-line"></i>
+          </div>
+          <div class="blocked-site-name">${domain}</div>
+        </div>
+        <div class="blocked-site-controls">
+          <button class="btn-icon" title="Edit">
+            <i class="ri-edit-line"></i>
+          </button>
+          <button class="btn-icon" title="Delete" data-action="unblock" data-domain="${domain}">
+            <i class="ri-delete-bin-line"></i>
+          </button>
+          <label class="custom-switch">
+            <input type="checkbox" checked>
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+      `;
     }
 
-    // Default icon and color
-    return { icon: 'ri-global-line', color: 'blue' };
+    return item;
   }
 
   /**
@@ -568,7 +735,7 @@ class PopupManager {
           class="input-field"
         >
         <button id="add-site-confirm" class="btn primary">Add</button>
-        </div>
+      </div>
       <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 1rem;">
         Enter the domain you want to block. The site will be blocked during focus mode.
       </p>
