@@ -1843,7 +1843,7 @@ const DeepFocusPage: React.FC = () => {
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <h2 className="text-lg font-medium text-text-primary">BLOCKED</h2>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2" style={{ display: 'none' }}>
                     <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
                       isExtensionConnected 
                         ? 'bg-green-100 text-green-700' 
@@ -1903,6 +1903,7 @@ const DeepFocusPage: React.FC = () => {
                           }}
                           className="p-1 text-text-secondary hover:text-text-primary transition-colors duration-200"
                           title="Quick Override Test (simple test)"
+                          style={{ display: 'none' }}
                         >
                           <Icon name="play-line" className="w-4 h-4" />
                         </button>
@@ -2053,6 +2054,7 @@ const DeepFocusPage: React.FC = () => {
                           }}
                           className="p-1 text-orange-500 hover:text-orange-600 transition-colors duration-200"
                           title="Fix Missing Icons (one-time migration)"
+                          style={{ display: 'none' }}
                         >
                           <Icon name="tools-line" className="w-4 h-4" />
                         </button>
