@@ -110,20 +110,42 @@ class DeepFocusSessionService {
    */
   async getUserSessions(userId: string, startDate?: Date, endDate?: Date): Promise<DeepFocusSession[]> {
     try {
-      console.log('🔍 DeepFocusSessionService: getUserSessions called', { userId, startDate, endDate });
+      console.log('🚀 DeepFocusSessionService: Smart query with database-level filtering', { 
+        userId, 
+        hasDateFilter: !!(startDate && endDate),
+        dateRange: startDate && endDate ? `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}` : 'all time'
+      });
       
-      // Simple query without orderBy to avoid index requirement
+      // Build query with database-level date filtering for efficiency
       let q = query(
         collection(db, this.collectionName),
         where('userId', '==', userId)
       );
 
-      console.log('🔍 DeepFocusSessionService: Base query created (without orderBy to avoid index)');
+      // Add date filtering at database level if provided
+      if (startDate && endDate) {
+        // Convert to Firestore Timestamp for database filtering
+        const startTimestamp = Timestamp.fromDate(startDate);
+        const endTimestamp = Timestamp.fromDate(endDate);
+        
+        q = query(
+          collection(db, this.collectionName),
+          where('userId', '==', userId),
+          where('createdAt', '>=', startTimestamp),
+          where('createdAt', '<=', endTimestamp)
+        );
+        
+        console.log('✅ Database-level date filtering applied:', {
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          benefit: 'No individual session checking needed'
+        });
+      }
       
       const querySnapshot = await getDocs(q);
-      console.log('🔍 DeepFocusSessionService: Query executed, found', querySnapshot.size, 'documents');
       
-      let sessions = querySnapshot.docs.map(doc => {
+      // Map documents to sessions
+      const sessions = querySnapshot.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -137,37 +159,15 @@ class DeepFocusSessionService {
         };
       });
 
-      console.log('🔍 DeepFocusSessionService: Mapped sessions:', sessions.length);
-      console.log('🔍 DeepFocusSessionService: Session details:', sessions.map(s => ({
-        id: s.id,
-        status: s.status,
-        duration: s.duration,
-        createdAt: s.createdAt.toISOString()
-      })));
-
-      // Apply date filtering in JavaScript if provided
-      if (startDate && endDate) {
-        console.log('🔍 DeepFocusSessionService: Applying date filter', { startDate, endDate });
-        const originalCount = sessions.length;
-        sessions = sessions.filter(session => {
-          const sessionDate = session.createdAt;
-          const isInRange = sessionDate >= startDate && sessionDate <= endDate;
-          console.log('🔍 Session date check:', {
-            sessionId: session.id,
-            sessionDate: sessionDate.toISOString(),
-            startDate: startDate.toISOString(),
-            endDate: endDate.toISOString(),
-            isInRange
-          });
-          return isInRange;
-        });
-        console.log('🔍 DeepFocusSessionService: Date filtering:', originalCount, '→', sessions.length, 'sessions');
-      }
-      
       // Sort by createdAt in JavaScript (newest first)
       sessions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       
-      console.log('🔍 DeepFocusSessionService: Final sessions:', sessions.length);
+      console.log('✅ Smart query completed:', {
+        sessionsReturned: sessions.length,
+        approach: startDate && endDate ? 'database-filtered' : 'all-sessions',
+        efficiency: 'No JavaScript filtering or individual session logs'
+      });
+      
       return sessions;
     } catch (error) {
       console.error('❌ Error fetching user Deep Focus sessions:', error);
