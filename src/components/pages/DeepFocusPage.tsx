@@ -2256,7 +2256,34 @@ const DeepFocusPage: React.FC = () => {
             <div className="bg-background-secondary rounded-lg">
               <h2 className="text-lg font-medium mb-6 text-text-primary p-6 pb-0">Your Usage</h2>
               <div className="w-full h-48 mb-4">
-                <UsagePieChart data={filteredSiteUsage} />
+                {/* Debug data flow for pie chart */}
+                {(() => {
+                  console.log('🥧 Pie Chart Data Debug:', {
+                    filteredSiteUsageLength: filteredSiteUsage.length,
+                    hasData: filteredSiteUsage.length > 0,
+                    isLoadingDateRangeData,
+                    selectedRangeType: selectedRange.rangeType,
+                    pageLoadTrigger,
+                    sampleData: filteredSiteUsage.slice(0, 3),
+                    totalTime: filteredSiteUsage.reduce((sum, site) => sum + site.timeSpent, 0)
+                  });
+                  return null;
+                })()}
+                
+                {/* Only render pie chart when we have actual data OR when not loading */}
+                {(filteredSiteUsage.length > 0 || !isLoadingDateRangeData) && (
+                  <UsagePieChart data={filteredSiteUsage} />
+                )}
+                
+                {/* Show loading indicator specifically for pie chart when loading */}
+                {isLoadingDateRangeData && filteredSiteUsage.length === 0 && (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                      <span className="text-text-secondary text-sm">Loading usage data...</span>
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* Site Usage List */}
