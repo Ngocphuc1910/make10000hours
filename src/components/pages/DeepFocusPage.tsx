@@ -154,9 +154,36 @@ const DeepFocusPage: React.FC = () => {
   
   // Add state to track immediate initialization completion
   const [immediateInitComplete, setImmediateInitComplete] = useState(false);
+
+  // Add loading state to prevent showing stale data
+  const [isLoadingDateRangeData, setIsLoadingDateRangeData] = useState(false);
   
-  // Add state to track if initial data load was attempted
-  const [initialDataLoadAttempted, setInitialDataLoadAttempted] = useState(false);
+  // Track page navigation to trigger data refresh
+  const [pageLoadTrigger, setPageLoadTrigger] = useState(0);
+
+  // Force data refresh when navigating to this page or on mount
+  useEffect(() => {
+    console.log('🔄 Deep Focus page mounted/navigated - forcing fresh data load for today');
+    
+    // Always reset to today's range to ensure fresh data
+    const todayRange = getTodayRange();
+    console.log('📅 Setting fresh today range:', {
+      startDate: todayRange.startDate?.toISOString(),
+      endDate: todayRange.endDate?.toISOString(),
+      rangeType: todayRange.rangeType
+    });
+    
+    setSelectedRange(todayRange);
+    
+    // Trigger data reload by incrementing the trigger
+    setPageLoadTrigger(prev => {
+      const newTrigger = prev + 1;
+      console.log('🎯 Page load trigger updated:', { oldTrigger: prev, newTrigger });
+      return newTrigger;
+    });
+    
+    console.log('✅ Auto-refresh configured - fresh today data will load automatically');
+  }, [location.pathname]); // Trigger when navigating to this page
 
   // Debug: Track selectedRange changes
   useEffect(() => {
@@ -166,9 +193,10 @@ const DeepFocusPage: React.FC = () => {
       endDate: selectedRange.endDate?.toISOString(),
       startFormatted: selectedRange.startDate ? formatLocalDate(selectedRange.startDate) : null,
       endFormatted: selectedRange.endDate ? formatLocalDate(selectedRange.endDate) : null,
-      todayForReference: new Date().toISOString().split('T')[0]
+      todayForReference: new Date().toISOString().split('T')[0],
+      pageLoadTrigger
     });
-  }, [selectedRange]);
+  }, [selectedRange, pageLoadTrigger]);
 
 
 
@@ -351,38 +379,152 @@ const DeepFocusPage: React.FC = () => {
     return isInRange;
   };
 
-  // Load hybrid data (Firebase + Extension) when date range changes
+  // Consolidated data loading effect with race condition prevention
+  // Priority: For "today" → Real-time extension data first, then fallback to hybrid
+  //          For other ranges → Hybrid data (Firebase + extension)
+  //          For "all time" → Store data
   useEffect(() => {
-    const loadHybridDateData = async () => {
-      if (selectedRange.rangeType === 'all time') {
-        console.log('🔍 DEBUG: All time selected - loading all extension data');
-        await loadExtensionData();
-        return;
-      }
-      
-      if (!selectedRange.startDate || !selectedRange.endDate) {
-        console.log('🔍 DEBUG: No date range selected - clearing extension data');
-        setExtensionData(null);
+    let isCancelled = false;
+    
+    const loadCoordinatedData = async () => {
+      if (!user?.uid) {
+        console.log('🔄 Data loading waiting for user...');
         return;
       }
 
-      const startDateStr = formatLocalDate(selectedRange.startDate);
-      const endDateStr = formatLocalDate(selectedRange.endDate);
-
-      console.log('🔍 DEBUG: Loading hybrid data with exact dates:', {
+      console.log('🔄 Starting coordinated data load:', {
         rangeType: selectedRange.rangeType,
-        originalStartDate: selectedRange.startDate.toISOString(),
-        originalEndDate: selectedRange.endDate.toISOString(),
-        startDateStr,
-        endDateStr,
-        today: new Date().toISOString().split('T')[0]
+        pageLoadTrigger,
+        reason: pageLoadTrigger > 0 ? 'Page navigation triggered refresh' : 'Regular data loading',
+        timestamp: new Date().toISOString()
       });
 
+      setIsLoadingDateRangeData(true);
+      
       try {
-        console.log('🔄 Loading hybrid data for date range:', startDateStr, 'to', endDateStr);
+        if (selectedRange.rangeType === 'all time') {
+          console.log('🔍 DEBUG: All time selected - loading all extension data');
+          await loadExtensionData();
+          
+          if (!isCancelled) {
+            // For all-time, use store data if available
+            if (siteUsage && siteUsage.length > 0) {
+              console.log('✅ Using store data for all-time view');
+              setExtensionData({
+                siteUsage: siteUsage,
+                dailyUsage: dailyUsage.length > 0 ? dailyUsage : [],
+                timeMetrics: timeMetrics
+              });
+              
+              console.log('✅ Extension data set successfully for all-time:', {
+                siteUsageCount: siteUsage.length,
+                dailyUsageCount: dailyUsage.length,
+                timeMetrics: timeMetrics,
+                source: 'store data for all-time'
+              });
+            } else {
+              console.log('⚠️ No store data available for all-time view, clearing extension data');
+              setExtensionData(null);
+            }
+          }
+          return;
+        }
+
+        // For "today", prioritize real-time extension data first
+        if (selectedRange.rangeType === 'today') {
+          console.log('🔍 DEBUG: Today selected - prioritizing real-time extension data');
+          
+          try {
+            // First, try to get real-time data directly from extension
+            await loadExtensionData();
+            
+            if (!isCancelled) {
+              // Check if we got fresh extension data
+              if (siteUsage && siteUsage.length > 0 && timeMetrics.onScreenTime > 0) {
+                console.log('✅ Using real-time extension data for today:', {
+                  onScreenTime: timeMetrics.onScreenTime,
+                  siteCount: siteUsage.length,
+                  source: 'real-time extension'
+                });
+                
+                // Calculate today's session data
+                const today = new Date();
+                const todayStr = formatLocalDate(today);
+                
+                // Calculate working time from today's work sessions
+                const todayWorkingTime = workSessions
+                  .filter(session => (session.sessionType === 'pomodoro' || session.sessionType === 'manual'))
+                  .filter(session => {
+                    const sessionDate = new Date(session.date);
+                    return sessionDate.toDateString() === today.toDateString();
+                  })
+                  .reduce((total, session) => total + (session.duration || 0), 0);
+                
+                // Calculate today's deep focus time
+                const todayDeepFocusTime = deepFocusSessions
+                  .filter(session => session.status === 'completed' && session.duration)
+                  .filter(session => {
+                    const sessionDate = new Date(session.createdAt);
+                    return sessionDate.toDateString() === today.toDateString();
+                  })
+                  .reduce((total, session) => total + (session.duration || 0), 0);
+
+                setExtensionData({
+                  timeMetrics: timeMetrics, // Use real-time extension data
+                  siteUsage: siteUsage,     // Use real-time extension data
+                  dailyUsage: [{
+                    date: todayStr,
+                    onScreenTime: timeMetrics.onScreenTime, // Real-time data
+                    workingTime: todayWorkingTime,
+                    deepFocusTime: todayDeepFocusTime
+                  }]
+                });
+                
+                console.log('✅ Extension data set successfully for today (real-time):', {
+                  onScreenTime: timeMetrics.onScreenTime,
+                  siteUsageCount: siteUsage.length,
+                  workingTime: todayWorkingTime,
+                  deepFocusTime: todayDeepFocusTime,
+                  source: 'real-time extension data'
+                });
+                
+                return; // Exit early with real-time data
+              } else {
+                console.log('⚠️ Extension data incomplete, falling back to hybrid data');
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ Real-time extension data failed, falling back to hybrid data:', error);
+          }
+        }
         
-        // Use the new hybrid data fetching approach from store
+        if (!selectedRange.startDate || !selectedRange.endDate) {
+          console.log('🔍 DEBUG: No date range selected - clearing extension data');
+          if (!isCancelled) {
+            setExtensionData(null);
+          }
+          return;
+        }
+
+        const startDateStr = formatLocalDate(selectedRange.startDate);
+        const endDateStr = formatLocalDate(selectedRange.endDate);
+
+        console.log('🔍 DEBUG: Loading coordinated data with exact dates (fallback for non-today or hybrid data):', {
+          rangeType: selectedRange.rangeType,
+          startDateStr,
+          endDateStr,
+          today: new Date().toISOString().split('T')[0]
+        });
+
+        // Use the hybrid data fetching approach from store for historical dates or as fallback
         const hybridData = await loadHybridTimeRangeData(startDateStr, endDateStr);
+        
+        // Check if the effect was cancelled during the async operation
+        if (isCancelled) {
+          console.log('🔄 Data loading cancelled, ignoring result');
+          return;
+        }
+        
         console.log('✅ Loaded hybrid data:', hybridData);
         
         // Check if we have meaningful data for this range
@@ -392,10 +534,10 @@ const DeepFocusPage: React.FC = () => {
           hasData,
           onScreenTime: hybridData.timeMetrics.onScreenTime,
           siteUsageCount: hybridData.siteUsage.length,
-          siteUsage: hybridData.siteUsage,
           hasDailyData: !!hybridData.dailyData,
           dailyDataKeys: hybridData.dailyData ? Object.keys(hybridData.dailyData) : [],
-          sampleDailyData: hybridData.dailyData ? Object.entries(hybridData.dailyData).slice(0, 2) : []
+          rangeType: selectedRange.rangeType,
+          dateRange: `${startDateStr} to ${endDateStr}`
         });
         
         // Only set extension data if we have meaningful data
@@ -450,22 +592,51 @@ const DeepFocusPage: React.FC = () => {
             siteUsage: hybridData.siteUsage,
             dailyUsage: enhancedDailyBreakdown // Use enhanced daily breakdown data
           });
+          
+          console.log('✅ Extension data set successfully:', {
+            timeMetrics: hybridData.timeMetrics,
+            siteUsageCount: hybridData.siteUsage.length,
+            dailyUsageCount: enhancedDailyBreakdown.length,
+            rangeType: selectedRange.rangeType,
+            source: 'hybrid data with enhanced daily breakdown'
+          });
         } else {
-          console.log('⚠️ No meaningful data found, using store data');
+          console.log('⚠️ No meaningful data found for date range, clearing extension data:', {
+            hybridDataReceived: !!hybridData,
+            onScreenTime: hybridData?.timeMetrics?.onScreenTime || 0,
+            siteUsageCount: hybridData?.siteUsage?.length || 0,
+            rangeType: selectedRange.rangeType,
+            dateRange: `${startDateStr} to ${endDateStr}`
+          });
           setExtensionData(null);
         }
       } catch (error) {
-        console.error('❌ Failed to load hybrid date range data:', error);
-        console.log('⚠️ Falling back to extension-only data...');
-        
-        // Fallback to basic store data filtering
-        console.log('⚠️ Using store data with date filtering');
-        setExtensionData(null); // Fall back to store data
+        if (!isCancelled) {
+          console.error('❌ Failed to load coordinated data:', error);
+          console.log('⚠️ Falling back to clearing extension data...', {
+            rangeType: selectedRange.rangeType,
+            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+            dateRange: selectedRange.startDate && selectedRange.endDate ? 
+              `${formatLocalDate(selectedRange.startDate)} to ${formatLocalDate(selectedRange.endDate)}` : 
+              'No date range'
+          });
+          setExtensionData(null);
+        }
+      } finally {
+        if (!isCancelled) {
+          console.log('🔄 Data loading completed, setting isLoadingDateRangeData to false');
+          setIsLoadingDateRangeData(false);
+        }
       }
     };
 
-    loadHybridDateData();
-  }, [selectedRange, loadHybridTimeRangeData]);
+    loadCoordinatedData();
+    
+    // Cleanup function to prevent race conditions
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedRange, loadHybridTimeRangeData, user?.uid, workSessions, deepFocusSessions, siteUsage, dailyUsage, timeMetrics, pageLoadTrigger]);
 
   // Set up extension message listener for override recording
   useEffect(() => {
@@ -684,10 +855,17 @@ const DeepFocusPage: React.FC = () => {
       rangeType: selectedRange.rangeType,
       startDate: selectedRange.startDate?.toISOString(),
       endDate: selectedRange.endDate?.toISOString(),
-      firebaseDailyDataLength: firebaseDailyData?.length || 0
+      firebaseDailyDataLength: firebaseDailyData?.length || 0,
+      isLoadingDateRangeData
     });
 
-    // Use extension data only if it has actual data
+    // While loading date range data, show empty array to prevent stale data
+    if (isLoadingDateRangeData && selectedRange.rangeType !== 'all time') {
+      console.log('🔄 Loading date range data, showing empty daily usage to prevent stale data');
+      return [];
+    }
+
+    // Use extension data only if it has actual data (prioritizes real-time for today)
     if (extensionData?.dailyUsage && extensionData.dailyUsage.length > 0) {
       console.log('✅ Using extension daily usage data:', {
         totalDays: extensionData.dailyUsage.length,
@@ -695,13 +873,8 @@ const DeepFocusPage: React.FC = () => {
         totalWorkingTime: extensionData.dailyUsage.reduce((sum, day) => sum + day.workingTime, 0),
         totalDeepFocusTime: extensionData.dailyUsage.reduce((sum, day) => sum + day.deepFocusTime, 0),
         sampleDays: extensionData.dailyUsage.slice(0, 3),
-        detailedSampleDays: extensionData.dailyUsage.slice(0, 3).map(day => ({
-          date: day.date,
-          onScreenTime: day.onScreenTime,
-          workingTime: day.workingTime,
-          deepFocusTime: day.deepFocusTime
-        })),
-        source: 'extensionData.dailyUsage'
+        source: selectedRange.rangeType === 'today' ? 'real-time extension (prioritized for today)' : 'extension data',
+        rangeType: selectedRange.rangeType
       });
       return extensionData.dailyUsage;
     }
@@ -877,28 +1050,58 @@ const DeepFocusPage: React.FC = () => {
     // Fallback to all store data if no valid date range
     console.log('✅ Using store data (fallback):', dailyUsage);
     return dailyUsage;
-  }, [extensionData, dailyUsage, selectedRange, filteredWorkSessions, filteredDeepFocusSessions, firebaseDailyData]);
+  }, [extensionData, dailyUsage, selectedRange, filteredWorkSessions, filteredDeepFocusSessions, firebaseDailyData, isLoadingDateRangeData]);
 
   // Filter and recalculate site usage based on date range
   const filteredSiteUsage = useMemo(() => {
-    // Always use extension data if available (contains actual daily data)
-    if (extensionData) {
+    console.log('🔍 filteredSiteUsage calculation:', {
+      hasExtensionData: !!extensionData,
+      extensionSiteUsageLength: extensionData?.siteUsage?.length || 0,
+      storeSiteUsageLength: siteUsage?.length || 0,
+      rangeType: selectedRange.rangeType,
+      isLoadingDateRangeData,
+      startDate: selectedRange.startDate?.toISOString(),
+      endDate: selectedRange.endDate?.toISOString()
+    });
+
+    // Always use extension data if available (prioritizes real-time data for today)
+    if (extensionData && extensionData.siteUsage && extensionData.siteUsage.length > 0) {
+      console.log('✅ Using extension data for site usage:', {
+        siteCount: extensionData.siteUsage.length,
+        totalTime: extensionData.siteUsage.reduce((sum, site) => sum + site.timeSpent, 0),
+        source: selectedRange.rangeType === 'today' ? 'real-time extension (prioritized)' : 'extension data',
+        rangeType: selectedRange.rangeType
+      });
       return extensionData.siteUsage;
     }
     
     // For "all time", use store data as-is
     if (selectedRange.rangeType === 'all time') {
+      console.log('✅ Using store data for all-time site usage:', siteUsage.length, 'sites');
       return siteUsage;
     }
 
-    // For date ranges without extension data, use store data without scaling
-    // This preserves actual values instead of proportional distribution
-    const totalTime = siteUsage.reduce((sum, site) => sum + site.timeSpent, 0);
-    return siteUsage.map(site => ({
-      ...site,
-      percentage: totalTime > 0 ? (site.timeSpent / totalTime) * 100 : 0
-    })).filter(site => site.timeSpent > 0);
-  }, [extensionData, siteUsage, selectedRange]);
+    // For specific date ranges, show store data if available (better than empty)
+    // Only show empty if we're actively loading AND we expect new data
+    if (isLoadingDateRangeData && selectedRange.rangeType !== ('all time' as RangeType)) {
+      console.log('🔄 Loading date range data, showing empty site usage to prevent stale data');
+      return [];
+    }
+
+    // Fallback: Use store data with a note that it might not be perfectly filtered
+    if (siteUsage && siteUsage.length > 0) {
+      console.log('⚠️ No extension data for date range, using store data as fallback:', {
+        siteCount: siteUsage.length,
+        totalTime: siteUsage.reduce((sum, site) => sum + site.timeSpent, 0),
+        note: 'May not be perfectly filtered for date range'
+      });
+      return siteUsage;
+    }
+
+    // Only return empty if we truly have no data at all
+    console.log('❌ No site usage data available from any source');
+    return [];
+  }, [extensionData, siteUsage, selectedRange, isLoadingDateRangeData]);
 
 
 
@@ -941,6 +1144,7 @@ const DeepFocusPage: React.FC = () => {
       siteCount: filteredSiteUsage.length,
       totalUsageTime,
       selectedRange: selectedRange.rangeType,
+      isLoadingDateRangeData,
       dateRange: {
         start: selectedRange.startDate?.toISOString(),
         end: selectedRange.endDate?.toISOString()
@@ -964,7 +1168,7 @@ const DeepFocusPage: React.FC = () => {
       deepFocusTime: filteredDeepFocusTime, // ALWAYS use filtered session data
       overrideTime: realOverrideTime // Use real override session data
     };
-  }, [filteredSiteUsage, filteredWorkSessions, filteredDeepFocusTime, selectedRange, overrideSessions, totalUsageTime]);
+  }, [filteredSiteUsage, filteredWorkSessions, filteredDeepFocusTime, selectedRange, overrideSessions, totalUsageTime, isLoadingDateRangeData]);
 
   // Ensure sidebar state is properly synchronized on mount and state changes
   useEffect(() => {
@@ -1386,60 +1590,10 @@ const DeepFocusPage: React.FC = () => {
     };
   }, []); // Run only on mount
 
-  // Load extension data on mount for line chart
-  useEffect(() => {
-    const loadInitialData = async () => {
-      console.log('🔄 Loading initial extension data for charts...');
-      await loadExtensionData();
-      
-      // After loading store data, populate extensionData for line chart
-      if (siteUsage && siteUsage.length > 0) {
-        console.log('✅ Populating extensionData from store for line chart');
-        setExtensionData({
-          siteUsage: siteUsage,
-          dailyUsage: dailyUsage.length > 0 ? dailyUsage : [], // Use existing dailyUsage if available
-          timeMetrics: timeMetrics
-        });
-      }
-    };
-    loadInitialData();
-  }, [loadExtensionData]);
-  
-  // Update extensionData when store siteUsage changes
-  useEffect(() => {
-    if (siteUsage && siteUsage.length > 0 && selectedRange.rangeType === 'all time') {
-      console.log('🔄 Updating extensionData from store siteUsage for all time view');
-      setExtensionData({
-        siteUsage: siteUsage,
-        dailyUsage: dailyUsage.length > 0 ? dailyUsage : [], // Use existing dailyUsage if available  
-        timeMetrics: timeMetrics
-      });
-    }
-  }, [siteUsage, timeMetrics, selectedRange.rangeType]);
+  // These effects have been consolidated into the main coordinated data loading effect above
+  // to prevent race conditions and stale data issues
 
-  // Monitor user authentication completion and trigger initial data load
-  useEffect(() => {
-    if (user?.uid && !initialDataLoadAttempted) {
-      console.log('🔄 User authenticated for first time, triggering initial data load...');
-      setInitialDataLoadAttempted(true);
-      
-      // Trigger data reload for current selected range
-      const loadInitialData = async () => {
-        try {
-          if (selectedRange.startDate && selectedRange.endDate) {
-            const startDateStr = formatLocalDate(selectedRange.startDate);
-            const endDateStr = formatLocalDate(selectedRange.endDate);
-            console.log('🔄 Loading initial data for authenticated user:', { startDateStr, endDateStr });
-            await loadHybridTimeRangeData(startDateStr, endDateStr);
-          }
-        } catch (error) {
-          console.warn('⚠️ Initial data load failed:', error);
-        }
-      };
-      
-      loadInitialData();
-    }
-  }, [user?.uid, selectedRange.startDate, selectedRange.endDate, loadHybridTimeRangeData, initialDataLoadAttempted]);
+  // User authentication monitoring is now handled by the main coordinated data loading effect
 
   return (
     <div className="deep-focus-page-container flex h-screen bg-background-primary dark:bg-[#141414]">
@@ -1750,7 +1904,21 @@ const DeepFocusPage: React.FC = () => {
 
         {/* Main Content */}
         <main className="flex-1 p-6 flex gap-6 overflow-y-auto relative">
-          {/* Loading indicator removed for simplicity */}
+          {/* Loading indicator for date range data */}
+          {isLoadingDateRangeData && selectedRange.rangeType !== 'all time' && (
+            <div className="absolute inset-0 bg-background-primary/50 flex items-center justify-center z-10">
+              <div className="bg-background-secondary rounded-lg p-6 shadow-lg border border-border">
+                <div className="flex items-center space-x-3">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                  <span className="text-text-primary font-medium">
+                    {pageLoadTrigger > 0 && selectedRange.rangeType === 'today' 
+                      ? 'Refreshing today\'s data...' 
+                      : `Loading ${getLabel().toLowerCase()} data...`}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* Left Column */}
           <div className="w-2/3 space-y-6">
