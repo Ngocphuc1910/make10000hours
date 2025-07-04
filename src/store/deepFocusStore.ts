@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DeepFocusData, SiteUsage, BlockedSite } from '../types/deepFocus';
+import { DeepFocusData, SiteUsage, BlockedSite, ComparisonMetrics, ComparisonData } from '../types/deepFocus';
 import { DeepFocusSession } from '../types/models';
 import ExtensionDataService from '../services/extensionDataService';
 import { deepFocusSessionService } from '../api/deepFocusSessionService';
@@ -9,6 +9,8 @@ import HybridDataService from '../api/hybridDataService';
 import { overrideSessionService, OverrideSession } from '../api/overrideSessionService';
 import { blockedSitesService } from '../api/blockedSitesService';
 import { useUserStore } from './userStore';
+import { calculateComparisonDateRange, formatComparisonResult, calculatePercentageChange } from '../utils/comparisonUtils';
+import { formatLocalDate } from '../utils/timeUtils';
 
 // Mock data with exact colors from AI design
 const mockSiteUsage: SiteUsage[] = [
@@ -195,6 +197,13 @@ interface DeepFocusStore extends DeepFocusData {
   recoveryInProgress: boolean;
   isReloading: boolean;
   setReloading: (isReloading: boolean) => void;
+  // Comparison data
+  comparisonData: ComparisonData | null;
+  isLoadingComparison: boolean;
+  comparisonError: string | null;
+  loadComparisonData: (selectedRange: any) => Promise<void>;
+  loadWorkSessionsForComparison: (userId: string, startDate: Date, endDate: Date) => Promise<number>;
+  loadDeepFocusSessionsForComparison: (userId: string, startDate: Date, endDate: Date) => Promise<number>;
 }
 
 // Helper function to get user-specific storage key
@@ -293,6 +302,10 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       autoSessionManagement: true,
       overrideSessions: [],
       isReloading: false,
+      // Comparison data
+      comparisonData: null,
+      isLoadingComparison: false,
+      comparisonError: null,
 
       setReloading: (isReloading: boolean) => set({ isReloading }),
 
@@ -1550,6 +1563,162 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           console.warn('Could not load override sessions (this is normal if index is still building):', error);
           // Set empty array instead of leaving it undefined
           set({ overrideSessions: [] });
+        }
+      },
+
+      loadComparisonData: async (selectedRange: any) => {
+        try {
+          const { useUserStore } = await import('./userStore');
+          const user = useUserStore.getState().user;
+          
+          // Authentication guard
+          if (!user?.uid) {
+            console.warn('⚠️ User not authenticated - skipping comparison data load');
+            set({ comparisonData: null, comparisonError: 'User not authenticated' });
+            return;
+          }
+
+          // Check if comparison should be shown for this range type
+          if (selectedRange.rangeType === 'all time') {
+            set({ comparisonData: null, comparisonError: null });
+            return;
+          }
+
+          set({ isLoadingComparison: true, comparisonError: null });
+
+          // Calculate comparison period
+          const comparisonPeriod = calculateComparisonDateRange(selectedRange);
+          if (!comparisonPeriod) {
+            set({ 
+              comparisonData: null, 
+              isLoadingComparison: false,
+              comparisonError: 'Invalid date range for comparison' 
+            });
+            return;
+          }
+
+          console.log('🔍 Loading comparison data:', {
+            current: {
+              start: formatLocalDate(selectedRange.startDate),
+              end: formatLocalDate(selectedRange.endDate),
+              type: selectedRange.rangeType
+            },
+            comparison: {
+              start: formatLocalDate(comparisonPeriod.startDate),
+              end: formatLocalDate(comparisonPeriod.endDate),
+              label: comparisonPeriod.label
+            }
+          });
+
+          // Load current period data using the same method as comparison period
+          const currentStartStr = formatLocalDate(selectedRange.startDate);
+          const currentEndStr = formatLocalDate(selectedRange.endDate);
+          
+          const hybridCurrentData = await get().loadHybridTimeRangeData(currentStartStr, currentEndStr);
+          
+          // Calculate current period metrics (same approach as comparison period)
+          const currentWorkSessions = await get().loadWorkSessionsForComparison(user.uid, selectedRange.startDate, selectedRange.endDate);
+          const currentDeepFocusSessions = await get().loadDeepFocusSessionsForComparison(user.uid, selectedRange.startDate, selectedRange.endDate);
+          const currentOverrideSessions = await overrideSessionService.getUserOverrides(user.uid, selectedRange.startDate, selectedRange.endDate);
+
+          const currentMetrics: ComparisonMetrics = {
+            onScreenTime: hybridCurrentData.timeMetrics.onScreenTime,
+            workingTime: currentWorkSessions,
+            deepFocusTime: currentDeepFocusSessions,
+            overrideTime: currentOverrideSessions.reduce((total, session) => total + session.duration, 0)
+          };
+
+          // Load comparison period data
+          const comparisonStartStr = formatLocalDate(comparisonPeriod.startDate);
+          const comparisonEndStr = formatLocalDate(comparisonPeriod.endDate);
+          
+          const hybridComparisonData = await get().loadHybridTimeRangeData(comparisonStartStr, comparisonEndStr);
+          
+          // Calculate comparison period metrics
+          const comparisonWorkSessions = await get().loadWorkSessionsForComparison(user.uid, comparisonPeriod.startDate, comparisonPeriod.endDate);
+          const comparisonDeepFocusSessions = await get().loadDeepFocusSessionsForComparison(user.uid, comparisonPeriod.startDate, comparisonPeriod.endDate);
+          const comparisonOverrideSessions = await overrideSessionService.getUserOverrides(user.uid, comparisonPeriod.startDate, comparisonPeriod.endDate);
+
+          const previousMetrics: ComparisonMetrics = {
+            onScreenTime: hybridComparisonData.timeMetrics.onScreenTime,
+            workingTime: comparisonWorkSessions,
+            deepFocusTime: comparisonDeepFocusSessions,
+            overrideTime: comparisonOverrideSessions.reduce((total, session) => total + session.duration, 0)
+          };
+
+          // Calculate percentage changes
+          const percentageChanges = {
+            onScreenTime: calculatePercentageChange(currentMetrics.onScreenTime, previousMetrics.onScreenTime),
+            workingTime: calculatePercentageChange(currentMetrics.workingTime, previousMetrics.workingTime),
+            deepFocusTime: calculatePercentageChange(currentMetrics.deepFocusTime, previousMetrics.deepFocusTime),
+            overrideTime: calculatePercentageChange(currentMetrics.overrideTime, previousMetrics.overrideTime)
+          };
+
+          const comparisonData: ComparisonData = {
+            current: currentMetrics,
+            previous: previousMetrics,
+            percentageChanges
+          };
+
+          set({ 
+            comparisonData, 
+            isLoadingComparison: false,
+            comparisonError: null 
+          });
+
+          console.log('✅ Comparison data loaded successfully:', {
+            label: comparisonPeriod.label,
+            currentPeriod: {
+              start: currentStartStr,
+              end: currentEndStr,
+              metrics: currentMetrics
+            },
+            previousPeriod: {
+              start: comparisonStartStr,
+              end: comparisonEndStr,
+              metrics: previousMetrics
+            },
+            changes: percentageChanges
+          });
+
+        } catch (error) {
+          console.error('❌ Failed to load comparison data:', error);
+          set({ 
+            comparisonData: null, 
+            isLoadingComparison: false,
+            comparisonError: error instanceof Error ? error.message : 'Unknown error' 
+          });
+        }
+      },
+
+      // Helper methods for comparison data loading
+      loadWorkSessionsForComparison: async (userId: string, startDate: Date, endDate: Date): Promise<number> => {
+        try {
+          const { useDashboardStore } = await import('./useDashboardStore');
+          const { workSessions } = useDashboardStore.getState();
+          
+          return workSessions
+            .filter(session => session.sessionType === 'pomodoro' || session.sessionType === 'manual')
+            .filter(session => {
+              const sessionDate = new Date(session.date);
+              return sessionDate >= startDate && sessionDate <= endDate;
+            })
+            .reduce((total, session) => total + (session.duration || 0), 0);
+        } catch (error) {
+          console.warn('Failed to load work sessions for comparison:', error);
+          return 0;
+        }
+      },
+
+      loadDeepFocusSessionsForComparison: async (userId: string, startDate: Date, endDate: Date): Promise<number> => {
+        try {
+          const sessions = await deepFocusSessionService.getUserSessions(userId, startDate, endDate);
+          return sessions
+            .filter(session => session.status === 'completed' && session.duration)
+            .reduce((total, session) => total + (session.duration || 0), 0);
+        } catch (error) {
+          console.warn('Failed to load deep focus sessions for comparison:', error);
+          return 0;
         }
       }
     }),

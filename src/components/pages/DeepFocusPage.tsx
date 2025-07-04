@@ -18,6 +18,8 @@ import { debugDeepFocus } from '../../utils/debugUtils';
 import { FaviconService } from '../../utils/faviconUtils';
 import { testOverrideSchema } from '../../utils/testOverrideSchema';
 import { quickOverrideTest } from '../../utils/quickOverrideTest';
+import { formatComparisonResult, shouldShowComparison } from '../../utils/comparisonUtils';
+import type { ComparisonMetrics } from '../../types/deepFocus';
 
 import { testUserSync } from '../../utils/testUserSync';
 import { debugUserSync, forceUserSync } from '../../utils/debugUserSync';
@@ -87,7 +89,12 @@ const DeepFocusPage: React.FC = () => {
     setAutoSessionManagement,
     recordOverrideSession,
     overrideSessions,
-    loadOverrideSessions
+    loadOverrideSessions,
+    // Comparison data
+    comparisonData,
+    isLoadingComparison,
+    comparisonError,
+    loadComparisonData
   } = useDeepFocusStore();
   
   const { workSessions } = useDashboardStore();
@@ -1320,6 +1327,14 @@ const DeepFocusPage: React.FC = () => {
     }
   }, [user?.uid, selectedRange, loadOverrideSessions]);
 
+  // Load comparison data when date range changes
+  useEffect(() => {
+    if (user?.uid && shouldShowComparison(selectedRange.rangeType)) {
+      console.log('🔄 Loading comparison data for range:', selectedRange.rangeType);
+      loadComparisonData(selectedRange);
+    }
+  }, [user?.uid, selectedRange, loadComparisonData]);
+
   // Preload favicons for better UX
   useEffect(() => {
     const preloadFavicons = async () => {
@@ -1589,6 +1604,38 @@ const DeepFocusPage: React.FC = () => {
     } else {
       return `${hours}h ${mins}m`;
     }
+  };
+
+  // Get comparison result for a specific metric
+  const getComparisonResult = (metricKey: keyof ComparisonMetrics) => {
+    if (!comparisonData || selectedRange.rangeType === 'all time') {
+      return {
+        label: 'All time data',
+        color: 'text-gray-500',
+        icon: '—'
+      };
+    }
+
+    const current = comparisonData.current[metricKey];
+    const previous = comparisonData.previous[metricKey];
+    
+    // Get the comparison label based on range type
+    let comparisonLabel = 'previous period';
+    switch (selectedRange.rangeType) {
+      case 'today':
+        comparisonLabel = 'yesterday';
+        break;
+      case 'last 7 days':
+        comparisonLabel = 'previous week';
+        break;
+      case 'last 30 days':
+        comparisonLabel = 'previous month';
+        break;
+      default:
+        comparisonLabel = 'previous period';
+    }
+
+    return formatComparisonResult(current, previous, comparisonLabel);
   };
 
   // Extension status detection (immediate)
@@ -2004,7 +2051,7 @@ const DeepFocusPage: React.FC = () => {
                 { 
                   label: 'On Screen Time', 
                   value: filteredTimeMetrics.onScreenTime, 
-                  change: '+2.4% from yesterday',
+                  metricKey: 'onScreenTime' as keyof ComparisonMetrics,
                   icon: 'computer-line',
                   iconColor: 'text-blue-500',
                   iconBg: 'bg-blue-50',
@@ -2014,7 +2061,7 @@ const DeepFocusPage: React.FC = () => {
                 { 
                   label: 'Working Time', 
                   value: filteredTimeMetrics.workingTime, 
-                  change: '+2.4% from yesterday',
+                  metricKey: 'workingTime' as keyof ComparisonMetrics,
                   icon: 'timer-line',
                   iconColor: 'text-green-500',
                   iconBg: 'bg-green-50',
@@ -2024,7 +2071,7 @@ const DeepFocusPage: React.FC = () => {
                 { 
                   label: 'Deep Focus Time', 
                   value: filteredTimeMetrics.deepFocusTime, 
-                  change: '+2.4% from yesterday',
+                  metricKey: 'deepFocusTime' as keyof ComparisonMetrics,
                   icon: 'focus-3-line',
                   iconColor: 'text-red-500',
                   iconBg: 'bg-red-50',
@@ -2035,14 +2082,16 @@ const DeepFocusPage: React.FC = () => {
                 { 
                   label: 'Override Time', 
                   value: filteredTimeMetrics.overrideTime, 
-                  change: '+2.4% from yesterday',
+                  metricKey: 'overrideTime' as keyof ComparisonMetrics,
                   icon: 'time-line',
                   iconColor: 'text-orange-500',
                   iconBg: 'bg-orange-50',
                   valueColor: 'text-orange-500',
                   hoverBorder: 'hover:border-orange-100'
                 }
-              ].map((metric, index) => (
+              ].map((metric, index) => {
+                const comparisonResult = getComparisonResult(metric.metricKey);
+                return (
                 <div key={index} className={`bg-background-secondary p-6 rounded-lg border border-border ${metric.hoverBorder} transition-all duration-300 group`}>
                   <div className="flex justify-between items-center mb-3">
                     <div className={`w-10 h-10 ${metric.iconBg} rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
@@ -2058,11 +2107,15 @@ const DeepFocusPage: React.FC = () => {
                   <div className={`text-2xl font-semibold ${metric.valueColor}`}>
                     {formatMinutesToHours(metric.value)}
                   </div>
-                  <div className="flex items-center mt-3 text-green-500 text-xs font-medium">
-                    <span>{metric.change}</span>
+                  <div className={`flex items-center mt-3 text-xs font-medium ${comparisonResult.color}`}>
+                    <span>{comparisonResult.label}</span>
+                    {isLoadingComparison && (
+                      <div className="ml-2 animate-spin rounded-full h-3 w-3 border-b border-gray-400"></div>
+                    )}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
 
             {/* Usage Chart */}
