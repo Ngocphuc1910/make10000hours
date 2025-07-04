@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
-import { useGlobalDeepFocusSync } from './useGlobalDeepFocusSync';
+import { useDeepFocusContext } from '../contexts/DeepFocusContext';
 
 export const useGlobalShortcuts = () => {
-  const { toggleDeepFocus } = useGlobalDeepFocusSync();
+  const { toggleDeepFocus } = useDeepFocusContext();
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

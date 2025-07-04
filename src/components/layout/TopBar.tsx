@@ -2,7 +2,6 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
 import { useExtensionSync } from '../../hooks/useExtensionSync';
-import { useGlobalDeepFocusSync } from '../../hooks/useGlobalDeepFocusSync';
 import { formatElapsedTime } from '../../utils/timeFormat';
 import { Icon } from '../ui/Icon';
 import { Tooltip } from '../ui/Tooltip';
@@ -17,8 +16,7 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
   const location = useLocation();
   const { toggleFocusMode, isLeftSidebarOpen, toggleLeftSidebar } = useUIStore();
   
-  // Ensure global deep focus sync is active in TopBar for cross-page state updates
-  useGlobalDeepFocusSync();
+  // Deep focus sync now handled by DeepFocusProvider context
   
   // Get page title based on current route
   const getPageTitle = () => {

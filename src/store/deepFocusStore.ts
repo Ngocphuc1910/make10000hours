@@ -820,11 +820,41 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           return;
         }
         
-        // Guard: if already active, do nothing to prevent duplicate sessions
+        // Comprehensive guards to prevent duplicate sessions
         if (state.isDeepFocusActive) {
           console.log('🟢 enableDeepFocus ignored – already active for user:', user.uid);
           return;
         }
+        
+        if (state.activeSessionId) {
+          console.log('🟢 enableDeepFocus ignored – session already exists:', state.activeSessionId);
+          return;
+        }
+        
+        if (state.recoveryInProgress) {
+          console.log('🟢 enableDeepFocus ignored – recovery in progress');
+          return;
+        }
+        
+        // Check for existing active sessions in database to prevent race conditions
+        try {
+          const activeSession = await deepFocusSessionService.getActiveSession(user.uid);
+          if (activeSession) {
+            console.log('🟢 enableDeepFocus ignored – active session exists in database:', activeSession.id);
+            // Update local state to match database
+            set({
+              activeSessionId: activeSession.id,
+              activeSessionStartTime: activeSession.startTime,
+              activeSessionDuration: activeSession.duration || 0,
+              isDeepFocusActive: true
+            });
+            return;
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to check for existing active sessions:', error);
+          // Continue with session creation if check fails
+        }
+        
         console.log('🟢 enableDeepFocus called for user:', user.uid, 'Current state:', {
           isDeepFocusActive: state.isDeepFocusActive,
           extensionConnected: state.isExtensionConnected,
