@@ -949,6 +949,22 @@ class PopupManager {
     try {
       this.showLoading();
       
+      // Get the current switch state
+      const focusModeSwitch = document.querySelector('#focus-mode-toggle');
+      const newFocusState = focusModeSwitch.checked;
+      
+      // Update UI immediately
+      if (this.currentState?.focusStats) {
+        this.currentState.focusStats.focusMode = newFocusState;
+      } else {
+        this.currentState = {
+          ...this.currentState,
+          focusStats: { focusMode: newFocusState }
+        };
+      }
+      this.updateFocusModeSwitch();
+      
+      // Send message to background
       const response = await this.sendMessage('TOGGLE_FOCUS_MODE');
       
       if (response.success) {
@@ -959,18 +975,24 @@ class PopupManager {
           response.focusMode ? 'success' : 'info'
         );
         
-        // Refresh state to update UI
+        // Refresh state to ensure sync
         await this.refreshState();
       } else {
-        this.showError('Failed to toggle focus mode: ' + response.error);
-        // Revert switch state
+        // If failed, revert the switch state
+        if (this.currentState?.focusStats) {
+          this.currentState.focusStats.focusMode = !newFocusState;
+        }
         this.updateFocusModeSwitch();
+        this.showError('Failed to toggle focus mode: ' + response.error);
       }
     } catch (error) {
       console.error('Error toggling focus mode:', error);
-      this.showError('Failed to toggle focus mode');
-      // Revert switch state
+      // Revert switch state on error
+      if (this.currentState?.focusStats) {
+        this.currentState.focusStats.focusMode = !focusModeSwitch.checked;
+      }
       this.updateFocusModeSwitch();
+      this.showError('Failed to toggle focus mode');
     } finally {
       this.hideLoading();
     }
