@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
 import { SiteUsage } from '../../types/deepFocus';
+import { getProgressBarColor, extractDomain } from '../../utils/colorUtils';
 
 interface UsagePieChartProps {
   data: SiteUsage[];
@@ -66,7 +67,7 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
       return;
     }
 
-    // Default EChart colors for top 5 sites
+    // Default EChart colors for top 5 sites (used as fallback)
     const defaultColors = [
       '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de'
     ];
@@ -78,13 +79,22 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
     const othersSessions = otherSites.reduce((sum, site) => sum + site.sessions, 0);
     
     const chartData = [
-      ...topSites.map((site, index) => ({
-        value: site.timeSpent,
-        name: site.name,
-        timeSpent: site.timeSpent,
-        sessions: site.sessions,
-        itemStyle: { color: defaultColors[index] }
-      }))
+      ...topSites.map((site, index) => {
+        // Extract domain from site URL for brand color lookup
+        const domain = extractDomain(site.url || site.name);
+        
+        // Use brand color if available, otherwise use default colors for top 5
+        const fallbackColor = defaultColors[index];
+        const brandColor = getProgressBarColor(domain, fallbackColor);
+        
+        return {
+          value: site.timeSpent,
+          name: site.name,
+          timeSpent: site.timeSpent,
+          sessions: site.sessions,
+          itemStyle: { color: brandColor }
+        };
+      })
     ];
 
     // Only add "Others" if there are sites beyond the top 5
