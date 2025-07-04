@@ -266,6 +266,41 @@ const clearPreviousUserStorage = () => {
   });
 };
 
+// Helper function to create timers
+const createTimers = (set: any, get: any, sessionId: string, startTime: Date) => {
+  console.log('🕒 Creating new timers for session:', sessionId);
+  
+  // Clear any existing timers first
+  const state = get();
+  if (state.timer) {
+    console.log('⚠️ Clearing existing timer');
+    clearInterval(state.timer);
+  }
+  if (state.secondTimer) {
+    console.log('⚠️ Clearing existing second timer');
+    clearInterval(state.secondTimer);
+  }
+
+  // Create new timers
+  const secondTimer = setInterval(() => {
+    const elapsedSeconds = Math.floor((Date.now() - startTime.getTime()) / 1000);
+    set({ activeSessionElapsedSeconds: elapsedSeconds });
+  }, 1000);
+
+  const timer = setInterval(async () => {
+    console.log('⏱️ Timer tick for session:', sessionId);
+    const currentDuration = get().activeSessionDuration + 1;
+    set({ activeSessionDuration: currentDuration });
+    if (sessionId) {
+      await deepFocusSessionService.incrementSessionDuration(sessionId, 1);
+      console.log('⏱️ Deep Focus: +1 minute added to session', sessionId);
+    }
+  }, 60000);
+
+  set({ timer, secondTimer });
+  console.log('✅ New timers created for session:', sessionId);
+};
+
 export const useDeepFocusStore = create<DeepFocusStore>()(
   persist(
     (set, get) => ({
@@ -676,22 +711,8 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
                   activeSessionElapsedSeconds: 0 
                 });
                 
-                // Start timers
-                const secondTimer = setInterval(() => {
-                  const elapsedSeconds = Math.floor((Date.now() - startTime.getTime()) / 1000);
-                  set({ activeSessionElapsedSeconds: elapsedSeconds });
-                }, 1000);
-                
-                const timer = setInterval(async () => {
-                  const currentDuration = get().activeSessionDuration + 1;
-                  set({ activeSessionDuration: currentDuration });
-                  if (sessionId) {
-                    await deepFocusSessionService.incrementSessionDuration(sessionId, 1);
-                    console.log('⏱️ Deep Focus: +1 minute added to session', sessionId);
-                  }
-                }, 60000);
-                
-                set({ timer, secondTimer });
+                // Use the consolidated timer creation
+                createTimers(set, get, sessionId, startTime);
               } catch (error) {
                 console.error('❌ Failed to start Deep Focus session:', error);
               }
@@ -872,23 +893,8 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
               
               set({ activeSessionId: sessionId, activeSessionStartTime: startTime, activeSessionDuration: 0, activeSessionElapsedSeconds: 0 });
               
-              // Start second timer for real-time UI updates (elapsed seconds)
-              const secondTimer = setInterval(() => {
-                const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000);
-                set({ activeSessionElapsedSeconds: elapsed });
-              }, 1000);
-              
-              // Start minute timer for database updates (atomic +1)
-              const timer = setInterval(async () => {
-                const currentDuration = get().activeSessionDuration + 1;
-                set({ activeSessionDuration: currentDuration });
-                if (sessionId) {
-                  await deepFocusSessionService.incrementSessionDuration(sessionId, 1);
-                  console.log('⏱️ Deep Focus: +1 minute added to session', sessionId);
-                }
-              }, 60000);
-              
-              set({ timer, secondTimer });
+              // Use the consolidated timer creation
+              createTimers(set, get, sessionId, startTime);
             } else {
               console.warn('⚠️ No user found, skipping session creation');
             }
