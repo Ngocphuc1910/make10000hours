@@ -221,55 +221,110 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
+  min-height: 80px;
 }
 
+.stat-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  height: 100%;
+  justify-content: space-between;
+}
+
+/* Updated icon styling to match Deep Focus page */
 .stat-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-lg);
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--font-size-base);
+  transition: all 0.3s ease;
 }
 
+.stat-icon i {
+  font-size: 24px;
+  transition: all 0.3s ease;
+}
+
+/* Blue theme - On Screen Time */
 .stat-card.blue .stat-icon {
-  background: #dbeafe;
-  color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.1);
+  color: #3B82F6;
 }
 
+.stat-card.blue:hover .stat-icon {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.stat-card.blue .stat-icon i {
+  color: #3B82F6;
+}
+
+/* Red theme - Deep Focus Time */
 .stat-card.red .stat-icon {
-  background: #fee2e2;
-  color: var(--accent-red);
+  background: linear-gradient(to right, rgba(187,95,90,0.1), rgba(236,72,153,0.1), rgba(251,146,60,0.1));
 }
 
+.stat-card.red:hover .stat-icon {
+  background: linear-gradient(to right, rgba(187,95,90,0.15), rgba(236,72,153,0.15), rgba(251,146,60,0.15));
+}
+
+.stat-card.red .stat-icon i {
+  background: linear-gradient(to right, rgb(187,95,90), rgb(236,72,153), rgb(251,146,60));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Orange theme - Override Time */
 .stat-card.orange .stat-icon {
-  background: #fed7aa;
-  color: var(--accent-orange);
+  background: rgba(249, 115, 22, 0.1);
+  color: #F97316;
+}
+
+.stat-card.orange:hover .stat-icon {
+  background: rgba(249, 115, 22, 0.15);
+}
+
+.stat-card.orange .stat-icon i {
+  color: #F97316;
 }
 
 .stat-label {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
   font-weight: var(--font-weight-medium);
+  min-height: 2.4em;
+  display: flex;
+  align-items: flex-start;
+  line-height: 1.2;
+  white-space: pre-line;
 }
 
 .stat-value {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
-  margin-top: 2px;
+  margin-top: auto;
+  line-height: 1;
 }
 
+/* Updated value colors to match icons */
 .stat-card.blue .stat-value {
-  color: var(--accent-blue);
+  color: #3B82F6;
 }
 
 .stat-card.red .stat-value {
-  color: var(--accent-red);
+  color: #EF4444;
+  background: linear-gradient(to right, rgb(187,95,90), rgb(236,72,153), rgb(251,146,60));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .stat-card.orange .stat-value {
-  color: var(--accent-orange);
+  color: #F97316;
 }
 
 /* Tab Navigation */
@@ -1039,4 +1094,21 @@ body {
 
 .progress-fill.facebook {
   background: #1877F2;
+}
+
+/* Update Deep Focus icon background */
+.stat-card.red .stat-icon {
+  background: linear-gradient(to right, rgba(187,95,90,0.1), rgba(236,72,153,0.1), rgba(251,146,60,0.1));
+}
+
+.stat-card.red:hover .stat-icon {
+  background: linear-gradient(to right, rgba(187,95,90,0.15), rgba(236,72,153,0.15), rgba(251,146,60,0.15));
+}
+
+/* Update Deep Focus icon color */
+.stat-card.red .stat-icon i {
+  background: linear-gradient(to right, rgb(187,95,90), rgb(236,72,153), rgb(251,146,60));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 } 

@@ -14,6 +14,7 @@ class PopupManager {
     this.currentTab = 'site-usage'; // Updated for new 2-tab system
     this.previousStats = null; // Add cache for previous stats
     this.updateTimeout = null; // Add debounce timeout
+    this.metricsUnsubscribe = null; // Add unsubscribe function
     
     this.initialize();
   }
@@ -55,9 +56,30 @@ class PopupManager {
         this.currentState.focusStats.focusMode = focusStateResponse.data.focusMode;
       }
 
-      // Store user info
+      // Store user info and initialize Firebase metrics if user is logged in
       if (userInfoResponse?.success) {
         this.userInfo = userInfoResponse.data;
+        if (this.userInfo?.uid) {
+          // Get initial metrics
+          try {
+            const metrics = await window.firebaseService.getTodayMetrics(this.userInfo.uid);
+            this.updateMetrics(metrics);
+            
+            // Subscribe to real-time updates
+            this.metricsUnsubscribe = window.firebaseService.subscribeTodayMetrics(
+              this.userInfo.uid,
+              (update) => {
+                if (update.type === 'deepFocus') {
+                  document.getElementById('deep-focus-time').textContent = this.formatTime(update.time * 60000);
+                } else if (update.type === 'override') {
+                  document.getElementById('override-time').textContent = this.formatTime(update.time * 60000);
+                }
+              }
+            );
+          } catch (error) {
+            console.error('Error initializing Firebase metrics:', error);
+          }
+        }
       }
 
       // Update UI with initial data
@@ -1367,6 +1389,19 @@ class PopupManager {
     }
     if (this.sessionTimer) {
       clearInterval(this.sessionTimer);
+    }
+    if (this.metricsUnsubscribe) {
+      this.metricsUnsubscribe();
+    }
+  }
+
+  // Add new method to update metrics
+  updateMetrics(metrics) {
+    if (metrics.deepFocusTime !== undefined) {
+      document.getElementById('deep-focus-time').textContent = this.formatTime(metrics.deepFocusTime * 60000);
+    }
+    if (metrics.overrideTime !== undefined) {
+      document.getElementById('override-time').textContent = this.formatTime(metrics.overrideTime * 60000);
     }
   }
 }
