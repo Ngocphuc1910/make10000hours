@@ -614,10 +614,10 @@ export const useTimerStore = create<TimerState>((set, get) => {
         lastCountedMinute: null,
       });
       
-      // If timer is running and we have a task, create a fresh session for accurate tracking
+      // If timer is running and we have a task, resume the existing session or create a new one
       if (remoteState.isRunning && currentTask && remoteState.mode === 'pomodoro') {
         try {
-          // Complete any existing active session first (calculate time worked before reload)
+          // Check for existing active session
           if (remoteState.activeSessionId) {
             const { user } = useUserStore.getState();
             if (user) {
@@ -627,39 +627,24 @@ export const useTimerStore = create<TimerState>((set, get) => {
                 session.status === 'active'
               );
               
-              if (existingSession && remoteState.sessionStartTime && remoteState.sessionStartTimerPosition) {
-                // Calculate how much time was worked before page reload
-                const timeWorkedBeforeReload = Math.floor(
-                  (remoteState.sessionStartTimerPosition - remoteState.currentTime) / 60
-                );
-                
-                if (timeWorkedBeforeReload > 0) {
-                  await workSessionService.incrementDuration(existingSession.id, timeWorkedBeforeReload);
-                }
-                
-                // Complete the session
-                await workSessionService.updateSession(existingSession.id, {
-                  status: 'completed',
-                  endTime: new Date(),
-                  notes: `Session completed: ${timeWorkedBeforeReload}m (page reload)`
-                });
-                
-                console.log('Completed previous session before creating new one:', {
+              if (existingSession) {
+                // Resume existing session without recalculation
+                console.log('Resuming existing session:', {
                   sessionId: existingSession.id,
-                  timeWorked: timeWorkedBeforeReload,
+                  duration: existingSession.duration,
                   reason: 'page reload'
                 });
+                return; // Keep using existing session
               }
             }
           }
           
-          // Create a fresh new session starting from current timer position
+          // Only create new session if no active one exists
           await get().createActiveSession();
           
-          console.log('Created fresh session after page reload:', {
+          console.log('Created new session:', {
             taskId: currentTask.id,
-            timerPosition: remoteState.currentTime,
-            reason: 'page reload with running timer'
+            reason: 'no active session found'
           });
           
         } catch (error) {
