@@ -74,3 +74,29 @@ export interface DeepFocusStore {
   setAutoSessionManagement: (enabled: boolean) => void;
   loadFocusStatus: () => Promise<void>;
 } 
+
+export interface ComparisonMetrics {
+  onScreenTime: number;
+  workingTime: number;
+  deepFocusTime: number;
+  overrideTime: number;
+}
+
+export interface ComparisonData {
+  current: ComparisonMetrics;
+  previous: ComparisonMetrics;
+  percentageChanges: {
+    onScreenTime: number | null;
+    workingTime: number | null;
+    deepFocusTime: number | null;
+    overrideTime: number | null;
+  };
+}
+
+export interface ComparisonResult {
+  percentage: number | null;
+  direction: 'up' | 'down' | 'same';
+  label: string;
+  color: string;
+  icon: string;
+} 
