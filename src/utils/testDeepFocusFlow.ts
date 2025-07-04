@@ -423,7 +423,7 @@ export const testExtensionToWebAppCommunication = {
       
       return success;
       
-    } catch (error) {
+  } catch (error) {
       console.error('❌ Test failed with error:', error);
       return false;
     }
