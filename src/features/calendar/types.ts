@@ -12,6 +12,8 @@ export interface CalendarEvent {
   taskId?: string;
   isTask?: boolean;
   isDraggable?: boolean;
+  isCompleted?: boolean;
+  completedAt?: Date;
 }
 
 export interface Project {
