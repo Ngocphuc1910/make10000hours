@@ -2124,17 +2124,36 @@ const DeepFocusPage: React.FC = () => {
                 }
               ].map((metric, index) => {
                 const comparisonResult = getComparisonResult(metric.metricKey);
+                
+                // Define tooltip messages for each metric
+                const getTooltipMessage = (label: string) => {
+                  switch (label) {
+                    case 'On Screen Time':
+                      return 'Total time spent on all websites';
+                    case 'Working Time':
+                      return 'Total time in active Pomodoro sessions';
+                    case 'Deep Focus Time':
+                      return 'Total time with Deep Focus mode enabled';
+                    case 'Override Time':
+                      return 'Total time spent overriding blocked websites';
+                    default:
+                      return label;
+                  }
+                };
+                
                 return (
                 <div key={index} className={`bg-background-secondary p-6 rounded-lg border border-border ${metric.hoverBorder} transition-all duration-300 group`}>
-                  <div className="flex justify-between items-center mb-3">
+                  <div className="flex justify-between items-start mb-3">
                     <div className={`w-10 h-10 ${metric.iconBg} rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
                       <Icon name={metric.icon} className={`text-xl ${metric.iconColor}`} size={20} />
                     </div>
-                    <button className="text-text-secondary hover:text-text-primary opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <div className="w-4 h-4 flex items-center justify-center">
-                        <Icon name="information-line" className="w-4 h-4" />
-                      </div>
-                    </button>
+                    <Tooltip text={getTooltipMessage(metric.label)} placement="bottom">
+                      <button className="text-text-secondary hover:text-text-primary opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <div className="w-4 h-4 flex items-center justify-center">
+                          <Icon name="information-line" className="w-4 h-4" />
+                        </div>
+                      </button>
+                    </Tooltip>
                   </div>
                   <h3 className="text-sm text-text-secondary mb-1">{metric.label}</h3>
                   <div className={`text-2xl font-semibold ${metric.valueColor}`}>
