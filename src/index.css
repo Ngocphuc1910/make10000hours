@@ -1562,4 +1562,16 @@ input[type="radio"][name="addSiteMethod"]:focus + div {
   border-color: var(--border-color);
 }
 
+/* Calendar Completed Task Styles */
+/* Simple completed task styling: white strikethrough + 85% opacity */
+.calendar-event-completed {
+  opacity: 0.85;
+}
+
+.calendar-event-completed .line-through {
+  text-decoration: line-through;
+  text-decoration-color: white;
+  text-decoration-thickness: 1px;
+}
+
 

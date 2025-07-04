@@ -20,6 +20,9 @@ export const taskToCalendarEvent = (task: Task, project?: Project): CalendarEven
   // Parse the scheduled date
   const scheduledDate = new Date(task.scheduledDate);
   
+  // Check completion status
+  const isCompleted = task.completed || task.status === 'completed';
+  
   // If task doesn't include specific time, make it an all-day event
   if (!task.includeTime || !task.scheduledStartTime || !task.scheduledEndTime) {
     return {
@@ -33,7 +36,9 @@ export const taskToCalendarEvent = (task: Task, project?: Project): CalendarEven
       isAllDay: true,
       taskId: task.id, // Add reference to original task
       isTask: true, // Flag to identify this as a task event
-      isDraggable: true
+      isDraggable: true,
+      isCompleted: isCompleted,
+      completedAt: isCompleted ? task.updatedAt : undefined
     };
   }
 
@@ -64,7 +69,9 @@ export const taskToCalendarEvent = (task: Task, project?: Project): CalendarEven
     isAllDay: false,
     taskId: task.id, // Add reference to original task
     isTask: true, // Flag to identify this as a task event
-    isDraggable: true
+    isDraggable: true,
+    isCompleted: isCompleted,
+    completedAt: isCompleted ? task.updatedAt : undefined
   };
 };
 
