@@ -161,29 +161,56 @@ const DeepFocusPage: React.FC = () => {
   // Track page navigation to trigger data refresh
   const [pageLoadTrigger, setPageLoadTrigger] = useState(0);
 
-  // Force data refresh when navigating to this page or on mount
+  // Force data refresh when navigating to this page or on mount  
   useEffect(() => {
-    console.log('🔄 Deep Focus page mounted/navigated - forcing fresh data load for today');
+    const performAutoReload = async () => {
+      console.log('🔄 AUTO-RELOAD: Deep Focus page mounted/navigated - forcing fresh data load for today');
+      console.log('🔄 AUTO-RELOAD: Current location pathname:', location.pathname);
+      
+      // STEP 1: Force fresh extension data load first (like manual selection when store has data)
+      console.log('📡 AUTO-RELOAD: Pre-loading fresh extension data to match manual selection behavior...');
+      
+      try {
+        // Force fresh extension data load to ensure we have latest data
+        await loadExtensionData();
+        console.log('✅ AUTO-RELOAD: Fresh extension data pre-loaded successfully');
+      } catch (error) {
+        console.warn('⚠️ AUTO-RELOAD: Extension data pre-load failed, continuing with range update:', error);
+      }
+      
+      // STEP 2: Create fresh today range (same as manual selection)
+      const todayRange = getTodayRange();
+      console.log('📅 AUTO-RELOAD: Setting fresh today range (matching manual selection):', {
+        startDate: todayRange.startDate?.toISOString(),
+        endDate: todayRange.endDate?.toISOString(),
+        rangeType: todayRange.rangeType,
+        currentTime: new Date().toISOString()
+      });
+      
+      // STEP 3: Clear existing data and set loading state
+      setExtensionData(null);
+      setIsLoadingDateRangeData(true);
+      
+      // STEP 4: Set the range (triggers data loading effect)
+      setSelectedRange(todayRange);
+      
+      // STEP 5: Increment trigger to force effect re-run even if range same
+      setPageLoadTrigger(prev => {
+        const newTrigger = prev + 1;
+        console.log('🎯 AUTO-RELOAD: Page load trigger updated to force fresh data:', { 
+          oldTrigger: prev, 
+          newTrigger,
+          timestamp: new Date().toISOString()
+        });
+        return newTrigger;
+      });
+      
+      console.log('✅ AUTO-RELOAD: Complete sequence initiated - fresh today data will load (matching manual behavior)');
+    };
     
-    // Always reset to today's range to ensure fresh data
-    const todayRange = getTodayRange();
-    console.log('📅 Setting fresh today range:', {
-      startDate: todayRange.startDate?.toISOString(),
-      endDate: todayRange.endDate?.toISOString(),
-      rangeType: todayRange.rangeType
-    });
-    
-    setSelectedRange(todayRange);
-    
-    // Trigger data reload by incrementing the trigger
-    setPageLoadTrigger(prev => {
-      const newTrigger = prev + 1;
-      console.log('🎯 Page load trigger updated:', { oldTrigger: prev, newTrigger });
-      return newTrigger;
-    });
-    
-    console.log('✅ Auto-refresh configured - fresh today data will load automatically');
-  }, [location.pathname]); // Trigger when navigating to this page
+    // Run the auto-reload sequence
+    performAutoReload();
+  }, [location.pathname, loadExtensionData]); // Added loadExtensionData dependency
 
   // Debug: Track selectedRange changes
   useEffect(() => {
@@ -392,14 +419,19 @@ const DeepFocusPage: React.FC = () => {
         return;
       }
 
-      console.log('🔄 Starting coordinated data load:', {
+      console.log('🔄 AUTO-RELOAD: Starting coordinated data load:', {
         rangeType: selectedRange.rangeType,
         pageLoadTrigger,
-        reason: pageLoadTrigger > 0 ? 'Page navigation triggered refresh' : 'Regular data loading',
-        timestamp: new Date().toISOString()
+        reason: pageLoadTrigger > 0 ? 'AUTO-RELOAD: Page navigation triggered refresh' : 'Regular data loading',
+        timestamp: new Date().toISOString(),
+        isAutoReload: pageLoadTrigger > 0,
+        pathname: location.pathname
       });
 
-      setIsLoadingDateRangeData(true);
+      // Ensure loading state is set (may already be set by navigation effect)
+      if (!isLoadingDateRangeData) {
+        setIsLoadingDateRangeData(true);
+      }
       
       try {
         if (selectedRange.rangeType === 'all time') {
@@ -430,21 +462,37 @@ const DeepFocusPage: React.FC = () => {
           return;
         }
 
-        // For "today", prioritize real-time extension data first
+        // For "today", prioritize real-time extension data first (especially during auto-reload)
         if (selectedRange.rangeType === 'today') {
-          console.log('🔍 DEBUG: Today selected - prioritizing real-time extension data');
+          console.log('🔍 AUTO-RELOAD: Today selected - prioritizing real-time extension data', {
+            isAutoReload: pageLoadTrigger > 0,
+            pageLoadTrigger,
+            hasExistingStoreData: siteUsage?.length > 0,
+            storeOnScreenTime: timeMetrics?.onScreenTime || 0
+          });
           
           try {
-            // First, try to get real-time data directly from extension
-            await loadExtensionData();
+            // Force fresh extension data load during auto-reload, reuse if recent for manual selection
+            if (pageLoadTrigger > 0) {
+              console.log('📡 AUTO-RELOAD: Force loading fresh extension data (auto-reload detected)...');
+              await loadExtensionData();
+            } else {
+              console.log('📡 Manual selection: Using existing extension data or loading if needed...');
+              // For manual selection, only load if we don't have good data already
+              if (!siteUsage || siteUsage.length === 0 || timeMetrics.onScreenTime === 0) {
+                await loadExtensionData();
+              }
+            }
             
             if (!isCancelled) {
               // Check if we got fresh extension data
               if (siteUsage && siteUsage.length > 0 && timeMetrics.onScreenTime > 0) {
-                console.log('✅ Using real-time extension data for today:', {
+                console.log('✅ AUTO-RELOAD: Using real-time extension data for today:', {
                   onScreenTime: timeMetrics.onScreenTime,
                   siteCount: siteUsage.length,
-                  source: 'real-time extension'
+                  source: 'real-time extension',
+                  isAutoReload: pageLoadTrigger > 0,
+                  loadTrigger: pageLoadTrigger > 0 ? 'auto-reload-forced' : 'manual-or-conditional'
                 });
                 
                 // Calculate today's session data
@@ -480,21 +528,35 @@ const DeepFocusPage: React.FC = () => {
                   }]
                 });
                 
-                console.log('✅ Extension data set successfully for today (real-time):', {
+                console.log('✅ AUTO-RELOAD: Extension data set successfully for today (real-time):', {
                   onScreenTime: timeMetrics.onScreenTime,
                   siteUsageCount: siteUsage.length,
                   workingTime: todayWorkingTime,
                   deepFocusTime: todayDeepFocusTime,
-                  source: 'real-time extension data'
+                  source: 'real-time extension data',
+                  autoReloadCompleted: true,
+                  isAutoReload: pageLoadTrigger > 0,
+                  freshDataConfirmed: timeMetrics.onScreenTime > 0 && siteUsage.length > 0,
+                  timestamp: new Date().toISOString()
                 });
+                
+                if (pageLoadTrigger > 0) {
+                  const formatTime = (minutes: number) => {
+                    const hours = Math.floor(minutes / 60);
+                    const mins = minutes % 60;
+                    return hours === 0 ? `${mins}m` : mins === 0 ? `${hours}h` : `${hours}h ${mins}m`;
+                  };
+                  console.log('🎯 AUTO-RELOAD SUCCESS: Fresh today data loaded automatically! On Screen Time:', 
+                    formatTime(timeMetrics.onScreenTime), '| Sites:', siteUsage.length);
+                }
                 
                 return; // Exit early with real-time data
               } else {
-                console.log('⚠️ Extension data incomplete, falling back to hybrid data');
+                console.log('⚠️ AUTO-RELOAD: Extension data incomplete, falling back to hybrid data');
               }
             }
           } catch (error) {
-            console.warn('⚠️ Real-time extension data failed, falling back to hybrid data:', error);
+            console.warn('⚠️ AUTO-RELOAD: Real-time extension data failed, falling back to hybrid data:', error);
           }
         }
         
@@ -624,8 +686,22 @@ const DeepFocusPage: React.FC = () => {
         }
       } finally {
         if (!isCancelled) {
-          console.log('🔄 Data loading completed, setting isLoadingDateRangeData to false');
+          console.log('🔄 AUTO-RELOAD: Data loading completed, setting isLoadingDateRangeData to false', {
+            isAutoReload: pageLoadTrigger > 0,
+            pageLoadTrigger,
+            rangeType: selectedRange.rangeType,
+            completedAt: new Date().toISOString()
+          });
           setIsLoadingDateRangeData(false);
+          
+          if (pageLoadTrigger > 0 && selectedRange.rangeType === 'today') {
+            console.log('🎉 AUTO-RELOAD COMPLETE: Successfully loaded fresh today\'s data automatically!', {
+              storeOnScreenTime: timeMetrics?.onScreenTime || 0,
+              storeSiteCount: siteUsage?.length || 0,
+              hasExtensionData: !!extensionData,
+              autoReloadWorking: true
+            });
+          }
         }
       }
     };
@@ -2256,34 +2332,23 @@ const DeepFocusPage: React.FC = () => {
             <div className="bg-background-secondary rounded-lg">
               <h2 className="text-lg font-medium mb-6 text-text-primary p-6 pb-0">Your Usage</h2>
               <div className="w-full h-48 mb-4">
-                {/* Debug data flow for pie chart */}
-                {(() => {
-                  console.log('🥧 Pie Chart Data Debug:', {
-                    filteredSiteUsageLength: filteredSiteUsage.length,
+                {/* Auto-reload status tracking for pie chart */}
+                {pageLoadTrigger > 0 && (() => {
+                  console.log('🥧 Auto-Reload Pie Chart Update:', {
                     hasData: filteredSiteUsage.length > 0,
-                    isLoadingDateRangeData,
-                    selectedRangeType: selectedRange.rangeType,
-                    pageLoadTrigger,
-                    sampleData: filteredSiteUsage.slice(0, 3),
-                    totalTime: filteredSiteUsage.reduce((sum, site) => sum + site.timeSpent, 0)
+                    siteCount: filteredSiteUsage.length,
+                    totalTime: filteredSiteUsage.reduce((sum, site) => sum + site.timeSpent, 0),
+                    status: 'Auto-reload data applied to pie chart'
                   });
                   return null;
                 })()}
                 
-                {/* Only render pie chart when we have actual data OR when not loading */}
-                {(filteredSiteUsage.length > 0 || !isLoadingDateRangeData) && (
-                  <UsagePieChart data={filteredSiteUsage} />
-                )}
-                
-                {/* Show loading indicator specifically for pie chart when loading */}
-                {isLoadingDateRangeData && filteredSiteUsage.length === 0 && (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="flex items-center space-x-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                      <span className="text-text-secondary text-sm">Loading usage data...</span>
-                    </div>
-                  </div>
-                )}
+                {/* ALWAYS render pie chart - let it handle empty data gracefully */}
+                {/* This ensures auto-reload works and chart updates properly */}
+                <UsagePieChart 
+                  data={filteredSiteUsage} 
+                  key={`pie-chart-${pageLoadTrigger}-${selectedRange.rangeType}`} 
+                />
               </div>
               
               {/* Site Usage List */}
