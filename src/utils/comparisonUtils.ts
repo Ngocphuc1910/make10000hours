@@ -1,7 +1,7 @@
 import { formatLocalDate } from './timeUtils';
 import { ComparisonResult } from '../types/deepFocus';
 
-export type RangeType = 'today' | 'last 7 days' | 'last 30 days' | 'custom' | 'all time';
+export type RangeType = 'today' | 'yesterday' | 'last 7 days' | 'last 30 days' | 'custom' | 'all time';
 
 export interface DateRange {
   startDate: Date | null;
