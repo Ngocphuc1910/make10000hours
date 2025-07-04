@@ -349,7 +349,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         sourceView="week"
                         className={`absolute inset-0 px-2 py-1 text-xs rounded truncate flex items-center ${
                           event.isTask ? 'border-l-2 border-white border-opacity-50' : ''
-                        }`}
+                        } ${event.isCompleted ? 'calendar-event-completed' : ''}`}
                         style={{
                           backgroundColor: event.color,
                           position: 'relative',
@@ -358,7 +358,9 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         }}
                       >
                         <div className="flex items-center text-white w-full">
-                          <span className="truncate">{event.title}</span>
+                          <span className={`truncate ${event.isCompleted ? 'line-through' : ''}`}>
+                            {event.title}
+                          </span>
                         </div>
                       </DraggableEvent>
                     </div>
@@ -454,21 +456,21 @@ export const WeekView: React.FC<WeekViewProps> = ({
                   onResizeMove={onEventResizeMove}
                   className={`rounded absolute ${
                     event.isTask ? 'border-l-4' : ''
-                  }`}
+                  } ${event.isCompleted ? 'calendar-event-completed' : ''}`}
                   style={{
                     ...getEventStyle(event),
                     borderLeftColor: event.isTask ? event.color : undefined
                   }}
                 >
                   <div className="pl-0.5 pr-1 py-1">
-                    <div className="task-item-title">
+                    <div className={`task-item-title ${event.isCompleted ? 'line-through' : ''}`}>
                       {event.title}
                     </div>
                     <div className="task-item-time">
                       {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
                     </div>
                     {!event.isTask && event.description && (
-                      <div className="text-xs opacity-75 mt-1 truncate text-white">
+                      <div className={`text-xs opacity-75 mt-1 truncate text-white ${event.isCompleted ? 'text-gray-400' : ''}`}>
                         {event.description}
                       </div>
                     )}

@@ -105,6 +105,8 @@ export const MonthView: React.FC<MonthViewProps> = ({
           const isCurrentDay = isToday(day);
           const allDayEvents = dayEvents.filter(event => event.isAllDay);
           const timedEvents = dayEvents.filter(event => !event.isAllDay);
+          
+
 
           return (
             <DroppableTimeSlot
@@ -176,14 +178,16 @@ export const MonthView: React.FC<MonthViewProps> = ({
                                   onClick={onEventClick}
                                   sourceView="month"
                                   className={`month-view-event block w-full cursor-grab rounded text-xs px-2 py-1 h-5 flex items-center ${
-                                    !isCurrentMonth ? 'opacity-60' : ''
+                                    !isCurrentMonth ? 'opacity-60' : event.isCompleted ? 'calendar-event-completed' : ''
                                   }`}
                                   style={{ 
                                     backgroundColor: event.color
                                   }}
                                 >
                                   <div 
-                                    className="font-medium truncate leading-tight w-full text-white" 
+                                    className={`font-medium truncate leading-tight w-full text-white ${
+                                      event.isCompleted ? 'line-through' : ''
+                                    }`}
                                     title={event.title}
                                   >
                                     {event.title}
@@ -198,7 +202,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                                   onClick={onEventClick}
                                   sourceView="month"
                                   className={`month-view-event block hover:bg-background-container rounded px-1 py-0.5 min-h-[16px] text-xs ${
-                                    !isCurrentMonth ? 'opacity-60' : ''
+                                    !isCurrentMonth ? 'opacity-60' : event.isCompleted ? 'calendar-event-completed' : ''
                                   }`}
                                   style={{ backgroundColor: 'transparent' }}
                                 >
@@ -206,10 +210,10 @@ export const MonthView: React.FC<MonthViewProps> = ({
                                     !isCurrentMonth ? 'text-text-secondary' : 'text-text-primary'
                                   }`}>
                                     <span 
-                                      className="inline-block w-1.5 h-1.5 rounded-full mr-1 flex-shrink-0" 
+                                      className="inline-block w-1.5 h-1.5 rounded-full mr-1 flex-shrink-0"
                                       style={{ backgroundColor: event.color }}
                                     ></span>
-                                    <span className="truncate">
+                                    <span className={`truncate ${event.isCompleted ? 'line-through' : ''}`}>
                                       {format(event.start, 'h:mm a')} {event.title}
                                     </span>
                                   </div>
