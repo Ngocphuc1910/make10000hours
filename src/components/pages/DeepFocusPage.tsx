@@ -651,17 +651,10 @@ const DeepFocusPage: React.FC = () => {
           return;
         }
 
-        // Handle extension focus state changes
+        // REMOVED: Extension focus state changes (now handled centrally by useGlobalDeepFocusSync)
         if (messageData?.type === 'EXTENSION_FOCUS_STATE_CHANGED' && messageData?.extensionId) {
-          console.log('🔄 Extension focus state change received:', messageData.payload?.isActive);
-          if (messageData.payload && typeof messageData.payload.isActive === 'boolean') {
-            // Update the focus state in the store using the correct function
-            if (messageData.payload.isActive) {
-              enableDeepFocus();
-            } else {
-              disableDeepFocus();
-            }
-          }
+          console.log('🔄 Extension focus state change received but IGNORED (handled centrally):', messageData.payload?.isActive);
+          // This is now handled centrally by useGlobalDeepFocusSync to prevent duplicate session creation
           return;
         }
         

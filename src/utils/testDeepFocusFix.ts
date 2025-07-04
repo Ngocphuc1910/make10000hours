@@ -3,95 +3,159 @@
  * Run this in browser console to test the implemented fixes
  */
 
-export const testDeepFocusFixes = {
-  /**
-   * Test 1: Verify no GlobalKeyboardShortcuts re-render spam
-   */
-  testGlobalShortcutsStability: () => {
-    console.log('🧪 Testing GlobalKeyboardShortcuts stability...');
-    
-    // Count console logs for 5 seconds
-    let logCount = 0;
-    const originalLog = console.log;
-    
-    console.log = (...args) => {
-      if (args[0]?.includes?.('GlobalKeyboardShortcuts: Component mounted')) {
-        logCount++;
-      }
-      originalLog.apply(console, args);
-    };
-    
-    setTimeout(() => {
-      console.log = originalLog;
-      console.log(`✅ Test Result: ${logCount} GlobalKeyboardShortcuts mount logs in 5 seconds (should be 0-1)`);
-      
-      if (logCount <= 1) {
-        console.log('✅ PASS: GlobalKeyboardShortcuts stability test');
-      } else {
-        console.log('❌ FAIL: Too many GlobalKeyboardShortcuts re-renders');
-      }
-    }, 5000);
-  },
+import { deepFocusSessionService } from '../api/deepFocusSessionService';
 
+export const testDeepFocusFixes = {
+  
   /**
-   * Test 2: Test batch blocking functionality  
+   * Test 1: Verify session creation locking prevents duplicates
    */
-  testBatchBlocking: async () => {
-    console.log('🧪 Testing batch blocking functionality...');
+  testSessionCreationLocking: async (userId: string) => {
+    console.log('🧪 Testing session creation locking...');
     
     try {
-      const ExtensionDataService = (await import('../services/extensionDataService')).default;
+      // Simulate multiple concurrent session creation calls
+      const promises = [
+        deepFocusSessionService.startSession(userId),
+        deepFocusSessionService.startSession(userId),
+        deepFocusSessionService.startSession(userId)
+      ];
       
-      if (!ExtensionDataService.isExtensionInstalled()) {
-        console.log('⚠️ Extension not installed - skipping batch blocking test');
-        return;
-      }
+      const results = await Promise.all(promises);
       
-      const testDomains = ['example.com', 'test.com', 'demo.com'];
-      console.log('📦 Testing batch block for:', testDomains);
+      // All promises should return the same session ID
+      const uniqueSessionIds = new Set(results);
       
-      const result = await ExtensionDataService.blockMultipleSites(testDomains);
-      console.log('📦 Batch block result:', result);
-      
-      if (result.success) {
-        console.log('✅ PASS: Batch blocking test');
+      if (uniqueSessionIds.size === 1) {
+        console.log('✅ Session creation locking works - all calls returned same session ID:', results[0]);
+        return { success: true, sessionId: results[0] };
       } else {
-        console.log('❌ FAIL: Batch blocking test');
+        console.error('❌ Session creation locking failed - multiple session IDs created:', results);
+        return { success: false, sessionIds: results };
       }
-      
     } catch (error) {
-      console.log('❌ FAIL: Batch blocking test error:', error);
+      console.error('❌ Session creation locking test failed:', error);
+      return { success: false, error };
     }
   },
 
   /**
-   * Test 3: Monitor for debouncing errors
+   * Test 2: Verify extension message deduplication
    */
-  testDebounceErrors: () => {
-    console.log('🧪 Monitoring for debouncing errors (30 seconds)...');
+  testExtensionMessageDeduplication: () => {
+    console.log('🧪 Testing extension message deduplication...');
     
-    let debounceErrors = 0;
-    const originalError = console.error;
+    let messageCount = 0;
+    const originalHandler = window.dispatchEvent;
     
-    console.error = (...args) => {
-      const errorMessage = args.join(' ');
-      if (errorMessage.includes('Extension call debounced') || 
-          errorMessage.includes('ADD_BLOCKED_SITE too frequent')) {
-        debounceErrors++;
+    // Mock window.dispatchEvent to count extensionFocusHandled events
+    window.dispatchEvent = function(event: Event) {
+      if (event instanceof CustomEvent && event.type === 'extensionFocusHandled') {
+        messageCount++;
+        console.log(`📥 Extension focus handled event #${messageCount}`);
       }
-      originalError.apply(console, args);
+      return originalHandler.call(this, event);
     };
     
-    setTimeout(() => {
-      console.error = originalError;
-      console.log(`✅ Test Result: ${debounceErrors} debouncing errors in 30 seconds (should be 0)`);
+    try {
+      // Simulate rapid duplicate messages from extension
+      const timestamp = Date.now();
+      const messageData = {
+        type: 'EXTENSION_FOCUS_STATE_CHANGED',
+        payload: {
+          isActive: true,
+          isVisible: true,
+          isFocused: true,
+          blockedSites: [],
+          timestamp,
+          messageId: `test-extension_true_${timestamp}`
+        },
+        source: 'test-extension',
+        extensionId: 'test-extension'
+      };
       
-      if (debounceErrors === 0) {
-        console.log('✅ PASS: No debouncing errors detected');
-      } else {
-        console.log('❌ FAIL: Debouncing errors still occurring');
+      // Send the same message multiple times rapidly
+      for (let i = 0; i < 5; i++) {
+        window.postMessage(messageData, '*');
       }
-    }, 30000);
+      
+      // Wait for processing
+      setTimeout(() => {
+        if (messageCount <= 1) {
+          console.log('✅ Extension message deduplication works - only', messageCount, 'message(s) processed');
+        } else {
+          console.error('❌ Extension message deduplication failed - processed', messageCount, 'messages');
+        }
+        
+        // Restore original handler
+        window.dispatchEvent = originalHandler;
+      }, 1000);
+      
+    } catch (error) {
+      console.error('❌ Extension message deduplication test failed:', error);
+      // Restore original handler
+      window.dispatchEvent = originalHandler;
+    }
+  },
+
+  /**
+   * Test 3: Verify single session creation when toggling from extension
+   */
+  testSingleSessionFromExtension: async (userId: string) => {
+    console.log('🧪 Testing single session creation from extension toggle...');
+    
+    try {
+      // Clean up any existing sessions first
+      await deepFocusSessionService.cleanupOrphanedSessions(userId);
+      
+      // Get initial session count
+      const initialSessions = await deepFocusSessionService.getUserSessions(userId);
+      const initialActiveCount = initialSessions.filter(s => s.status === 'active').length;
+      
+      console.log('📊 Initial active sessions:', initialActiveCount);
+      
+      // Simulate extension toggle message
+      const timestamp = Date.now();
+      window.postMessage({
+        type: 'EXTENSION_FOCUS_STATE_CHANGED',
+        payload: {
+          isActive: true,
+          isVisible: true,
+          isFocused: true,
+          blockedSites: ['facebook.com', 'twitter.com'],
+          targetUserId: userId,
+          timestamp,
+          messageId: `test-extension_true_${timestamp}`,
+          source: 'extension-content-script'
+        },
+        source: 'test-extension',
+        extensionId: 'test-extension',
+        messageTimestamp: timestamp,
+        messageSource: 'focus-time-tracker-extension'
+      }, '*');
+      
+      // Wait for session creation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Check final session count
+      const finalSessions = await deepFocusSessionService.getUserSessions(userId);
+      const finalActiveCount = finalSessions.filter(s => s.status === 'active').length;
+      
+      console.log('📊 Final active sessions:', finalActiveCount);
+      
+      if (finalActiveCount === initialActiveCount + 1) {
+        console.log('✅ Single session creation from extension works - exactly 1 new session created');
+        return { success: true, newSessionCount: 1 };
+      } else {
+        const newSessionCount = finalActiveCount - initialActiveCount;
+        console.error('❌ Multiple sessions created from extension toggle:', newSessionCount);
+        return { success: false, newSessionCount };
+      }
+      
+    } catch (error) {
+      console.error('❌ Single session creation test failed:', error);
+      return { success: false, error };
+    }
   },
 
   /**
@@ -121,126 +185,64 @@ export const testDeepFocusFixes = {
             isVisible: false,
             isFocused: false,
             blockedSites: [],
-            targetUserId: null
+            targetUserId: null,
+            timestamp: Date.now(),
+            messageId: `test-extension_false_${Date.now()}`,
+            source: 'extension-content-script'
           },
           source: 'test-extension-id',
-          extensionId: 'test-extension-id'
+          extensionId: 'test-extension-id',
+          messageTimestamp: Date.now(),
+          messageSource: 'focus-time-tracker-extension'
         }, '*');
         
-        // Check state after a brief delay to allow async processing
+        // Check state after a delay
         setTimeout(() => {
-          const newState = useDeepFocusStore.getState();
-          console.log('📊 State after extension disable:', {
-            isDeepFocusActive: newState.isDeepFocusActive,
-            activeSessionId: newState.activeSessionId,
-            hasTimers: !!(newState.timer || newState.secondTimer)
+          const finalState = useDeepFocusStore.getState();
+          
+          console.log('📊 Final state:', {
+            isDeepFocusActive: finalState.isDeepFocusActive,
+            activeSessionId: finalState.activeSessionId
           });
           
-          if (newState.isDeepFocusActive === false) {
-            console.log('✅ SUCCESS: Deep Focus correctly disabled from extension');
+          if (!finalState.isDeepFocusActive) {
+            console.log('✅ Deep Focus disable from extension works correctly');
           } else {
-            console.log('❌ FAILED: Deep Focus still active after extension disable');
-            console.log('🔍 This indicates the syncCompleteFocusState method is not properly setting isDeepFocusActive to false');
+            console.error('❌ Deep Focus did not disable from extension message');
           }
         }, 1000);
       });
     } catch (error) {
-      console.error('❌ Failed to test disable from extension:', error);
+      console.error('❌ Deep Focus disable test failed:', error);
     }
   },
 
   /**
-   * Test 5: Test switch synchronization across pages
+   * Test 5: Run all tests
    */
-  testSwitchSynchronization: () => {
-    console.log('🧪 Testing switch synchronization across pages...');
+  runAllTests: async (userId: string) => {
+    console.log('🔬 Running all Deep Focus duplicate session fixes tests...');
+    console.log('=====================================');
     
-    try {
-      // Dynamic import to avoid bundler issues
-      import('../store/deepFocusStore').then(({ useDeepFocusStore }) => {
-        // Enable Deep Focus to test both directions
-        console.log('📤 Testing enable synchronization...');
-        window.postMessage({
-          type: 'EXTENSION_FOCUS_STATE_CHANGED',
-          payload: {
-            isActive: true,
-            isVisible: true,
-            isFocused: true,
-            blockedSites: ['youtube.com', 'twitter.com'],
-            targetUserId: null
-          },
-          source: 'test-extension-id',
-          extensionId: 'test-extension-id'
-        }, '*');
-        
-        setTimeout(() => {
-          const enabledState = useDeepFocusStore.getState();
-          console.log('📊 State after enable:', { isDeepFocusActive: enabledState.isDeepFocusActive });
-          
-          // Now test disable
-          console.log('📤 Testing disable synchronization...');
-          window.postMessage({
-            type: 'EXTENSION_FOCUS_STATE_CHANGED',
-            payload: {
-              isActive: false,
-              isVisible: false,
-              isFocused: false,
-              blockedSites: [],
-              targetUserId: null
-            },
-            source: 'test-extension-id',
-            extensionId: 'test-extension-id'
-          }, '*');
-          
-          setTimeout(() => {
-            const disabledState = useDeepFocusStore.getState();
-            console.log('📊 State after disable:', { isDeepFocusActive: disabledState.isDeepFocusActive });
-            
-            if (enabledState.isDeepFocusActive === true && disabledState.isDeepFocusActive === false) {
-              console.log('✅ SUCCESS: Switch synchronization working correctly');
-            } else {
-              console.log('❌ FAILED: Switch synchronization has issues');
-              console.log('🔍 Expected: enabled=true, disabled=false');
-              console.log('🔍 Actual: enabled=' + enabledState.isDeepFocusActive + ', disabled=' + disabledState.isDeepFocusActive);
-            }
-          }, 1000);
-        }, 1000);
-      });
-    } catch (error) {
-      console.error('❌ Failed to test switch synchronization:', error);
-    }
-  },
-
-  /**
-   * Run all tests
-   */
-  runAllTests: () => {
-    console.log('🚀 Running all Deep Focus fix tests...');
+    // Test 1: Session creation locking
+    await testDeepFocusFixes.testSessionCreationLocking(userId);
+    console.log('-------------------------------------');
     
-    // Run tests with delays to avoid interference
-    testDeepFocusFixes.testGlobalShortcutsStability();
+    // Test 2: Extension message deduplication
+    testDeepFocusFixes.testExtensionMessageDeduplication();
+    console.log('-------------------------------------');
     
-    setTimeout(() => {
-      testDeepFocusFixes.testDebounceErrors();
-    }, 1000);
+    // Test 3: Single session from extension
+    await testDeepFocusFixes.testSingleSessionFromExtension(userId);
+    console.log('-------------------------------------');
     
-    setTimeout(() => {
-      testDeepFocusFixes.testBatchBlocking();
-    }, 2000);
+    // Test 4: Disable from extension
+    testDeepFocusFixes.testDisableFromExtension();
+    console.log('=====================================');
     
-    setTimeout(() => {
-      testDeepFocusFixes.testDisableFromExtension();
-    }, 3000);
-    
-    setTimeout(() => {
-      testDeepFocusFixes.testSwitchSynchronization();
-    }, 4000);
-    
-    console.log('✅ All tests initiated. Check individual test results above.');
+    console.log('📋 All tests completed. Check console for individual results.');
   }
 };
 
-// Make available in global scope for console testing
-if (typeof window !== 'undefined') {
-  (window as any).testDeepFocusFixes = testDeepFocusFixes;
-} 
+// Export for console testing
+(window as any).testDeepFocusFixes = testDeepFocusFixes; 

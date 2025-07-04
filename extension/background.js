@@ -2017,7 +2017,7 @@ class FocusTimeTracker {
   }
 
   /**
-   * Broadcast focus state changes to all listeners
+   * Broadcast focus state changes to all listeners (single channel to prevent duplicates)
    */
   broadcastFocusStateChange(isActive) {
     console.log(`🔄 Broadcasting focus state change: ${isActive}`);
@@ -2035,7 +2035,8 @@ class FocusTimeTracker {
 
     console.log('📤 Broadcasting full focus state:', focusState);
 
-    // Send to all tabs with content scripts
+    // Use ONLY content script forwarding to prevent duplicate messages
+    // Remove direct web app forwarding to avoid race conditions
     chrome.tabs.query({}, (tabs) => {
       tabs.forEach(tab => {
         if (tab.id && this.isTrackableUrl(tab.url)) {
@@ -2049,8 +2050,8 @@ class FocusTimeTracker {
       });
     });
 
-    // Forward directly to web app for redundancy
-    this.forwardToWebApp('EXTENSION_FOCUS_STATE_CHANGED', focusState);
+    // REMOVED: Direct web app forwarding to prevent duplicate session creation
+    // this.forwardToWebApp('EXTENSION_FOCUS_STATE_CHANGED', focusState);
   }
 
   /**
