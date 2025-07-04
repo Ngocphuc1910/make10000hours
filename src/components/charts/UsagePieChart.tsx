@@ -10,7 +10,14 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
 
-  // Pie chart data processing (debug logging removed to reduce console noise)
+  // Debug data flow for pie chart
+  console.log('🥧 UsagePieChart received data:', {
+    hasData: !!data,
+    dataLength: data?.length || 0,
+    totalTime: data?.reduce((sum, site) => sum + site.timeSpent, 0) || 0,
+    sampleData: data?.slice(0, 3) || [],
+    timestamp: new Date().toISOString()
+  });
 
   // Helper function to format time
   const formatTime = (minutes: number): string => {
@@ -51,9 +58,11 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
             fontSize: 16,
             fill: isDarkMode ? '#a1a1aa' : '#666'
           }
-        }
+        },
+        // Clear any existing series
+        series: []
       };
-      chartInstance.current.setOption(emptyOption);
+      chartInstance.current.setOption(emptyOption, true); // Force clear with true
       return;
     }
 
@@ -89,9 +98,15 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
       });
     }
 
+    console.log('🥧 UsagePieChart: Rendering chart with data:', {
+      chartDataLength: chartData.length,
+      totalValue: chartData.reduce((sum, item) => sum + item.value, 0),
+      hasOthers: chartData.some(item => item.name === 'Others')
+    });
+
     const option = {
       animation: false,
-      graphic: null, // Clear any previous "no data" graphic
+      graphic: [], // Clear any previous graphics (empty array instead of null)
       tooltip: {
         trigger: 'item',
         backgroundColor: isDarkMode ? 'rgba(42, 42, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
@@ -166,7 +181,10 @@ const UsagePieChart: React.FC<UsagePieChartProps> = ({ data }) => {
       ]
     };
 
-    chartInstance.current.setOption(option);
+    // Force clear and set new option to ensure "No data available" message is removed
+    chartInstance.current.setOption(option, true); // true = notMerge, completely replace the option
+    
+    console.log('🥧 UsagePieChart: Chart updated with', chartData.length, 'data points');
 
     // Handle resize
     const handleResize = () => {
