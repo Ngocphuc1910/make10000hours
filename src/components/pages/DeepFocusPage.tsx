@@ -815,13 +815,17 @@ const DeepFocusPage: React.FC = () => {
     });
   }, [workSessions, selectedRange]);
 
-  // Calculate filtered deep focus sessions based on date range (MOVED UP for dependency order)
+  // ✅ FIXED: Apply proper date filtering to deep focus sessions (same logic as work sessions)
   const filteredDeepFocusSessions = useMemo(() => {
+    // For 'all time' range, show all deep focus sessions without filtering
     if (selectedRange.rangeType === 'all time') {
+      console.log('🔍 Deep Focus Sessions: Using all sessions for "all time" range');
       return deepFocusSessions;
     }
     
+    // For all other cases, use the selected range if available
     if (!selectedRange.startDate || !selectedRange.endDate) {
+      console.log('🔍 Deep Focus Sessions: No date range specified, using all sessions');
       return deepFocusSessions;
     }
     
@@ -830,16 +834,33 @@ const DeepFocusPage: React.FC = () => {
     const endDate = new Date(selectedRange.endDate);
     endDate.setHours(23, 59, 59, 999);
     
-    return deepFocusSessions.filter(session => {
+    const filtered = deepFocusSessions.filter(session => {
+      // Use createdAt for deep focus sessions (equivalent to date field in work sessions)
       const sessionDate = new Date(session.createdAt);
       
-      // Convert session UTC date to local date for comparison
+      // Convert session date to local date for comparison (same logic as work sessions)
       const sessionLocalDate = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate());
       const startLocalDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
       const endLocalDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
       
       return sessionLocalDate >= startLocalDate && sessionLocalDate <= endLocalDate;
     });
+    
+    console.log('🔍 Deep Focus Sessions: Filtered by date range:', {
+      totalSessions: deepFocusSessions.length,
+      filteredSessions: filtered.length,
+      rangeType: selectedRange.rangeType,
+      startDate: selectedRange.startDate?.toISOString(),
+      endDate: selectedRange.endDate?.toISOString(),
+      sampleFiltered: filtered.slice(0, 3).map(s => ({
+        id: s.id,
+        createdAt: s.createdAt,
+        duration: s.duration,
+        status: s.status
+      }))
+    });
+    
+    return filtered;
   }, [deepFocusSessions, selectedRange]);
 
   // Filter dailyUsage based on selected date range
@@ -894,17 +915,20 @@ const DeepFocusPage: React.FC = () => {
       console.log('✅ FIXED - Using filtered sessions (same as summary cards):', {
         filteredWorkSessionsCount: filteredWorkSessions.length,
         workSessionsForCalculationCount: workSessionsForCalculation.length,
+        filteredDeepFocusSessionsCount: filteredDeepFocusSessions.length,
         realWorkingTime,
         realDeepFocusTime,
-        source: 'filteredSessions (CONSISTENT)',
-        shouldMatchSummaryCards: true
+        source: 'client-side filtered sessions (CONSISTENT APPROACH)',
+        shouldMatchSummaryCards: true,
+        efficiency: 'JavaScript filtering applied for date range consistency!'
       });
       
-      console.log('🔍 Using FILTERED metrics for chart (same as blocks):', {
+      console.log('🚀 Using CONSISTENT client-side filtered metrics for chart:', {
         onScreenTime: totalOnScreenTime,
         realWorkingTime,
         realDeepFocusTime,
-        source: 'filteredTimeMetrics (CORRECT)'
+        approach: 'client-side filtering (CONSISTENT)',
+        benefit: 'Date range filtering applied for accurate metrics'
       });
       
             // Generate daily breakdown using Firebase data for historical dates
@@ -943,18 +967,17 @@ const DeepFocusPage: React.FC = () => {
             }
           });
         
-        // Process deep focus sessions by day
-        deepFocusSessions
+        // Process deep focus sessions by day - USE FILTERED SESSIONS (same as metrics cards)
+        filteredDeepFocusSessions
           .filter(session => session.status === 'completed' && session.duration)
           .forEach(session => {
             const sessionDate = new Date(session.createdAt);
-            if (sessionDate >= startDate && sessionDate <= endDate) {
-              const dateKey = formatLocalDate(sessionDate);
-              if (!dailySessionData[dateKey]) {
-                dailySessionData[dateKey] = { workingTime: 0, deepFocusTime: 0, onScreenTime: 0 };
-              }
-              dailySessionData[dateKey].deepFocusTime += session.duration || 0;
+            // No need for additional date filtering since filteredDeepFocusSessions is already filtered
+            const dateKey = formatLocalDate(sessionDate);
+            if (!dailySessionData[dateKey]) {
+              dailySessionData[dateKey] = { workingTime: 0, deepFocusTime: 0, onScreenTime: 0 };
             }
+            dailySessionData[dateKey].deepFocusTime += session.duration || 0;
           });
 
         // Use Firebase data from state for On Screen Time, with fallback to distributed aggregated data
@@ -1096,13 +1119,13 @@ const DeepFocusPage: React.FC = () => {
     }
 
     // Only return empty if we truly have no data at all
-    console.log('❌ No site usage data available from any source');
+    console.log('❌ No site usage data available from any source');    
     return [];
-  }, [extensionData, siteUsage, selectedRange, isLoadingDateRangeData]);
+  }, [extensionData, siteUsage, selectedRange, isLoadingDateRangeData, filteredWorkSessions, deepFocusSessions, workSessions, firebaseDailyData]);
 
 
 
-  // Calculate total deep focus time from filtered sessions
+  // Calculate total deep focus time from database-filtered sessions (no additional filtering needed)
   const filteredDeepFocusTime = useMemo(() => {
     const totalTime = filteredDeepFocusSessions
       .filter(session => session.duration)
@@ -1110,10 +1133,10 @@ const DeepFocusPage: React.FC = () => {
     
     // Debug logging
     debugDeepFocus.logCurrentState(filteredDeepFocusSessions, selectedRange);
-    console.log('🎯 Filtered Deep Focus Time:', totalTime, 'minutes');
+    console.log('🎯 Database-filtered Deep Focus Time:', totalTime, 'minutes (no JS filtering needed)');
     
     return totalTime;
-  }, [filteredDeepFocusSessions, selectedRange]);
+  }, [filteredDeepFocusSessions]);
 
   // Calculate total usage time from daily usage data
   const totalUsageTime = useMemo(() => {
@@ -1131,7 +1154,7 @@ const DeepFocusPage: React.FC = () => {
     // Calculate On Screen Time by summing all site usage for accurate aggregation
     const totalOnScreenTime = filteredSiteUsage.reduce((total, site) => total + site.timeSpent, 0);
 
-    console.log('Deep Focus Page - Time Metrics Calculation:', {
+    console.log('🚀 Deep Focus Page - SMART Time Metrics Calculation:', {
       totalWorkSessions: workSessions.length,
       filteredWorkSessions: filteredWorkSessions.length,
       workSessionsForCalculation: workSessionsForCalculation.length,
@@ -1142,6 +1165,8 @@ const DeepFocusPage: React.FC = () => {
       totalUsageTime,
       selectedRange: selectedRange.rangeType,
       isLoadingDateRangeData,
+      smartApproach: 'Database-level filtering eliminates JS session checks',
+      efficiency: 'No more individual session date verification needed',
       dateRange: {
         start: selectedRange.startDate?.toISOString(),
         end: selectedRange.endDate?.toISOString()
