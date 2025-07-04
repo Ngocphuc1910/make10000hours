@@ -3,10 +3,10 @@ import { WorkSession } from '../types/models';
 import { useUserStore } from './userStore';
 import { workSessionService } from '../api/workSessionService';
 
-export type RangeType = 'today' | 'last 7 days' | 'last 30 days' | 'all time' | 'custom';
+export type RangeType = 'today' | 'yesterday' | 'last 7 days' | 'last 30 days' | 'all time' | 'custom';
 
 export type DateRange = {
-  rangeType: 'today' | 'last 7 days' | 'last 30 days' | 'all time' | 'custom';
+  rangeType: RangeType;
   startDate: Date | null;
   endDate: Date | null;
 };
@@ -51,7 +51,12 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
       // Subscribe to work sessions for the user
       const newUnsubscribe = workSessionService.subscribeToWorkSessions(userId, (sessions) => {
         console.log('DashboardStore - Received work sessions:', sessions.length);
-        console.log('DashboardStore - Work sessions:', sessions);
+        console.log('DashboardStore - Sample work sessions:', sessions.slice(0, 3));
+        console.log('DashboardStore - Today\'s sessions:', sessions.filter(s => {
+          const sessionDate = new Date(s.date);
+          const today = new Date();
+          return sessionDate.toDateString() === today.toDateString();
+        }).length);
         set({ workSessions: sessions });
       });
       
