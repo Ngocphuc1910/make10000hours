@@ -67,6 +67,7 @@ export const Header: React.FC = () => {
       const fp = flatpickr(dateRangeInputRef.current, {
         mode: 'range',
         dateFormat: 'M d, Y',
+        maxDate: new Date(), // Prevent future date selection
         defaultDate: [startDate, endDate].filter(Boolean) as Date[],
         onChange: function(selectedDates) {
           if (selectedDates.length === 2) {
@@ -130,6 +131,16 @@ export const Header: React.FC = () => {
         type = 'today';
         setSelectedRange({ startDate: start, endDate: end, rangeType: type });
         break;
+      case 'Yesterday':
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        const yesterdayStart = new Date(yesterday);
+        yesterdayStart.setHours(0, 0, 0, 0);
+        const yesterdayEnd = new Date(yesterday);
+        yesterdayEnd.setHours(23, 59, 59, 999);
+        type = 'yesterday';
+        setSelectedRange({ startDate: yesterdayStart, endDate: yesterdayEnd, rangeType: type });
+        break;
       case 'Last 7 Days':
         const start7 = new Date(today);
         start7.setDate(today.getDate() - 6); // -6 to include today = 7 days
@@ -160,6 +171,15 @@ export const Header: React.FC = () => {
   // Apply the custom date range
   const applyCustomDateRange = () => {
     if (startDate && endDate) {
+      const today = new Date();
+      today.setHours(23, 59, 59, 999); // Set to end of today for comparison
+      
+      // Prevent future date selection
+      if (startDate > today || endDate > today) {
+        console.warn('Cannot select future dates for productivity analysis');
+        return;
+      }
+      
       // Ensure start date is at beginning of day and end date is at end of day
       const adjustedStartDate = new Date(startDate);
       adjustedStartDate.setHours(0, 0, 0, 0);
@@ -186,6 +206,8 @@ export const Header: React.FC = () => {
     switch (selectedRange.rangeType) {
       case 'today':
         return 'Today';
+      case 'yesterday':
+        return 'Yesterday';
       case 'last 7 days':
         return 'Last 7 days';
       case 'last 30 days':
@@ -257,6 +279,12 @@ export const Header: React.FC = () => {
               </button>
               <button 
                 className="w-full px-4 py-2 text-left text-sm text-text-primary hover:bg-background-container" 
+                onClick={() => handleDateRangeSelect('Yesterday')}
+              >
+                Yesterday
+              </button>
+              <button 
+                className="w-full px-4 py-2 text-left text-sm text-text-primary hover:bg-background-container" 
                 onClick={() => handleDateRangeSelect('Last 7 Days')}
               >
                 Last 7 days
@@ -318,6 +346,11 @@ export const Header: React.FC = () => {
               </div>
               <div className="mt-2 text-xs text-text-secondary">
                 {startDate && !endDate ? 'Select end date' : !startDate ? 'Select start date' : ''}
+                {(!startDate || !endDate) && (
+                  <div className="text-text-secondary mt-1">
+                    Note: Future dates cannot be selected for productivity analysis
+                  </div>
+                )}
               </div>
               <div className="mt-4 flex justify-end">
                 <button
