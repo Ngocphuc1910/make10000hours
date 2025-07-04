@@ -19,6 +19,7 @@ import { FaviconService } from '../../utils/faviconUtils';
 import { testOverrideSchema } from '../../utils/testOverrideSchema';
 import { quickOverrideTest } from '../../utils/quickOverrideTest';
 import { formatComparisonResult, shouldShowComparison } from '../../utils/comparisonUtils';
+import { getProgressBarColor, extractDomain } from '../../utils/colorUtils';
 import type { ComparisonMetrics } from '../../types/deepFocus';
 
 import { testUserSync } from '../../utils/testUserSync';
@@ -2464,8 +2465,12 @@ const DeepFocusPage: React.FC = () => {
                     '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de'
                   ];
                   
-                  // Use default color for top 5 sites, gray for others
-                  const progressBarColor = index < 5 ? defaultColors[index] : '#9CA3AF';
+                  // Extract domain from site URL for brand color lookup
+                  const domain = extractDomain(site.url || site.name);
+                  
+                  // Use brand color if available, otherwise use default colors for top 5, gray for others
+                  const fallbackColor = index < 5 ? defaultColors[index] : '#9CA3AF';
+                  const progressBarColor = getProgressBarColor(domain, fallbackColor);
                   
                   // Calculate percentage based on actual time data (same as pie chart)
                   const totalTimeSpent = filteredSiteUsage.reduce((sum, s) => sum + s.timeSpent, 0);
