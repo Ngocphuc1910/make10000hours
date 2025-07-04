@@ -17,13 +17,60 @@ import { DeepFocusSession } from '../types/models';
 
 class DeepFocusSessionService {
   private readonly collectionName = 'deepFocusSessions';
+  
+  // Session creation lock to prevent concurrent creation
+  private sessionCreationLocks = new Map<string, Promise<string>>();
+  private readonly lockTimeout = 10000; // 10 seconds timeout
 
   /**
-   * Start a new deep focus session with duplicate prevention
+   * Start a new deep focus session with duplicate prevention and locking
    */
   async startSession(userId: string): Promise<string> {
+    // Check if there's already a session creation in progress for this user
+    const existingLock = this.sessionCreationLocks.get(userId);
+    if (existingLock) {
+      console.log('🔒 Session creation in progress for user, waiting for existing lock:', userId);
+      try {
+        const sessionId = await existingLock;
+        console.log('✅ Using session from existing lock:', sessionId);
+        return sessionId;
+      } catch (error) {
+        console.warn('⚠️ Existing lock failed, proceeding with new session creation:', error);
+        // Remove failed lock and proceed
+        this.sessionCreationLocks.delete(userId);
+      }
+    }
+
+    // Create a new session creation promise and store it as a lock
+    const sessionCreationPromise = this.createSessionWithLock(userId);
+    
+    // Store the promise as a lock
+    this.sessionCreationLocks.set(userId, sessionCreationPromise);
+    
+    // Set up timeout to clean up lock
+    setTimeout(() => {
+      this.sessionCreationLocks.delete(userId);
+    }, this.lockTimeout);
+
     try {
-      // First, check if there's already an active session for this user
+      const sessionId = await sessionCreationPromise;
+      console.log('✅ Deep Focus session created with lock:', sessionId);
+      return sessionId;
+    } catch (error) {
+      console.error('❌ Error creating Deep Focus session:', error);
+      throw error;
+    } finally {
+      // Clean up lock on completion
+      this.sessionCreationLocks.delete(userId);
+    }
+  }
+
+  /**
+   * Internal method to create session with proper locking
+   */
+  private async createSessionWithLock(userId: string): Promise<string> {
+    try {
+      // Double-check if there's already an active session for this user
       const existingActiveSession = await this.getActiveSession(userId);
       if (existingActiveSession) {
         console.log('🛡️ Session creation prevented - active session already exists:', existingActiveSession.id);
@@ -40,6 +87,7 @@ class DeepFocusSessionService {
         userId,
         startTime: serverTimestamp(),
         status: 'active',
+        duration: 0, // Initialize duration to 0
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
@@ -388,12 +436,18 @@ class DeepFocusSessionService {
     try {
       if (minutes <= 0) return; // guard – nothing to add
       const sessionRef = doc(db, this.collectionName, sessionId);
+      
+      // Use increment() which handles missing fields gracefully
+      // If duration field doesn't exist, it will create it with the increment value
       await updateDoc(sessionRef, {
         duration: increment(minutes),
         updatedAt: serverTimestamp()
       });
+      
+      console.log(`⏱️ Deep Focus session ${sessionId}: +${minutes} minute(s) added`);
     } catch (error) {
       console.error('Error incrementing Deep Focus session duration:', error);
+      // Don't throw - allow the session to continue even if one update fails
     }
   }
 }
