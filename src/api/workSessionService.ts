@@ -207,7 +207,7 @@ export class WorkSessionService {
       for (const session of activeSessions) {
         const sessionAge = new Date(session.updatedAt);
         
-              if (sessionAge < cutoffTime) {
+        if (sessionAge < cutoffTime) {
         if (session.duration > 0) {
           // Meaningful work - complete with existing duration only
           await this.completeSession(
@@ -222,9 +222,9 @@ export class WorkSessionService {
           await this.deleteWorkSession(session.id);
           console.log(`🗑️ Deleted empty orphaned session: ${session.id}`);
         }
-        
-        cleanedCount++;
-      }
+          
+          cleanedCount++;
+        }
       }
 
       return cleanedCount;
