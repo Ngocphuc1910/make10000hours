@@ -1,5 +1,5 @@
 import React from 'react';
-import { useGlobalDeepFocusSync } from '../../hooks/useGlobalDeepFocusSync';
+import { useDeepFocusContext } from '../../contexts/DeepFocusContext';
 import { Tooltip } from './Tooltip';
 
 interface DeepFocusSwitchProps {
@@ -23,7 +23,7 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
   showPageTitle = false,
   pageTitleClassName = ''
 }) => {
-  const { isDeepFocusActive, enableDeepFocus, disableDeepFocus } = useGlobalDeepFocusSync();
+  const { isDeepFocusActive, enableDeepFocus, disableDeepFocus } = useDeepFocusContext();
 
   // Size configurations
   const sizeConfig = {

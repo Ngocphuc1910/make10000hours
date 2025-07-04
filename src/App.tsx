@@ -19,7 +19,6 @@ import { useTaskStore } from './store/taskStore';
 import { useUIStore } from './store/uiStore';
 import { useThemeStore } from './store/themeStore';
 import { useUserSync } from './hooks/useUserSync';
-import { useGlobalDeepFocusSync } from './hooks/useGlobalDeepFocusSync';
 import SettingsPage from './components/pages/SettingsPage';
 import { formatTime } from './utils/timeUtils';
 import { trackPageView, setAnalyticsUserId } from './utils/analytics';
@@ -31,7 +30,7 @@ import { ChatButton } from './components/chat/ChatButton';
 import DataSyncPage from './components/pages/DataSyncPage';
 import { ChatIntegrationService } from './services/chatIntegration';
 import { useDeepFocusStore } from './store/deepFocusStore';
-import { useGlobalShortcuts } from './hooks/useGlobalShortcuts';
+import { DeepFocusProvider, useDeepFocusContext } from './contexts/DeepFocusContext';
 import { testDeepFocusFixes } from './utils/testDeepFocusFix';
 
 // Import test utilities in development mode
@@ -116,7 +115,7 @@ const GlobalKeyboardShortcuts: React.FC = React.memo(() => {
     toggleLeftSidebar 
   } = useUIStore();
   const { setIsAddingTask } = useTaskStore();
-  const { toggleDeepFocus } = useGlobalDeepFocusSync();
+  const { toggleDeepFocus } = useDeepFocusContext();
   const { start, pause, isRunning } = useTimerStore();
   const enableStartPauseBtn = useTimerStore(state => state.enableStartPauseBtn);
 
@@ -290,8 +289,7 @@ const App: React.FC = () => {
   // Global user sync with extension
   useUserSync();
 
-  // Global Deep Focus sync for consistent state across all pages
-  useGlobalDeepFocusSync();
+  // Global Deep Focus sync now handled by DeepFocusProvider context
 
   // Global timer interval - runs regardless of current page
   useEffect(() => {
@@ -432,8 +430,7 @@ const App: React.FC = () => {
     </MainLayout>
   );
 
-  // Add this line near the top of the component
-  useGlobalShortcuts();
+  // Global shortcuts now handled by GlobalKeyboardShortcuts component inside DeepFocusProvider
 
   // CRITICAL: Don't render main app until user authentication is initialized
   // This prevents the brief "logged out" flash during Firebase auth restoration
@@ -447,27 +444,29 @@ const App: React.FC = () => {
   }
 
   return (
-    <Router>
-      <GlobalTabTitleUpdater />
-      <GlobalKeyboardShortcuts key="global-shortcuts" />
-      <AnalyticsWrapper>
-        <Routes>
-          <Route path="/" element={<PomodoroPageWithLayout />} />
-          <Route path="pomodoro" element={<PomodoroPageWithLayout />} />
-          <Route path="projects" element={<ProjectsPageWithLayout />} />
-          <Route path="dashboard/*" element={<DashboardLayout />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
-          <Route path="calendar" element={<CalendarPage />} />
-          <Route path="deep-focus" element={<DeepFocusPage />} />
-          <Route path="data-sync" element={<DataSyncPageWithLayout />} />
-          <Route path="support" element={<SupportPageWithLayout />} />
-        </Routes>
-      </AnalyticsWrapper>
-      <ToastContainer />
-      <ChatButton />
-    </Router>
+    <DeepFocusProvider>
+      <Router>
+        <GlobalTabTitleUpdater />
+        <GlobalKeyboardShortcuts key="global-shortcuts" />
+        <AnalyticsWrapper>
+          <Routes>
+            <Route path="/" element={<PomodoroPageWithLayout />} />
+            <Route path="pomodoro" element={<PomodoroPageWithLayout />} />
+            <Route path="projects" element={<ProjectsPageWithLayout />} />
+            <Route path="dashboard/*" element={<DashboardLayout />}>
+              <Route index element={<DashboardPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+            </Route>
+            <Route path="calendar" element={<CalendarPage />} />
+            <Route path="deep-focus" element={<DeepFocusPage />} />
+            <Route path="data-sync" element={<DataSyncPageWithLayout />} />
+            <Route path="support" element={<SupportPageWithLayout />} />
+          </Routes>
+        </AnalyticsWrapper>
+        <ToastContainer />
+        <ChatButton />
+      </Router>
+    </DeepFocusProvider>
   );
 }
 

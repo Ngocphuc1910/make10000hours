@@ -19,10 +19,23 @@ class DeepFocusSessionService {
   private readonly collectionName = 'deepFocusSessions';
 
   /**
-   * Start a new deep focus session
+   * Start a new deep focus session with duplicate prevention
    */
   async startSession(userId: string): Promise<string> {
     try {
+      // First, check if there's already an active session for this user
+      const existingActiveSession = await this.getActiveSession(userId);
+      if (existingActiveSession) {
+        console.log('🛡️ Session creation prevented - active session already exists:', existingActiveSession.id);
+        return existingActiveSession.id; // Return existing session ID instead of creating duplicate
+      }
+
+      // Clean up any orphaned sessions first
+      const cleanedCount = await this.cleanupOrphanedSessions(userId);
+      if (cleanedCount > 0) {
+        console.log(`🧹 Cleaned up ${cleanedCount} orphaned session(s) before creating new session`);
+      }
+
       const sessionData = {
         userId,
         startTime: serverTimestamp(),
@@ -32,10 +45,10 @@ class DeepFocusSessionService {
       };
 
       const docRef = await addDoc(collection(db, this.collectionName), sessionData);
-      console.log('Deep Focus session started:', docRef.id);
+      console.log('✅ Deep Focus session started:', docRef.id);
       return docRef.id;
     } catch (error) {
-      console.error('Error starting Deep Focus session:', error);
+      console.error('❌ Error starting Deep Focus session:', error);
       throw error;
     }
   }
@@ -164,14 +177,15 @@ class DeepFocusSessionService {
 
   /**
    * Get active session for a user (if any)
+   * Modified to avoid composite index requirements
    */
   async getActiveSession(userId: string): Promise<DeepFocusSession | null> {
     try {
+      // Simple query without orderBy to avoid index requirement
       const q = query(
         collection(db, this.collectionName),
         where('userId', '==', userId),
-        where('status', '==', 'active'),
-        orderBy('createdAt', 'desc')
+        where('status', '==', 'active')
       );
       
       const querySnapshot = await getDocs(q);
@@ -179,19 +193,25 @@ class DeepFocusSessionService {
         return null;
       }
       
-      const doc = querySnapshot.docs[0];
-      const data = doc.data();
+      // Convert to array and sort by createdAt in JavaScript (newest first)
+      const sessions = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          userId: data.userId,
+          startTime: data.startTime?.toDate() || new Date(),
+          endTime: data.endTime?.toDate(),
+          duration: data.duration,
+          status: data.status,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date()
+        };
+      });
       
-      return {
-        id: doc.id,
-        userId: data.userId,
-        startTime: data.startTime?.toDate() || new Date(),
-        endTime: data.endTime?.toDate(),
-        duration: data.duration,
-        status: data.status,
-        createdAt: data.createdAt?.toDate() || new Date(),
-        updatedAt: data.updatedAt?.toDate() || new Date()
-      };
+      // Sort by createdAt (newest first) and return the first one
+      sessions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      
+      return sessions[0] || null;
     } catch (error) {
       console.error('Error fetching active Deep Focus session:', error);
       throw error;
