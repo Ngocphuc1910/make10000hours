@@ -84,48 +84,31 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
           });
         }
         
-        // If we have an active deep focus state but no session ID, create a new session
+        // DISABLED: Context recovery logic that was creating sessions at wrong times
+        // Only clean up orphaned sessions, don't auto-create new ones
         if (currentState.isDeepFocusActive && !currentState.activeSessionId && !currentState.recoveryInProgress) {
-          console.log('🔄 Context: Deep Focus active but no session - forcing recovery...');
+          console.log('🔄 Context: Deep Focus active but no session - cleaning up and resetting state...');
           
           // Clean up any orphaned sessions first
           const cleanedCount = await deepFocusSessionService.cleanupOrphanedSessions(user.uid);
           if (cleanedCount > 0) {
-            console.log(`✅ Context: Cleaned up ${cleanedCount} orphaned session(s) during recovery`);
+            console.log(`✅ Context: Cleaned up ${cleanedCount} orphaned session(s)`);
           }
           
-          // Start a new session immediately
-          const newSessionId = await deepFocusSessionService.startSession(user.uid);
-          const startTime = new Date();
-          
-          // Update store with new session
-          const { timer, secondTimer } = useDeepFocusStore.getState();
-          
-          // Clear any existing timers
-          if (timer) clearInterval(timer);
-          if (secondTimer) clearInterval(secondTimer);
-          
-          const newTimer = setInterval(async () => {
-            const currentDuration = useDeepFocusStore.getState().activeSessionDuration + 1;
-            useDeepFocusStore.setState({ activeSessionDuration: currentDuration });
-            if (newSessionId) {
-              await deepFocusSessionService.incrementSessionDuration(newSessionId, 1);
-              console.log('⏱️ Context: +1 minute added to session', newSessionId);
-            }
-          }, 60000);
-          
-          // Update store with new session state
+          // Reset state to inactive since no active session exists
           useDeepFocusStore.setState({
-            activeSessionId: newSessionId,
-            activeSessionStartTime: startTime,
+            isDeepFocusActive: false,
+            activeSessionId: null,
+            activeSessionStartTime: null,
             activeSessionDuration: 0,
             activeSessionElapsedSeconds: 0,
-            timer: newTimer,
-            hasRecoveredSession: true,
+            timer: null,
+            secondTimer: null,
+            hasRecoveredSession: false,
             recoveryInProgress: false
           });
           
-          console.log('✅ Context: Session recovery completed:', newSessionId);
+          console.log('✅ Context: Reset deep focus state to inactive (no active session)');
         }
         
         hasInitialized = true;
@@ -166,28 +149,11 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
       }
     };
 
-    // Listen for real-time focus state changes from extension
-    const handleExtensionFocusChange = async (event: MessageEvent) => {
-      if (event.data?.type === 'EXTENSION_FOCUS_STATE_CHANGED') {
-        const now = Date.now();
-        if (now - lastMessageTime < MESSAGE_DEBOUNCE) {
-          return; // Skip rapid messages
-        }
-        lastMessageTime = now;
-        
-        const hasExtensionId = !!event.data?.extensionId;
-        const hasPayload = !!event.data?.payload;
-        const isActiveBoolean = typeof event.data.payload?.isActive === 'boolean';
-        
-        // Verify message is from our extension with proper structure
-        if (hasExtensionId && hasPayload && isActiveBoolean) {
-          console.log('🔄 Context: Real-time focus state change from extension:', event.data.payload);
-          const { isActive, blockedSites = [] } = event.data.payload;
-          
-          // Use syncCompleteFocusState for extension-originated changes
-          await syncCompleteFocusState(isActive, blockedSites);
-        }
-      }
+    // Listen for centrally handled extension focus changes
+    const handleExtensionFocusHandled = (event: CustomEvent) => {
+      console.log('🔄 Context: Extension focus state handled centrally:', event.detail);
+      // Extension message has been processed by useGlobalDeepFocusSync
+      // No action needed here, just log for debugging
     };
 
     // Handle page visibility changes - sync when coming back from hidden state
@@ -211,13 +177,13 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
 
     // Add event listeners
     window.addEventListener('deepFocusChanged', handleFocusChange as EventListener);
-    window.addEventListener('message', handleExtensionFocusChange);
+    window.addEventListener('extensionFocusHandled', handleExtensionFocusHandled as EventListener);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Cleanup
     return () => {
       window.removeEventListener('deepFocusChanged', handleFocusChange as EventListener);
-      window.removeEventListener('message', handleExtensionFocusChange);
+      window.removeEventListener('extensionFocusHandled', handleExtensionFocusHandled as EventListener);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [syncFocusStatus, loadFocusStatus, isUserInitialized, hasInitialized, syncCompleteFocusState]);

@@ -619,6 +619,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
       const currentUserId = getCurrentUserId();
       
+      // Add deduplication - only forward if this is a new state change
+      const currentState = message.payload.isActive;
+      const lastForwardedState = activityDetector.lastForwardedState;
+      const lastForwardedTime = activityDetector.lastForwardedTime || 0;
+      const now = Date.now();
+      
+      // Skip if same state was forwarded within the last 1 second
+      if (lastForwardedState === currentState && (now - lastForwardedTime) < 1000) {
+        console.log('🔄 Skipping duplicate focus state forward:', currentState);
+        break;
+      }
+      
+      // Store state to prevent duplicates
+      activityDetector.lastForwardedState = currentState;
+      activityDetector.lastForwardedTime = now;
+      
       // Forward to web app with extension ID as source and user validation
       window.postMessage({
         type: 'EXTENSION_FOCUS_STATE_CHANGED',
@@ -627,10 +643,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           isVisible: message.payload.isActive,
           isFocused: message.payload.isActive,
           blockedSites: message.payload.blockedSites || [],
-          targetUserId: currentUserId // Include current user for validation
+          targetUserId: currentUserId, // Include current user for validation
+          timestamp: now, // Add timestamp for additional deduplication
+          messageId: `${chrome.runtime.id}_${currentState}_${now}`, // Unique message ID
+          source: 'extension-content-script' // Source identification
         },
         source: chrome.runtime.id,
-        extensionId: chrome.runtime.id
+        extensionId: chrome.runtime.id,
+        messageTimestamp: now, // Duplicate timestamp for backward compatibility
+        messageSource: 'focus-time-tracker-extension'
       }, '*');
       
       sendResponse({ success: true });
