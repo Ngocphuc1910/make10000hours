@@ -1104,18 +1104,21 @@ class StorageManager {
         return;
       }
 
-      // Real Chrome storage implementation
-      const storageKey = this.getDeepFocusStorageKey(today);
-      const result = await chrome.storage.local.get([storageKey]);
-      const sessions = result[storageKey] || [];
-      
-      const sessionIndex = sessions.findIndex(s => s.id === sessionId);
-      if (sessionIndex !== -1) {
-        sessions[sessionIndex].status = 'completed';
-        sessions[sessionIndex].endTime = now.getTime();
-        sessions[sessionIndex].updatedAt = now.getTime();
-        await chrome.storage.local.set({ [storageKey]: sessions });
-        console.log('✅ Completed local deep focus session:', sessionId);
+      // Get storage and find session
+      const storage = await this.getDeepFocusStorage();
+      if (storage[today]) {
+        const sessionIndex = storage[today].findIndex(s => s.id === sessionId);
+        if (sessionIndex !== -1) {
+          storage[today][sessionIndex].status = 'completed';
+          storage[today][sessionIndex].endTime = now.getTime();
+          storage[today][sessionIndex].updatedAt = now.getTime();
+          await this.saveDeepFocusStorage(storage);
+          console.log('✅ Completed local deep focus session:', sessionId);
+        } else {
+          console.warn('⚠️ Session not found for completion:', sessionId);
+        }
+      } else {
+        console.warn('⚠️ No sessions found for today during completion');
       }
     } catch (error) {
       console.error('❌ Failed to complete session:', error);
@@ -1234,6 +1237,41 @@ class StorageManager {
       }
     } catch (error) {
       console.error('❌ Failed to clean old deep focus sessions:', error);
+    }
+  }
+
+  /**
+   * Get deep focus storage
+   */
+  async getDeepFocusStorage() {
+    if (this.mockMode) {
+      return this.mockData.deepFocusSessions || {};
+    }
+    
+    try {
+      const result = await chrome.storage.local.get(['deepFocusSession']);
+      return result.deepFocusSession || {};
+    } catch (error) {
+      console.error('❌ Failed to get deep focus storage:', error);
+      return {};
+    }
+  }
+
+  /**
+   * Save deep focus storage
+   */
+  async saveDeepFocusStorage(sessionData) {
+    if (this.mockMode) {
+      this.mockData.deepFocusSessions = sessionData;
+      return;
+    }
+    
+    try {
+      await chrome.storage.local.set({ deepFocusSession: sessionData });
+      console.log('💾 Saved deep focus session data');
+    } catch (error) {
+      console.error('❌ Failed to save deep focus storage:', error);
+      throw error;
     }
   }
 }
