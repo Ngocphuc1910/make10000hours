@@ -14,7 +14,6 @@ class PopupManager {
     this.currentTab = 'site-usage'; // Updated for new 2-tab system
     this.previousStats = null; // Add cache for previous stats
     this.updateTimeout = null; // Add debounce timeout
-    this.metricsUnsubscribe = null; // Add unsubscribe function
     
     this.initialize();
   }
@@ -56,30 +55,9 @@ class PopupManager {
         this.currentState.focusStats.focusMode = focusStateResponse.data.focusMode;
       }
 
-      // Store user info and initialize Firebase metrics if user is logged in
+      // Store user info
       if (userInfoResponse?.success) {
         this.userInfo = userInfoResponse.data;
-        if (this.userInfo?.uid) {
-          // Get initial metrics
-          try {
-            const metrics = await window.firebaseService.getTodayMetrics(this.userInfo.uid);
-            this.updateMetrics(metrics);
-            
-            // Subscribe to real-time updates
-            this.metricsUnsubscribe = window.firebaseService.subscribeTodayMetrics(
-              this.userInfo.uid,
-              (update) => {
-                if (update.type === 'deepFocus') {
-                  document.getElementById('deep-focus-time').textContent = this.formatTime(update.time * 60000);
-                } else if (update.type === 'override') {
-                  document.getElementById('override-time').textContent = this.formatTime(update.time * 60000);
-                }
-              }
-            );
-          } catch (error) {
-            console.error('Error initializing Firebase metrics:', error);
-          }
-        }
       }
 
       // Update UI with initial data
@@ -93,14 +71,13 @@ class PopupManager {
       // Set up tab system
       this.setupTabs();
 
-      // Set up periodic updates with optimized frequency (similar to web app)
-      // Now uses real-time data for both total time AND individual site usage
+      // Set up periodic updates
       this.updateInterval = setInterval(() => {
         // Only refresh if popup is visible and in site-usage tab
         if (document.visibilityState === 'visible' && this.currentTab === 'site-usage') {
           this.refreshState();
         }
-      }, 5000); // Check every 5 seconds for faster updates like web app
+      }, 5000); // Check every 5 seconds
 
       // Set up event listeners
       this.setupEventListeners();
@@ -117,14 +94,6 @@ class PopupManager {
         } else if (message.type === 'USER_INFO_UPDATED') {
           this.userInfo = message.payload;
           this.updateUserInfo();
-        } else if (message.type === 'DEEP_FOCUS_TIME_UPDATED') {
-          // Update deep focus time immediately when received from background
-          const deepFocusTimeEl = document.getElementById('deep-focus-time');
-          if (deepFocusTimeEl) {
-            const focusTimeMs = message.payload.minutes * 60 * 1000;
-            deepFocusTimeEl.textContent = this.formatTime(focusTimeMs);
-            console.log('📊 Updated deep focus time from background:', message.payload.minutes, 'minutes');
-          }
         } else if (message.type === 'OVERRIDE_DATA_UPDATED') {
           // Update override time from localStorage when data changes
           console.log('🔄 Override data updated, refreshing display');
@@ -141,14 +110,6 @@ class PopupManager {
           setTimeout(() => {
             this.refreshState();
           }, 100); // Small delay to ensure popup is fully loaded
-        }
-      });
-
-      // Listen for deep focus time updates
-      chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        if (message.type === 'DEEP_FOCUS_TIME_UPDATED') {
-          console.log('📢 Received deep focus time update:', message.payload.minutes, 'minutes');
-          this.updateDeepFocusTimeDisplay(message.payload.minutes);
         }
       });
     } catch (error) {
@@ -445,12 +406,8 @@ class PopupManager {
     // Deep focus time - fetch from local storage
     this.updateLocalDeepFocusTime();
 
-    // Override time
-    const overrideTimeEl = document.getElementById('override-time');
-    if (overrideTimeEl) {
-      const overrideTime = this.currentState?.focusStats?.overrideTime || 0;
-      overrideTimeEl.textContent = this.formatTime(overrideTime);
-    }
+    // Override time - fetch from localStorage
+    this.updateLocalOverrideTime();
   }
 
   /**
@@ -1154,8 +1111,8 @@ class PopupManager {
           this.currentState = stateResponse.data;
         }
 
-        // Always update local deep focus time (independent of other stats)
-        await this.updateLocalDeepFocusTime();
+        // Always update local override time
+        await this.updateLocalOverrideTime();
       } catch (error) {
         console.error('Error refreshing state:', error);
       }
@@ -1517,9 +1474,6 @@ class PopupManager {
     }
     if (this.sessionTimer) {
       clearInterval(this.sessionTimer);
-    }
-    if (this.metricsUnsubscribe) {
-      this.metricsUnsubscribe();
     }
   }
 
