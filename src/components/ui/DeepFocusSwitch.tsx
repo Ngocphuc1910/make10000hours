@@ -60,7 +60,7 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
     
     try {
       if (e.target.checked) {
-        await enableDeepFocus();
+        await enableDeepFocus('web');
       } else {
         await disableDeepFocus();
       }

@@ -13,7 +13,7 @@ import {
   increment
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { DeepFocusSession } from '../types/models';
+import { DeepFocusSession, Source } from '../types/models';
 
 class DeepFocusSessionService {
   private readonly collectionName = 'deepFocusSessions';
@@ -25,7 +25,7 @@ class DeepFocusSessionService {
   /**
    * Start a new deep focus session with duplicate prevention and locking
    */
-  async startSession(userId: string): Promise<string> {
+  async startSession(userId: string, source: Source = 'extension'): Promise<string> {
     // Check if there's already a session creation in progress for this user
     const existingLock = this.sessionCreationLocks.get(userId);
     if (existingLock) {
@@ -42,7 +42,7 @@ class DeepFocusSessionService {
     }
 
     // Create a new session creation promise and store it as a lock
-    const sessionCreationPromise = this.createSessionWithLock(userId);
+    const sessionCreationPromise = this.createSessionWithLock(userId, source);
     
     // Store the promise as a lock
     this.sessionCreationLocks.set(userId, sessionCreationPromise);
@@ -68,7 +68,7 @@ class DeepFocusSessionService {
   /**
    * Internal method to create session with proper locking
    */
-  private async createSessionWithLock(userId: string): Promise<string> {
+  private async createSessionWithLock(userId: string, source: Source): Promise<string> {
     try {
       // Double-check if there's already an active session for this user
       const existingActiveSession = await this.getActiveSession(userId);
@@ -88,6 +88,7 @@ class DeepFocusSessionService {
         startTime: serverTimestamp(),
         status: 'active',
         duration: 0, // Initialize duration to 0
+        source,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
