@@ -171,6 +171,89 @@ class StorageManager {
       .slice(0, limit);
   }
 
+  /**
+   * Get real-time stats by combining stored data with current session
+   */
+  async getRealTimeStats() {
+    const storedStats = await this.getTodayStats();
+    
+    // Clone stored stats to avoid mutation
+    const realTimeStats = {
+      ...storedStats,
+      sites: { ...storedStats.sites }
+    };
+    
+    return realTimeStats;
+  }
+
+  /**
+   * Set reference to FocusTimeTracker for real-time data access
+   */
+  setFocusTimeTracker(tracker) {
+    this.focusTimeTracker = tracker;
+  }
+
+  /**
+   * Get real-time stats with current session data
+   */
+  async getRealTimeStatsWithSession() {
+    const storedStats = await this.getTodayStats();
+    
+    // Clone stored stats to avoid mutation
+    const realTimeStats = {
+      totalTime: storedStats?.totalTime || 0,
+      sitesVisited: storedStats?.sitesVisited || 0,
+      sites: { ...(storedStats?.sites || {}) }
+    };
+    
+    // Add current session time if actively tracking and we have tracker reference
+    if (this.focusTimeTracker && this.focusTimeTracker.currentSession) {
+      const currentSession = this.focusTimeTracker.currentSession;
+      
+      if (currentSession.isActive && currentSession.domain && currentSession.startTime) {
+        const currentTime = Date.now();
+        const sessionTime = currentTime - currentSession.startTime;
+        
+        // Update current domain stats
+        if (!realTimeStats.sites[currentSession.domain]) {
+          realTimeStats.sites[currentSession.domain] = {
+            timeSpent: 0,
+            visits: 0
+          };
+        }
+        
+        realTimeStats.sites[currentSession.domain].timeSpent += sessionTime;
+        realTimeStats.totalTime += sessionTime;
+      }
+    }
+    
+    return realTimeStats;
+  }
+
+  /**
+   * Get real-time top sites with current session data
+   * This provides the same real-time data as getRealTimeStatsWithSession but formatted for site list
+   */
+  async getRealTimeTopSites(limit = 20) {
+    const realTimeStats = await this.getRealTimeStatsWithSession();
+    
+    if (!realTimeStats || !realTimeStats.sites || Object.keys(realTimeStats.sites).length === 0) {
+      return [];
+    }
+
+    const topSites = Object.entries(realTimeStats.sites)
+      .map(([domain, data]) => ({
+        domain,
+        timeSpent: data.timeSpent || 0,
+        visits: data.visits || 0
+      }))
+      .filter(site => site.timeSpent > 0) // Only include sites with actual time
+      .sort((a, b) => b.timeSpent - a.timeSpent)
+      .slice(0, limit);
+    
+    return topSites;
+  }
+
   async getSettings() {
     const result = await chrome.storage.local.get(['settings']);
     return result.settings || this.getDefaultSettings();
@@ -1067,6 +1150,9 @@ class FocusTimeTracker {
       await this.storageManager.initialize(); // Initialize storage manager
       this.blockingManager = new BlockingManager(); // Initialize blocking manager
       
+      // Set up reference for real-time data access
+      this.storageManager.setFocusTimeTracker(this);
+      
       // Set up event listeners
       this.setupEventListeners();
       
@@ -1233,6 +1319,11 @@ class FocusTimeTracker {
           sendResponse({ success: true, data: stats });
           break;
 
+        case 'GET_REALTIME_STATS':
+          const realTimeStats = await this.storageManager.getRealTimeStatsWithSession();
+          sendResponse({ success: true, data: realTimeStats });
+          break;
+
         case 'GET_TIME_DATA_RANGE':
           try {
             const { startDate, endDate } = message.payload;
@@ -1252,6 +1343,11 @@ class FocusTimeTracker {
         case 'GET_TOP_SITES':
           const topSites = await this.storageManager.getTopSites(message.payload?.limit || 5);
           sendResponse({ success: true, data: topSites });
+          break;
+
+        case 'GET_REALTIME_TOP_SITES':
+          const realTimeTopSites = await this.storageManager.getRealTimeTopSites(message.payload?.limit || 20);
+          sendResponse({ success: true, data: realTimeTopSites });
           break;
 
         case 'EXPORT_DATA':
@@ -1744,11 +1840,11 @@ class FocusTimeTracker {
       const domain = this.currentSession.domain;
 
       // Only save if spent more than 1 second and round down to nearest second
-      if (timeSpent > 1000 && domain) {
-        const roundedTime = Math.floor(timeSpent / 1000) * 1000; // Round to nearest second
-        await this.storageManager.saveTimeEntry(domain, roundedTime, 1);
-        console.log(`Stopped tracking: ${domain}, Time: ${this.storageManager.formatTime(roundedTime)}`);
-      }
+              if (timeSpent > 1000 && domain) {
+          const roundedTime = Math.floor(timeSpent / 1000) * 1000; // Round to nearest second
+          await this.storageManager.saveTimeEntry(domain, roundedTime, 1);
+          console.log(`Stopped tracking: ${domain}, Time: ${this.storageManager.formatTime(roundedTime)}`);
+        }
 
       await this.stateManager.dispatch({
         type: 'STOP_TRACKING'
