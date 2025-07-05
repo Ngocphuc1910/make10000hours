@@ -117,3 +117,5 @@ export interface DeepFocusSession {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export type Source = 'web' | 'extension';
