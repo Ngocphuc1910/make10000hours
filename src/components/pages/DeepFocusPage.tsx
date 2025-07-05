@@ -1641,7 +1641,7 @@ const DeepFocusPage: React.FC = () => {
                       try {
                         if (e.target.checked) {
                           console.log('🟢 Enabling Deep Focus...');
-                          await enableDeepFocus();
+                          await enableDeepFocus('web');
                           console.log('✅ Deep Focus enabled successfully');
                         } else {
                           console.log('🔴 Disabling Deep Focus...');

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DeepFocusData, SiteUsage, BlockedSite, ComparisonMetrics, ComparisonData } from '../types/deepFocus';
-import { DeepFocusSession } from '../types/models';
+import { DeepFocusSession, Source } from '../types/models';
 import ExtensionDataService from '../services/extensionDataService';
 import { deepFocusSessionService } from '../api/deepFocusSessionService';
 import { siteUsageService } from '../api/siteUsageService';
@@ -141,7 +141,7 @@ interface DeepFocusStore extends DeepFocusData {
   loadAllTimeDailyUsage: () => Promise<void>;
   blockSiteInExtension: (domain: string) => Promise<void>;
   unblockSiteInExtension: (domain: string) => Promise<void>;
-  enableDeepFocus: () => Promise<void>;
+  enableDeepFocus: (source?: Source) => Promise<void>;
   disableDeepFocus: () => Promise<void>;
   toggleDeepFocus: () => Promise<void>;
   loadFocusStatus: () => Promise<void>;
@@ -834,7 +834,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         }
       },
 
-      enableDeepFocus: async () => {
+      enableDeepFocus: async (source: Source = 'extension') => {
         const state = get();
         
         // Authentication guard - prevent operation if user not authenticated
@@ -887,7 +887,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
             
             if (user?.uid) {
               console.log('📝 Starting Deep Focus session for user:', user.uid);
-              sessionId = await deepFocusSessionService.startSession(user.uid);
+              sessionId = await deepFocusSessionService.startSession(user.uid, source);
               startTime = new Date();
               console.log('✅ Deep Focus session started:', sessionId);
               
