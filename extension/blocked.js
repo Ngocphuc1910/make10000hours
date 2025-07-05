@@ -111,6 +111,14 @@ class BlockedPage {
     document.getElementById('sessionTimer')?.addEventListener('click', () => {
       this.toggleDebugInfo();
     });
+
+    // Listen for override data updates from background script
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === 'OVERRIDE_DATA_UPDATED') {
+        console.log('🔄 Override data updated, refreshing display');
+        this.loadLocalOverrideTime();
+      }
+    });
   }
 
   toggleDebugInfo() {
@@ -126,10 +134,31 @@ class BlockedPage {
         const stats = response.data;
         document.getElementById('focusTime').textContent = this.formatTime(stats.focusTime || 0);
         document.getElementById('blockedAttempts').textContent = stats.blockedAttempts || 0;
-        document.getElementById('overrideTime').textContent = this.formatTime(stats.overrideTime || 0);
+        
+        // Try to get override time from localStorage first
+        await this.loadLocalOverrideTime();
       }
     } catch (error) {
       console.error('Error loading focus stats:', error);
+    }
+  }
+
+  async loadLocalOverrideTime() {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_LOCAL_OVERRIDE_TIME' });
+      if (response && response.success) {
+        const overrideMinutes = response.data.overrideTime || 0;
+        const overrideMilliseconds = overrideMinutes * 60 * 1000;
+        document.getElementById('overrideTime').textContent = this.formatTime(overrideMilliseconds);
+        
+        console.log('✅ Loaded override time from localStorage:', overrideMinutes + ' minutes');
+      } else {
+        // Fallback to web app data
+        document.getElementById('overrideTime').textContent = this.formatTime(0);
+      }
+    } catch (error) {
+      console.error('Error loading local override time:', error);
+      document.getElementById('overrideTime').textContent = this.formatTime(0);
     }
   }
 
