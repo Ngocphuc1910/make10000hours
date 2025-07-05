@@ -955,7 +955,7 @@ class StorageManager {
       console.log('🏁 Completing deep focus session:', sessionId);
 
       // Get storage and find session
-      const storage = await this.storageManager.getDeepFocusStorage();
+      const storage = await this.getDeepFocusStorage(); // Fixed: removed this.storageManager
       if (storage[today]) {
         const sessionIndex = storage[today].findIndex(s => s.id === sessionId);
         if (sessionIndex !== -1) {
