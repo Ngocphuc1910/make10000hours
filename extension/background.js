@@ -6,6 +6,232 @@
 // Utility Classes - Inline for Service Worker Compatibility
 
 /**
+ * Override Session Manager for Chrome Extension Local Storage
+ * Manages override sessions with date-based organization and consistency with database schema
+ */
+class OverrideSessionManager {
+  constructor() {
+    this.storageKey = 'overrideSessions';
+    this.version = '1.0.0';
+  }
+
+  generateId() {
+    return `override_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  getCurrentDate() {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  validateOverrideData(data) {
+    const errors = [];
+    
+    if (!data.domain || typeof data.domain !== 'string') {
+      errors.push('Missing or invalid domain');
+    }
+    
+    if (!data.duration || typeof data.duration !== 'number' || data.duration <= 0) {
+      errors.push('Missing or invalid duration');
+    }
+    
+    if (data.userId && typeof data.userId !== 'string') {
+      errors.push('Invalid userId');
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+
+  async saveOverrideSession(data) {
+    try {
+      const validation = this.validateOverrideData(data);
+      if (!validation.isValid) {
+        throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
+      }
+
+      const currentDate = this.getCurrentDate();
+      const sessionId = this.generateId();
+      
+      const overrideSession = {
+        id: sessionId,
+        userId: data.userId || 'anonymous',
+        domain: data.domain,
+        url: data.url || null,
+        duration: data.duration,
+        createdAt: Date.now(),
+        reason: data.reason || 'manual_override',
+        metadata: {
+          extensionVersion: this.version,
+          source: 'extension',
+          ...data.metadata
+        }
+      };
+
+      const result = await chrome.storage.local.get([this.storageKey]);
+      const existingData = result[this.storageKey] || {};
+      
+      if (!existingData[currentDate]) {
+        existingData[currentDate] = [];
+      }
+      
+      existingData[currentDate].push(overrideSession);
+      existingData.lastUpdated = Date.now();
+      
+      await chrome.storage.local.set({
+        [this.storageKey]: existingData
+      });
+      
+      console.log('✅ Override session saved to localStorage:', {
+        id: sessionId,
+        domain: data.domain,
+        duration: data.duration + 'min',
+        date: currentDate
+      });
+      
+      return {
+        success: true,
+        id: sessionId,
+        session: overrideSession
+      };
+      
+    } catch (error) {
+      console.error('❌ Error saving override session to localStorage:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async calculateTodayOverrideTime() {
+    try {
+      const currentDate = this.getCurrentDate();
+      const result = await chrome.storage.local.get([this.storageKey]);
+      const data = result[this.storageKey] || {};
+      
+      const todaySessions = data[currentDate] || [];
+      const totalMinutes = todaySessions.reduce((total, session) => {
+        return total + (session.duration || 0);
+      }, 0);
+      
+      return {
+        success: true,
+        minutes: totalMinutes,
+        sessions: todaySessions.length
+      };
+    } catch (error) {
+      console.error('❌ Error calculating today override time:', error);
+      return {
+        success: false,
+        minutes: 0
+      };
+    }
+  }
+
+  async getTodayOverrideSessions() {
+    try {
+      const currentDate = this.getCurrentDate();
+      const result = await chrome.storage.local.get([this.storageKey]);
+      const data = result[this.storageKey] || {};
+      
+      return {
+        success: true,
+        sessions: data[currentDate] || [],
+        date: currentDate
+      };
+    } catch (error) {
+      console.error('❌ Error getting today override sessions:', error);
+      return {
+        success: false,
+        error: error.message,
+        sessions: []
+      };
+    }
+  }
+
+  async cleanupOldSessions(daysToKeep = 30) {
+    try {
+      const result = await chrome.storage.local.get([this.storageKey]);
+      const data = result[this.storageKey] || {};
+      
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+      const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+      
+      let deletedCount = 0;
+      const updatedData = {};
+      
+      // Keep only recent dates
+      Object.keys(data).forEach(dateStr => {
+        if (dateStr === 'lastUpdated' || dateStr >= cutoffDateStr) {
+          updatedData[dateStr] = data[dateStr];
+        } else {
+          deletedCount += Array.isArray(data[dateStr]) ? data[dateStr].length : 0;
+        }
+      });
+      
+      // Update localStorage
+      await chrome.storage.local.set({
+        [this.storageKey]: updatedData
+      });
+      
+      return {
+        success: true,
+        deletedCount
+      };
+    } catch (error) {
+      console.error('❌ Error cleaning up old sessions:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async clearAllSessions() {
+    try {
+      await chrome.storage.local.remove([this.storageKey]);
+      console.log('🗑️ All override sessions cleared from localStorage');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error clearing override sessions:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getDebugInfo() {
+    try {
+      const result = await chrome.storage.local.get([this.storageKey]);
+      const data = result[this.storageKey] || {};
+      
+      const dates = Object.keys(data).filter(key => key !== 'lastUpdated');
+      const totalSessions = dates.reduce((total, date) => {
+        return total + (Array.isArray(data[date]) ? data[date].length : 0);
+      }, 0);
+      
+      return {
+        success: true,
+        debug: {
+          totalDates: dates.length,
+          totalSessions,
+          lastUpdated: data.lastUpdated,
+          dates: dates.sort(),
+          storageKey: this.storageKey
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error getting debug info:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+}
+
+/**
  * Simple Storage Manager for Chrome Extension
  */
 class StorageManager {
@@ -1566,6 +1792,7 @@ class FocusTimeTracker {
     this.stateManager = null;
     this.storageManager = null;
     this.blockingManager = null; // Add blocking manager
+    this.overrideSessionManager = new OverrideSessionManager(); // Add override session manager
     this.currentSession = {
       tabId: null,
       domain: null,
@@ -1616,6 +1843,9 @@ class FocusTimeTracker {
       
       // Start tracking current tab
       await this.startTrackingCurrentTab();
+      
+      // Set up periodic cleanup for override sessions (daily)
+      this.setupPeriodicCleanup();
       
       console.log('✅ Focus Time Tracker initialized successfully');
     } catch (error) {
@@ -1989,7 +2219,7 @@ class FocusTimeTracker {
           break;
 
         case 'RECORD_OVERRIDE_SESSION':
-          // Forward to web app with user ID if available
+          // Forward to web app with user ID if available AND save to localStorage
           try {
             if (!this.currentUserId) {
               console.warn('⚠️ No user ID available for override session');
@@ -2010,8 +2240,35 @@ class FocusTimeTracker {
             console.log('📤 Recording override session:', enhancedPayload);
             console.log('🔍 Current user ID:', this.currentUserId);
             
+            // Save to localStorage using OverrideSessionManager
+            const localSaveResult = await this.overrideSessionManager.saveOverrideSession({
+              domain: enhancedPayload.domain,
+              url: enhancedPayload.url,
+              duration: enhancedPayload.duration,
+              userId: this.currentUserId,
+              reason: enhancedPayload.reason || 'manual_override',
+              metadata: {
+                timestamp: enhancedPayload.timestamp,
+                source: 'extension'
+              }
+            });
+            
+            if (localSaveResult.success) {
+              console.log('✅ Override session saved to localStorage:', localSaveResult.id);
+              // Broadcast local storage update to popup/blocked pages
+              this.broadcastOverrideUpdate();
+            } else {
+              console.error('❌ Failed to save override session to localStorage:', localSaveResult.error);
+            }
+            
+            // Forward to web app for database storage
             this.forwardToWebApp('RECORD_OVERRIDE_SESSION', enhancedPayload);
-            sendResponse({ success: true, payload: enhancedPayload });
+            
+            sendResponse({ 
+              success: true, 
+              payload: enhancedPayload,
+              localStorage: localSaveResult
+            });
           } catch (error) {
             console.error('❌ Error recording override session:', error);
             sendResponse({ success: false, error: error.message });
@@ -2191,6 +2448,80 @@ class FocusTimeTracker {
             }
           } catch (error) {
             console.error('Error disabling focus mode:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'GET_LOCAL_OVERRIDE_TIME':
+          try {
+            const overrideTimeResult = await this.overrideSessionManager.calculateTodayOverrideTime();
+            sendResponse({ 
+              success: true, 
+              data: { 
+                overrideTime: overrideTimeResult.minutes,
+                sessions: overrideTimeResult.sessions || 0
+              }
+            });
+          } catch (error) {
+            console.error('Error getting local override time:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'GET_LOCAL_OVERRIDE_SESSIONS':
+          try {
+            const sessionsResult = await this.overrideSessionManager.getTodayOverrideSessions();
+            sendResponse({ 
+              success: true, 
+              data: { 
+                sessions: sessionsResult.sessions,
+                date: sessionsResult.date
+              }
+            });
+          } catch (error) {
+            console.error('Error getting local override sessions:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'CLEANUP_OLD_OVERRIDE_SESSIONS':
+          try {
+            const daysToKeep = message.payload?.daysToKeep || 30;
+            const result = await this.overrideSessionManager.cleanupOldSessions(daysToKeep);
+            sendResponse({ 
+              success: true, 
+              data: { 
+                deletedCount: result.deletedCount
+              }
+            });
+          } catch (error) {
+            console.error('Error cleaning up old override sessions:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'CLEAR_ALL_OVERRIDE_SESSIONS':
+          try {
+            const result = await this.overrideSessionManager.clearAllSessions();
+            sendResponse({ 
+              success: true, 
+              data: { cleared: result.success }
+            });
+          } catch (error) {
+            console.error('Error clearing all override sessions:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'GET_OVERRIDE_DEBUG_INFO':
+          try {
+            const debugInfo = await this.overrideSessionManager.getDebugInfo();
+            sendResponse({ 
+              success: true, 
+              data: debugInfo.debug
+            });
+          } catch (error) {
+            console.error('Error getting override debug info:', error);
             sendResponse({ success: false, error: error.message });
           }
           break;
@@ -2616,6 +2947,73 @@ class FocusTimeTracker {
 
     // REMOVED: Direct web app forwarding to prevent duplicate session creation
     // this.forwardToWebApp('EXTENSION_FOCUS_STATE_CHANGED', focusState);
+  }
+
+  /**
+   * Set up periodic cleanup for override sessions
+   */
+  setupPeriodicCleanup() {
+    try {
+      // Run cleanup immediately
+      this.cleanupOldOverrideSessions();
+      
+      // Set up daily cleanup (24 hours)
+      this.cleanupInterval = setInterval(() => {
+        this.cleanupOldOverrideSessions();
+      }, 24 * 60 * 60 * 1000); // 24 hours in milliseconds
+      
+      console.log('✅ Periodic cleanup scheduled for override sessions');
+    } catch (error) {
+      console.error('❌ Error setting up periodic cleanup:', error);
+    }
+  }
+
+  /**
+   * Clean up old override sessions (keep last 30 days)
+   */
+  async cleanupOldOverrideSessions() {
+    try {
+      const result = await this.overrideSessionManager.cleanupOldSessions(30);
+      if (result.success && result.deletedCount > 0) {
+        console.log(`🧹 Cleaned up ${result.deletedCount} old override sessions`);
+      }
+    } catch (error) {
+      console.error('❌ Error cleaning up old override sessions:', error);
+    }
+  }
+
+  /**
+   * Broadcast override update to popup and blocked pages
+   */
+  broadcastOverrideUpdate() {
+    try {
+      console.log('📢 Broadcasting override update to extension components');
+      
+      // Send message to popup if open
+      chrome.runtime.sendMessage({
+        type: 'OVERRIDE_DATA_UPDATED',
+        payload: { timestamp: Date.now() }
+      }).catch(() => {
+        // Popup might not be open, ignore error
+      });
+      
+      // Send message to all blocked pages
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          if (tab.url && tab.url.includes('blocked.html')) {
+            chrome.tabs.sendMessage(tab.id, {
+              type: 'OVERRIDE_DATA_UPDATED',
+              payload: { timestamp: Date.now() }
+            }).catch(() => {
+              // Tab might be closed, ignore error
+            });
+          }
+        });
+      });
+      
+    } catch (error) {
+      console.error('❌ Error broadcasting override update:', error);
+    }
   }
 
   /**
