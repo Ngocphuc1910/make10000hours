@@ -84,6 +84,10 @@ class PopupManager {
 
       // Update UI with initial data
       this.updateUI();
+      
+      // Load initial override time from localStorage
+      await this.updateLocalOverrideTime();
+      
       this.hideLoading();
 
       // Set up tab system
@@ -121,6 +125,10 @@ class PopupManager {
             deepFocusTimeEl.textContent = this.formatTime(focusTimeMs);
             console.log('📊 Updated deep focus time from background:', message.payload.minutes, 'minutes');
           }
+        } else if (message.type === 'OVERRIDE_DATA_UPDATED') {
+          // Update override time from localStorage when data changes
+          console.log('🔄 Override data updated, refreshing display');
+          this.updateLocalOverrideTime();
         }
         sendResponse({ success: true });
         return true;
@@ -482,6 +490,26 @@ class PopupManager {
       const timeText = hours > 0 ? `${hours}h ${remainingMinutes}m` : `${remainingMinutes}m`;
       deepFocusTimeElement.textContent = timeText;
       console.log('🔄 Updated deep focus time display:', timeText);
+    }
+  }
+
+  /**
+   * Update override time display from localStorage
+   */
+  async updateLocalOverrideTime() {
+    try {
+      const response = await this.sendMessage('GET_LOCAL_OVERRIDE_TIME');
+      if (response?.success) {
+        const overrideMinutes = response.data.overrideTime || 0;
+        const overrideTimeEl = document.getElementById('override-time');
+        if (overrideTimeEl) {
+          const overrideTimeMs = overrideMinutes * 60 * 1000;
+          overrideTimeEl.textContent = this.formatTime(overrideTimeMs);
+          console.log('✅ Updated override time from localStorage:', overrideMinutes, 'minutes');
+        }
+      }
+    } catch (error) {
+      console.error('Error updating local override time:', error);
     }
   }
 
