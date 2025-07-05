@@ -32,10 +32,10 @@ class PopupManager {
         this.analyticsUI = new window.AnalyticsUI();
       }
 
-      // Get initial state and stats - always get fresh focus state
+      // Get initial state and stats - always get fresh real-time focus state and data
       const [stateResponse, statsResponse, focusStateResponse, userInfoResponse] = await Promise.all([
         this.sendMessage('GET_CURRENT_STATE'),
-        this.sendMessage('GET_TODAY_STATS'),
+        this.sendMessage('GET_REALTIME_STATS'), // Real-time stats for total time
         this.sendMessage('GET_FOCUS_STATE'),
         this.sendMessage('GET_USER_INFO')
       ]);
@@ -89,13 +89,14 @@ class PopupManager {
       // Set up tab system
       this.setupTabs();
 
-      // Set up periodic updates with optimized frequency
+      // Set up periodic updates with optimized frequency (similar to web app)
+      // Now uses real-time data for both total time AND individual site usage
       this.updateInterval = setInterval(() => {
         // Only refresh if popup is visible and in site-usage tab
         if (document.visibilityState === 'visible' && this.currentTab === 'site-usage') {
           this.refreshState();
         }
-      }, 15000); // Check every 15 seconds
+      }, 5000); // Check every 5 seconds for faster updates like web app
 
       // Set up event listeners
       this.setupEventListeners();
@@ -115,6 +116,16 @@ class PopupManager {
         }
         sendResponse({ success: true });
         return true;
+      });
+
+      // Add visibility change handler for immediate updates when popup becomes visible
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && this.currentTab === 'site-usage') {
+          // Immediately refresh when popup becomes visible
+          setTimeout(() => {
+            this.refreshState();
+          }, 100); // Small delay to ensure popup is fully loaded
+        }
       });
     } catch (error) {
       console.error('Error initializing popup:', error);
@@ -286,7 +297,7 @@ class PopupManager {
           if (document.visibilityState === 'visible') {
             this.refreshState();
           }
-        }, 15000);
+        }, 5000); // Match the faster update frequency
       }
     }
   }
@@ -480,21 +491,21 @@ class PopupManager {
   }
 
   /**
-   * Update top sites list with optimized rendering
+   * Update top sites list with optimized rendering using real-time data
    */
   async updateTopSites() {
     const sitesListEl = document.getElementById('top-sites-list');
     if (!sitesListEl) return;
 
     try {
-      const response = await this.sendMessage('GET_TOP_SITES', { limit: 20 });
+      const response = await this.sendMessage('GET_REALTIME_TOP_SITES', { limit: 20 });
       
-      if (response.success && response.data.length > 0) {
+      if (response.success && response.data && response.data.length > 0) {
         const currentSites = response.data;
         
         // Check if we need to do a full refresh
         const needsFullRefresh = !this.previousStats || 
-                                 !sitesListEl.children.length ||
+                                 this.previousStats.length !== currentSites.length ||
                                  sitesListEl.querySelector('.loading-state');
         
         if (needsFullRefresh) {
@@ -535,7 +546,10 @@ class PopupManager {
             }
           }
         }
-      } else if (!response.success || response.data.length === 0) {
+        
+        // Store current sites for next comparison
+        this.previousStats = currentSites;
+      } else {
         sitesListEl.innerHTML = `
           <div class="loading-state">
             <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
@@ -544,13 +558,12 @@ class PopupManager {
         `;
       }
       
-      // Update previous stats
-      this.previousStats = this.todayStats;
     } catch (error) {
       console.error('Error updating top sites:', error);
       sitesListEl.innerHTML = `
         <div class="loading-state">
-          <div style="color: var(--accent-red);">Failed to load sites</div>
+          <div style="font-size: 2rem; margin-bottom: 0.5rem;">⚠️</div>
+          <div style="color: var(--text-muted); font-size: 0.875rem;">Error loading sites</div>
         </div>
       `;
     }
@@ -1044,7 +1057,7 @@ class PopupManager {
       try {
         const [stateResponse, statsResponse] = await Promise.all([
           this.sendMessage('GET_CURRENT_STATE'),
-          this.sendMessage('GET_TODAY_STATS')
+          this.sendMessage('GET_REALTIME_STATS')
         ]);
 
         if (statsResponse?.success) {
@@ -1053,7 +1066,7 @@ class PopupManager {
           // Only update if stats have changed
           if (this.haveStatsChanged(newStats, this.todayStats)) {
             this.todayStats = newStats;
-            this.updateUI();
+            this.updateUI(); // This will call updateTopSites() which now uses real-time data
           }
         }
 
