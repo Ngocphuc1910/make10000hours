@@ -23,6 +23,8 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
   const isLoading = useTimerStore(state => state.isLoading);
   const isSyncing = useTimerStore(state => state.isSyncing);
   const syncError = useTimerStore(state => state.syncError);
+  const isTaskLoading = useTimerStore(state => state.isTaskLoading);
+  const taskLoadError = useTimerStore(state => state.taskLoadError);
   
   // Get action functions (these don't change, so we can destructure them)
   const { start, pause, reset, skip, setMode } = useTimerStore();
@@ -53,6 +55,24 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
   
   // Render sync status indicator - only show critical errors
   const renderSyncStatus = () => {
+    if (isTaskLoading) {
+      return (
+        <div className="flex items-center text-sm text-text-secondary mb-2">
+          <Icon name="loader-4-line" className="mr-1 animate-spin" size={16} />
+          Recovering task state...
+        </div>
+      );
+    }
+    
+    if (taskLoadError) {
+      return (
+        <div className="flex items-center text-sm text-red-500 mb-2">
+          <Icon name="error-warning-line" className="mr-1" size={16} />
+          {taskLoadError}
+        </div>
+      );
+    }
+    
     // Only show persistent connection errors that prevent functionality
     if (syncError && !isLoading && !isSyncing) {
       return (
@@ -74,7 +94,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
             className={`px-4 sm:px-6 py-2 rounded-full font-medium transition-all !rounded-button whitespace-nowrap text-sm sm:text-base
             ${mode === 'pomodoro' ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'}`}
             onClick={() => setMode('pomodoro')}
-            disabled={isLoading}
+            disabled={isLoading || isTaskLoading}
           >
             Pomodoro
           </button>
@@ -82,7 +102,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
             className={`px-4 sm:px-6 py-2 rounded-full font-medium transition-all !rounded-button whitespace-nowrap text-sm sm:text-base
             ${mode === 'shortBreak' ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'}`}
             onClick={() => setMode('shortBreak')}
-            disabled={isLoading}
+            disabled={isLoading || isTaskLoading}
           >
             Short Break
           </button>
@@ -90,7 +110,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
             className={`px-4 sm:px-6 py-2 rounded-full font-medium transition-all !rounded-button whitespace-nowrap text-sm sm:text-base
             ${mode === 'longBreak' ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'}`}
             onClick={() => setMode('longBreak')}
-            disabled={isLoading}
+            disabled={isLoading || isTaskLoading}
           >
             Long Break
           </button>
@@ -111,9 +131,9 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
       
       <div className="flex items-center space-x-4 mb-8 flex-wrap justify-center">
         <button 
-          className={`px-5 sm:px-6 py-3 rounded-full font-medium bg-primary text-white hover:bg-opacity-90 !rounded-button whitespace-nowrap m-1 ${(!enableStartPauseBtn || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`px-5 sm:px-6 py-3 rounded-full font-medium bg-primary text-white hover:bg-opacity-90 !rounded-button whitespace-nowrap m-1 ${(!enableStartPauseBtn || isLoading || isTaskLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
           onClick={handleStartPause}
-          disabled={isLoading || !enableStartPauseBtn}
+          disabled={isLoading || isTaskLoading || !enableStartPauseBtn}
         >
           <div className="flex items-center">
             <div className="w-5 h-5 flex items-center justify-center">
@@ -127,7 +147,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
         <button 
           className="p-3 rounded-full border border-border text-text-primary hover:bg-background-secondary !rounded-button whitespace-nowrap m-1 disabled:opacity-50"
           onClick={handleReset}
-          disabled={isLoading}
+          disabled={isLoading || isTaskLoading}
         >
           <div className="w-5 h-5 flex items-center justify-center">
             <Icon name="restart-line" size={20} />
@@ -136,7 +156,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
         <button 
           className="p-3 rounded-full border border-border text-text-primary hover:bg-background-secondary !rounded-button whitespace-nowrap m-1 disabled:opacity-50"
           onClick={handleSkip}
-          disabled={isLoading}
+          disabled={isLoading || isTaskLoading}
         >
           <div className="w-5 h-5 flex items-center justify-center">
             <Icon name="skip-forward-line" size={20} />
@@ -146,9 +166,16 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
       
       <div className="w-full max-w-md bg-background-container rounded-lg p-4">
         <p className="text-text-primary mb-2 break-words text-left">
-          {currentTask 
-            ? currentTask.title 
-            : "Select a task to start working"}
+          {isTaskLoading ? (
+            <span className="flex items-center">
+              <Icon name="loader-4-line" className="mr-2 animate-spin" size={16} />
+              Recovering task...
+            </span>
+          ) : currentTask ? (
+            currentTask.title
+          ) : (
+            "Select a task to start working"
+          )}
         </p>
         <div className="flex items-center justify-between text-sm text-text-secondary flex-wrap gap-2 text-left">
           <span className="break-words text-left">
