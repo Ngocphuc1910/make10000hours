@@ -5,10 +5,9 @@ const firebaseConfig = {
 
 class FirebaseService {
   constructor() {
-    // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
-    this.db = firebase.firestore();
-    this.auth = firebase.auth();
+    this.db = null;
+    this.auth = null;
+    this.initialized = false;
   }
 
   async getTodayMetrics(userId) {
@@ -31,21 +30,8 @@ class FirebaseService {
         return total + (doc.data().duration || 0);
       }, 0);
 
-      // Get override sessions
-      const overrideQuery = await this.db.collection('overrideSessions')
-        .where('userId', '==', userId)
-        .where('createdAt', '>=', today)
-        .where('createdAt', '<', tomorrow)
-        .get();
-
-      // Calculate total override time
-      const overrideTime = overrideQuery.docs.reduce((total, doc) => {
-        return total + (doc.data().duration || 0);
-      }, 0);
-
       return {
         deepFocusTime,
-        overrideTime,
         lastUpdated: new Date()
       };
     } catch (error) {
@@ -74,22 +60,9 @@ class FirebaseService {
         callback({ type: 'deepFocus', time: deepFocusTime });
       });
 
-    // Subscribe to override sessions
-    const overrideUnsubscribe = this.db.collection('overrideSessions')
-      .where('userId', '==', userId)
-      .where('createdAt', '>=', today)
-      .where('createdAt', '<', tomorrow)
-      .onSnapshot(snapshot => {
-        const overrideTime = snapshot.docs.reduce((total, doc) => {
-          return total + (doc.data().duration || 0);
-        }, 0);
-        callback({ type: 'override', time: overrideTime });
-      });
-
     // Return unsubscribe function
     return () => {
       deepFocusUnsubscribe();
-      overrideUnsubscribe();
     };
   }
 }
