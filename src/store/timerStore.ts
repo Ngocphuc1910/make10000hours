@@ -61,9 +61,30 @@ interface TimerState {
   cleanupPersistence: () => void;
   resetTimerState: () => void;
   setEnableStartPauseBtn: (enable: boolean) => void;
+
+  // Add new fields for task persistence
+  taskLoadRetryCount: number;
+  isTaskLoading: boolean;
+  taskLoadError: string | null;
 }
 
 export const useTimerStore = create<TimerState>((set, get) => {
+  // Helper function to find task by ID with retry
+  const findTaskWithRetry = async (taskId: string, maxRetries = 3): Promise<Task | null> => {
+    const taskStore = useTaskStore.getState();
+    let retryCount = 0;
+    
+    while (retryCount < maxRetries) {
+      const task = taskStore.tasks.find(t => t.id === taskId);
+      if (task) return task;
+      
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+      retryCount++;
+    }
+    
+    return null;
+  };
 
   return {
     // Initial state
@@ -85,6 +106,11 @@ export const useTimerStore = create<TimerState>((set, get) => {
     lastSyncTime: null,
     isActiveDevice: true,
     syncError: null,
+    
+    // Add new fields for task persistence
+    taskLoadRetryCount: 0,
+    isTaskLoading: false,
+    taskLoadError: null,
     
     // Actions
     start: async () => {
@@ -479,28 +505,38 @@ export const useTimerStore = create<TimerState>((set, get) => {
       try {
         set({ isLoading: true, syncError: null });
         
-        // 🔥 COST OPTIMIZATION: Load from localStorage first for instant loading
-        get().loadFromLocalStorage();
+        // Load from localStorage immediately
+        await get().loadFromLocalStorage();
         
-        // Cleanup orphaned sessions
-        await get().cleanupOrphanedSessions();
+        // Initialize task store in background
+        const taskStore = useTaskStore.getState();
+        if (taskStore.tasks.length === 0) {
+          taskStore.initializeStore().catch(error => {
+            console.warn('Background task store initialization failed:', error);
+          });
+        }
         
-        // 🔥 COST OPTIMIZATION: Only sync from remote every 5 minutes or on app start
+        // Cleanup orphaned sessions in background
+        get().cleanupOrphanedSessions().catch(error => {
+          console.warn('Background cleanup failed:', error);
+        });
+        
+        // Only sync from remote every 5 minutes or on app start
         const lastRemoteSync = localStorage.getItem('lastRemoteSync');
         const shouldSyncFromRemote = !lastRemoteSync || 
           (Date.now() - parseInt(lastRemoteSync)) > 5 * 60 * 1000; // 5 minutes
         
         if (shouldSyncFromRemote) {
-          console.log('Syncing from remote (periodic sync)...');
-          const remoteState = await timerService.loadTimerState(userId);
-          
-          if (remoteState) {
-            await get().syncFromRemoteState(remoteState);
-          }
-          
-          localStorage.setItem('lastRemoteSync', Date.now().toString());
-        } else {
-          console.log('Using local state (remote sync not needed)');
+          // Sync in background
+          timerService.loadTimerState(userId).then(remoteState => {
+            if (remoteState) {
+              get().syncFromRemoteState(remoteState);
+            }
+            localStorage.setItem('lastRemoteSync', Date.now().toString());
+          }).catch(error => {
+            console.warn('Background remote sync failed:', error);
+            set({ syncError: 'Failed to sync timer state' });
+          });
         }
         
         set({ isLoading: false });
@@ -567,10 +603,18 @@ export const useTimerStore = create<TimerState>((set, get) => {
         mode: state.mode,
         sessionsCompleted: state.sessionsCompleted,
         isRunning: state.isRunning,
-        currentTaskId: state.currentTask ? state.currentTask.id : null,
+        currentTaskId: state.currentTask?.id || null,
         lastSaveTime: new Date().toISOString(),
         activeSession: state.activeSession,
         sessionStartTimerPosition: state.sessionStartTimerPosition,
+        // Add task details for better recovery
+        currentTaskDetails: state.currentTask ? {
+          id: state.currentTask.id,
+          title: state.currentTask.title,
+          projectId: state.currentTask.projectId,
+          timeSpent: state.currentTask.timeSpent,
+          timeEstimated: state.currentTask.timeEstimated,
+        } : null,
       };
       
       try {
@@ -580,22 +624,61 @@ export const useTimerStore = create<TimerState>((set, get) => {
       }
     },
     
-    loadFromLocalStorage: () => {
+    loadFromLocalStorage: async () => {
       const state = get();
       const timerData = localStorage.getItem('timerState');
       
       if (timerData) {
-        const parsedData = JSON.parse(timerData);
-        set({
-          currentTime: parsedData.currentTime,
-          totalTime: parsedData.totalTime,
-          mode: parsedData.mode,
-          sessionsCompleted: parsedData.sessionsCompleted,
-          isRunning: parsedData.isRunning,
-          currentTask: parsedData.currentTaskId ? useTaskStore.getState().tasks.find(task => task.id === parsedData.currentTaskId) || null : null,
-          activeSession: parsedData.activeSession,
-          sessionStartTimerPosition: parsedData.sessionStartTimerPosition,
-        });
+        try {
+          set({ isTaskLoading: true, taskLoadError: null });
+          const parsedData = JSON.parse(timerData);
+          
+          // First set the basic timer state
+          set({
+            currentTime: parsedData.currentTime,
+            totalTime: parsedData.totalTime,
+            mode: parsedData.mode,
+            sessionsCompleted: parsedData.sessionsCompleted,
+            isRunning: parsedData.isRunning,
+            activeSession: parsedData.activeSession,
+            sessionStartTimerPosition: parsedData.sessionStartTimerPosition,
+          });
+          
+          // Immediately set task from cached details for instant loading
+          if (parsedData.currentTaskDetails) {
+            set({ 
+              currentTask: {
+                ...parsedData.currentTaskDetails,
+                completed: false,
+                status: 'pomodoro',
+                userId: useUserStore.getState().user?.uid || '',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                order: 0,
+              } as Task,
+              isTaskLoading: false
+            });
+            
+            // Then verify task in background
+            if (parsedData.currentTaskId) {
+              findTaskWithRetry(parsedData.currentTaskId, 1).then(task => {
+                if (task) {
+                  set({ currentTask: task });
+                }
+              }).catch(error => {
+                console.warn('Background task verification failed:', error);
+              });
+            }
+          } else {
+            set({ isTaskLoading: false });
+          }
+        } catch (error) {
+          console.error('Failed to parse timer state from localStorage:', error);
+          set({ 
+            isTaskLoading: false,
+            taskLoadError: 'Failed to load saved timer state' 
+          });
+        }
       }
     },
     
