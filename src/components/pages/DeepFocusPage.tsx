@@ -153,8 +153,7 @@ const DeepFocusPage: React.FC = () => {
   // State for Firebase-loaded daily data
   const [firebaseDailyData, setFirebaseDailyData] = useState<any[]>([]);
 
-  // Add state to track processed messages
-  const [processedMessages, setProcessedMessages] = useState<Set<string>>(new Set());
+  // Processed messages now tracked globally in DeepFocusContext
   
   // Add state to track extension status
   const [extensionStatus, setExtensionStatus] = useState<'unknown' | 'online' | 'offline'>('unknown');
@@ -635,111 +634,38 @@ const DeepFocusPage: React.FC = () => {
     };
   }, [selectedRange, loadHybridTimeRangeData, user?.uid, workSessions, deepFocusSessions, siteUsage, dailyUsage, timeMetrics, pageLoadTrigger]);
 
-  // Set up extension message listener for override recording
+  // Listen for override session recordings from global context and update UI
   useEffect(() => {
+    const handleOverrideSessionRecorded = async (event: CustomEvent) => {
+      try {
+        console.log('📱 PAGE: Override session recorded globally:', event.detail);
+        
+        // Reload override sessions to update UI immediately
+        const startDate = selectedRange.startDate;
+        const endDate = selectedRange.endDate;
+        
+        console.log('🔄 PAGE: Reloading override sessions with date range:', { startDate, endDate });
+        if (user?.uid) {
+          await loadOverrideSessions(user.uid, startDate || undefined, endDate || undefined);
+          console.log('🔄 PAGE: Reloaded override sessions after global recording');
+        }
+      } catch (error) {
+        console.error('❌ PAGE: Failed to reload override sessions after global recording:', error);
+      }
+    };
+
     const handleExtensionMessage = async (event: any) => {
       try {
         // Handle both Chrome extension messages and window messages
         const messageData = event.data || event;
         
-        // Process incoming extension messages (debug logging removed to reduce console noise)
-        
-        // Handle extension status messages
+        // Handle extension status messages only (override recording now handled globally)
         if (messageData?.type === 'EXTENSION_STATUS' && messageData?.source?.includes('extension')) {
           console.log('🔍 DEBUG: Extension status received:', messageData.payload);
           setExtensionStatus(messageData.payload?.status || 'unknown');
           return;
         }
 
-        // REMOVED: Extension focus state changes (now handled centrally by useGlobalDeepFocusSync)
-        if (messageData?.type === 'EXTENSION_FOCUS_STATE_CHANGED' && messageData?.extensionId) {
-          console.log('🔄 Extension focus state change received but IGNORED (handled centrally):', messageData.payload?.isActive);
-          // This is now handled centrally by useGlobalDeepFocusSync to prevent duplicate session creation
-          return;
-        }
-        
-        if (messageData?.type === 'RECORD_OVERRIDE_SESSION' && 
-            (messageData?.source?.includes('make10000hours') || 
-             messageData?.source?.includes('extension'))) {
-          console.log('🔍 DEBUG: RECORD_OVERRIDE_SESSION received in DeepFocusPage:', messageData);
-          console.log('🔍 DEBUG: Current domain:', window.location.hostname);
-          console.log('🔍 DEBUG: User state:', { user: user?.uid, isLoggedIn: !!user });
-          
-          const { domain, duration, userId: incomingUserId, timestamp, extensionTimestamp } = messageData.payload || {};
-          
-          // Create unique message ID to prevent duplicate processing
-          const messageId = `${domain}_${duration}_${extensionTimestamp || timestamp || Date.now()}`;
-          
-          if (processedMessages.has(messageId)) {
-            console.log('🔄 Skipping duplicate override session message:', messageId);
-            return;
-          }
-          
-          // Mark message as processed
-          setProcessedMessages(prev => new Set(prev).add(messageId));
-          
-          // Clean up old processed messages (keep only last 100)
-          setProcessedMessages(prev => {
-            const newSet = new Set(prev);
-            if (newSet.size > 100) {
-              const array = Array.from(newSet);
-              return new Set(array.slice(-50)); // Keep only last 50
-            }
-            return newSet;
-          });
-          
-          // Use incoming userId or fallback to current user
-          const effectiveUserId = incomingUserId || user?.uid;
-          
-          console.log('🔍 DEBUG: Override session data validation:', {
-            domain,
-            duration,
-            incomingUserId,
-            currentUserUid: user?.uid,
-            effectiveUserId,
-            timestamp,
-            hasUser: !!user
-          });
-
-          if (!effectiveUserId) {
-            console.error('❌ DEBUG: No user ID available for override session');
-            return;
-          }
-
-          if (!domain || !duration) {
-            console.error('❌ DEBUG: Missing required override session data:', { domain, duration });
-            return;
-          }
-
-          try {
-            console.log('📝 Recording override session from extension:', domain, duration, 'for user:', effectiveUserId);
-            
-            await recordOverrideSession(domain, duration);
-            console.log('✅ Override session recorded successfully');
-            
-            // Reload override sessions to update UI immediately
-            const startDate = selectedRange.startDate;
-            const endDate = selectedRange.endDate;
-            
-            console.log('🔄 Reloading override sessions with date range:', { startDate, endDate });
-            if (user?.uid) {
-              await loadOverrideSessions(user.uid, startDate || undefined, endDate || undefined);
-              console.log('🔄 Reloaded override sessions after recording');
-            }
-            
-          } catch (error) {
-            console.error('❌ Failed to record override session:', error);
-            console.error('🔍 DEBUG: Override session error details:', {
-              name: (error as Error)?.name,
-              message: (error as Error)?.message,
-              stack: (error as Error)?.stack,
-              domain,
-              duration,
-              userId: effectiveUserId
-            });
-          }
-        }
-        
         // Handle debug responses from extension via content script
         if (messageData?.type === 'SET_USER_ID_RESPONSE') {
           console.log('📧 Debug: SET_USER_ID response from extension:', messageData);
@@ -753,7 +679,10 @@ const DeepFocusPage: React.FC = () => {
       }
     };
 
-    // Listen for window messages (for extension communication)
+    // Listen for global override session recordings
+    window.addEventListener('overrideSessionRecorded', handleOverrideSessionRecorded as any);
+
+    // Listen for extension status and debug messages only
     window.addEventListener('message', handleExtensionMessage);
     
     // Listen for Chrome extension messages if available (with try-catch)
@@ -768,6 +697,7 @@ const DeepFocusPage: React.FC = () => {
 
     return () => {
       try {
+        window.removeEventListener('overrideSessionRecorded', handleOverrideSessionRecorded as any);
         window.removeEventListener('message', handleExtensionMessage);
         if (typeof (window as any).chrome !== 'undefined' && 
             (window as any).chrome?.runtime?.onMessage?.removeListener) {
@@ -777,7 +707,7 @@ const DeepFocusPage: React.FC = () => {
         console.warn('Error cleaning up extension listeners:', error);
       }
     };
-  }, [recordOverrideSession, user?.uid]);
+  }, [selectedRange, loadOverrideSessions, user?.uid]);
 
   // Filter work sessions based on date range (MOVED UP for dependency order)
   const filteredWorkSessions = useMemo(() => {
