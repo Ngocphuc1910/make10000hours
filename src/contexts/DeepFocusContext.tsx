@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { useDeepFocusStore } from '../store/deepFocusStore';
 import { useUserStore } from '../store/userStore';
+import { Source } from '../types/models';
 
 // Global state locks to prevent concurrent operations
 let isInitializing = false;
@@ -9,7 +10,7 @@ const initializationLock = { current: false };
 
 interface DeepFocusContextType {
   isDeepFocusActive: boolean;
-  enableDeepFocus: () => Promise<void>;
+  enableDeepFocus: (source?: Source) => Promise<void>;
   disableDeepFocus: () => Promise<void>;
   toggleDeepFocus: () => Promise<void>;
   isInitialized: boolean;
@@ -189,7 +190,7 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
   }, [syncFocusStatus, loadFocusStatus, isUserInitialized, hasInitialized, syncCompleteFocusState]);
 
   // Enhanced session guards with comprehensive checking
-  const enableDeepFocus = useCallback(async () => {
+  const enableDeepFocus = useCallback(async (source?: Source) => {
     const state = useDeepFocusStore.getState();
     
     // Authentication guard
@@ -217,7 +218,7 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
     console.log('🟢 Context: enableDeepFocus called for user:', user.uid);
     
     try {
-      await storeEnableDeepFocus();
+      await storeEnableDeepFocus(source);
     } catch (error) {
       console.error('❌ Context: Failed to enable deep focus:', error);
       throw error;
