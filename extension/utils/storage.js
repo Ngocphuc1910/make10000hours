@@ -7,6 +7,17 @@ class StorageManager {
   constructor() {
     this.mockMode = true; // Set to false for production
     this.mockData = this.generateMockData();
+    this._currentUserId = null; // Add currentUserId property
+  }
+
+  // Add getter/setter for currentUserId
+  get currentUserId() {
+    return this._currentUserId;
+  }
+
+  set currentUserId(value) {
+    this._currentUserId = value;
+    console.log('🔄 StorageManager currentUserId updated:', value);
   }
 
   /**
@@ -167,6 +178,7 @@ class StorageManager {
   generateMockDeepFocusSessions() {
     const sessions = {};
     const today = new Date();
+    const mockUserId = 'mock-user-123'; // Add mock user ID
     
     // Generate sessions for the last 7 days
     for (let i = 0; i < 7; i++) {
@@ -186,6 +198,7 @@ class StorageManager {
         
         daySessions.push({
           id: `dfs_mock_${dateStr}_${j}`,
+          userId: mockUserId, // Add userId to mock sessions
           startTime: sessionStart.getTime(),
           endTime: sessionEnd.getTime(),
           duration: duration,
@@ -211,6 +224,7 @@ class StorageManager {
       
       sessions[todayStr].push({
         id: `dfs_mock_active_${Date.now()}`,
+        userId: mockUserId, // Add userId to mock active session
         startTime: activeSessionStart.getTime(),
         duration: Math.floor((Date.now() - activeSessionStart.getTime()) / 60000), // Minutes elapsed
         status: 'active',
@@ -980,12 +994,19 @@ class StorageManager {
    */
   async createDeepFocusSession() {
     try {
+      // Add validation for userId
+      if (!this.currentUserId) {
+        console.warn('⚠️ No user ID available - cannot create deep focus session');
+        throw new Error('User ID required to create deep focus session');
+      }
+
       const now = new Date();
       const today = now.toISOString().split('T')[0];
       const sessionId = this.generateSessionId();
       
       const newSession = {
         id: sessionId,
+        userId: this.currentUserId, // Add userId to session
         startTime: now.getTime(),
         duration: 0,
         status: 'active',
@@ -1002,7 +1023,7 @@ class StorageManager {
           this.mockData.deepFocusSessions[today] = [];
         }
         this.mockData.deepFocusSessions[today].push(newSession);
-        console.log('🧪 Mock: Created deep focus session:', sessionId);
+        console.log('🧪 Mock: Created deep focus session:', sessionId, 'for user:', this.currentUserId);
         return sessionId;
       }
 
@@ -1014,7 +1035,7 @@ class StorageManager {
       sessions.push(newSession);
       await chrome.storage.local.set({ [storageKey]: sessions });
       
-      console.log('✅ Created local deep focus session:', sessionId);
+      console.log('✅ Created local deep focus session:', sessionId, 'for user:', this.currentUserId);
       return sessionId;
     } catch (error) {
       console.error('❌ Failed to create deep focus session:', error);
