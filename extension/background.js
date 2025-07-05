@@ -869,12 +869,19 @@ class StorageManager {
    */
   async createDeepFocusSession() {
     try {
+      // Add validation for userId
+      if (!this.currentUserId) {
+        console.warn('⚠️ No user ID available - cannot create deep focus session');
+        throw new Error('User ID required to create deep focus session');
+      }
+
       const now = new Date();
       const today = now.toISOString().split('T')[0];
       const sessionId = this.generateSessionId();
       
       const newSession = {
         id: sessionId,
+        userId: this.currentUserId, // Add userId to session
         date: today,
         startTime: now.getTime(),
         duration: 0,
@@ -883,7 +890,7 @@ class StorageManager {
         updatedAt: now.getTime()
       };
 
-      console.log('🎯 Creating deep focus session in unified storage:', sessionId);
+      console.log('🎯 Creating deep focus session in unified storage:', sessionId, 'for user:', this.currentUserId);
 
       // Get existing storage and add new session
       const storage = await this.getDeepFocusStorage();
@@ -2197,6 +2204,13 @@ class FocusTimeTracker {
               userEmail: message.payload?.userEmail,
               displayName: message.payload?.displayName
             };
+            
+            // Set user ID in StorageManager
+            if (this.storageManager) {
+              this.storageManager.currentUserId = this.currentUserId;
+              console.log('✅ User ID set in StorageManager:', this.currentUserId);
+            }
+            
             console.log('✅ User ID set in extension:', this.currentUserId);
             console.log('🔍 DEBUG: Full user info stored:', this.userInfo);
             
