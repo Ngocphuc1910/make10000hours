@@ -115,7 +115,8 @@ class StorageManager {
         }
       },
       weeklyStats: this.generateWeeklyMockData(),
-      monthlyStats: this.generateMonthlyMockData()
+      monthlyStats: this.generateMonthlyMockData(),
+      deepFocusSessions: this.generateMockDeepFocusSessions()
     };
   }
 
@@ -158,6 +159,67 @@ class StorageManager {
     }
     
     return monthlyData;
+  }
+
+  /**
+   * Generate mock deep focus sessions for development
+   */
+  generateMockDeepFocusSessions() {
+    const sessions = {};
+    const today = new Date();
+    
+    // Generate sessions for the last 7 days
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
+      const dateStr = date.toISOString().split('T')[0];
+      
+      // Generate 0-3 completed sessions per day
+      const sessionCount = Math.floor(Math.random() * 4);
+      const daySessions = [];
+      
+      for (let j = 0; j < sessionCount; j++) {
+        const sessionStart = new Date(date);
+        sessionStart.setHours(9 + j * 3, Math.floor(Math.random() * 60), 0); // Spread throughout day
+        
+        const duration = Math.floor(Math.random() * 120) + 25; // 25-145 minutes
+        const sessionEnd = new Date(sessionStart.getTime() + duration * 60 * 1000);
+        
+        daySessions.push({
+          id: `dfs_mock_${dateStr}_${j}`,
+          startTime: sessionStart.getTime(),
+          endTime: sessionEnd.getTime(),
+          duration: duration,
+          status: 'completed',
+          createdAt: sessionStart.getTime(),
+          updatedAt: sessionEnd.getTime()
+        });
+      }
+      
+      if (daySessions.length > 0) {
+        sessions[dateStr] = daySessions;
+      }
+    }
+    
+    // Add an active session for today if it's during work hours
+    const currentHour = today.getHours();
+    if (currentHour >= 9 && currentHour <= 17) {
+      const todayStr = today.toISOString().split('T')[0];
+      if (!sessions[todayStr]) sessions[todayStr] = [];
+      
+      const activeSessionStart = new Date();
+      activeSessionStart.setMinutes(activeSessionStart.getMinutes() - Math.floor(Math.random() * 30)); // Started 0-30 min ago
+      
+      sessions[todayStr].push({
+        id: `dfs_mock_active_${Date.now()}`,
+        startTime: activeSessionStart.getTime(),
+        duration: Math.floor((Date.now() - activeSessionStart.getTime()) / 60000), // Minutes elapsed
+        status: 'active',
+        createdAt: activeSessionStart.getTime(),
+        updatedAt: Date.now()
+      });
+    }
+    
+    return sessions;
   }
 
   /**
@@ -891,6 +953,266 @@ class StorageManager {
     } catch (error) {
       console.error('Error updating goal progress:', error);
       return { success: false, error: error.message };
+    }
+  }
+
+  // ===========================================
+  // DEEP FOCUS SESSION MANAGEMENT METHODS
+  // ===========================================
+
+  /**
+   * Generate storage key for deep focus sessions by date
+   */
+  getDeepFocusStorageKey(date) {
+    const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+    return `deepFocusSessions_${dateStr}`;
+  }
+
+  /**
+   * Generate unique session ID
+   */
+  generateSessionId() {
+    return `dfs_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Create a new deep focus session
+   */
+  async createDeepFocusSession() {
+    try {
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const sessionId = this.generateSessionId();
+      
+      const newSession = {
+        id: sessionId,
+        startTime: now.getTime(),
+        duration: 0,
+        status: 'active',
+        createdAt: now.getTime(),
+        updatedAt: now.getTime()
+      };
+
+      if (this.mockMode) {
+        // Add to mock data
+        if (!this.mockData.deepFocusSessions) {
+          this.mockData.deepFocusSessions = {};
+        }
+        if (!this.mockData.deepFocusSessions[today]) {
+          this.mockData.deepFocusSessions[today] = [];
+        }
+        this.mockData.deepFocusSessions[today].push(newSession);
+        console.log('🧪 Mock: Created deep focus session:', sessionId);
+        return sessionId;
+      }
+
+      // Real Chrome storage implementation
+      const storageKey = this.getDeepFocusStorageKey(today);
+      const result = await chrome.storage.local.get([storageKey]);
+      const sessions = result[storageKey] || [];
+      
+      sessions.push(newSession);
+      await chrome.storage.local.set({ [storageKey]: sessions });
+      
+      console.log('✅ Created local deep focus session:', sessionId);
+      return sessionId;
+    } catch (error) {
+      console.error('❌ Failed to create deep focus session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update deep focus session duration
+   */
+  async updateDeepFocusSessionDuration(sessionId, duration) {
+    try {
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+
+      if (this.mockMode) {
+        // Update mock data
+        if (this.mockData.deepFocusSessions && this.mockData.deepFocusSessions[today]) {
+          const session = this.mockData.deepFocusSessions[today].find(s => s.id === sessionId);
+          if (session) {
+            session.duration = duration;
+            session.updatedAt = now.getTime();
+            console.log('🧪 Mock: Updated session duration:', sessionId, duration);
+          }
+        }
+        return;
+      }
+
+      // Real Chrome storage implementation
+      const storageKey = this.getDeepFocusStorageKey(today);
+      const result = await chrome.storage.local.get([storageKey]);
+      const sessions = result[storageKey] || [];
+      
+      const sessionIndex = sessions.findIndex(s => s.id === sessionId);
+      if (sessionIndex !== -1) {
+        sessions[sessionIndex].duration = duration;
+        sessions[sessionIndex].updatedAt = now.getTime();
+        await chrome.storage.local.set({ [storageKey]: sessions });
+        console.log('⏱️ Updated local session duration:', sessionId, duration);
+      }
+    } catch (error) {
+      console.error('❌ Failed to update session duration:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Complete a deep focus session
+   */
+  async completeDeepFocusSession(sessionId) {
+    try {
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+
+      if (this.mockMode) {
+        // Update mock data
+        if (this.mockData.deepFocusSessions && this.mockData.deepFocusSessions[today]) {
+          const session = this.mockData.deepFocusSessions[today].find(s => s.id === sessionId);
+          if (session) {
+            session.status = 'completed';
+            session.endTime = now.getTime();
+            session.updatedAt = now.getTime();
+            console.log('🧪 Mock: Completed session:', sessionId);
+          }
+        }
+        return;
+      }
+
+      // Real Chrome storage implementation
+      const storageKey = this.getDeepFocusStorageKey(today);
+      const result = await chrome.storage.local.get([storageKey]);
+      const sessions = result[storageKey] || [];
+      
+      const sessionIndex = sessions.findIndex(s => s.id === sessionId);
+      if (sessionIndex !== -1) {
+        sessions[sessionIndex].status = 'completed';
+        sessions[sessionIndex].endTime = now.getTime();
+        sessions[sessionIndex].updatedAt = now.getTime();
+        await chrome.storage.local.set({ [storageKey]: sessions });
+        console.log('✅ Completed local deep focus session:', sessionId);
+      }
+    } catch (error) {
+      console.error('❌ Failed to complete session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get deep focus sessions for a specific date
+   */
+  async getDeepFocusSessionsForDate(date) {
+    try {
+      const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+
+      if (this.mockMode) {
+        // Return mock data
+        const sessions = this.mockData.deepFocusSessions?.[dateStr] || [];
+        console.log('🧪 Mock: Retrieved sessions for', dateStr, sessions.length);
+        return sessions;
+      }
+
+      // Real Chrome storage implementation
+      const storageKey = this.getDeepFocusStorageKey(dateStr);
+      const result = await chrome.storage.local.get([storageKey]);
+      const sessions = result[storageKey] || [];
+      
+      console.log('📖 Retrieved local sessions for', dateStr, sessions.length);
+      return sessions;
+    } catch (error) {
+      console.error('❌ Failed to get sessions for date:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get today's deep focus sessions
+   */
+  async getTodayDeepFocusSessions() {
+    const today = new Date();
+    return this.getDeepFocusSessionsForDate(today);
+  }
+
+  /**
+   * Calculate total deep focus time for today
+   */
+  async getTodayDeepFocusTime() {
+    try {
+      const sessions = await this.getTodayDeepFocusSessions();
+      const completedSessions = sessions.filter(s => s.status === 'completed');
+      const totalMinutes = completedSessions.reduce((total, session) => total + (session.duration || 0), 0);
+      
+      console.log('📊 Today\'s deep focus time:', totalMinutes, 'minutes from', completedSessions.length, 'completed sessions');
+      return totalMinutes;
+    } catch (error) {
+      console.error('❌ Failed to calculate today\'s deep focus time:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Find active deep focus session
+   */
+  async getActiveDeepFocusSession() {
+    try {
+      const sessions = await this.getTodayDeepFocusSessions();
+      const activeSession = sessions.find(s => s.status === 'active');
+      
+      if (activeSession) {
+        console.log('🎯 Found active session:', activeSession.id);
+      }
+      
+      return activeSession || null;
+    } catch (error) {
+      console.error('❌ Failed to get active session:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Clean up old deep focus sessions (keep last 30 days)
+   */
+  async cleanOldDeepFocusSessions() {
+    try {
+      const retentionDays = 30;
+      const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+      const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+
+      if (this.mockMode) {
+        // Clean mock data
+        if (this.mockData.deepFocusSessions) {
+          Object.keys(this.mockData.deepFocusSessions).forEach(date => {
+            if (date < cutoffDateStr) {
+              delete this.mockData.deepFocusSessions[date];
+            }
+          });
+        }
+        return;
+      }
+
+      // Real Chrome storage implementation
+      const allData = await chrome.storage.local.get(null);
+      const keysToRemove = [];
+
+      Object.keys(allData).forEach(key => {
+        if (key.startsWith('deepFocusSessions_')) {
+          const date = key.replace('deepFocusSessions_', '');
+          if (date < cutoffDateStr) {
+            keysToRemove.push(key);
+          }
+        }
+      });
+
+      if (keysToRemove.length > 0) {
+        await chrome.storage.local.remove(keysToRemove);
+        console.log('🧹 Cleaned up', keysToRemove.length, 'old deep focus session storage keys');
+      }
+    } catch (error) {
+      console.error('❌ Failed to clean old deep focus sessions:', error);
     }
   }
 }

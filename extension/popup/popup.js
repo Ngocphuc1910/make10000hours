@@ -418,18 +418,40 @@ class PopupManager {
       totalTimeEl.textContent = this.formatTime(this.todayStats.totalTime || 0);
     }
 
-    // Deep focus time
-    const deepFocusTimeEl = document.getElementById('deep-focus-time');
-    if (deepFocusTimeEl) {
-      const focusTime = this.currentState?.focusStats?.focusTime || 0;
-      deepFocusTimeEl.textContent = this.formatTime(focusTime);
-    }
+    // Deep focus time - fetch from local storage
+    this.updateLocalDeepFocusTime();
 
     // Override time
     const overrideTimeEl = document.getElementById('override-time');
     if (overrideTimeEl) {
       const overrideTime = this.currentState?.focusStats?.overrideTime || 0;
       overrideTimeEl.textContent = this.formatTime(overrideTime);
+    }
+  }
+
+  /**
+   * Update deep focus time from local storage
+   */
+  async updateLocalDeepFocusTime() {
+    try {
+      const response = await this.sendMessage('GET_LOCAL_DEEP_FOCUS_TIME');
+      
+      if (response.success) {
+        const deepFocusTimeEl = document.getElementById('deep-focus-time');
+        if (deepFocusTimeEl) {
+          // Convert minutes to milliseconds for formatting
+          const focusTimeMs = response.data.minutes * 60 * 1000;
+          deepFocusTimeEl.textContent = this.formatTime(focusTimeMs);
+          console.log('📊 Updated local deep focus time:', response.data.minutes, 'minutes');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error updating local deep focus time:', error);
+      // Fallback to default display
+      const deepFocusTimeEl = document.getElementById('deep-focus-time');
+      if (deepFocusTimeEl) {
+        deepFocusTimeEl.textContent = '0m';
+      }
     }
   }
 
@@ -1073,6 +1095,9 @@ class PopupManager {
         if (stateResponse?.success) {
           this.currentState = stateResponse.data;
         }
+
+        // Always update local deep focus time (independent of other stats)
+        await this.updateLocalDeepFocusTime();
       } catch (error) {
         console.error('Error refreshing state:', error);
       }

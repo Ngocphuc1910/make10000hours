@@ -600,6 +600,245 @@ class StorageManager {
       return { success: false, error: error.message };
     }
   }
+
+  // ===========================================
+  // DEEP FOCUS SESSION MANAGEMENT METHODS
+  // ===========================================
+
+  /**
+   * Generate unique session ID
+   */
+  generateSessionId() {
+    return `dfs_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Get all deep focus sessions from unified storage
+   */
+  async getDeepFocusStorage() {
+    try {
+      const result = await chrome.storage.local.get(['deepFocusSession']);
+      return result.deepFocusSession || {};
+    } catch (error) {
+      console.error('❌ Failed to get deep focus storage:', error);
+      return {};
+    }
+  }
+
+  /**
+   * Save deep focus sessions to unified storage
+   */
+  async saveDeepFocusStorage(sessionData) {
+    try {
+      await chrome.storage.local.set({ deepFocusSession: sessionData });
+      console.log('💾 Saved deep focus session data');
+    } catch (error) {
+      console.error('❌ Failed to save deep focus storage:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new deep focus session
+   */
+  async createDeepFocusSession() {
+    try {
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const sessionId = this.generateSessionId();
+      
+      const newSession = {
+        id: sessionId,
+        date: today,
+        startTime: now.getTime(),
+        duration: 0,
+        status: 'active',
+        createdAt: now.getTime(),
+        updatedAt: now.getTime()
+      };
+
+      console.log('🎯 Creating deep focus session in unified storage:', sessionId);
+
+      // Get existing storage and add new session
+      const storage = await this.getDeepFocusStorage();
+      if (!storage[today]) {
+        storage[today] = [];
+      }
+      
+      storage[today].push(newSession);
+      await this.saveDeepFocusStorage(storage);
+      
+      console.log('✅ Created local deep focus session:', sessionId, 'Total sessions today:', storage[today].length);
+      console.log('📦 Session data:', newSession);
+      return sessionId;
+    } catch (error) {
+      console.error('❌ Failed to create deep focus session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update deep focus session duration
+   */
+  async updateDeepFocusSessionDuration(sessionId, duration) {
+    try {
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+
+      console.log('⏱️ Updating session duration:', sessionId, 'to', duration, 'minutes');
+
+      // Get storage and find session
+      const storage = await this.getDeepFocusStorage();
+      if (storage[today]) {
+        const sessionIndex = storage[today].findIndex(s => s.id === sessionId);
+        if (sessionIndex !== -1) {
+          storage[today][sessionIndex].duration = duration;
+          storage[today][sessionIndex].updatedAt = now.getTime();
+          await this.saveDeepFocusStorage(storage);
+          console.log('✅ Updated local session duration:', sessionId, duration, 'minutes');
+          return true;
+        } else {
+          console.warn('⚠️ Session not found for duration update:', sessionId);
+          return false;
+        }
+      } else {
+        console.warn('⚠️ No sessions found for today during duration update');
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Failed to update session duration:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Complete a deep focus session
+   */
+  async completeDeepFocusSession(sessionId) {
+    try {
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+
+      console.log('🏁 Completing deep focus session:', sessionId);
+
+      // Get storage and find session
+      const storage = await this.getDeepFocusStorage();
+      if (storage[today]) {
+        const sessionIndex = storage[today].findIndex(s => s.id === sessionId);
+        if (sessionIndex !== -1) {
+          storage[today][sessionIndex].status = 'completed';
+          storage[today][sessionIndex].endTime = now.getTime();
+          storage[today][sessionIndex].updatedAt = now.getTime();
+          await this.saveDeepFocusStorage(storage);
+          console.log('✅ Completed local deep focus session:', sessionId, 'Final duration:', storage[today][sessionIndex].duration, 'minutes');
+        } else {
+          console.warn('⚠️ Session not found for completion:', sessionId);
+        }
+      } else {
+        console.warn('⚠️ No sessions found for today during completion');
+      }
+    } catch (error) {
+      console.error('❌ Failed to complete session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get deep focus sessions for a specific date
+   */
+  async getDeepFocusSessionsForDate(date) {
+    try {
+      const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+      const storage = await this.getDeepFocusStorage();
+      const sessions = storage[dateStr] || [];
+      
+      console.log('📖 Retrieved local sessions for', dateStr, ':', sessions.length, 'sessions');
+      return sessions;
+    } catch (error) {
+      console.error('❌ Failed to get sessions for date:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get today's deep focus sessions
+   */
+  async getTodayDeepFocusSessions() {
+    const today = new Date();
+    return this.getDeepFocusSessionsForDate(today);
+  }
+
+  /**
+   * Calculate total deep focus time for today
+   */
+  async getTodayDeepFocusTime() {
+    try {
+      const sessions = await this.getTodayDeepFocusSessions();
+      const completedSessions = sessions.filter(s => s.status === 'completed');
+      const totalMinutes = completedSessions.reduce((total, session) => total + (session.duration || 0), 0);
+      
+      console.log('📊 Today\'s deep focus time:', totalMinutes, 'minutes from', completedSessions.length, 'completed sessions');
+      if (completedSessions.length > 0) {
+        console.log('📝 Completed sessions:', completedSessions.map(s => ({ id: s.id, duration: s.duration })));
+      }
+      return totalMinutes;
+    } catch (error) {
+      console.error('❌ Failed to calculate today\'s deep focus time:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Find active deep focus session
+   */
+  async getActiveDeepFocusSession() {
+    try {
+      const sessions = await this.getTodayDeepFocusSessions();
+      const activeSession = sessions.find(s => s.status === 'active');
+      
+      if (activeSession) {
+        console.log('🎯 Found active session:', activeSession.id, 'Duration so far:', activeSession.duration, 'minutes');
+      } else {
+        console.log('🔍 No active deep focus session found');
+      }
+      
+      return activeSession || null;
+    } catch (error) {
+      console.error('❌ Failed to get active session:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Clean up old deep focus sessions (keep last 30 days)
+   */
+  async cleanOldDeepFocusSessions() {
+    try {
+      const retentionDays = 30;
+      const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+      const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+
+      const storage = await this.getDeepFocusStorage();
+      const updatedStorage = {};
+      let cleanedCount = 0;
+
+      // Keep only dates within retention period
+      Object.keys(storage).forEach(date => {
+        if (date >= cutoffDateStr) {
+          updatedStorage[date] = storage[date];
+        } else {
+          cleanedCount++;
+        }
+      });
+
+      if (cleanedCount > 0) {
+        await this.saveDeepFocusStorage(updatedStorage);
+        console.log('🧹 Cleaned up', cleanedCount, 'old deep focus session dates');
+      }
+    } catch (error) {
+      console.error('❌ Failed to clean old deep focus sessions:', error);
+    }
+  }
 }
 
 /**
@@ -683,6 +922,11 @@ class BlockingManager {
     this.focusStartTime = null;
     this.blockedAttempts = 0;
     
+    // Deep focus session tracking
+    this.currentLocalSessionId = null;
+    this.sessionTimer = null;
+    this.storageManager = null;
+    
     this.initialize();
   }
 
@@ -710,16 +954,30 @@ class BlockingManager {
       // Update blocking rules if focus mode is active
       if (this.focusMode) {
         await this.updateBlockingRules();
+        
+        // If focus mode was active, check if we need to resume local session tracking
+        if (this.storageManager) {
+          await this.resumeLocalSessionIfNeeded();
+        }
       }
       
       console.log('🛡️ Blocking Manager initialized', {
         focusMode: this.focusMode,
         blockedSites: Array.from(this.blockedSites),
-        focusStartTime: this.focusStartTime
+        focusStartTime: this.focusStartTime,
+        hasStorageManager: !!this.storageManager
       });
     } catch (error) {
       console.error('Error initializing BlockingManager:', error);
     }
+  }
+
+  /**
+   * Set reference to StorageManager
+   */
+  setStorageManager(storageManager) {
+    this.storageManager = storageManager;
+    console.log('📦 StorageManager reference set in BlockingManager');
   }
 
   /**
@@ -734,22 +992,29 @@ class BlockingManager {
         this.blockedAttempts = 0;
         await this.updateBlockingRules();
         
+        // Create local deep focus session
+        await this.startLocalDeepFocusSession();
+        
         // Get current blocked sites list
         const blockedSites = Array.from(this.blockedSites);
         console.log('🔒 Focus mode ENABLED with blocked sites:', blockedSites);
         
         // Broadcast focus state with blocked sites
-        if (this.tracker) {
-          this.tracker.broadcastFocusStateChange(true);
+        if (this.focusTimeTracker) {
+          this.focusTimeTracker.broadcastFocusStateChange(true);
         }
       } else {
         this.focusStartTime = null;
         await this.clearBlockingRules();
+        
+        // Complete local deep focus session
+        await this.completeLocalDeepFocusSession();
+        
         console.log('🔓 Focus mode DISABLED');
         
         // Broadcast focus state change
-        if (this.tracker) {
-          this.tracker.broadcastFocusStateChange(false);
+        if (this.focusTimeTracker) {
+          this.focusTimeTracker.broadcastFocusStateChange(false);
         }
       }
       
@@ -1102,6 +1367,190 @@ class BlockingManager {
   getBlockedSites() {
     return Array.from(this.blockedSites);
   }
+
+  // ===========================================
+  // LOCAL DEEP FOCUS SESSION METHODS
+  // ===========================================
+
+  /**
+   * Start a local deep focus session
+   */
+  async startLocalDeepFocusSession() {
+    try {
+      console.log('🚀 Starting local deep focus session...');
+      
+      if (!this.storageManager) {
+        console.error('❌ StorageManager not available, cannot create local session');
+        return;
+      }
+
+      // Complete any existing active session first
+      await this.completeLocalDeepFocusSession();
+
+      // Create new session
+      this.currentLocalSessionId = await this.storageManager.createDeepFocusSession();
+      console.log('🎯 Successfully started local deep focus session:', this.currentLocalSessionId);
+
+      // Start the 1-minute timer
+      this.startSessionTimer();
+      
+      console.log('✅ Local deep focus session setup complete');
+    } catch (error) {
+      console.error('❌ Failed to start local deep focus session:', error);
+    }
+  }
+
+  /**
+   * Complete current local deep focus session
+   */
+  async completeLocalDeepFocusSession() {
+    try {
+      if (!this.storageManager || !this.currentLocalSessionId) {
+        return;
+      }
+
+      // Stop the timer
+      this.stopSessionTimer();
+
+      // Complete the session
+      await this.storageManager.completeDeepFocusSession(this.currentLocalSessionId);
+      console.log('✅ Completed local deep focus session:', this.currentLocalSessionId);
+
+      this.currentLocalSessionId = null;
+    } catch (error) {
+      console.error('❌ Failed to complete local deep focus session:', error);
+    }
+  }
+
+  /**
+   * Start the session timer that increments duration every minute
+   */
+  startSessionTimer() {
+    if (this.sessionTimer) {
+      clearInterval(this.sessionTimer);
+    }
+
+    console.log('🕐 Session timer started, will increment every minute for session:', this.currentLocalSessionId);
+    
+    this.sessionTimer = setInterval(async () => {
+      console.log('⏱️ Timer tick - checking focus mode and session...', {
+        focusMode: this.focusMode,
+        currentLocalSessionId: this.currentLocalSessionId,
+        hasStorageManager: !!this.storageManager
+      });
+
+      if (this.storageManager && this.currentLocalSessionId && this.focusMode) {
+        try {
+          // Get current session to find actual duration
+          const activeSession = await this.storageManager.getActiveDeepFocusSession();
+          if (activeSession && activeSession.id === this.currentLocalSessionId) {
+            const newDuration = activeSession.duration + 1; // Increment by 1 minute
+            const updateResult = await this.storageManager.updateDeepFocusSessionDuration(
+              this.currentLocalSessionId, 
+              newDuration
+            );
+            
+            if (updateResult) {
+              console.log(`⏱️ Timer tick: Updated session ${this.currentLocalSessionId} duration to ${newDuration} minutes`);
+            } else {
+              console.warn('⚠️ Failed to update session duration - session may not exist');
+            }
+          } else {
+            console.warn('⚠️ Active session not found or session ID mismatch during timer update', {
+              foundActiveSession: !!activeSession,
+              activeSessionId: activeSession?.id,
+              currentSessionId: this.currentLocalSessionId
+            });
+          }
+        } catch (error) {
+          console.error('❌ Failed to update session duration:', error);
+        }
+      } else {
+        console.warn('⚠️ Timer tick but missing requirements:', {
+          hasStorageManager: !!this.storageManager,
+          hasCurrentSessionId: !!this.currentLocalSessionId,
+          focusMode: this.focusMode
+        });
+        
+        // If focus mode is off, we should stop the timer
+        if (!this.focusMode) {
+          console.log('⏹️ Focus mode is off, stopping timer');
+          this.stopSessionTimer();
+        }
+      }
+    }, 60000); // Every minute
+  }
+
+  /**
+   * Stop the session timer
+   */
+  stopSessionTimer() {
+    if (this.sessionTimer) {
+      clearInterval(this.sessionTimer);
+      this.sessionTimer = null;
+      console.log('⏹️ Session timer stopped');
+    }
+  }
+
+  /**
+   * Resume local session if needed (called during initialization)
+   */
+  async resumeLocalSessionIfNeeded() {
+    try {
+      if (!this.storageManager) {
+        return;
+      }
+
+      // Check if there's an active session from previous run
+      const activeSession = await this.storageManager.getActiveDeepFocusSession();
+      
+      if (activeSession) {
+        this.currentLocalSessionId = activeSession.id;
+        console.log('🔄 Resuming local deep focus session:', this.currentLocalSessionId);
+        
+        // Restart the timer (it will continue from where it left off)
+        this.startSessionTimer();
+      }
+    } catch (error) {
+      console.error('❌ Failed to resume local session:', error);
+    }
+  }
+
+  /**
+   * Get current local deep focus session info
+   */
+  getCurrentLocalSession() {
+    return {
+      sessionId: this.currentLocalSessionId,
+      isActive: !!this.currentLocalSessionId,
+      hasTimer: !!this.sessionTimer
+    };
+  }
+
+  /**
+   * Debug function to inspect deep focus storage
+   */
+  async debugDeepFocusStorage() {
+    try {
+      const storage = await this.storageManager.getDeepFocusStorage();
+      console.log('🔍 Deep Focus Storage Debug:', storage);
+      
+      const today = new Date().toISOString().split('T')[0];
+      const todaySessions = storage[today] || [];
+      
+      console.log('📅 Today\'s Sessions:', todaySessions);
+      console.log('📊 Active Sessions:', todaySessions.filter(s => s.status === 'active'));
+      console.log('✅ Completed Sessions:', todaySessions.filter(s => s.status === 'completed'));
+      
+      const totalTime = await this.storageManager.getTodayDeepFocusTime();
+      console.log('⏱️ Total Deep Focus Time Today:', totalTime, 'minutes');
+      
+      return { storage, todaySessions, totalTime };
+    } catch (error) {
+      console.error('❌ Error debugging deep focus storage:', error);
+      return null;
+    }
+  }
 }
 
 // Main Focus Time Tracker Class
@@ -1150,8 +1599,10 @@ class FocusTimeTracker {
       await this.storageManager.initialize(); // Initialize storage manager
       this.blockingManager = new BlockingManager(); // Initialize blocking manager
       
-      // Set up reference for real-time data access
+      // Set up cross-references for real-time data access
       this.storageManager.setFocusTimeTracker(this);
+      this.blockingManager.setStorageManager(this.storageManager);
+      this.blockingManager.focusTimeTracker = this;
       
       // Set up event listeners
       this.setupEventListeners();
@@ -1348,6 +1799,16 @@ class FocusTimeTracker {
         case 'GET_REALTIME_TOP_SITES':
           const realTimeTopSites = await this.storageManager.getRealTimeTopSites(message.payload?.limit || 20);
           sendResponse({ success: true, data: realTimeTopSites });
+          break;
+
+        case 'GET_LOCAL_DEEP_FOCUS_TIME':
+          try {
+            const localDeepFocusTime = await this.storageManager.getTodayDeepFocusTime();
+            sendResponse({ success: true, data: { minutes: localDeepFocusTime } });
+          } catch (error) {
+            console.error('Error getting local deep focus time:', error);
+            sendResponse({ success: false, error: error.message });
+          }
           break;
 
         case 'EXPORT_DATA':
