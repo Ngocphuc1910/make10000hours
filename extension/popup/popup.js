@@ -318,8 +318,11 @@ class PopupManager {
     // Update focus mode switch state
     this.updateFocusModeSwitch();
     
-    // Update active tab content
-    this.initializeTabContent(this.currentTab);
+    // Only update tab content if it's the site-usage tab and we have valid data
+    // Don't reinitialize tab content automatically to prevent duplication
+    if (this.currentTab === 'site-usage' && this.todayStats) {
+      this.updateTopSites();
+    }
   }
 
   /**
@@ -489,8 +492,13 @@ class PopupManager {
       if (response.success && response.data.length > 0) {
         const currentSites = response.data;
         
-        // If no previous state, do full render
-        if (!this.previousStats || !sitesListEl.children.length) {
+        // Check if we need to do a full refresh
+        const needsFullRefresh = !this.previousStats || 
+                                 !sitesListEl.children.length ||
+                                 sitesListEl.querySelector('.loading-state');
+        
+        if (needsFullRefresh) {
+          // Clear all existing content and rebuild
           sitesListEl.innerHTML = '';
           for (const site of currentSites) {
             const siteItem = await this.createSiteItem(site);
@@ -500,7 +508,7 @@ class PopupManager {
           // Update existing cards
           const totalTime = this.todayStats?.totalTime || 0;
           
-          // Get current site elements
+          // Get current site elements (only real site items, not loading states)
           const siteElements = sitesListEl.querySelectorAll('.site-item');
           const currentDomains = currentSites.map(site => site.domain);
           
@@ -516,9 +524,11 @@ class PopupManager {
             }
           });
           
-          // Add new sites
+          // Add new sites that don't exist yet
           for (const site of currentSites) {
-            const exists = sitesListEl.querySelector(`.site-name[text="${site.domain}"]`);
+            const existingElements = sitesListEl.querySelectorAll('.site-item .site-name');
+            const exists = Array.from(existingElements).some(el => el.textContent === site.domain);
+            
             if (!exists) {
               const siteItem = await this.createSiteItem(site);
               sitesListEl.appendChild(siteItem);
