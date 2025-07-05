@@ -722,7 +722,7 @@ class StorageManager {
       console.log('🏁 Completing deep focus session:', sessionId);
 
       // Get storage and find session
-      const storage = await this.getDeepFocusStorage();
+      const storage = await this.storageManager.getDeepFocusStorage();
       if (storage[today]) {
         const sessionIndex = storage[today].findIndex(s => s.id === sessionId);
         if (sessionIndex !== -1) {
@@ -731,6 +731,9 @@ class StorageManager {
           storage[today][sessionIndex].updatedAt = now.getTime();
           await this.saveDeepFocusStorage(storage);
           console.log('✅ Completed local deep focus session:', sessionId, 'Final duration:', storage[today][sessionIndex].duration, 'minutes');
+          
+          // Broadcast update to all listeners
+          await this.broadcastDeepFocusTimeUpdate();
         } else {
           console.warn('⚠️ Session not found for completion:', sessionId);
         }
@@ -774,13 +777,27 @@ class StorageManager {
   async getTodayDeepFocusTime() {
     try {
       const sessions = await this.getTodayDeepFocusSessions();
-      const completedSessions = sessions.filter(s => s.status === 'completed');
-      const totalMinutes = completedSessions.reduce((total, session) => total + (session.duration || 0), 0);
       
-      console.log('📊 Today\'s deep focus time:', totalMinutes, 'minutes from', completedSessions.length, 'completed sessions');
-      if (completedSessions.length > 0) {
-        console.log('📝 Completed sessions:', completedSessions.map(s => ({ id: s.id, duration: s.duration })));
+      // Calculate total from completed sessions
+      const completedSessions = sessions.filter(s => s.status === 'completed');
+      const completedMinutes = completedSessions.reduce((total, session) => total + (session.duration || 0), 0);
+      
+      // Calculate total from active sessions
+      const activeSession = sessions.find(s => s.status === 'active');
+      let activeMinutes = 0;
+      if (activeSession) {
+        const elapsedMs = Date.now() - activeSession.startTime;
+        activeMinutes = Math.floor(elapsedMs / (60 * 1000));
       }
+      
+      const totalMinutes = completedMinutes + activeMinutes;
+      
+      console.log('📊 Today\'s deep focus time:', totalMinutes, 'minutes');
+      console.log('- Completed sessions:', completedMinutes, 'minutes from', completedSessions.length, 'sessions');
+      if (activeSession) {
+        console.log('- Active session:', activeMinutes, 'minutes');
+      }
+      
       return totalMinutes;
     } catch (error) {
       console.error('❌ Failed to calculate today\'s deep focus time:', error);
@@ -1430,55 +1447,27 @@ class BlockingManager {
       clearInterval(this.sessionTimer);
     }
 
-    console.log('🕐 Session timer started, will increment every minute for session:', this.currentLocalSessionId);
-    
+    console.log('⏱️ Starting session timer...');
     this.sessionTimer = setInterval(async () => {
-      console.log('⏱️ Timer tick - checking focus mode and session...', {
-        focusMode: this.focusMode,
-        currentLocalSessionId: this.currentLocalSessionId,
-        hasStorageManager: !!this.storageManager
-      });
-
-      if (this.storageManager && this.currentLocalSessionId && this.focusMode) {
-        try {
-          // Get current session to find actual duration
+      try {
+        if (this.currentLocalSessionId) {
+          // Calculate elapsed time
           const activeSession = await this.storageManager.getActiveDeepFocusSession();
-          if (activeSession && activeSession.id === this.currentLocalSessionId) {
-            const newDuration = activeSession.duration + 1; // Increment by 1 minute
-            const updateResult = await this.storageManager.updateDeepFocusSessionDuration(
-              this.currentLocalSessionId, 
-              newDuration
-            );
+          if (activeSession) {
+            const elapsedMs = Date.now() - activeSession.startTime;
+            const elapsedMinutes = Math.floor(elapsedMs / (60 * 1000));
             
-            if (updateResult) {
-              console.log(`⏱️ Timer tick: Updated session ${this.currentLocalSessionId} duration to ${newDuration} minutes`);
-            } else {
-              console.warn('⚠️ Failed to update session duration - session may not exist');
-            }
-          } else {
-            console.warn('⚠️ Active session not found or session ID mismatch during timer update', {
-              foundActiveSession: !!activeSession,
-              activeSessionId: activeSession?.id,
-              currentSessionId: this.currentLocalSessionId
-            });
+            // Update session duration
+            await this.storageManager.updateDeepFocusSessionDuration(this.currentLocalSessionId, elapsedMinutes);
+            
+            // Broadcast update to all listeners
+            await this.broadcastDeepFocusTimeUpdate();
           }
-        } catch (error) {
-          console.error('❌ Failed to update session duration:', error);
         }
-      } else {
-        console.warn('⚠️ Timer tick but missing requirements:', {
-          hasStorageManager: !!this.storageManager,
-          hasCurrentSessionId: !!this.currentLocalSessionId,
-          focusMode: this.focusMode
-        });
-        
-        // If focus mode is off, we should stop the timer
-        if (!this.focusMode) {
-          console.log('⏹️ Focus mode is off, stopping timer');
-          this.stopSessionTimer();
-        }
+      } catch (error) {
+        console.error('❌ Error in session timer:', error);
       }
-    }, 60000); // Every minute
+    }, 60 * 1000); // Update every minute
   }
 
   /**
@@ -1549,6 +1538,24 @@ class BlockingManager {
     } catch (error) {
       console.error('❌ Error debugging deep focus storage:', error);
       return null;
+    }
+  }
+
+  /**
+   * Broadcast deep focus time update to all listeners
+   */
+  async broadcastDeepFocusTimeUpdate() {
+    try {
+      const totalMinutes = await this.storageManager.getTodayDeepFocusTime();
+      chrome.runtime.sendMessage({
+        type: 'DEEP_FOCUS_TIME_UPDATED',
+        payload: { minutes: totalMinutes }
+      }).catch(() => {
+        // Ignore errors when no listeners are connected
+      });
+      console.log('📢 Broadcasted deep focus time update:', totalMinutes, 'minutes');
+    } catch (error) {
+      console.error('❌ Failed to broadcast deep focus time:', error);
     }
   }
 }

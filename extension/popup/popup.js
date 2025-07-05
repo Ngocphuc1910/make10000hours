@@ -113,6 +113,14 @@ class PopupManager {
         } else if (message.type === 'USER_INFO_UPDATED') {
           this.userInfo = message.payload;
           this.updateUserInfo();
+        } else if (message.type === 'DEEP_FOCUS_TIME_UPDATED') {
+          // Update deep focus time immediately when received from background
+          const deepFocusTimeEl = document.getElementById('deep-focus-time');
+          if (deepFocusTimeEl) {
+            const focusTimeMs = message.payload.minutes * 60 * 1000;
+            deepFocusTimeEl.textContent = this.formatTime(focusTimeMs);
+            console.log('📊 Updated deep focus time from background:', message.payload.minutes, 'minutes');
+          }
         }
         sendResponse({ success: true });
         return true;
@@ -125,6 +133,14 @@ class PopupManager {
           setTimeout(() => {
             this.refreshState();
           }, 100); // Small delay to ensure popup is fully loaded
+        }
+      });
+
+      // Listen for deep focus time updates
+      chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.type === 'DEEP_FOCUS_TIME_UPDATED') {
+          console.log('📢 Received deep focus time update:', message.payload.minutes, 'minutes');
+          this.updateDeepFocusTimeDisplay(message.payload.minutes);
         }
       });
     } catch (error) {
@@ -452,6 +468,20 @@ class PopupManager {
       if (deepFocusTimeEl) {
         deepFocusTimeEl.textContent = '0m';
       }
+    }
+  }
+
+  /**
+   * Update deep focus time display
+   */
+  updateDeepFocusTimeDisplay(minutes) {
+    const deepFocusTimeElement = document.querySelector('.deep-focus-time');
+    if (deepFocusTimeElement) {
+      const hours = Math.floor(minutes / 60);
+      const remainingMinutes = minutes % 60;
+      const timeText = hours > 0 ? `${hours}h ${remainingMinutes}m` : `${remainingMinutes}m`;
+      deepFocusTimeElement.textContent = timeText;
+      console.log('🔄 Updated deep focus time display:', timeText);
     }
   }
 
