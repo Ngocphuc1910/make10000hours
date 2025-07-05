@@ -7,6 +7,9 @@ let isInitializing = false;
 let hasInitialized = false;
 const initializationLock = { current: false };
 
+// Global processed messages tracking for override sessions (persist across component unmounts)
+const globalProcessedMessages = new Set<string>();
+
 interface DeepFocusContextType {
   isDeepFocusActive: boolean;
   enableDeepFocus: () => Promise<void>;
@@ -31,7 +34,9 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
     isDeepFocusActive,
     enableDeepFocus: storeEnableDeepFocus,
     disableDeepFocus: storeDisableDeepFocus,
-    syncCompleteFocusState
+    syncCompleteFocusState,
+    recordOverrideSession,
+    loadOverrideSessions
   } = useDeepFocusStore();
   
   const { isInitialized: isUserInitialized, user } = useUserStore();
@@ -123,6 +128,130 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
 
     initializeDeepFocusState();
   }, [user?.uid, isUserInitialized, loadFocusStatus]);
+
+  // GLOBAL OVERRIDE SESSION RECORDING - Works regardless of current page
+  useEffect(() => {
+    // Wait for user authentication to initialize
+    if (!isUserInitialized || !user?.uid) {
+      return;
+    }
+
+    const handleExtensionMessage = async (event: any) => {
+      try {
+        // Handle both Chrome extension messages and window messages
+        const messageData = event.data || event;
+        
+        // Only handle override session recording messages
+        if (messageData?.type === 'RECORD_OVERRIDE_SESSION' && 
+            (messageData?.source?.includes('make10000hours') || 
+             messageData?.source?.includes('extension'))) {
+          
+          console.log('🌐 GLOBAL: RECORD_OVERRIDE_SESSION received in DeepFocusContext:', messageData);
+          console.log('🌐 GLOBAL: Current page:', window.location.pathname);
+          console.log('🌐 GLOBAL: User state:', { user: user?.uid, isLoggedIn: !!user });
+          
+          const { domain, duration, userId: incomingUserId, timestamp, extensionTimestamp } = messageData.payload || {};
+          
+          // Create unique message ID to prevent duplicate processing
+          const messageId = `${domain}_${duration}_${extensionTimestamp || timestamp || Date.now()}`;
+          
+          if (globalProcessedMessages.has(messageId)) {
+            console.log('🔄 GLOBAL: Skipping duplicate override session message:', messageId);
+            return;
+          }
+          
+          // Mark message as processed globally
+          globalProcessedMessages.add(messageId);
+          
+          // Clean up old processed messages (keep only last 100)
+          if (globalProcessedMessages.size > 100) {
+            const array = Array.from(globalProcessedMessages);
+            const toKeep = array.slice(-50); // Keep only last 50
+            globalProcessedMessages.clear();
+            toKeep.forEach(id => globalProcessedMessages.add(id));
+          }
+          
+          // Use incoming userId or fallback to current user
+          const effectiveUserId = incomingUserId || user?.uid;
+          
+          console.log('🌐 GLOBAL: Override session data validation:', {
+            domain,
+            duration,
+            incomingUserId,
+            currentUserUid: user?.uid,
+            effectiveUserId,
+            timestamp,
+            hasUser: !!user
+          });
+
+          if (!effectiveUserId) {
+            console.error('❌ GLOBAL: No user ID available for override session');
+            return;
+          }
+
+          if (!domain || !duration) {
+            console.error('❌ GLOBAL: Missing required override session data:', { domain, duration });
+            return;
+          }
+
+          try {
+            console.log('📝 GLOBAL: Recording override session from extension:', domain, duration, 'for user:', effectiveUserId);
+            
+            // Record the override session using the store function
+            await recordOverrideSession(domain, duration);
+            console.log('✅ GLOBAL: Override session recorded successfully');
+            
+            // Broadcast custom event to notify any listening components (like DeepFocusPage)
+            window.dispatchEvent(new CustomEvent('overrideSessionRecorded', {
+              detail: { domain, duration, userId: effectiveUserId, timestamp: Date.now() }
+            }));
+            
+          } catch (error) {
+            console.error('❌ GLOBAL: Failed to record override session:', error);
+            console.error('🔍 GLOBAL: Override session error details:', {
+              name: (error as Error)?.name,
+              message: (error as Error)?.message,
+              stack: (error as Error)?.stack,
+              domain,
+              duration,
+              userId: effectiveUserId
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error in global extension message handler:', error);
+      }
+    };
+
+    console.log('🌐 GLOBAL: Setting up override session recording listeners');
+
+    // Listen for window messages (for extension communication)
+    window.addEventListener('message', handleExtensionMessage);
+    
+    // Listen for Chrome extension messages if available (with try-catch)
+    try {
+      if (typeof (window as any).chrome !== 'undefined' && 
+          (window as any).chrome?.runtime?.onMessage?.addListener) {
+        (window as any).chrome.runtime.onMessage.addListener(handleExtensionMessage);
+      }
+    } catch (error) {
+      console.warn('Could not set up Chrome extension listener in context:', error);
+    }
+
+    // Cleanup function
+    return () => {
+      try {
+        console.log('🌐 GLOBAL: Cleaning up override session recording listeners');
+        window.removeEventListener('message', handleExtensionMessage);
+        if (typeof (window as any).chrome !== 'undefined' && 
+            (window as any).chrome?.runtime?.onMessage?.removeListener) {
+          (window as any).chrome.runtime.onMessage.removeListener(handleExtensionMessage);
+        }
+      } catch (error) {
+        console.warn('Error cleaning up global extension listeners:', error);
+      }
+    };
+  }, [user?.uid, isUserInitialized, recordOverrideSession]);
 
   // Listen for focus changes from other components (internal state sync)
   useEffect(() => {
