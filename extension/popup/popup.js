@@ -40,36 +40,66 @@ class PopupManager {
         this.analyticsUI = new window.AnalyticsUI();
       }
 
-      // Get initial state and stats - always get fresh real-time focus state and data
-      const [stateResponse, statsResponse, focusStateResponse, userInfoResponse] = await Promise.all([
-        this.sendMessage('GET_CURRENT_STATE'),
-        this.sendMessage('GET_REALTIME_STATS'), // Real-time stats for total time
-        this.sendMessage('GET_FOCUS_STATE'),
-        this.sendMessage('GET_USER_INFO')
+      // Get initial state and stats with improved error handling and retries
+      const results = await Promise.allSettled([
+        this.sendMessageWithRetry('GET_CURRENT_STATE'),
+        this.sendMessageWithRetry('GET_REALTIME_STATS'),
+        this.sendMessageWithRetry('GET_FOCUS_STATE'),
+        this.sendMessageWithRetry('GET_USER_INFO', {}, 3) // More retries for user info
       ]);
 
-      if (stateResponse?.success) {
-        this.currentState = stateResponse.data;
+      // Process results with fallbacks
+      const [stateResponse, statsResponse, focusStateResponse, userInfoResponse] = results;
+
+      if (stateResponse.status === 'fulfilled' && stateResponse.value?.success) {
+        this.currentState = stateResponse.value.data;
+      } else {
+        console.warn('Failed to get current state:', stateResponse.reason || 'Unknown error');
+        this.currentState = this.getDefaultState();
       }
 
-      if (statsResponse?.success) {
-        this.todayStats = statsResponse.data;
+      if (statsResponse.status === 'fulfilled' && statsResponse.value?.success) {
+        this.todayStats = statsResponse.value.data;
+      } else {
+        console.warn('Failed to get stats:', statsResponse.reason || 'Unknown error');
+        this.todayStats = this.getDefaultStats();
       }
 
-      // Always use the latest focus state to ensure sync
-      if (focusStateResponse?.success) {
-        if (!this.currentState.focusStats) {
-          this.currentState.focusStats = {};
+      // Always ensure focus stats object exists
+      if (!this.currentState.focusStats) {
+        this.currentState.focusStats = {};
+      }
+
+      // Update focus state if available
+      if (focusStateResponse.status === 'fulfilled' && focusStateResponse.value?.success) {
+        this.currentState.focusStats.focusMode = focusStateResponse.value.data.focusMode;
+      } else {
+        console.warn('Failed to get focus state:', focusStateResponse.reason || 'Unknown error');
+        this.currentState.focusStats.focusMode = false;
+      }
+
+      // Handle user info with special care
+      if (userInfoResponse.status === 'fulfilled' && userInfoResponse.value?.success) {
+        this.userInfo = userInfoResponse.value.data;
+        console.log('✅ Got user info on init:', this.userInfo);
+      } else {
+        console.warn('Failed to get user info:', userInfoResponse.reason || 'Unknown error');
+        // Try to get from local storage as backup
+        try {
+          const localData = await chrome.storage.local.get(['userInfo']);
+          if (localData.userInfo) {
+            this.userInfo = localData.userInfo;
+            console.log('✅ Restored user info from local storage');
+          } else {
+            this.userInfo = this.getDefaultUserInfo();
+          }
+        } catch (error) {
+          console.error('Failed to get user info from local storage:', error);
+          this.userInfo = this.getDefaultUserInfo();
         }
-        this.currentState.focusStats.focusMode = focusStateResponse.data.focusMode;
       }
 
-      // Store user info
-      if (userInfoResponse?.success) {
-        this.userInfo = userInfoResponse.data;
-      }
-
-      // Update UI with initial data
+      // Update UI with available data
       this.updateUI();
       
       // Load initial override time from localStorage
@@ -82,11 +112,10 @@ class PopupManager {
 
       // Set up periodic updates
       this.updateInterval = setInterval(() => {
-        // Only refresh if popup is visible and in site-usage tab
         if (document.visibilityState === 'visible' && this.currentTab === 'site-usage') {
           this.refreshState();
         }
-      }, 5000); // Check every 5 seconds
+      }, 5000);
 
       // Set up event listeners
       this.setupEventListeners();
@@ -97,14 +126,15 @@ class PopupManager {
           this.todayStats = message.payload;
           this.updateUI();
         } else if (message.type === 'FOCUS_STATE_CHANGED') {
-          // Update local state and UI without triggering another toggle
           this.currentState.focusStats.focusMode = message.payload.isActive;
           this.updateUI();
         } else if (message.type === 'USER_INFO_UPDATED') {
+          console.log('📱 Received user info update:', message.payload);
           this.userInfo = message.payload;
+          // Save to local storage as backup
+          chrome.storage.local.set({ userInfo: message.payload });
           this.updateUserInfo();
         } else if (message.type === 'OVERRIDE_DATA_UPDATED') {
-          // Update override time from localStorage when data changes
           console.log('🔄 Override data updated, refreshing display');
           this.updateLocalOverrideTime();
         }
@@ -112,13 +142,19 @@ class PopupManager {
         return true;
       });
 
-      // Add visibility change handler for immediate updates when popup becomes visible
+      // Add visibility change handler
       document.addEventListener('visibilitychange', () => {
         if (!document.hidden && this.currentTab === 'site-usage') {
-          // Immediately refresh when popup becomes visible
           setTimeout(() => {
             this.refreshState();
-          }, 100); // Small delay to ensure popup is fully loaded
+            // Also refresh user info when popup becomes visible
+            this.sendMessageWithRetry('GET_USER_INFO').then(response => {
+              if (response?.success) {
+                this.userInfo = response.data;
+                this.updateUserInfo();
+              }
+            });
+          }, 100);
         }
       });
     } catch (error) {
@@ -1384,6 +1420,63 @@ class PopupManager {
       console.error(`❌ Error sending message ${type}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Send message with retry logic
+   */
+  async sendMessageWithRetry(type, payload = {}, maxRetries = 2) {
+    let lastError;
+    for (let i = 0; i <= maxRetries; i++) {
+      try {
+        const response = await this.sendMessage(type, payload);
+        if (response?.success) {
+          return response;
+        }
+        lastError = new Error(response?.error || 'Unknown error');
+      } catch (error) {
+        lastError = error;
+        if (i < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+        }
+      }
+    }
+    throw lastError;
+  }
+
+  /**
+   * Get default state for fallback
+   */
+  getDefaultState() {
+    return {
+      isTracking: false,
+      currentSite: null,
+      focusStats: {
+        focusMode: false
+      }
+    };
+  }
+
+  /**
+   * Get default stats for fallback
+   */
+  getDefaultStats() {
+    return {
+      totalTime: 0,
+      sitesVisited: 0,
+      topSites: []
+    };
+  }
+
+  /**
+   * Get default user info for fallback
+   */
+  getDefaultUserInfo() {
+    return {
+      userId: 'anonymous',
+      displayName: 'Anonymous',
+      isLoggedIn: false
+    };
   }
 
   /**
