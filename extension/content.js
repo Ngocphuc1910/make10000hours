@@ -621,6 +621,56 @@ class ActivityDetector {
   }
 }
 
+// Update message handling
+async function handleMessage(event) {
+  if (event.source !== window || !event.data || event.data.source === 'make10000hours-extension') {
+    return;
+  }
+
+  const { type, payload } = event.data;
+  
+  try {
+    // Check for user ID requirement for deep focus operations
+    if (type.includes('DEEP_FOCUS') && (!payload || !payload.userId)) {
+      window.postMessage({
+        type: `${type}_RESPONSE`,
+        payload: { 
+          success: false, 
+          error: 'User ID required to create deep focus session',
+          recoverable: true
+        },
+        source: 'make10000hours-extension'
+      });
+      return;
+    }
+
+    const response = await ExtensionEventBus.safeForwardMessage(type, payload);
+    
+    window.postMessage({
+      type: `${type}_RESPONSE`,
+      payload: response,
+      source: 'make10000hours-extension'
+    });
+  } catch (error) {
+    const errorResponse = {
+      success: false,
+      error: error.message,
+      recoverable: error.message.includes('Extension context invalidated')
+    };
+
+    // Only log non-recoverable errors
+    if (!errorResponse.recoverable) {
+      console.error(`❌ Failed to forward ${type}:`, error);
+    }
+
+    window.postMessage({
+      type: `${type}_RESPONSE`,
+      payload: errorResponse,
+      source: 'make10000hours-extension'
+    });
+  }
+}
+
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
