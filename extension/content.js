@@ -1,7 +1,44 @@
 /**
  * Content Script for Focus Time Tracker Extension
  * Detects user activity and communicates with background script
+ * Enhanced with robust extension context handling
  */
+
+// Load required utilities for robust extension communication
+(function loadUtilities() {
+  if (typeof chrome === 'undefined' || !chrome.runtime) {
+    console.warn('⚠️ Chrome extension API not available, skipping utility loading');
+    return;
+  }
+
+  const loadScript = (src) => {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL(src);
+      script.onload = resolve;
+      script.onerror = () => {
+        console.warn(`⚠️ Failed to load ${src}, continuing without it`);
+        resolve(); // Don't reject, just continue
+      };
+      (document.head || document.documentElement).appendChild(script);
+    });
+  };
+
+  // Load utilities in order (non-blocking)
+  Promise.all([
+    loadScript('utils/contextValidator.js'),
+    loadScript('utils/connectionManager.js'),
+    loadScript('utils/messageQueue.js')
+  ]).then(() => {
+    console.log('✅ Extension utilities loaded successfully');
+    // Notify that utilities are ready
+    window.dispatchEvent(new CustomEvent('extensionUtilitiesReady'));
+  }).catch(error => {
+    console.warn('⚠️ Some extension utilities failed to load:', error);
+    // Still dispatch event so content script can continue
+    window.dispatchEvent(new CustomEvent('extensionUtilitiesReady'));
+  });
+})();
 
 // Enhanced Content Script with Activity Detection
 console.log('🚀 Content script loading on:', window.location.href);
@@ -26,7 +63,132 @@ class ActivityDetector {
     this.messageListenersSetup = false;
     this.chromeListenerSetup = false;
     
-    this.initialize();
+    // Enhanced extension communication
+    this.connectionManager = null;
+    this.messageQueue = null;
+    this.utilitiesReady = false;
+    
+    // Wait for utilities to load before initializing
+    this.waitForUtilities();
+  }
+
+  /**
+   * Wait for extension utilities to be ready
+   */
+  waitForUtilities() {
+    const initializeWhenReady = () => {
+      // Initialize utilities if available
+      this.initializeUtilities();
+      // Initialize the detector
+      this.initialize();
+    };
+
+    if (window.ExtensionConnectionManager) {
+      // Utilities already loaded
+      initializeWhenReady();
+    } else {
+      // Wait for utilities to load
+      window.addEventListener('extensionUtilitiesReady', () => {
+        initializeWhenReady();
+      });
+      
+      // Fallback: initialize after delay even if utilities don't load
+      setTimeout(() => {
+        if (!this.isInitialized) {
+          console.warn('⚠️ Extension utilities not loaded, initializing without them');
+          this.initialize();
+        }
+      }, 2000);
+    }
+  }
+
+  /**
+   * Initialize extension utilities if available
+   */
+  initializeUtilities() {
+    try {
+      if (typeof window.ExtensionConnectionManager !== 'undefined') {
+        this.connectionManager = new window.ExtensionConnectionManager();
+        console.log('✅ Extension Connection Manager initialized');
+      }
+
+      if (typeof window.ExtensionMessageQueue !== 'undefined' && this.connectionManager) {
+        this.messageQueue = new window.ExtensionMessageQueue(this.connectionManager);
+        console.log('✅ Extension Message Queue initialized');
+      }
+
+      this.utilitiesReady = true;
+    } catch (error) {
+      console.warn('⚠️ Failed to initialize extension utilities:', error);
+    }
+  }
+
+  /**
+   * Safe message sending with enhanced error handling
+   */
+  async sendMessageSafely(message, options = {}) {
+    const { 
+      fallback = { success: false, error: 'Extension not available' },
+      priority = 'normal',
+      shouldQueue = true 
+    } = options;
+
+    try {
+      // Use message queue if available
+      if (this.messageQueue && this.utilitiesReady) {
+        return await this.messageQueue.sendMessage(message, {
+          priority,
+          fallback,
+          shouldQueue
+        });
+      }
+
+      // Use connection manager if available
+      if (this.connectionManager && this.utilitiesReady) {
+        return await this.connectionManager.sendMessage(message, { fallback });
+      }
+
+      // Fallback to direct Chrome API with context validation
+      if (typeof window.ExtensionContextValidator !== 'undefined') {
+        if (!window.ExtensionContextValidator.isContextValid()) {
+          console.warn('🔄 Extension context invalid, using fallback');
+          return fallback;
+        }
+      }
+
+      // Direct Chrome API call (last resort)
+      return await this.sendMessageDirect(message);
+      
+    } catch (error) {
+      console.warn('📨 Enhanced message sending failed:', error.message);
+      return fallback;
+    }
+  }
+
+  /**
+   * Direct message sending (fallback method)
+   */
+  async sendMessageDirect(message) {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Message timeout'));
+      }, 10000);
+
+      try {
+        chrome.runtime.sendMessage(message, (response) => {
+          clearTimeout(timeoutId);
+          
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(response);
+          }
+        });
+      } catch (error) {
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    });
   }
 
   /**
@@ -143,27 +305,26 @@ class ActivityDetector {
       if (event.data?.type === 'SET_USER_ID' && event.data?.source?.includes('make10000hours')) {
         console.log('🔄 Received SET_USER_ID from web app:', event.data.payload);
         
-        try {
-          const response = await chrome.runtime.sendMessage({
-            type: 'SET_USER_ID',
-            payload: event.data.payload
-          });
-          
-          window.postMessage({
-            type: 'SET_USER_ID_RESPONSE',
-            payload: response,
-            source: 'make10000hours-extension'
-          }, '*');
-          
-        } catch (error) {
-          console.error('❌ Failed to forward SET_USER_ID:', error);
-          
-          window.postMessage({
-            type: 'SET_USER_ID_RESPONSE',
-            payload: { success: false, error: error.message },
-            source: 'make10000hours-extension'
-          }, '*');
-        }
+        const message = {
+          type: 'SET_USER_ID',
+          payload: event.data.payload
+        };
+
+        const response = await this.sendMessageSafely(message, {
+          priority: 'high',
+          shouldQueue: true,
+          fallback: { 
+            success: false, 
+            error: 'Extension temporarily unavailable - message queued for retry',
+            queued: true 
+          }
+        });
+        
+        window.postMessage({
+          type: 'SET_USER_ID_RESPONSE',
+          payload: response,
+          source: 'make10000hours-extension'
+        }, '*');
       }
 
       // Handle RECORD_OVERRIDE_SESSION messages from web app
@@ -174,27 +335,26 @@ class ActivityDetector {
         
         console.log('📝 Forwarding override session from web app to extension');
         
-        try {
-          const response = await chrome.runtime.sendMessage({
-            type: 'RECORD_OVERRIDE_SESSION',
-            payload: event.data.payload
-          });
-          
-          window.postMessage({
-            type: 'RECORD_OVERRIDE_SESSION_RESPONSE',
-            payload: { success: true },
-            source: 'make10000hours-extension'
-          }, '*');
-          
-        } catch (error) {
-          console.error('❌ Failed to record override session:', error);
-          
-          window.postMessage({
-            type: 'RECORD_OVERRIDE_SESSION_RESPONSE',
-            payload: { success: false, error: error.message },
-            source: 'make10000hours-extension'
-          }, '*');
-        }
+        const message = {
+          type: 'RECORD_OVERRIDE_SESSION',
+          payload: event.data.payload
+        };
+
+        const response = await this.sendMessageSafely(message, {
+          priority: 'high',
+          shouldQueue: true,
+          fallback: { 
+            success: false, 
+            error: 'Extension temporarily unavailable - override session queued for retry',
+            queued: true 
+          }
+        });
+        
+        window.postMessage({
+          type: 'RECORD_OVERRIDE_SESSION_RESPONSE',
+          payload: response.success ? { success: true } : response,
+          source: 'make10000hours-extension'
+        }, '*');
       }
     });
 
@@ -275,11 +435,17 @@ class ActivityDetector {
     this.wasSleeping = true;
     this.sleepStartTime = Date.now();
     
-    // Report sleep state to background
-    chrome.runtime.sendMessage({
+    // Report sleep state to background (using safe messaging)
+    this.sendMessageSafely({
       type: 'SYSTEM_SLEEP_DETECTED',
       timestamp: this.sleepStartTime
-    }).catch(console.error);
+    }, {
+      priority: 'low',
+      shouldQueue: false,
+      fallback: null // Don't care if this fails
+    }).catch(() => {
+      // Silently ignore failures for sleep detection
+    });
   }
 
   /**
@@ -300,12 +466,18 @@ class ActivityDetector {
     // Update last activity to current time
     this.lastActivity = now;
     
-    // Report wake state to background
-    chrome.runtime.sendMessage({
+    // Report wake state to background (using safe messaging)
+    this.sendMessageSafely({
       type: 'SYSTEM_WAKE_DETECTED',
       timestamp: now,
       sleepDuration: duration
-    }).catch(console.error);
+    }, {
+      priority: 'low',
+      shouldQueue: false,
+      fallback: null // Don't care if this fails
+    }).catch(() => {
+      // Silently ignore failures for wake detection
+    });
   }
 
   /**

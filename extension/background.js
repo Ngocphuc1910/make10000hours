@@ -2582,6 +2582,15 @@ class FocusTimeTracker {
           this.handleSystemWake(message.timestamp, message.sleepDuration);
           break;
 
+        case 'PING':
+          // Health check ping from content scripts
+          sendResponse({ 
+            success: true, 
+            timestamp: Date.now(),
+            extensionId: chrome.runtime.id 
+          });
+          break;
+
         default:
           console.warn('❓ Unknown message type:', message.type);
           sendResponse({ success: false, error: 'Unknown message type' });
