@@ -11,6 +11,41 @@ const initializationLock = { current: false };
 // Global processed messages tracking for override sessions (persist across component unmounts)
 const globalProcessedMessages = new Set<string>();
 
+// Global message deduplication
+const processedMessages = new Set<string>();
+const MESSAGE_DEBOUNCE = 500; // ms
+let lastMessageTime = 0;
+
+// Error recovery configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // ms
+const retryAttempts = new Map<string, number>();
+
+// Retry helper function
+const retryOperation = async (
+  operationId: string,
+  operation: () => Promise<void>,
+  maxRetries: number = MAX_RETRIES,
+  delay: number = RETRY_DELAY
+): Promise<void> => {
+  try {
+    await operation();
+    // Clear retry count on success
+    retryAttempts.delete(operationId);
+  } catch (error) {
+    const attempts = retryAttempts.get(operationId) || 0;
+    if (attempts < maxRetries) {
+      console.log(`🔄 Retry attempt ${attempts + 1} for operation: ${operationId}`);
+      retryAttempts.set(operationId, attempts + 1);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return retryOperation(operationId, operation, maxRetries, delay);
+    } else {
+      retryAttempts.delete(operationId);
+      throw error;
+    }
+  }
+};
+
 interface DeepFocusContextType {
   isDeepFocusActive: boolean;
   enableDeepFocus: (source?: Source) => Promise<void>;
@@ -253,6 +288,78 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
       }
     };
   }, [user?.uid, isUserInitialized, recordOverrideSession]);
+
+  // Enhanced message handling with retry
+  useEffect(() => {
+    if (!isUserInitialized || !user?.uid) {
+      console.log('🔄 Waiting for user initialization before setting up message handler...');
+      return;
+    }
+
+    const handleExtensionMessage = async (event: MessageEvent) => {
+      const now = Date.now();
+      
+      try {
+        // Handle focus state changes from extension
+        if (event.data?.type === 'EXTENSION_FOCUS_STATE_CHANGED' || 
+            event.data?.type === 'FOCUS_STATE_CHANGED') {
+          
+          if (now - lastMessageTime < MESSAGE_DEBOUNCE) {
+            console.log('🔄 Skipping message due to debounce');
+            return;
+          }
+          lastMessageTime = now;
+
+          // Message deduplication
+          const messageId = `${event.data.extensionId}_${event.data.payload?.isActive}_${now}`;
+          if (processedMessages.has(messageId)) {
+            console.log('🔄 Skipping duplicate message:', messageId);
+            return;
+          }
+          processedMessages.add(messageId);
+
+          // Clean up old message IDs (keep last 5 minutes)
+          const CLEANUP_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+          processedMessages.forEach(id => {
+            const [, , timestamp] = id.split('_');
+            if (now - parseInt(timestamp) > CLEANUP_THRESHOLD) {
+              processedMessages.delete(id);
+            }
+          });
+
+          console.log('🔄 Processing focus state change:', event.data);
+          const { isActive, blockedSites = [] } = event.data.payload;
+
+          // Sync complete focus state with retry
+          await retryOperation(
+            `sync_focus_${messageId}`,
+            async () => {
+              await syncCompleteFocusState(isActive, blockedSites);
+              
+              // Broadcast that state was handled
+              window.dispatchEvent(new CustomEvent('focusStateHandled', { 
+                detail: { isActive, timestamp: now } 
+              }));
+            }
+          );
+        }
+      } catch (error) {
+        console.error('Error handling extension message:', error);
+        // Broadcast error for error boundary handling
+        window.dispatchEvent(new CustomEvent('focusStateError', { 
+          detail: { error, timestamp: now } 
+        }));
+      }
+    };
+
+    // Add message listener
+    window.addEventListener('message', handleExtensionMessage);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('message', handleExtensionMessage);
+    };
+  }, [isUserInitialized, user?.uid, syncCompleteFocusState]);
 
   // Listen for focus changes from other components (internal state sync)
   useEffect(() => {
