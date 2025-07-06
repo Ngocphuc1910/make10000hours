@@ -71,6 +71,7 @@ const DeepFocusPage: React.FC = () => {
     addBlockedSite,
     loadBlockedSites,
     loadExtensionData,
+    loadAllTimeExtensionData,
     blockSiteInExtension,
     unblockSiteInExtension,
     enableDeepFocus,
@@ -215,7 +216,7 @@ const DeepFocusPage: React.FC = () => {
     
     // Run the auto-reload sequence
     performAutoReload();
-  }, [location.pathname, loadExtensionData]); // Added loadExtensionData dependency
+  }, [location.pathname]); // Added loadExtensionData dependency
 
   // Debug: Track selectedRange changes
   useEffect(() => {
@@ -356,7 +357,7 @@ const DeepFocusPage: React.FC = () => {
       try {
         if (selectedRange.rangeType === 'all time') {
           console.log('🔍 DEBUG: All time selected - loading all extension data');
-          await loadExtensionData();
+          await loadAllTimeExtensionData();
           
           if (!isCancelled) {
             // For all-time, use store data if available
@@ -632,7 +633,7 @@ const DeepFocusPage: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [selectedRange, loadHybridTimeRangeData, user?.uid, workSessions, deepFocusSessions, siteUsage, dailyUsage, timeMetrics, pageLoadTrigger]);
+  }, [selectedRange, user]);
 
   // Listen for override session recordings from global context and update UI
   useEffect(() => {
@@ -1044,7 +1045,7 @@ const DeepFocusPage: React.FC = () => {
     // Only return empty if we truly have no data at all
     console.log('❌ No site usage data available from any source');    
     return [];
-  }, [extensionData, siteUsage, selectedRange, isLoadingDateRangeData, filteredWorkSessions, deepFocusSessions, workSessions, firebaseDailyData]);
+  }, [extensionData, siteUsage, selectedRange, isLoadingDateRangeData]);
 
 
 
