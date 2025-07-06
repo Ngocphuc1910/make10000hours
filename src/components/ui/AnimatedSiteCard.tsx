@@ -44,17 +44,9 @@ const AnimatedSiteCard: React.FC<AnimatedSiteCardProps> = ({ site, onToggle, onR
       </div>
       <div className="flex items-center space-x-3">
         <button 
-          className="p-1.5 text-text-secondary hover:text-text-primary transition-colors duration-200"
-          title="Edit site"
-          style={{ display: 'none' }}
-        >
-          <Icon name="edit-line" className="w-5 h-5" />
-        </button>
-        <button 
           onClick={handleRemove}
-          className="p-1.5 text-text-secondary hover:text-red-500 transition-colors duration-200"
+          className="p-1.5 text-text-secondary hover:text-red-500 transition-colors duration-200 hover:scale-110"
           title="Remove site"
-          style={{ display: 'none' }}
         >
           <Icon name="delete-bin-line" className="w-5 h-5" />
         </button>
