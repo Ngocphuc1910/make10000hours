@@ -80,15 +80,25 @@ class ExtensionConnectionManager {
   async sendPing() {
     return new Promise((resolve) => {
       const timeoutId = setTimeout(() => {
+        console.debug('🔍 Ping timed out after 10s');
         resolve(null);
-      }, 5000); // 5 second timeout
+      }, 10000); // Increase timeout to 10 seconds
 
       try {
         chrome.runtime.sendMessage(
-          { type: 'PING', timestamp: Date.now() },
+          { 
+            type: 'PING', 
+            timestamp: Date.now(),
+            metadata: {
+              source: 'connection_manager',
+              attempt: this.reconnectAttempts + 1
+            }
+          },
           (response) => {
             clearTimeout(timeoutId);
+            
             if (chrome.runtime.lastError) {
+              console.debug('🔍 Ping failed:', chrome.runtime.lastError.message);
               resolve(null);
             } else {
               resolve(response);
@@ -97,6 +107,7 @@ class ExtensionConnectionManager {
         );
       } catch (error) {
         clearTimeout(timeoutId);
+        console.debug('🔍 Ping error:', error.message);
         resolve(null);
       }
     });
@@ -176,15 +187,26 @@ class ExtensionConnectionManager {
     this.reconnectAttempts++;
     console.log(`🔄 Attempting reconnection (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
 
-    // Wait before attempting reconnection
-    await this.delay(this.getReconnectDelay());
+    // Calculate delay with exponential backoff and jitter
+    const baseDelay = this.getReconnectDelay();
+    const jitter = Math.random() * 1000; // Add up to 1s random jitter
+    const delay = baseDelay + jitter;
 
-    const isConnected = await this.checkConnection();
-    
-    if (isConnected) {
-      console.log('✅ Reconnection successful!');
-      return true;
-    } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+    // Wait before attempting reconnection
+    await this.delay(delay);
+
+    // Try multiple ping attempts before giving up
+    for (let i = 0; i < 3; i++) {
+      const isConnected = await this.checkConnection();
+      if (isConnected) {
+        console.log('✅ Reconnection successful!');
+        return true;
+      }
+      // Small delay between ping attempts
+      await this.delay(100);
+    }
+
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.warn('⚠️ Max reconnection attempts reached. Extension may need manual reload.');
       return false;
     }
@@ -196,11 +218,10 @@ class ExtensionConnectionManager {
    * Get reconnect delay with exponential backoff
    */
   getReconnectDelay() {
-    const delay = Math.min(
-      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
+    return Math.min(
+      this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1), // Use 1.5 instead of 2 for gentler backoff
       this.maxReconnectDelay
     );
-    return delay + Math.random() * 1000; // Add jitter
   }
 
   /**
