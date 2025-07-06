@@ -138,6 +138,7 @@ interface DeepFocusStore extends DeepFocusData {
   addBlockedSite: (site: Omit<BlockedSite, 'id'>) => Promise<void>;
   loadBlockedSites: (userId: string) => Promise<void>;
   loadExtensionData: () => Promise<void>;
+  loadAllTimeExtensionData: () => Promise<void>;
   loadAllTimeDailyUsage: () => Promise<void>;
   blockSiteInExtension: (domain: string) => Promise<void>;
   unblockSiteInExtension: (domain: string) => Promise<void>;
@@ -373,6 +374,38 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           set({ isExtensionConnected: false });
         }
       },
+
+      loadAllTimeExtensionData: async () => {
+        try {
+          if (!ExtensionDataService.isExtensionInstalled()) {
+            set({ isExtensionConnected: false });
+            return;
+          }
+          const user = useUserStore.getState().user;
+          if (!user?.uid) {
+            console.warn('⚠️ User not authenticated - skipping all time extension data load');
+            set({ isExtensionConnected: false });
+            return;
+          }
+
+          const dailySiteUsage = await siteUsageService.getAllTimeDailyUsage(user.uid);
+          
+          const mappedData = ExtensionDataService.mapArrSiteUsage(dailySiteUsage);
+
+          console.log('khanhnq6', mappedData);
+          
+          set({
+            timeMetrics: mappedData.timeMetrics,
+            siteUsage: mappedData.siteUsage,
+            dailyUsage: mappedData.dailyUsage,
+            isExtensionConnected: true
+          });
+        } catch (error) {
+          console.error('Extension data all time loading failed:', error);
+          set({ isExtensionConnected: false });
+        }
+      },
+
 
       loadAllTimeDailyUsage: async () => {
         try {

@@ -394,6 +394,28 @@ class SiteUsageService {
       throw error;
     }
   }
+
+  async getAllTimeDailyUsage(userId: string): Promise<DailySiteUsage[]> {
+    try {
+      const q = query(
+        collection(db, this.collectionName),
+        where('userId', '==', userId),
+        orderBy('date', 'desc')
+      );
+      
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date(),
+        updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+        syncedAt: doc.data().syncedAt?.toDate() || new Date()
+      })) as DailySiteUsage[];
+    } catch (error) {
+      console.error('❌ Failed to get all time daily usage:', error);
+      throw error;
+    }
+  }
 }
 
 export const siteUsageService = new SiteUsageService(); 
