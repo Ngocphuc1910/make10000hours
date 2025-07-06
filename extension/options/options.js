@@ -454,6 +454,51 @@ class BlockedSitesManager {
   }
 }
 
+// Add Firebase config section to options page
+document.addEventListener('DOMContentLoaded', async () => {
+  // Get current config
+  const response = await chrome.runtime.sendMessage({ type: 'GET_FIREBASE_CONFIG' });
+  const config = response?.config || {};
+  
+  // Create Firebase config section
+  const configSection = document.createElement('div');
+  configSection.className = 'config-section';
+  configSection.innerHTML = `
+    <h3>Firebase Configuration</h3>
+    <div class="form-group">
+      <label for="projectId">Project ID:</label>
+      <input type="text" id="projectId" value="${config.projectId || ''}" />
+    </div>
+    <div class="form-group">
+      <label for="apiKey">API Key:</label>
+      <input type="password" id="apiKey" value="${config.apiKey || ''}" />
+    </div>
+    <button id="saveConfig" class="btn primary">Save Configuration</button>
+  `;
+  
+  document.querySelector('#options-form').appendChild(configSection);
+  
+  // Add save handler
+  document.querySelector('#saveConfig').addEventListener('click', async () => {
+    const newConfig = {
+      projectId: document.querySelector('#projectId').value,
+      apiKey: document.querySelector('#apiKey').value,
+      // Add other required Firebase config fields
+    };
+    
+    const saveResponse = await chrome.runtime.sendMessage({ 
+      type: 'SET_FIREBASE_CONFIG', 
+      payload: newConfig 
+    });
+    
+    if (saveResponse?.success) {
+      alert('Firebase configuration saved successfully!');
+    } else {
+      alert('Failed to save Firebase configuration: ' + saveResponse?.error);
+    }
+  });
+});
+
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
   console.log('🎯 Focus Time Tracker Options - Phase 2 with Blocked Sites Management');
