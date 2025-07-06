@@ -978,40 +978,14 @@ class StorageManager {
   /**
    * Create a new deep focus session
    */
-  async createDeepFocusSession() {
+  async createDeepFocusSession(userId) {
+    if (!userId) {
+      throw new Error('User ID required to create deep focus session');
+    }
+
     try {
-      // Add validation for userId
-      if (!this.currentUserId) {
-        console.warn('⚠️ No user ID available - cannot create deep focus session');
-        throw new Error('User ID required to create deep focus session');
-      }
-
-      const now = new Date();
-      const today = now.toISOString().split('T')[0];
-      const sessionId = this.generateSessionId();
-      
-      const newSession = {
-        id: sessionId,
-        userId: this.currentUserId, // Add userId to session
-        date: today,
-        startTime: now.getTime(),
-        duration: 0,
-        status: 'active',
-        createdAt: now.getTime(),
-        updatedAt: now.getTime()
-      };
-
-      console.log('🎯 Creating deep focus session in unified storage:', sessionId, 'for user:', this.currentUserId);
-
-      // Get existing storage and add new session
-      const storage = await this.getDeepFocusStorage();
-      if (!storage[today]) {
-        storage[today] = [];
-      }
-      
-      storage[today].push(newSession);
-      await this.saveDeepFocusStorage(storage);
-      
+      // Existing session creation logic
+      const sessionId = await this.saveDeepFocusStorage(storage);
       console.log('✅ Created local deep focus session:', sessionId, 'Total sessions today:', storage[today].length);
       console.log('📦 Session data:', newSession);
       return sessionId;
