@@ -966,98 +966,81 @@ async function handleMessage(event) {
 
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  switch (message.type) {
-    case 'GET_ACTIVITY_STATUS':
-      sendResponse({
-        success: true,
-        data: activityDetector.getActivityStatus()
-      });
-      break;
-      
-    case 'FOCUS_MODE_CHANGED':
-      if (message.payload.enabled) {
-        activityDetector.isActive = true;
-        activityDetector.isPageVisible = true;
-        activityDetector.isWindowFocused = true;
-        activityDetector.showFocusIndicator();
-      } else {
-        activityDetector.hideFocusIndicator();
-      }
-      sendResponse({ success: true });
-      break;
-      
-    case 'FOCUS_STATE_CHANGED':
-      // Update local state
-      activityDetector.isActive = message.payload.isActive;
-      if (message.payload.isActive) {
-        activityDetector.showFocusIndicator();
-      } else {
-        activityDetector.hideFocusIndicator();
-      }
-      
-      // Get current user ID from page to validate if this change applies
-      const getCurrentUserId = () => {
+  try {
+    switch (message.type) {
+      case 'FOCUS_STATE_CHANGED':
         try {
-          const userStorage = localStorage.getItem('user-store');
-          if (userStorage) {
-            const parsed = JSON.parse(userStorage);
-            return parsed?.state?.user?.uid || null;
+          // Get current state for validation
+          const currentState = message.payload.isActive;
+          const now = Date.now();
+          
+          // Get current user ID from page to validate if this change applies
+          const getCurrentUserId = () => {
+            try {
+              const userStorage = localStorage.getItem('user-store');
+              if (userStorage) {
+                const parsed = JSON.parse(userStorage);
+                return parsed?.state?.user?.uid || null;
+              }
+            } catch (error) {
+              console.warn('Failed to get current user ID:', error);
+            }
+            return null;
+          };
+          
+          const currentUserId = getCurrentUserId();
+          
+          // Forward state change to web app with enhanced metadata
+          window.postMessage({
+            type: 'EXTENSION_FOCUS_STATE_CHANGED',
+            payload: {
+              ...message.payload,
+              targetUserId: currentUserId,
+              timestamp: now,
+              messageId: `${chrome.runtime.id}_${currentState}_${now}`,
+              source: 'extension-content-script',
+              forceSync: true
+            },
+            source: chrome.runtime.id,
+            extensionId: chrome.runtime.id,
+            messageTimestamp: now,
+            messageSource: 'focus-time-tracker-extension',
+            forceSync: true
+          }, '*');
+
+          // Ensure state is synchronized by sending a direct message to the web app
+          try {
+            const appOrigin = window.location.origin;
+            ['/pomodoro', '/deep-focus', '/dashboard', '/settings'].forEach(route => {
+              window.postMessage({
+                type: 'EXTENSION_STATE_SYNC',
+                payload: {
+                  focusMode: message.payload.isActive,
+                  timestamp: now,
+                  messageId: `${chrome.runtime.id}_sync_${now}_${route}`,
+                  source: 'extension-content-script'
+                }
+              }, appOrigin);
+            });
+          } catch (error) {
+            console.warn('Failed to send direct state sync:', error);
           }
+          
+          sendResponse({ success: true });
         } catch (error) {
-          console.warn('Failed to get current user ID:', error);
+          console.error('Error handling focus state change:', error);
+          sendResponse({ success: false, error: error.message });
         }
-        return null;
-      };
-      
-      const currentUserId = getCurrentUserId();
-      
-      // Add deduplication - only forward if this is a new state change
-      const currentState = message.payload.isActive;
-      const lastForwardedState = activityDetector.lastForwardedState;
-      const lastForwardedTime = activityDetector.lastForwardedTime || 0;
-      const now = Date.now();
-      
-      // Skip if same state was forwarded within the last 1 second
-      if (lastForwardedState === currentState && (now - lastForwardedTime) < 1000) {
-        console.log('🔄 Skipping duplicate focus state forward:', currentState);
         break;
-      }
-      
-      // Store state to prevent duplicates
-      activityDetector.lastForwardedState = currentState;
-      activityDetector.lastForwardedTime = now;
-      
-      // Forward to web app with extension ID as source and user validation
-      window.postMessage({
-        type: 'EXTENSION_FOCUS_STATE_CHANGED',
-        payload: {
-          isActive: message.payload.isActive,
-          isVisible: message.payload.isActive,
-          isFocused: message.payload.isActive,
-          blockedSites: message.payload.blockedSites || [],
-          targetUserId: currentUserId, // Include current user for validation
-          timestamp: now, // Add timestamp for additional deduplication
-          messageId: `${chrome.runtime.id}_${currentState}_${now}`, // Unique message ID
-          source: 'extension-content-script' // Source identification
-        },
-        source: chrome.runtime.id,
-        extensionId: chrome.runtime.id,
-        messageTimestamp: now, // Duplicate timestamp for backward compatibility
-        messageSource: 'focus-time-tracker-extension'
-      }, '*');
-      
-      sendResponse({ success: true });
-      break;
-      
-    case 'PING':
-      sendResponse({ success: true, pong: true });
-      break;
-      
-    default:
-      sendResponse({ success: false, error: 'Unknown message type' });
+
+      default:
+        sendResponse({ success: false, error: 'Unknown message type' });
+        break;
+    }
+  } catch (error) {
+    console.error('Error in message listener:', error);
+    sendResponse({ success: false, error: error.message });
   }
-  
-  return true; // Keep message channel open
 });
 
 // Initialize activity detector
