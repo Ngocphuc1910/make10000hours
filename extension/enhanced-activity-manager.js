@@ -4,6 +4,8 @@
  * Similar to the web app's useActivityDetection hook
  */
 
+import SleepDetectionService from './utils/sleepDetectionService.js';
+
 class EnhancedActivityManager {
   constructor() {
     this.isUserActive = true;
@@ -24,6 +26,10 @@ class EnhancedActivityManager {
     this.currentTabId = null;
     this.currentDomain = null;
     this.sessionStartTime = null;
+    
+    // Sleep detection
+    this.sleepDetectionService = new SleepDetectionService();
+    this.wasSleeping = false;
     
     // Callbacks
     this.onActivityChange = null;
@@ -166,6 +172,11 @@ class EnhancedActivityManager {
   checkActivityStatus() {
     const now = Date.now();
     const timeSinceLastActivity = now - this.lastActivityTime;
+    
+    // Skip check if system was sleeping
+    if (this.wasSleeping) {
+      return;
+    }
     
     console.log('🔍 Activity check:', {
       timeSinceLastActivity: Math.round(timeSinceLastActivity / 1000) + 's',
@@ -357,6 +368,40 @@ class EnhancedActivityManager {
   }
 
   /**
+   * Handle system sleep detection
+   */
+  handleSystemSleep() {
+    console.log('💤 System sleep detected');
+    
+    this.wasSleeping = true;
+    this.pauseSession('system_sleep');
+    
+    // Stop activity monitoring during sleep
+    this.stopActivityMonitoring();
+  }
+
+  /**
+   * Handle system wake detection
+   */
+  handleSystemWake(timeGap) {
+    console.log('🌅 System wake detected, gap:', Math.round(timeGap / 1000) + 's');
+    
+    if (this.wasSleeping) {
+      // Add sleep time to total paused time
+      this.totalPausedTime += timeGap;
+      this.wasSleeping = false;
+      
+      // Restart activity monitoring
+      this.startActivityMonitoring();
+      
+      // Resume session if auto-management is enabled
+      if (this.autoManagementEnabled) {
+        this.resumeSession();
+      }
+    }
+  }
+
+  /**
    * Handle extension suspend
    */
   handleExtensionSuspend() {
@@ -487,6 +532,16 @@ class EnhancedActivityManager {
     this.stopActivityMonitoring();
     this.saveCurrentState();
     console.log('🧹 Enhanced Activity Manager cleaned up');
+  }
+
+  /**
+   * Clean up resources
+   */
+  destroy() {
+    this.stopActivityMonitoring();
+    if (this.sleepDetectionService) {
+      this.sleepDetectionService.destroy();
+    }
   }
 }
 
