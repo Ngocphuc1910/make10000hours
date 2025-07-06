@@ -1,11 +1,9 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
-import { formatElapsedTime } from '../../utils/timeFormat';
 import { Icon } from '../ui/Icon';
 import { Tooltip } from '../ui/Tooltip';
 import { DeepFocusSwitch } from '../ui/DeepFocusSwitch';
-import { useDeepFocusContext } from '../../contexts/DeepFocusContext';
 
 interface TopBarProps {
   className?: string;
@@ -37,27 +35,107 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
   };
 
   return (
-    <div className={`flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 ${className}`}>
-      <div className="flex items-center space-x-4">
-        <button
-          onClick={toggleLeftSidebar}
-          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-          aria-label="Toggle sidebar"
-        >
-          <Icon name={isLeftSidebarOpen ? 'menu-fold' : 'menu-unfold'} className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-        </button>
-        <h1 className="text-xl font-semibold text-gray-800 dark:text-white">
-          {getPageTitle()}
-        </h1>
+    <div className={`h-16 border-b border-border flex items-center justify-between px-4 bg-background-secondary transition-all duration-500 relative ${className}`}>
+      <div className="flex items-center">
+        {!isLeftSidebarOpen && (
+          <button
+            onClick={toggleLeftSidebar}
+            className="p-2 mr-2 rounded-md hover:bg-background-primary hover:shadow-sm hover:scale-105 transition-all duration-200 group"
+            aria-label="Show Sidebar"
+          >
+            <div className="w-5 h-5 flex items-center justify-center text-text-secondary group-hover:text-text-primary transition-colors duration-200">
+              <Icon name="menu-line" size={20} />
+            </div>
+          </button>
+        )}
+        <DeepFocusSwitch 
+          size="medium" 
+          showLabel={false} 
+          showPageTitle={true} 
+          pageTitle={getPageTitle()}
+        />
       </div>
 
       <div className="flex items-center space-x-4">
-        <DeepFocusSwitch
-          size="medium"
-          showLabel={false}
-          className="mr-4"
-        />
-        {/* Add other top bar items here */}
+        <Tooltip text="Pomodoro Timer">
+          <button 
+            className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+              location.pathname === '/pomodoro' 
+                ? 'bg-background-container text-text-primary' 
+                : 'hover:bg-background-container hover:text-text-primary'
+            }`}
+            onClick={location.pathname === '/pomodoro' ? undefined : () => navigate('/pomodoro')}
+            aria-label={location.pathname === '/pomodoro' ? 'Current page: Pomodoro Timer' : 'Go to Pomodoro Timer'}
+          >
+            <span className="w-5 h-5 flex items-center justify-center">
+              <Icon name="timer-line" size={20} />
+            </span>
+          </button>
+        </Tooltip>
+        
+        <Tooltip text="Task Management">
+          <button 
+            className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+              location.pathname === '/projects' 
+                ? 'bg-background-container text-text-primary' 
+                : 'hover:bg-background-container hover:text-text-primary'
+            }`}
+            onClick={location.pathname === '/projects' ? undefined : () => navigate('/projects')}
+            aria-label={location.pathname === '/projects' ? 'Current page: Task Management' : 'Go to Task Management'}
+          >
+            <span className="w-5 h-5 flex items-center justify-center">
+              <Icon name="task-line" size={20} />
+            </span>
+          </button>
+        </Tooltip>
+        
+        <Tooltip text="Productivity Insights">
+          <button 
+            className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+              location.pathname === '/dashboard' 
+                ? 'bg-background-container text-text-primary' 
+                : 'hover:bg-background-container hover:text-text-primary'
+            }`}
+            onClick={location.pathname === '/dashboard' ? undefined : () => navigate('/dashboard')}
+            aria-label={location.pathname === '/dashboard' ? 'Current page: Productivity Insights' : 'Go to Productivity Insights'}
+          >
+            <span className="w-5 h-5 flex items-center justify-center">
+              <Icon name="dashboard-line" size={20} />
+            </span>
+          </button>
+        </Tooltip>
+        
+        <Tooltip text="Calendar">
+          <button 
+            className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+              location.pathname === '/calendar' 
+                ? 'bg-background-container text-text-primary' 
+                : 'hover:bg-background-container hover:text-text-primary'
+            }`}
+            onClick={location.pathname === '/calendar' ? undefined : () => navigate('/calendar')}
+            aria-label={location.pathname === '/calendar' ? 'Current page: Calendar' : 'Go to Calendar'}
+          >
+            <span className="w-5 h-5 flex items-center justify-center">
+              <Icon name="calendar-line" size={20} />
+            </span>
+          </button>
+        </Tooltip>
+        
+        <Tooltip text="Deep Focus">
+          <button 
+            className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
+              location.pathname === '/deep-focus' 
+                ? 'bg-background-container text-text-primary' 
+                : 'hover:bg-background-container hover:text-text-primary'
+            }`}
+            onClick={location.pathname === '/deep-focus' ? undefined : () => navigate('/deep-focus')}
+            aria-label={location.pathname === '/deep-focus' ? 'Current page: Deep Focus' : 'Go to Deep Focus'}
+          >
+            <span className="w-5 h-5 flex items-center justify-center">
+              <Icon name="brain-line" size={20} />
+            </span>
+          </button>
+        </Tooltip>
       </div>
     </div>
   );
