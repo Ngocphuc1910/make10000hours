@@ -1,7 +1,49 @@
 /**
  * Content Script for Focus Time Tracker Extension
  * Detects user activity and communicates with background script
+ * Enhanced with robust extension context handling
  */
+
+// Load required utilities for robust extension communication
+(function loadUtilities() {
+  if (typeof chrome === 'undefined' || !chrome.runtime) {
+    console.warn('⚠️ Chrome extension API not available, skipping utility loading');
+    return;
+  }
+
+  const loadScript = (src) => {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL(src);
+      script.onload = () => {
+        console.log(`✅ Loaded ${src} successfully`);
+        resolve();
+      };
+      script.onerror = (error) => {
+        console.warn(`⚠️ Failed to load ${src}:`, error);
+        reject(error);
+      };
+      (document.head || document.documentElement).appendChild(script);
+    });
+  };
+
+  // Load utilities in sequence to ensure proper initialization order
+  loadScript('utils/contextValidator.js')
+    .then(() => loadScript('utils/connectionManager.js'))
+    .then(() => loadScript('utils/messageQueue.js'))
+    .then(() => {
+      console.log('✅ All extension utilities loaded successfully');
+      window.dispatchEvent(new CustomEvent('extensionUtilitiesReady', {
+        detail: { success: true }
+      }));
+    })
+    .catch(error => {
+      console.error('❌ Failed to load extension utilities:', error);
+      window.dispatchEvent(new CustomEvent('extensionUtilitiesReady', {
+        detail: { success: false, error: error.message }
+      }));
+    });
+})();
 
 // Enhanced Content Script with Activity Detection
 console.log('🚀 Content script loading on:', window.location.href);
@@ -26,7 +68,231 @@ class ActivityDetector {
     this.messageListenersSetup = false;
     this.chromeListenerSetup = false;
     
-    this.initialize();
+    // Enhanced extension communication
+    this.connectionManager = null;
+    this.messageQueue = null;
+    this.utilitiesReady = false;
+    
+    // Wait for utilities to load before initializing
+    this.waitForUtilities();
+  }
+
+  /**
+   * Wait for extension utilities to be ready
+   */
+  waitForUtilities() {
+    const initializeWhenReady = () => {
+      // Initialize utilities if available
+      this.initializeUtilities();
+      // Initialize the detector
+      this.initialize();
+    };
+
+    if (window.ExtensionConnectionManager) {
+      // Utilities already loaded
+      initializeWhenReady();
+    } else {
+      // Wait for utilities to load
+      window.addEventListener('extensionUtilitiesReady', () => {
+        initializeWhenReady();
+      });
+      
+      // Fallback: initialize after delay even if utilities don't load
+      setTimeout(() => {
+        if (!this.isInitialized) {
+          console.warn('⚠️ Extension utilities not loaded, initializing without them');
+          this.initialize();
+        }
+      }, 2000);
+    }
+  }
+
+  /**
+   * Initialize extension utilities with exponential backoff
+   */
+  initializeUtilities(retryCount = 0) {
+    const MAX_RETRIES = 5;
+    const BASE_DELAY = 1000;
+
+    try {
+      console.log('🔄 Initializing extension utilities...');
+      
+      // Reset state
+      this.utilitiesReady = false;
+      
+      // Initialize message queue first
+      if (!this.messageQueue) {
+        this.messageQueue = new window.ExtensionMessageQueue();
+      }
+
+      // Initialize connection manager
+      if (!this.connectionManager) {
+        this.connectionManager = new window.ExtensionConnectionManager();
+      }
+
+      // Initialize context validator
+      if (typeof window.ExtensionContextValidator === 'undefined') {
+        window.ExtensionContextValidator = {
+          isContextValid: () => {
+            try {
+              // Check if extension context is still valid
+              return chrome.runtime && chrome.runtime.id;
+            } catch (e) {
+              return false;
+            }
+          }
+        };
+      }
+
+      this.utilitiesReady = true;
+      console.log('✅ All extension utilities initialized successfully');
+      
+      // Dispatch event for any waiting operations
+      window.dispatchEvent(new CustomEvent('extensionUtilitiesReady', { 
+        detail: { success: true } 
+      }));
+      
+    } catch (error) {
+      console.error('❌ Failed to initialize extension utilities:', error);
+      this.utilitiesReady = false;
+      
+      // Implement exponential backoff for retries
+      if (retryCount < MAX_RETRIES) {
+        const delay = BASE_DELAY * Math.pow(2, retryCount);
+        console.log(`🔄 Retrying initialization in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+        setTimeout(() => this.initializeUtilities(retryCount + 1), delay);
+      } else {
+        console.error('❌ Max retry attempts reached for utility initialization');
+        // Dispatch failure event
+        window.dispatchEvent(new CustomEvent('extensionUtilitiesReady', { 
+          detail: { success: false, error: error.message } 
+        }));
+      }
+    }
+  }
+
+  /**
+   * Safe message sending with enhanced error handling and recovery
+   */
+  async sendMessageSafely(message, options = {}) {
+    const { 
+      fallback = { success: false, error: 'Extension not available' },
+      priority = 'normal',
+      shouldQueue = true,
+      timeout = 10000,
+      maxRetries = 3
+    } = options;
+
+    let retryCount = 0;
+    const tryMessage = async () => {
+      try {
+        // Check context validity first
+        if (window.ExtensionContextValidator && !window.ExtensionContextValidator.isContextValid()) {
+          throw new Error('Extension context invalidated');
+        }
+
+        // Validate utilities are ready
+        if (!this.utilitiesReady) {
+          // Wait for utilities to be ready with timeout
+          const ready = await Promise.race([
+            new Promise(resolve => {
+              const handler = (event) => {
+                if (event.detail?.success) {
+                  window.removeEventListener('extensionUtilitiesReady', handler);
+                  resolve(true);
+                }
+              };
+              window.addEventListener('extensionUtilitiesReady', handler);
+            }),
+            new Promise(resolve => setTimeout(() => resolve(false), 5000))
+          ]);
+
+          if (!ready) {
+            throw new Error('Extension utilities not ready');
+          }
+        }
+
+        // Use message queue if available (preferred method)
+        if (this.messageQueue) {
+          return await this.messageQueue.sendMessage(message, {
+            priority,
+            fallback,
+            shouldQueue,
+            timeout,
+            retries: maxRetries,
+            onFailure: (error) => {
+              console.warn('📨 Message failed:', error.message);
+              if (error.message.includes('Extension context invalidated')) {
+                this.initializeUtilities();
+              }
+            }
+          });
+        }
+
+        // Use connection manager as fallback
+        if (this.connectionManager) {
+          return await this.connectionManager.sendMessage(message, { 
+            fallback,
+            timeout,
+            retries: maxRetries - 1
+          });
+        }
+
+        // Last resort: direct Chrome API call
+        return await this.sendMessageDirect(message);
+        
+      } catch (error) {
+        console.warn(`📨 Message attempt ${retryCount + 1} failed:`, error.message);
+        
+        if (error.message.includes('Extension context invalidated')) {
+          // Trigger reinitialization
+          this.initializeUtilities();
+          
+          // Retry with backoff if attempts remain
+          if (retryCount < maxRetries) {
+            retryCount++;
+            const delay = 1000 * Math.pow(2, retryCount - 1);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return tryMessage();
+          }
+        }
+        
+        throw error;
+      }
+    };
+
+    try {
+      return await tryMessage();
+    } catch (error) {
+      console.error('📨 All message attempts failed:', error.message);
+      return fallback;
+    }
+  }
+
+  /**
+   * Direct message sending (fallback method)
+   */
+  async sendMessageDirect(message) {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Message timeout'));
+      }, 10000);
+
+      try {
+        chrome.runtime.sendMessage(message, (response) => {
+          clearTimeout(timeoutId);
+          
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(response);
+          }
+        });
+      } catch (error) {
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    });
   }
 
   /**
@@ -77,129 +343,144 @@ class ActivityDetector {
   }
 
   /**
-   * Set up web app communication bridge
+   * Set up web app communication bridge with enhanced error handling
    */
   setupWebAppCommunication() {
-    // Prevent duplicate setup
     if (this.messageListenersSetup) {
-      console.log('🔄 Web app communication already set up, skipping...');
       return;
     }
-
-    // Check if Chrome extension API is available
-    if (typeof chrome === 'undefined' || !chrome.runtime) {
-      console.warn('⚠️ Chrome extension API not available in content script');
-      return;
-    }
-
-    console.log('🔧 Setting up web app communication bridge...');
-
-    // Listen for messages from web app
-    window.addEventListener('message', async (event) => {
-      // Only accept messages from same origin
-      if (event.origin !== window.location.origin) {
+    
+    this.messageListenersSetup = true;
+    
+    // Enhanced message handling for web app communication
+    const messageHandler = async (event) => {
+      // Validate message origin
+      if (!event.data?.source?.includes('make10000hours')) {
         return;
       }
 
-      // Handle EXTENSION_REQUEST messages (new simplified method)
-      if (event.data?.type === 'EXTENSION_REQUEST') {
-        console.log('🔄 Received EXTENSION_REQUEST from web app');
-        
-        try {
-          const response = await chrome.runtime.sendMessage(event.data.payload);
-          
-          // Send response back to web app
-          window.postMessage({
-            extensionResponseId: event.data.messageId,
-            response: response
-          }, '*');
-          
-        } catch (error) {
-          console.error('❌ Failed to forward request to extension:', error);
-          
-          // Send error response back to web app
-          window.postMessage({
-            extensionResponseId: event.data.messageId,
-            response: { success: false, error: error.message }
-          }, '*');
-        }
-        return;
-      }
-
-      // Handle EXTENSION_PING messages (keep for backward compatibility)
-      if (event.data?.type === 'EXTENSION_PING' && event.data?.source?.includes('make10000hours')) {
-        console.log('🔄 Received EXTENSION_PING from web app, responding...');
-        
+      const { type, messageId, payload } = event.data;
+      
+      // Helper function to send response back to web app
+      const sendResponse = (responseType, responsePayload) => {
         window.postMessage({
-          type: 'EXTENSION_PONG',
-          messageId: event.data.messageId,
-          payload: { status: 'online', timestamp: Date.now() },
+          type: responseType,
+          messageId,
+          payload: responsePayload,
           source: 'focus-time-tracker-extension'
         }, '*');
-        return;
-      }
+      };
 
-      // Handle SET_USER_ID messages
-      if (event.data?.type === 'SET_USER_ID' && event.data?.source?.includes('make10000hours')) {
-        console.log('🔄 Received SET_USER_ID from web app:', event.data.payload);
-        
-        try {
-          const response = await chrome.runtime.sendMessage({
-            type: 'SET_USER_ID',
-            payload: event.data.payload
+      try {
+        // Validate extension context before processing
+        if (window.ExtensionContextValidator && !window.ExtensionContextValidator.isContextValid()) {
+          // Attempt recovery
+          await new Promise((resolve) => {
+            const timeout = setTimeout(() => resolve(false), 5000);
+            this.initializeUtilities();
+            
+            const handler = (event) => {
+              if (event.detail?.success) {
+                clearTimeout(timeout);
+                window.removeEventListener('extensionUtilitiesReady', handler);
+                resolve(true);
+              }
+            };
+            
+            window.addEventListener('extensionUtilitiesReady', handler);
           });
-          
-          window.postMessage({
-            type: 'SET_USER_ID_RESPONSE',
-            payload: response,
-            source: 'make10000hours-extension'
-          }, '*');
-          
-        } catch (error) {
-          console.error('❌ Failed to forward SET_USER_ID:', error);
-          
-          window.postMessage({
-            type: 'SET_USER_ID_RESPONSE',
-            payload: { success: false, error: error.message },
-            source: 'make10000hours-extension'
-          }, '*');
         }
-      }
 
-      // Handle RECORD_OVERRIDE_SESSION messages from web app
-      if (event.data?.type === 'RECORD_OVERRIDE_SESSION' && event.data?.source?.includes('make10000hours')) {
-        if (event.data.payload?.source === 'extension') {
+        // Handle EXTENSION_PING messages
+        if (type === 'EXTENSION_PING') {
+          console.log('🔄 Received EXTENSION_PING from web app');
+          
+          // Check extension utilities status
+          const status = {
+            status: 'online',
+            timestamp: Date.now(),
+            utilitiesReady: this.utilitiesReady,
+            connectionStatus: this.connectionManager?.isConnected ? 'connected' : 'disconnected',
+            queueStatus: this.messageQueue?.getStatus() || null,
+            contextValid: window.ExtensionContextValidator?.isContextValid() || false
+          };
+          
+          sendResponse('EXTENSION_PONG', status);
           return;
         }
-        
-        console.log('📝 Forwarding override session from web app to extension');
-        
-        try {
-          const response = await chrome.runtime.sendMessage({
-            type: 'RECORD_OVERRIDE_SESSION',
-            payload: event.data.payload
-          });
-          
-          window.postMessage({
-            type: 'RECORD_OVERRIDE_SESSION_RESPONSE',
-            payload: { success: true },
-            source: 'make10000hours-extension'
-          }, '*');
-          
-        } catch (error) {
-          console.error('❌ Failed to record override session:', error);
-          
-          window.postMessage({
-            type: 'RECORD_OVERRIDE_SESSION_RESPONSE',
-            payload: { success: false, error: error.message },
-            source: 'make10000hours-extension'
-          }, '*');
-        }
-      }
-    });
 
-    this.messageListenersSetup = true;
-    console.log('✅ Web app communication bridge set up successfully');
+        // Handle SET_USER_ID messages
+        if (type === 'SET_USER_ID') {
+          console.log('🔄 Received SET_USER_ID from web app:', payload);
+          
+          // Wait for utilities with timeout
+          if (!this.utilitiesReady) {
+            const ready = await Promise.race([
+              new Promise(resolve => {
+                const handler = (event) => {
+                  if (event.detail?.success) {
+                    window.removeEventListener('extensionUtilitiesReady', handler);
+                    resolve(true);
+                  }
+                };
+                window.addEventListener('extensionUtilitiesReady', handler);
+              }),
+              new Promise(resolve => setTimeout(() => resolve(false), 5000))
+            ]);
+
+            if (!ready) {
+              throw new Error('Extension utilities not ready after timeout');
+            }
+          }
+          
+          const message = {
+            type: 'SET_USER_ID',
+            payload
+          };
+
+          try {
+            const response = await this.sendMessageSafely(message, {
+              priority: 'high',
+              shouldQueue: true,
+              timeout: 15000,
+              maxRetries: 3,
+              fallback: { 
+                success: false, 
+                error: 'Extension temporarily unavailable - message queued for retry',
+                queued: true 
+              }
+            });
+            
+            sendResponse('SET_USER_ID_RESPONSE', response);
+            
+          } catch (error) {
+            console.error('❌ Failed to process SET_USER_ID:', error);
+            sendResponse('SET_USER_ID_RESPONSE', {
+              success: false,
+              error: error.message,
+              queued: false
+            });
+          }
+        }
+        
+      } catch (error) {
+        console.error('❌ Error processing web app message:', error);
+        sendResponse(`${type}_RESPONSE`, {
+          success: false,
+          error: error.message,
+          contextValid: window.ExtensionContextValidator?.isContextValid() || false
+        });
+      }
+    };
+
+    // Add message listener with error boundary
+    window.addEventListener('message', (event) => {
+      messageHandler(event).catch(error => {
+        console.error('❌ Unhandled error in message handler:', error);
+      });
+    });
+    
+    console.log('✅ Web app communication handler initialized');
   }
 
   /**
@@ -275,11 +556,17 @@ class ActivityDetector {
     this.wasSleeping = true;
     this.sleepStartTime = Date.now();
     
-    // Report sleep state to background
-    chrome.runtime.sendMessage({
+    // Report sleep state to background (using safe messaging)
+    this.sendMessageSafely({
       type: 'SYSTEM_SLEEP_DETECTED',
       timestamp: this.sleepStartTime
-    }).catch(console.error);
+    }, {
+      priority: 'low',
+      shouldQueue: false,
+      fallback: null // Don't care if this fails
+    }).catch(() => {
+      // Silently ignore failures for sleep detection
+    });
   }
 
   /**
@@ -300,12 +587,18 @@ class ActivityDetector {
     // Update last activity to current time
     this.lastActivity = now;
     
-    // Report wake state to background
-    chrome.runtime.sendMessage({
+    // Report wake state to background (using safe messaging)
+    this.sendMessageSafely({
       type: 'SYSTEM_WAKE_DETECTED',
       timestamp: now,
       sleepDuration: duration
-    }).catch(console.error);
+    }, {
+      priority: 'low',
+      shouldQueue: false,
+      fallback: null // Don't care if this fails
+    }).catch(() => {
+      // Silently ignore failures for wake detection
+    });
   }
 
   /**
