@@ -1824,6 +1824,14 @@ class FocusTimeTracker {
     this.currentUserId = null;
     this.userInfo = null;
     
+    // Add sleep tracking state
+    this.systemSleepState = {
+      isSleeping: false,
+      sleepStartTime: null,
+      lastWakeTime: null,
+      totalSleepTime: 0
+    };
+    
     this.initialize();
   }
 
@@ -2566,6 +2574,14 @@ class FocusTimeTracker {
           }
           break;
 
+        case 'SYSTEM_SLEEP_DETECTED':
+          this.handleSystemSleep(message.timestamp);
+          break;
+
+        case 'SYSTEM_WAKE_DETECTED':
+          this.handleSystemWake(message.timestamp, message.sleepDuration);
+          break;
+
         default:
           console.warn('❓ Unknown message type:', message.type);
           sendResponse({ success: false, error: 'Unknown message type' });
@@ -2719,7 +2735,7 @@ class FocusTimeTracker {
    */
   async saveCurrentSession() {
     try {
-      if (this.currentSession.isActive && this.currentSession.startTime && !this.isSessionPaused) {
+      if (this.currentSession.isActive && this.currentSession.startTime && !this.systemSleepState.isSleeping) {
         const now = Date.now();
         const grossTimeSpent = now - this.currentSession.startTime;
         const netTimeSpent = grossTimeSpent - this.totalPausedTime;
@@ -2732,6 +2748,7 @@ class FocusTimeTracker {
           // Update accumulated savedTime and reset counters
           this.currentSession.savedTime = (this.currentSession.savedTime || 0) + minutesToSave;
           const remainder = netTimeSpent - minutesToSave;
+          
           // Preserve remainder for continuous counting
           this.currentSession.startTime = now - remainder;
           this.totalPausedTime = 0;
@@ -3089,6 +3106,46 @@ class FocusTimeTracker {
       
     } catch (error) {
       console.error('❌ Error in forwardToWebApp:', error);
+    }
+  }
+
+  /**
+   * Handle system sleep detection
+   */
+  handleSystemSleep(timestamp) {
+    console.log('💤 System sleep detected at:', new Date(timestamp).toISOString());
+    
+    this.systemSleepState.isSleeping = true;
+    this.systemSleepState.sleepStartTime = timestamp;
+    
+    // Pause tracking
+    this.pauseTracking();
+  }
+
+  /**
+   * Handle system wake detection
+   */
+  async handleSystemWake(timestamp, sleepDuration) {
+    console.log('🌅 System wake detected:', {
+      timestamp: new Date(timestamp).toISOString(),
+      sleepDuration: Math.round(sleepDuration / 1000) + 's'
+    });
+    
+    // Update sleep state
+    this.systemSleepState.isSleeping = false;
+    this.systemSleepState.lastWakeTime = timestamp;
+    this.systemSleepState.totalSleepTime += sleepDuration;
+    
+    // Adjust current session if needed
+    if (this.currentSession.isActive) {
+      // Add sleep time to total paused time
+      this.totalPausedTime += sleepDuration;
+      
+      // Update session start time to account for sleep
+      this.currentSession.startTime = timestamp;
+      
+      // Save current progress
+      await this.saveCurrentSession();
     }
   }
 }

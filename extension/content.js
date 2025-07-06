@@ -18,6 +18,8 @@ class ActivityDetector {
     this.reportingInterval = null;
     this.inactivityThreshold = 30000; // 30 seconds
     this.reportingFrequency = 10000; // 10 seconds
+    this.wasSleeping = false;
+    this.sleepStartTime = null;
     
     // Add flags to prevent duplicate setup
     this.isInitialized = false;
@@ -235,29 +237,75 @@ class ActivityDetector {
     });
 
     // Page lifecycle events for sleep detection
-    window.addEventListener('beforeunload', () => {
-      this.handlePageUnload();
-    });
-
-    // Page freeze/resume for system sleep detection
     if ('onfreeze' in window) {
       window.addEventListener('freeze', () => {
         console.log('🧊 Page freeze detected - system likely sleeping');
-        this.handlePageFreeze();
+        this.handleSystemSleep();
       });
     }
 
     if ('onresume' in window) {
       window.addEventListener('resume', () => {
         console.log('🌅 Page resume detected - system likely waking');
-        this.handlePageResume();
+        this.handleSystemWake();
       });
     }
 
-    // Beforeunload to report final activity
-    window.addEventListener('beforeunload', () => {
-      this.reportActivity(true);
+    // Handle page visibility for sleep detection
+    document.addEventListener('visibilitychange', () => {
+      const now = Date.now();
+      if (document.hidden) {
+        this.sleepStartTime = now;
+      } else if (this.sleepStartTime) {
+        const sleepDuration = now - this.sleepStartTime;
+        // If hidden for more than 2 minutes, consider it as sleep
+        if (sleepDuration > 2 * 60 * 1000) {
+          this.handleSystemWake(sleepDuration);
+        }
+        this.sleepStartTime = null;
+      }
     });
+  }
+
+  /**
+   * Handle system sleep detection
+   */
+  handleSystemSleep() {
+    console.log('💤 System sleep detected');
+    this.wasSleeping = true;
+    this.sleepStartTime = Date.now();
+    
+    // Report sleep state to background
+    chrome.runtime.sendMessage({
+      type: 'SYSTEM_SLEEP_DETECTED',
+      timestamp: this.sleepStartTime
+    }).catch(console.error);
+  }
+
+  /**
+   * Handle system wake detection
+   */
+  handleSystemWake(sleepDuration) {
+    if (!this.wasSleeping && !sleepDuration) return;
+    
+    const now = Date.now();
+    const duration = sleepDuration || (now - (this.sleepStartTime || now));
+    
+    console.log('🌅 System wake detected, sleep duration:', Math.round(duration / 1000) + 's');
+    
+    // Reset sleep state
+    this.wasSleeping = false;
+    this.sleepStartTime = null;
+    
+    // Update last activity to current time
+    this.lastActivity = now;
+    
+    // Report wake state to background
+    chrome.runtime.sendMessage({
+      type: 'SYSTEM_WAKE_DETECTED',
+      timestamp: now,
+      sleepDuration: duration
+    }).catch(console.error);
   }
 
   /**
@@ -273,8 +321,9 @@ class ActivityDetector {
       this.isActive = true;
       
       // Report activity immediately if it was inactive
-      if (!this.isActive) {
+      if (!this.isActive || this.wasSleeping) {
         this.reportActivity();
+        this.wasSleeping = false;
       }
     }
   }
