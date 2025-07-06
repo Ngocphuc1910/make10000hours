@@ -10,6 +10,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.6.0/remixicon.min.css">
+  
+  <!-- Load ExtensionEventBus first -->
+  <script src="../utils/ExtensionEventBus.js"></script>
 </head>
 <body>
   <div class="popup-container">
@@ -210,7 +213,7 @@
   <!-- Utility Scripts -->
   <script src="/utils/faviconUtils.js"></script>
   
-  <!-- Main Scripts -->
+  <!-- Load application scripts after ExtensionEventBus -->
   <script src="popup.js"></script>
   <script src="../test-realtime-stats.js"></script>
 
