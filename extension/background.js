@@ -3,6 +3,93 @@
  * Handles time tracking, tab management, and extension coordination
  */
 
+class ConfigManager {
+  constructor() {
+    this.storageKey = 'extensionConfig';
+    this.version = '1.0.0';
+  }
+
+  async initialize() {
+    try {
+      // Check if config exists
+      const result = await chrome.storage.local.get([this.storageKey]);
+      if (!result[this.storageKey]) {
+        // Set default empty config
+        await this.saveConfig({
+          version: this.version,
+          firebase: null,
+          lastUpdated: Date.now()
+        });
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error initializing config:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getConfig() {
+    try {
+      const result = await chrome.storage.local.get([this.storageKey]);
+      return {
+        success: true,
+        config: result[this.storageKey] || null
+      };
+    } catch (error) {
+      console.error('❌ Error getting config:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async saveConfig(config) {
+    try {
+      await chrome.storage.local.set({
+        [this.storageKey]: {
+          ...config,
+          lastUpdated: Date.now()
+        }
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error saving config:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async setFirebaseConfig(firebaseConfig) {
+    try {
+      const current = await this.getConfig();
+      if (!current.success) throw new Error(current.error);
+      
+      const updatedConfig = {
+        ...(current.config || {}),
+        firebase: firebaseConfig
+      };
+      
+      await this.saveConfig(updatedConfig);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error setting Firebase config:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getFirebaseConfig() {
+    try {
+      const result = await this.getConfig();
+      if (!result.success) throw new Error(result.error);
+      
+      return {
+        success: true,
+        config: result.config?.firebase || null
+      };
+    } catch (error) {
+      console.error('❌ Error getting Firebase config:', error);
+      return { success: false, error: error.message };
+    }
+  }
+}
+
 // Utility Classes - Inline for Service Worker Compatibility
 
 /**
@@ -1796,6 +1883,9 @@ class BlockingManager {
 // Main Focus Time Tracker Class
 class FocusTimeTracker {
   constructor() {
+    // Add ConfigManager
+    this.configManager = new ConfigManager();
+    
     this.stateManager = null;
     this.storageManager = null;
     this.blockingManager = null; // Add blocking manager
@@ -1840,6 +1930,21 @@ class FocusTimeTracker {
    */
   async initialize() {
     try {
+      // Initialize config manager first
+      await this.configManager.initialize();
+      
+      // Set initial Firebase config if not already set
+      const configResult = await this.configManager.getFirebaseConfig();
+      if (!configResult.config) {
+        await this.configManager.setFirebaseConfig({
+          // Your default Firebase config here
+          // This should be replaced with your actual config
+          projectId: "your-project-id",
+          apiKey: "your-api-key",
+          // ... other required Firebase config fields
+        });
+      }
+
       console.log('🚀 Initializing Focus Time Tracker...');
       
       // Initialize managers
@@ -2005,9 +2110,23 @@ class FocusTimeTracker {
    */
   async handleMessage(message, sender, sendResponse) {
     try {
-      console.log('📨 Message received:', message.type);
+      const { type, payload } = message;
 
-      switch (message.type) {
+      switch (type) {
+        case 'GET_FIREBASE_CONFIG':
+          const configResult = await this.configManager.getFirebaseConfig();
+          sendResponse(configResult);
+          return true;
+
+        case 'SET_FIREBASE_CONFIG':
+          if (!payload) {
+            sendResponse({ success: false, error: 'No config provided' });
+            return true;
+          }
+          const saveResult = await this.configManager.setFirebaseConfig(payload);
+          sendResponse(saveResult);
+          return true;
+
         case 'GET_CURRENT_STATE':
           const currentState = await this.getCurrentState();
           const focusStats = this.blockingManager.getFocusStats(); // Add focus stats
@@ -2583,7 +2702,7 @@ class FocusTimeTracker {
           break;
 
         default:
-          console.warn('❓ Unknown message type:', message.type);
+          console.warn('❓ Unknown message type:', type);
           sendResponse({ success: false, error: 'Unknown message type' });
       }
     } catch (error) {
