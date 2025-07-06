@@ -38,14 +38,39 @@ const ExtensionEventBus = {
       }
       return true; // Keep message channel open
     });
+  },
+
+  isExtensionContextValid: function() {
+    try {
+      return Boolean(chrome.runtime && chrome.runtime.id);
+    } catch (e) {
+      return false;
+    }
+  },
+
+  safeForwardMessage: async function(type, payload) {
+    if (!this.isExtensionContextValid()) {
+      return { success: false, error: 'Extension context invalid', recoverable: true };
+    }
+
+    try {
+      return await chrome.runtime.sendMessage({
+        type,
+        payload,
+        source: 'make10000hours-extension'
+      });
+    } catch (error) {
+      if (!error.message.includes('Extension context invalidated')) {
+        console.error(`Failed to forward ${type}:`, error);
+      }
+      return { 
+        success: false, 
+        error: error.message,
+        recoverable: error.message.includes('Extension context invalidated')
+      };
+    }
   }
 };
 
-// Support both module and non-module environments
-if (typeof exports !== 'undefined') {
-  exports.ExtensionEventBus = ExtensionEventBus;
-} else if (typeof define === 'function' && define.amd) {
-  define([], function() { return ExtensionEventBus; });
-} else {
-  window.ExtensionEventBus = ExtensionEventBus;
-} 
+// Make it available globally
+window.ExtensionEventBus = ExtensionEventBus; 
