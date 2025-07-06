@@ -601,6 +601,16 @@ body {
   background: var(--primary-hover);
 }
 
+.add-site-btn.current-site {
+  margin-bottom: 8px;
+  background-color: var(--danger-light, #fee2e2);
+  color: var(--danger, #dc2626);
+}
+
+.add-site-btn.current-site:hover {
+  background-color: var(--danger-hover, #fecaca);
+}
+
 /* Loading State */
 .loading-state {
   display: flex;
