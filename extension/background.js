@@ -3,6 +3,30 @@
  * Handles time tracking, tab management, and extension coordination
  */
 
+// At the top of the file
+const ExtensionEventBus = {
+  EVENTS: {
+    DEEP_FOCUS_UPDATE: 'DEEP_FOCUS_TIME_UPDATED',
+    FOCUS_STATE_CHANGE: 'FOCUS_STATE_CHANGED'
+  },
+
+  async emit(eventName, payload) {
+    try {
+      const manifestData = chrome.runtime.getManifest();
+      await chrome.runtime.sendMessage({
+        type: eventName,
+        payload: {
+          ...payload,
+          _version: manifestData.version,
+          _timestamp: Date.now()
+        }
+      });
+    } catch (error) {
+      console.warn(`⚠️ Event emission failed: ${eventName}`, error);
+    }
+  }
+};
+
 class ConfigManager {
   constructor() {
     this.storageKey = 'extensionConfig';
@@ -1016,6 +1040,13 @@ class StorageManager {
           storage[today][sessionIndex].updatedAt = now.getTime();
           await this.saveDeepFocusStorage(storage);
           console.log('✅ Updated local session duration:', sessionId, duration, 'minutes');
+          
+          // Get total minutes and emit event
+          const totalMinutes = await this.getTodayDeepFocusTime();
+          await ExtensionEventBus.emit(
+            ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE,
+            { minutes: totalMinutes }
+          );
           return true;
         } else {
           console.warn('⚠️ Session not found for duration update:', sessionId);
@@ -1042,7 +1073,7 @@ class StorageManager {
       console.log('🏁 Completing deep focus session:', sessionId);
 
       // Get storage and find session
-      const storage = await this.getDeepFocusStorage(); // Fixed: removed this.storageManager
+      const storage = await this.getDeepFocusStorage();
       if (storage[today]) {
         const sessionIndex = storage[today].findIndex(s => s.id === sessionId);
         if (sessionIndex !== -1) {
@@ -1050,10 +1081,14 @@ class StorageManager {
           storage[today][sessionIndex].endTime = now.getTime();
           storage[today][sessionIndex].updatedAt = now.getTime();
           await this.saveDeepFocusStorage(storage);
-          console.log('✅ Completed local deep focus session:', sessionId, 'Final duration:', storage[today][sessionIndex].duration, 'minutes');
+          console.log('✅ Completed local deep focus session:', sessionId);
           
-          // Broadcast update to all listeners
-          await this.broadcastDeepFocusTimeUpdate();
+          // Get total minutes and emit event
+          const totalMinutes = await this.getTodayDeepFocusTime();
+          await ExtensionEventBus.emit(
+            ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE,
+            { minutes: totalMinutes }
+          );
         } else {
           console.warn('⚠️ Session not found for completion:', sessionId);
         }
@@ -1160,9 +1195,9 @@ class StorageManager {
       let cleanedCount = 0;
 
       // Keep only dates within retention period
-      Object.keys(storage).forEach(date => {
-        if (date >= cutoffDateStr) {
-          updatedStorage[date] = storage[date];
+      Object.keys(storage).forEach(dateStr => {
+        if (dateStr >= cutoffDateStr) {
+          updatedStorage[dateStr] = storage[dateStr];
         } else {
           cleanedCount++;
         }
@@ -1760,34 +1795,43 @@ class BlockingManager {
   }
 
   /**
-   * Start the session timer that increments duration every minute
+   * Start session timer for local deep focus
    */
   startSessionTimer() {
     if (this.sessionTimer) {
       clearInterval(this.sessionTimer);
     }
 
-    console.log('⏱️ Starting session timer...');
     this.sessionTimer = setInterval(async () => {
       try {
         if (this.currentLocalSessionId) {
-          // Calculate elapsed time
-          const activeSession = await this.storageManager.getActiveDeepFocusSession();
-          if (activeSession) {
-            const elapsedMs = Date.now() - activeSession.startTime;
-            const elapsedMinutes = Math.floor(elapsedMs / (60 * 1000));
-            
-            // Update session duration
-            await this.storageManager.updateDeepFocusSessionDuration(this.currentLocalSessionId, elapsedMinutes);
-            
-            // Broadcast update to all listeners
-            await this.broadcastDeepFocusTimeUpdate();
+          const storage = await this.storageManager.getDeepFocusStorage();
+          const today = new Date().toISOString().split('T')[0];
+          
+          if (storage[today]) {
+            const session = storage[today].find(s => s.id === this.currentLocalSessionId);
+            if (session) {
+              const elapsedMs = Date.now() - session.startTime;
+              const elapsedMinutes = Math.floor(elapsedMs / (60 * 1000));
+              
+              await this.storageManager.updateDeepFocusSessionDuration(
+                this.currentLocalSessionId,
+                elapsedMinutes
+              );
+              
+              // Get total minutes and emit event
+              const totalMinutes = await this.storageManager.getTodayDeepFocusTime();
+              await ExtensionEventBus.emit(
+                ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE,
+                { minutes: totalMinutes }
+              );
+            }
           }
         }
       } catch (error) {
         console.error('❌ Error in session timer:', error);
       }
-    }, 60 * 1000); // Update every minute
+    }, 60000); // Update every minute
   }
 
   /**

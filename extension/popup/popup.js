@@ -16,6 +16,15 @@ class PopupManager {
     this.updateTimeout = null; // Add debounce timeout
     
     this.initialize();
+
+    // Subscribe to deep focus updates using global ExtensionEventBus
+    if (window.ExtensionEventBus) {
+      window.ExtensionEventBus.subscribe((message) => {
+        if (message.type === window.ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE) {
+          this.updateDeepFocusTimeDisplay(message.payload.minutes);
+        }
+      });
+    }
   }
 
   /**

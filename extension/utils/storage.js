@@ -3,6 +3,8 @@
  * Handles data persistence with Chrome Storage API and provides mock data for development
  */
 
+import { ExtensionEventBus } from './ExtensionEventBus.js';
+
 class StorageManager {
   constructor() {
     this.mockMode = true; // Set to false for production
@@ -1051,30 +1053,32 @@ class StorageManager {
       const now = new Date();
       const today = now.toISOString().split('T')[0];
 
-      if (this.mockMode) {
-        // Update mock data
-        if (this.mockData.deepFocusSessions && this.mockData.deepFocusSessions[today]) {
-          const session = this.mockData.deepFocusSessions[today].find(s => s.id === sessionId);
-          if (session) {
-            session.duration = duration;
-            session.updatedAt = now.getTime();
-            console.log('🧪 Mock: Updated session duration:', sessionId, duration);
-          }
-        }
-        return;
-      }
+      console.log('⏱️ Updating session duration:', sessionId, 'to', duration, 'minutes');
 
-      // Real Chrome storage implementation
-      const storageKey = this.getDeepFocusStorageKey(today);
-      const result = await chrome.storage.local.get([storageKey]);
-      const sessions = result[storageKey] || [];
-      
-      const sessionIndex = sessions.findIndex(s => s.id === sessionId);
-      if (sessionIndex !== -1) {
-        sessions[sessionIndex].duration = duration;
-        sessions[sessionIndex].updatedAt = now.getTime();
-        await chrome.storage.local.set({ [storageKey]: sessions });
-        console.log('⏱️ Updated local session duration:', sessionId, duration);
+      // Get storage and find session
+      const storage = await this.getDeepFocusStorage();
+      if (storage[today]) {
+        const sessionIndex = storage[today].findIndex(s => s.id === sessionId);
+        if (sessionIndex !== -1) {
+          storage[today][sessionIndex].duration = duration;
+          storage[today][sessionIndex].updatedAt = now.getTime();
+          await this.saveDeepFocusStorage(storage);
+          console.log('✅ Updated local session duration:', sessionId, duration, 'minutes');
+          
+          // Replace direct call with event emission
+          const totalMinutes = await this.getTodayDeepFocusTime();
+          await ExtensionEventBus.emit(
+            ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE,
+            { minutes: totalMinutes }
+          );
+          return true;
+        } else {
+          console.warn('⚠️ Session not found for duration update:', sessionId);
+          return false;
+        }
+      } else {
+        console.warn('⚠️ No sessions found for today during duration update');
+        return false;
       }
     } catch (error) {
       console.error('❌ Failed to update session duration:', error);
@@ -1090,19 +1094,7 @@ class StorageManager {
       const now = new Date();
       const today = now.toISOString().split('T')[0];
 
-      if (this.mockMode) {
-        // Update mock data
-        if (this.mockData.deepFocusSessions && this.mockData.deepFocusSessions[today]) {
-          const session = this.mockData.deepFocusSessions[today].find(s => s.id === sessionId);
-          if (session) {
-            session.status = 'completed';
-            session.endTime = now.getTime();
-            session.updatedAt = now.getTime();
-            console.log('🧪 Mock: Completed session:', sessionId);
-          }
-        }
-        return;
-      }
+      console.log('🏁 Completing deep focus session:', sessionId);
 
       // Get storage and find session
       const storage = await this.getDeepFocusStorage();
@@ -1114,6 +1106,13 @@ class StorageManager {
           storage[today][sessionIndex].updatedAt = now.getTime();
           await this.saveDeepFocusStorage(storage);
           console.log('✅ Completed local deep focus session:', sessionId);
+          
+          // Replace direct call with event emission
+          const totalMinutes = await this.getTodayDeepFocusTime();
+          await ExtensionEventBus.emit(
+            ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE,
+            { minutes: totalMinutes }
+          );
         } else {
           console.warn('⚠️ Session not found for completion:', sessionId);
         }
