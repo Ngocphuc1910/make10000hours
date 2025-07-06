@@ -65,7 +65,15 @@
   
   "web_accessible_resources": [
     {
-      "resources": ["blocked.html", "blocked.js", "icons/*", "components/*"],
+      "resources": [
+        "blocked.html", 
+        "blocked.js", 
+        "icons/*", 
+        "components/*",
+        "utils/contextValidator.js",
+        "utils/connectionManager.js",
+        "utils/messageQueue.js"
+      ],
       "matches": ["<all_urls>"]
     }
   ],

@@ -1,5 +1,8 @@
 // Chrome Extension types
 
+import { DailySiteUsage } from "../api/siteUsageService";
+import { DailyUsage, SiteUsage, TimeMetrics } from "../types/deepFocus";
+
 interface ExtensionTimeData {
   totalTime: number;
   sitesVisited: number;
@@ -331,6 +334,67 @@ class ExtensionDataService {
       },
       siteUsage: sites.sort((a, b) => b.timeSpent - a.timeSpent),
       productivityScore: extensionData.productivityScore
+    };
+  }
+
+  static mapArrSiteUsage(data: DailySiteUsage[]) {
+    const siteUsages: {[domain: string]: SiteUsage} = {};
+    let totalTime = 0;
+    const timeMetrics: TimeMetrics = {
+      onScreenTime: 0,
+      workingTime: 0,
+      deepFocusTime: 0,
+      overrideTime: 0
+    };
+    const dailyUsages: DailyUsage[] = [];
+
+    data.forEach((item) => {
+      Object.entries(item.sites).forEach(([domain, siteData]) => {
+        if (!siteUsages[domain]) {
+          siteUsages[domain] = {
+            id: domain,
+            name: this.getDomainDisplayName(domain),
+            url: domain,
+            icon: this.getDomainIcon(domain),
+            backgroundColor: this.getDomainColor(domain),
+            timeSpent: 0,
+            sessions: 0,
+            percentage: 0, // Will be calculated later
+          };
+        }
+        
+        // Aggregate site usage data
+        siteUsages[domain].timeSpent += Math.round(siteData.timeSpent / (1000 * 60)); // Convert ms to minutes
+        siteUsages[domain].sessions += siteData.visits;
+        // Update total time for percentage calculation
+        totalTime += siteData.timeSpent;
+      });
+
+      // Map time metrics
+      timeMetrics.onScreenTime += Math.round(item.totalTime / (1000 * 60));
+
+      // Map daily usage
+      dailyUsages.push({
+        date: item.date,
+        onScreenTime: Math.round(item.totalTime / (1000 * 60)),
+        workingTime: 0, // Will be calculated later
+        deepFocusTime: 0, // will be calculated later
+      });
+    });
+
+    // Calculate percentages and sort site usage
+    const siteUsageArray = Object.values(siteUsages).map(site => {
+      const percentage = totalTime > 0 ? Math.round((site.timeSpent / totalTime) * 100) : 0;
+      return {
+        ...site,
+        percentage
+      };
+    }).sort((a, b) => b.timeSpent - a.timeSpent);
+    
+    return {
+      timeMetrics,
+      dailyUsage: dailyUsages,
+      siteUsage: siteUsageArray,
     };
   }
 
