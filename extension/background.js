@@ -1843,28 +1843,49 @@ class FocusTimeTracker {
       console.log('🚀 Initializing Focus Time Tracker...');
       
       // Initialize managers
-      this.stateManager = new StateManager();
       this.storageManager = new StorageManager();
-      await this.storageManager.initialize(); // Initialize storage manager
-      this.blockingManager = new BlockingManager(); // Initialize blocking manager
+      await this.storageManager.initialize();
       
-      // Set up cross-references for real-time data access
-      this.storageManager.setFocusTimeTracker(this);
+      this.blockingManager = new BlockingManager();
       this.blockingManager.setStorageManager(this.storageManager);
-      this.blockingManager.focusTimeTracker = this;
+      await this.blockingManager.initialize();
+      
+      this.overrideSessionManager = new OverrideSessionManager();
+      
+      // Restore user info from storage
+      try {
+        const settings = await this.storageManager.getSettings();
+        const localData = await chrome.storage.local.get(['userInfo']);
+        
+        // Use most recently updated user info
+        let userInfo = settings.lastUpdated > (localData.userInfo?.lastUpdated || 0) 
+          ? settings 
+          : localData.userInfo;
+          
+        if (userInfo?.userId) {
+          this.currentUserId = userInfo.userId;
+          this.userInfo = userInfo;
+          this.storageManager.currentUserId = userInfo.userId;
+          console.log('✅ Restored user info on initialization:', userInfo.userId);
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not restore user info:', error);
+      }
       
       // Set up event listeners
       this.setupEventListeners();
       
-      // Start tracking current tab
-      await this.startTrackingCurrentTab();
-      
-      // Set up periodic cleanup for override sessions (daily)
+      // Set up periodic cleanup
       this.setupPeriodicCleanup();
       
       console.log('✅ Focus Time Tracker initialized successfully');
+      
+      // Start tracking current tab if active
+      await this.startTrackingCurrentTab();
+      
     } catch (error) {
-      console.error('❌ Failed to initialize Focus Time Tracker:', error);
+      console.error('❌ Error initializing Focus Time Tracker:', error);
+      throw error;
     }
   }
 
@@ -2202,25 +2223,39 @@ class FocusTimeTracker {
           break;
 
         case 'SET_USER_ID':
-          // Store user ID for override session attribution
           try {
             console.log('🔍 DEBUG: SET_USER_ID received:', message.payload);
             
+            // Store user info in memory for quick access
             this.currentUserId = message.payload?.userId;
             this.userInfo = {
               userId: message.payload?.userId,
               userEmail: message.payload?.userEmail,
-              displayName: message.payload?.displayName
+              displayName: message.payload?.displayName,
+              lastUpdated: Date.now()
             };
             
-            // Set user ID in StorageManager
+            // Persist user info to storage
             if (this.storageManager) {
+              // Save to storage manager
+              await this.storageManager.saveSettings({
+                userId: this.currentUserId,
+                userEmail: message.payload?.userEmail,
+                displayName: message.payload?.displayName,
+                lastUpdated: Date.now()
+              });
+              
+              // Update StorageManager's current user reference
               this.storageManager.currentUserId = this.currentUserId;
-              console.log('✅ User ID set in StorageManager:', this.currentUserId);
+              console.log('✅ User info persisted to storage:', this.currentUserId);
             }
             
-            console.log('✅ User ID set in extension:', this.currentUserId);
-            console.log('🔍 DEBUG: Full user info stored:', this.userInfo);
+            // Save to local storage as backup
+            await chrome.storage.local.set({
+              userInfo: this.userInfo
+            });
+            
+            console.log('✅ User info saved to local storage');
             
             // Notify popup about user info update
             try {
@@ -2229,7 +2264,6 @@ class FocusTimeTracker {
                 payload: this.userInfo
               });
             } catch (error) {
-              // Popup might not be open, ignore error
               console.log('📝 Popup not available for user info update notification');
             }
             
@@ -2239,6 +2273,58 @@ class FocusTimeTracker {
             sendResponse({ success: false, error: error.message });
           }
           break;
+
+        case 'GET_USER_INFO':
+          try {
+            // First try to get from storage manager
+            const settings = await this.storageManager.getSettings();
+            let userInfo = {
+              userId: settings.userId,
+              displayName: settings.displayName,
+              userEmail: settings.userEmail,
+              lastUpdated: settings.lastUpdated
+            };
+
+            // If not found in storage manager, try local storage
+            if (!userInfo.userId) {
+              const localData = await chrome.storage.local.get(['userInfo']);
+              if (localData.userInfo) {
+                userInfo = localData.userInfo;
+                
+                // Sync back to storage manager
+                if (this.storageManager) {
+                  await this.storageManager.saveSettings(userInfo);
+                }
+              }
+            }
+
+            // Update memory references
+            this.currentUserId = userInfo.userId;
+            this.userInfo = userInfo;
+
+            sendResponse({
+              success: true,
+              data: {
+                userId: userInfo.userId || 'anonymous',
+                displayName: userInfo.displayName || 'Anonymous',
+                userEmail: userInfo.userEmail,
+                isLoggedIn: !!userInfo.userId,
+                lastUpdated: userInfo.lastUpdated || Date.now()
+              }
+            });
+          } catch (error) {
+            console.error('Error getting user info:', error);
+            sendResponse({
+              success: true,
+              data: {
+                userId: 'anonymous',
+                displayName: 'Anonymous',
+                isLoggedIn: false,
+                lastUpdated: Date.now()
+              }
+            });
+          }
+          return true;
 
         case 'RECORD_OVERRIDE_SESSION':
           // Forward to web app with user ID if available AND save to localStorage
@@ -2312,20 +2398,6 @@ class FocusTimeTracker {
         case 'GET_CACHED_URL':
           const cachedUrl = this.blockingManager.getCachedUrl(sender.tab?.id);
           sendResponse({ success: true, data: { url: cachedUrl } });
-          break;
-
-        case 'GET_USER_INFO':
-          try {
-            const userInfo = this.userInfo || null;
-            console.log('📤 Sending user info to popup:', userInfo);
-            sendResponse({ 
-              success: true, 
-              data: userInfo 
-            });
-          } catch (error) {
-            console.error('❌ Error getting user info:', error);
-            sendResponse({ success: false, error: error.message });
-          }
           break;
 
         case 'CLEAR_CACHED_URL':
@@ -2549,21 +2621,14 @@ class FocusTimeTracker {
           break;
 
         case 'GET_FOCUS_STATE':
-          try {
-            // Get focus mode from BlockingManager (authoritative source)
-            const focusStats = this.blockingManager.getFocusStats();
-            sendResponse({ 
-              success: true, 
-              data: { 
-                focusMode: this.blockingManager.focusMode,
-                ...focusStats 
-              } 
-            });
-          } catch (error) {
-            console.error('Error getting focus state:', error);
-            sendResponse({ success: false, error: error.message });
-          }
-          break;
+          sendResponse({
+            success: true,
+            data: {
+              focusMode: this.blockingManager.getFocusStats().focusMode,
+              lastUpdated: Date.now()
+            }
+          });
+          return true;
 
         case 'GET_FOCUS_STATUS':
           try {
