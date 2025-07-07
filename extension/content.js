@@ -4,7 +4,7 @@
  * Enhanced with robust extension context handling
  */
 
-// Simple extension communication helper using native Chrome APIs
+// Remove the import statement and use the class directly since it will be loaded before this file
 class ExtensionCommunicator {
   constructor() {
     this.maxRetries = 3;
@@ -18,6 +18,9 @@ class ExtensionCommunicator {
     };
     this.initializationDelay = 500; // Wait for extension to initialize
     this.initialized = false;
+    
+    // Create message queue manager instance
+    this.messageQueue = new MessageQueueManager();
     
     // Initialize connection state
     this.initializeConnection();
@@ -105,43 +108,31 @@ class ExtensionCommunicator {
     return this.connectionState.valid;
   }
   
+  /**
+   * Enhanced message sending with queue management
+   */
   async sendMessage(message, options = {}) {
-    const { timeout = this.messageTimeout, retries = this.maxRetries, fallback = null } = options;
-    
     // Wait for initialization on first message
     if (!this.initialized) {
       await this.initializeConnection();
     }
     
-    if (!await this.validateContext()) {
-      // Only log warning if state changed from valid to invalid
-      if (this.connectionState.valid) {
-        console.warn('❌ Extension context invalid');
-        this.connectionState.valid = false;
-      }
-      return fallback || { success: false, error: 'Extension context invalid' };
-    }
+    const { timeout = this.messageTimeout, retries = this.maxRetries, fallback = null } = options;
     
-    // Reset connection state if we got here
-    this.connectionState.valid = true;
-    
-    let attempt = 0;
-    while (attempt <= retries) {
-      try {
-        return await this.sendDirectMessage(message, timeout);
-      } catch (error) {
-        attempt++;
-        if (attempt <= retries) {
-          await this.delay(this.retryDelay * attempt);
-          // Revalidate context before retry
-          if (!await this.validateContext()) {
-            return fallback || { success: false, error: 'Extension context invalid during retry' };
-          }
-        } else {
-          console.error('❌ Message failed after all retries:', error.message);
-          return fallback || { success: false, error: error.message };
-        }
-      }
+    try {
+      // Use queue manager for reliable delivery
+      const response = await this.messageQueue.enqueue(message, {
+        timeout,
+        retries,
+        fallback
+      });
+      
+      // Reset connection state on successful send
+      this.connectionState.valid = true;
+      return response;
+    } catch (error) {
+      console.error('❌ Message failed after all retries:', error.message);
+      return fallback || { success: false, error: error.message };
     }
   }
   
@@ -199,6 +190,7 @@ class ActivityDetector {
     this.isInitialized = false;
     this.messageListenersSetup = false;
     this.chromeListenerSetup = false;
+    this.contextInvalidationLogged = false; // Track context invalidation logging
     
     // Initialize immediately - no need to wait for utilities
     this.initialize();
@@ -620,6 +612,16 @@ class ActivityDetector {
    */
   async reportEnhancedActivity(eventType = 'periodic') {
     try {
+      // Check if extension context is valid before proceeding
+      if (!chrome.runtime || !chrome.runtime.id) {
+        // Context invalidated, stop reporting
+        if (!this.contextInvalidationLogged) {
+          console.debug('Extension context invalidated - stopping activity reporting');
+          this.contextInvalidationLogged = true;
+        }
+        return;
+      }
+
       const now = Date.now();
       const timeSinceLastActivity = now - this.lastActivity;
       
@@ -656,7 +658,16 @@ class ActivityDetector {
         }
       }
     } catch (error) {
-      console.debug('Could not report enhanced activity:', error);
+      // Handle context invalidation errors gracefully
+      if (error.message && (error.message.includes('Extension context invalidated') || 
+                           error.message.includes('receiving end does not exist'))) {
+        if (!this.contextInvalidationLogged) {
+          console.debug('Extension context invalidated - stopping activity reporting');
+          this.contextInvalidationLogged = true;
+        }
+      } else {
+        console.debug('Could not report enhanced activity:', error);
+      }
     }
   }
 
@@ -673,6 +684,11 @@ class ActivityDetector {
    */
   async checkFocusMode() {
     try {
+      // Check if extension context is valid before proceeding
+      if (!chrome.runtime || !chrome.runtime.id) {
+        return;
+      }
+
       const response = await chrome.runtime.sendMessage({
         type: 'GET_CURRENT_STATE'
       });
@@ -684,7 +700,11 @@ class ActivityDetector {
         this.showFocusIndicator();
       }
     } catch (error) {
-      console.debug('Could not check focus mode:', error);
+      // Only log non-context invalidation errors
+      if (!error.message || (!error.message.includes('Extension context invalidated') && 
+                            !error.message.includes('receiving end does not exist'))) {
+        console.debug('Could not check focus mode:', error);
+      }
     }
   }
 

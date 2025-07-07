@@ -11,33 +11,10 @@ class FirebaseService {
   }
   
   async init() {
-    try {
-      // Check if Firebase is available (from our bundle)
-      if (typeof window.firebase === 'undefined' || !window.firebase.initializeApp) {
-        console.warn('⚠️ Firebase bundle not loaded yet, will retry...');
-        // Retry after a short delay
-        setTimeout(() => this.init(), 100);
-        return;
-      }
-
-      // Get config from background script
-      const response = await chrome.runtime.sendMessage({ type: 'GET_FIREBASE_CONFIG' });
-      
-      if (!response?.success || !response?.config) {
-        throw new Error('Failed to get Firebase config from background script');
-      }
-
-      // Initialize Firebase app with config
-      this.app = window.firebase.initializeApp(response.config);
-      this.db = this.app.firestore();
-      this.auth = this.app.auth();
-      this.initialized = true;
-      console.log('✅ Firebase initialized successfully for extension');
-    } catch (error) {
-      console.error('❌ Failed to initialize Firebase:', error);
-      // Retry after a short delay
-      setTimeout(() => this.init(), 100);
-    }
+    // Firebase integration disabled - extension works with local storage only
+    console.log('ℹ️ Firebase integration disabled in popup');
+    this.initialized = false;
+    return;
   }
 
   async getTodayMetrics(userId) {
