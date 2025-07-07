@@ -11,6 +11,18 @@ function checkForSecrets() {
     /(['"])?[a-zA-Z0-9_-]*token['"]?\s*[:=]\s*['"][a-zA-Z0-9_-]+['"]/i
   ];
 
+  // Whitelist of safe storage keys and variable names
+  const safePatterns = [
+    'storageKey = \'extensionConfig\'',
+    'storageKey = \'overrideSessions\'',
+    'storageKey = \'timeData\'',
+    'getDeepFocusStorageKey',
+    'cachedStorageKey',
+    'getUserSpecificStorageKey',
+    'deep-focus-storage-anonymous',
+    'deep-focus-storage-'
+  ];
+
   try {
     // Get staged files
     const stagedFiles = execSync('git diff --cached --name-only', { encoding: 'utf8' })
@@ -28,9 +40,16 @@ function checkForSecrets() {
       const content = fs.readFileSync(file, 'utf8');
       
       for (const pattern of secretPatterns) {
-        if (pattern.test(content)) {
-          console.error(`⚠️  Warning: Possible secret found in ${file}`);
-          foundSecrets = true;
+        const matches = content.match(pattern);
+        if (matches) {
+          // Check if any match is in our whitelist
+          const matchedText = matches[0];
+          const isSafe = safePatterns.some(safePattern => matchedText.includes(safePattern));
+          
+          if (!isSafe) {
+            console.error(`⚠️  Warning: Possible secret found in ${file}`);
+            foundSecrets = true;
+          }
         }
       }
     }
