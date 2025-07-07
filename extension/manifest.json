@@ -69,10 +69,7 @@
         "blocked.html", 
         "blocked.js", 
         "icons/*", 
-        "components/*",
-        "utils/contextValidator.js",
-        "utils/connectionManager.js",
-        "utils/messageQueue.js"
+        "components/*"
       ],
       "matches": ["<all_urls>"]
     }
