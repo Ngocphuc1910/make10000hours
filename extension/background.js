@@ -1529,48 +1529,76 @@ class BlockingManager {
   }
 
   /**
+   * Get current dynamic rules
+   */
+  async getCurrentRules() {
+    try {
+      const rules = await chrome.declarativeNetRequest.getDynamicRules();
+      console.log('📊 Current rules:', rules);
+      return rules;
+    } catch (error) {
+      console.error('❌ Error getting rules:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Generate a unique rule ID that doesn't conflict with existing rules
+   */
+  generateUniqueRuleId(existingRules) {
+    const usedIds = new Set(existingRules.map(rule => rule.id));
+    let ruleId = Math.floor(Math.random() * 100000) + 1000; // Start from 1000
+    while (usedIds.has(ruleId)) {
+      ruleId = Math.floor(Math.random() * 100000) + 1000;
+    }
+    return ruleId;
+  }
+
+  /**
    * Update Chrome declarativeNetRequest rules
    */
   async updateBlockingRules() {
     try {
-      // First, get and remove all existing dynamic rules
-      const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
-      const existingRuleIds = existingRules.map(rule => rule.id);
+      // First, get and remove all existing rules
+      const existingRules = await this.getCurrentRules();
       
-      if (existingRuleIds.length > 0) {
+      if (existingRules.length > 0) {
         await chrome.declarativeNetRequest.updateDynamicRules({
-          removeRuleIds: existingRuleIds
+          removeRuleIds: existingRules.map(rule => rule.id)
         });
-        console.log(`🧹 Removed ${existingRuleIds.length} existing blocking rules`);
+        
+        // Add safety delay to ensure rules are cleared
+        await new Promise(resolve => setTimeout(resolve, 100));
+        console.log(`🧹 Removed ${existingRules.length} existing blocking rules`);
       }
-      
+
       // If focus mode is off or no sites to block, we're done
       if (!this.focusMode || this.blockedSites.size === 0) {
         console.log('🔓 Focus mode disabled or no sites to block');
         return;
       }
-      
-      // Create new rules for blocked sites
+
+      // Create new rules with unique IDs
       const rules = [];
-      let ruleId = 1;
       
-      // Add rules for each blocked site (skip those with temporary override)
       for (const domain of this.blockedSites) {
-        // Skip if domain has temporary override
+        // Skip domains with active overrides
         if (this.temporaryOverrides.has(domain)) {
           const expiryTime = this.temporaryOverrides.get(domain);
           if (Date.now() < expiryTime) {
             console.log(`⏭️ Skipping ${domain} due to active override`);
             continue;
-          } else {
-            // Clean up expired override
-            this.temporaryOverrides.delete(domain);
           }
+          this.temporaryOverrides.delete(domain);
         }
-        
-        // Add blocking rule for this domain
+
+        // Generate unique IDs for each rule
+        const ruleId1 = this.generateUniqueRuleId(rules);
+        const ruleId2 = this.generateUniqueRuleId([...rules, { id: ruleId1 }]);
+
+        // Add rules for domain with www and without www
         rules.push({
-          id: ruleId++,
+          id: ruleId1,
           priority: 1,
           action: {
             type: "redirect",
@@ -1581,10 +1609,9 @@ class BlockingManager {
             resourceTypes: ["main_frame"]
           }
         });
-        
-        // Also block the domain without www
+
         rules.push({
-          id: ruleId++,
+          id: ruleId2,
           priority: 1,
           action: {
             type: "redirect",
@@ -1596,7 +1623,7 @@ class BlockingManager {
           }
         });
       }
-      
+
       if (rules.length > 0) {
         await chrome.declarativeNetRequest.updateDynamicRules({
           addRules: rules
@@ -1618,19 +1645,20 @@ class BlockingManager {
    */
   async clearBlockingRules() {
     try {
-      // Get existing rules
-      const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
-      const ruleIds = existingRules.map(rule => rule.id);
+      // Get existing rules using our helper
+      const existingRules = await this.getCurrentRules();
       
-      if (ruleIds.length > 0) {
+      if (existingRules.length > 0) {
         await chrome.declarativeNetRequest.updateDynamicRules({
-          removeRuleIds: ruleIds
+          removeRuleIds: existingRules.map(rule => rule.id)
         });
         
-        console.log(`🧹 Cleared ${ruleIds.length} blocking rules`);
+        // Add safety delay to ensure rules are cleared
+        await new Promise(resolve => setTimeout(resolve, 100));
+        console.log(`🧹 Cleared ${existingRules.length} blocking rules`);
       }
     } catch (error) {
-      console.error('Error clearing blocking rules:', error);
+      console.error('❌ Error clearing blocking rules:', error);
     }
   }
 

@@ -30,4 +30,27 @@ setTimeout(() => {
   chrome.runtime.sendMessage({type: 'GET_BLOCKED_SITES'}, (response) => {
     console.log('✅ Blocked sites:', response);
   });
-}, 3000); 
+}, 3000);
+
+// Test extension context validation
+console.log('🧪 Testing extension context validation...');
+
+// Should be valid initially
+const initialValid = extensionCommunicator.isExtensionContextValid();
+console.log('Initial context validation:', initialValid);
+
+// Test caching behavior
+const start = Date.now();
+const validations = [];
+for (let i = 0; i < 5; i++) {
+  validations.push(extensionCommunicator.isExtensionContextValid());
+}
+const end = Date.now();
+console.log('Multiple validations (should use cache):', validations);
+console.log('Time taken for 5 validations:', end - start, 'ms');
+
+// Test after chrome.runtime becomes unavailable
+const originalRuntime = chrome.runtime;
+chrome.runtime = undefined;
+console.log('Context validation after runtime removed:', extensionCommunicator.isExtensionContextValid());
+chrome.runtime = originalRuntime; 

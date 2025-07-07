@@ -82,6 +82,28 @@ class ExtensionCommunicator {
       return false;
     }
   }
+
+  /**
+   * Synchronously check if the extension context is currently valid
+   * Uses cached validation state to avoid excessive checks
+   * @returns {boolean} Whether the extension context is currently valid
+   */
+  isExtensionContextValid() {
+    // If we haven't initialized yet, assume invalid
+    if (!this.initialized) {
+      return false;
+    }
+    
+    // Use cached state if within cache time
+    const now = Date.now();
+    if (now - this.lastValidationTime < this.validationCacheTime) {
+      return this.connectionState.valid;
+    }
+    
+    // If cache expired, trigger a new validation but return current state
+    this.validateContext().catch(() => {}); // Silent catch - state will be updated by validateContext
+    return this.connectionState.valid;
+  }
   
   async sendMessage(message, options = {}) {
     const { timeout = this.messageTimeout, retries = this.maxRetries, fallback = null } = options;
