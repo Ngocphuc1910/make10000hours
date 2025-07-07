@@ -348,6 +348,12 @@ class OverrideSessionManager {
 class StorageManager {
   constructor() {
     this.initialized = false;
+    this.stateManager = null;
+  }
+
+  setStateManager(stateManager) {
+    this.stateManager = stateManager;
+    console.log('✅ StateManager reference set in StorageManager');
   }
 
   async initialize() {
@@ -376,6 +382,18 @@ class StorageManager {
       
       this.initialized = true;
       console.log('✅ Storage Manager initialized');
+      
+      // Sync with state manager if available
+      if (this.stateManager?.isInitialized) {
+        const state = this.stateManager.getState();
+        if (state.todayStats) {
+          // Update state with storage stats
+          await this.stateManager.dispatch({
+            type: 'UPDATE_STATS',
+            payload: await this.getTodayStats()
+          });
+        }
+      }
     } catch (error) {
       console.error('❌ Storage Manager initialization failed:', error);
     }
@@ -1206,9 +1224,38 @@ class StateManager {
       }
     };
     this.listeners = new Map();
+    this.isInitialized = false;
+  }
+
+  async initialize() {
+    try {
+      // Load persisted state from storage
+      const stored = await chrome.storage.local.get(['stateManagerState']);
+      if (stored.stateManagerState) {
+        this.state = stored.stateManagerState;
+      }
+      this.isInitialized = true;
+      console.log('✅ StateManager initialized with state:', this.state);
+    } catch (error) {
+      console.error('❌ StateManager initialization failed:', error);
+      throw error;
+    }
+  }
+
+  async persistState() {
+    if (this.isInitialized) {
+      await chrome.storage.local.set({
+        stateManagerState: this.state
+      });
+    }
   }
 
   async dispatch(action, payload = {}) {
+    if (!this.isInitialized) {
+      console.warn('⚠️ StateManager not initialized');
+      return;
+    }
+
     switch (action.type) {
       case 'START_TRACKING':
         this.state.currentSession = {
@@ -1231,8 +1278,9 @@ class StateManager {
         break;
     }
 
-    // Notify listeners
+    // Notify listeners and persist state
     this.notifyListeners();
+    await this.persistState();
     return this.state;
   }
 
@@ -1906,8 +1954,9 @@ class FocusTimeTracker {
     
     this.stateManager = null;
     this.storageManager = null;
-    this.blockingManager = null; // Add blocking manager
-    this.overrideSessionManager = new OverrideSessionManager(); // Add override session manager
+    this.blockingManager = null;
+    this.overrideSessionManager = new OverrideSessionManager();
+    
     this.currentSession = {
       tabId: null,
       domain: null,
@@ -1943,13 +1992,40 @@ class FocusTimeTracker {
     this.initialize();
   }
 
-  /**
-   * Initialize the background script
-   */
+  async recoverState() {
+    if (!this.stateManager?.isInitialized) {
+      console.warn('⚠️ Attempting state recovery...');
+      this.stateManager = new StateManager();
+      await this.stateManager.initialize();
+      
+      // Notify other managers of recovery
+      if (this.storageManager) {
+        this.storageManager.setStateManager(this.stateManager);
+      }
+      console.log('✅ State recovered successfully');
+    }
+  }
+
   async initialize() {
     try {
       // Initialize config manager first
       await this.configManager.initialize();
+      
+      // Initialize state manager early
+      console.log('🔄 Initializing StateManager...');
+      this.stateManager = new StateManager();
+      await this.stateManager.initialize();
+      
+      // Initialize storage manager with state reference
+      console.log('🔄 Initializing StorageManager...');
+      this.storageManager = new StorageManager();
+      this.storageManager.setStateManager(this.stateManager);
+      await this.storageManager.initialize();
+      
+      // Continue with other initialization
+      this.blockingManager = new BlockingManager();
+      this.blockingManager.setStorageManager(this.storageManager);
+      await this.blockingManager.initialize();
       
       // Set initial Firebase config if not already set
       const configResult = await this.configManager.getFirebaseConfig();
@@ -1964,16 +2040,6 @@ class FocusTimeTracker {
       }
 
       console.log('🚀 Initializing Focus Time Tracker...');
-      
-      // Initialize managers
-      this.storageManager = new StorageManager();
-      await this.storageManager.initialize();
-      
-      this.blockingManager = new BlockingManager();
-      this.blockingManager.setStorageManager(this.storageManager);
-      await this.blockingManager.initialize();
-      
-      this.overrideSessionManager = new OverrideSessionManager();
       
       // Restore user info from storage
       try {
@@ -2823,6 +2889,10 @@ class FocusTimeTracker {
    */
   async startTracking(tab) {
     try {
+      await this.recoverState();
+      if (!this.stateManager?.isInitialized) {
+        throw new Error('StateManager not available');
+      }
       console.log('🎯 startTracking called with tab:', { id: tab.id, url: tab.url });
       
       if (!tab || !tab.url || !this.isTrackableUrl(tab.url)) {
@@ -2862,7 +2932,7 @@ class FocusTimeTracker {
 
       console.log(`✅ Started tracking: ${domain}, Tab ID: ${tab.id}`);
     } catch (error) {
-      console.error('❌ Error starting tracking:', error);
+      console.error('❌ Error in startTracking:', error);
     }
   }
 
@@ -2871,6 +2941,10 @@ class FocusTimeTracker {
    */
   async stopCurrentTracking() {
     try {
+      await this.recoverState();
+      if (!this.stateManager?.isInitialized) {
+        throw new Error('StateManager not available');
+      }
       if (!this.currentSession.isActive || !this.currentSession.startTime) {
         return;
       }
@@ -2898,7 +2972,7 @@ class FocusTimeTracker {
         isActive: false
       };
     } catch (error) {
-      console.error('Error stopping tracking:', error);
+      console.error('❌ Error in stopCurrentTracking:', error);
     }
   }
 
