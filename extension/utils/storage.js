@@ -7,9 +7,11 @@ import { ExtensionEventBus } from './ExtensionEventBus.js';
 
 class StorageManager {
   constructor() {
-    this.mockMode = true; // Set to false for production
+    this.mockMode = false; // Set to false for production
     this.mockData = this.generateMockData();
-    this._currentUserId = null; // Add currentUserId property
+    this._currentUserId = null;
+    this.initialized = false;
+    this.stateManager = null;
   }
 
   // Add getter/setter for currentUserId
@@ -20,6 +22,109 @@ class StorageManager {
   set currentUserId(value) {
     this._currentUserId = value;
     console.log('🔄 StorageManager currentUserId updated:', value);
+  }
+
+  async initialize() {
+    if (this.initialized) {
+      return;
+    }
+
+    try {
+      // Initialize storage with default settings if needed
+      const settings = await this.getSettings();
+      if (!settings) {
+        await this.saveSettings(this.getDefaultSettings());
+      }
+
+      // Try to recover user state during initialization
+      await this.validateAndRecoverUserState();
+      
+      this.initialized = true;
+      console.log('✅ StorageManager initialized successfully');
+    } catch (error) {
+      console.error('❌ Error initializing StorageManager:', error);
+      throw error;
+    }
+  }
+
+  getDefaultSettings() {
+    return {
+      trackingEnabled: true,
+      blockingEnabled: false,
+      focusMode: false,
+      blockedSites: [],
+      categories: this.getDefaultSiteCategories(),
+      userId: null, // Add userId to default settings
+      lastUpdated: null
+    };
+  }
+
+  // Add user state recovery methods
+  async recoverFromSettings() {
+    try {
+      const settings = await this.getSettings();
+      if (settings?.userId) {
+        this.currentUserId = settings.userId;
+        return true;
+      }
+    } catch (error) {
+      console.warn('⚠️ Failed to recover from settings:', error);
+    }
+    return false;
+  }
+
+  async recoverFromLocalStorage() {
+    try {
+      const localData = await chrome.storage.local.get(['userInfo']);
+      if (localData.userInfo?.userId) {
+        this.currentUserId = localData.userInfo.userId;
+        return true;
+      }
+    } catch (error) {
+      console.warn('⚠️ Failed to recover from local storage:', error);
+    }
+    return false;
+  }
+
+  async recoverFromWebApp() {
+    try {
+      // Try to get user info from web app via message
+      const response = await chrome.runtime.sendMessage({
+        type: 'GET_USER_INFO_FROM_WEBAPP'
+      });
+      if (response?.userId) {
+        this.currentUserId = response.userId;
+        return true;
+      }
+    } catch (error) {
+      console.warn('⚠️ Failed to recover from web app:', error);
+    }
+    return false;
+  }
+
+  async validateAndRecoverUserState() {
+    if (this.currentUserId) return true;
+    
+    // Try multiple recovery sources in sequence
+    const sources = [
+      this.recoverFromSettings,
+      this.recoverFromLocalStorage,
+      this.recoverFromWebApp
+    ];
+    
+    for (const recoveryMethod of sources) {
+      try {
+        const recovered = await recoveryMethod.call(this);
+        if (recovered) {
+          console.log('✅ Recovered user ID from source:', recoveryMethod.name);
+          return true;
+        }
+      } catch (error) {
+        console.warn('⚠️ Recovery attempt failed:', error);
+      }
+    }
+    
+    return false;
   }
 
   /**
@@ -992,12 +1097,13 @@ class StorageManager {
   }
 
   /**
-   * Create a new deep focus session
+   * Create a new deep focus session with enhanced error handling
    */
   async createDeepFocusSession() {
     try {
-      // Add validation for userId
-      if (!this.currentUserId) {
+      // Try to recover user state first
+      const recovered = await this.validateAndRecoverUserState();
+      if (!recovered) {
         console.warn('⚠️ No user ID available - cannot create deep focus session');
         throw new Error('User ID required to create deep focus session');
       }
@@ -1008,7 +1114,7 @@ class StorageManager {
       
       const newSession = {
         id: sessionId,
-        userId: this.currentUserId, // Add userId to session
+        userId: this.currentUserId,
         startTime: now.getTime(),
         duration: 0,
         status: 'active',

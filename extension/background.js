@@ -349,6 +349,7 @@ class StorageManager {
   constructor() {
     this.initialized = false;
     this.stateManager = null;
+    this.currentUserId = null;
   }
 
   setStateManager(stateManager) {
@@ -996,14 +997,59 @@ class StorageManager {
   /**
    * Create a new deep focus session
    */
-  async createDeepFocusSession(userId) {
-    if (!userId) {
-      throw new Error('User ID required to create deep focus session');
-    }
-
+  async createDeepFocusSession(userId = null) {
     try {
-      // Existing session creation logic
-      const sessionId = await this.saveDeepFocusStorage(storage);
+      // Try to get user ID from parameter, settings, or use fallback
+      let actualUserId = userId;
+      
+      if (!actualUserId) {
+        // Try to get from settings first
+        try {
+          const settings = await this.getSettings();
+          actualUserId = settings.userId;
+        } catch (error) {
+          console.warn('⚠️ Could not get userId from settings:', error);
+        }
+      }
+      
+      if (!actualUserId) {
+        // Try to get from local storage
+        try {
+          const localData = await chrome.storage.local.get(['userInfo']);
+          actualUserId = localData.userInfo?.userId;
+        } catch (error) {
+          console.warn('⚠️ Could not get userId from local storage:', error);
+        }
+      }
+      
+      if (!actualUserId) {
+        // Use a fallback user ID for anonymous sessions
+        actualUserId = 'anonymous-user-' + Date.now();
+        console.warn('⚠️ No user ID available, using fallback:', actualUserId);
+      }
+
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const sessionId = this.generateSessionId();
+      
+      const newSession = {
+        id: sessionId,
+        userId: actualUserId,
+        startTime: now.getTime(),
+        duration: 0,
+        status: 'active',
+        createdAt: now.getTime(),
+        updatedAt: now.getTime()
+      };
+
+      // Get storage and add session
+      const storage = await this.getDeepFocusStorage();
+      if (!storage[today]) {
+        storage[today] = [];
+      }
+      storage[today].push(newSession);
+      await this.saveDeepFocusStorage(storage);
+      
       console.log('✅ Created local deep focus session:', sessionId, 'Total sessions today:', storage[today].length);
       console.log('📦 Session data:', newSession);
       return sessionId;
@@ -1320,6 +1366,7 @@ class BlockingManager {
     this.currentLocalSessionId = null;
     this.sessionTimer = null;
     this.storageManager = null;
+    this.focusTimeTracker = null;
     
     this.initialize();
   }
@@ -1372,6 +1419,14 @@ class BlockingManager {
   setStorageManager(storageManager) {
     this.storageManager = storageManager;
     console.log('📦 StorageManager reference set in BlockingManager');
+  }
+
+  /**
+   * Set reference to FocusTimeTracker
+   */
+  setFocusTimeTracker(focusTimeTracker) {
+    this.focusTimeTracker = focusTimeTracker;
+    console.log('🎯 FocusTimeTracker reference set in BlockingManager');
   }
 
   /**
@@ -1809,8 +1864,9 @@ class BlockingManager {
       // Complete any existing active session first
       await this.completeLocalDeepFocusSession();
 
-      // Create new session
-      this.currentLocalSessionId = await this.storageManager.createDeepFocusSession();
+      // Create new session - try to pass user ID if available
+      const userId = this.focusTimeTracker?.currentUserId || null;
+      this.currentLocalSessionId = await this.storageManager.createDeepFocusSession(userId);
       console.log('🎯 Successfully started local deep focus session:', this.currentLocalSessionId);
 
       // Start the 1-minute timer
@@ -2053,6 +2109,7 @@ class FocusTimeTracker {
       // Continue with other initialization
       this.blockingManager = new BlockingManager();
       this.blockingManager.setStorageManager(this.storageManager);
+      this.blockingManager.setFocusTimeTracker(this);
       await this.blockingManager.initialize();
       
       // Set initial Firebase config if not already set
@@ -2084,6 +2141,8 @@ class FocusTimeTracker {
           this.userInfo = userInfo;
           this.storageManager.currentUserId = userInfo.userId;
           console.log('✅ Restored user info on initialization:', userInfo.userId);
+        } else {
+          console.log('ℹ️ No user info found during initialization - sessions will use fallback user ID');
         }
       } catch (error) {
         console.warn('⚠️ Could not restore user info:', error);
