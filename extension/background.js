@@ -3437,3 +3437,68 @@ class FocusTimeTracker {
 
 // Initialize the tracker when the service worker starts
 const focusTimeTracker = new FocusTimeTracker(); 
+
+// Add ping handler for context validation
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'PING') {
+    sendResponse({ success: true });
+    return true; // Keep channel open for async response
+  }
+  // ... existing message handlers ...
+});
+
+// Add initialization state tracking
+let isInitialized = false;
+
+// Initialize as soon as possible
+async function initializeExtension() {
+  if (isInitialized) return;
+  
+  try {
+    // Initialize the tracker when the service worker starts
+    const focusTimeTracker = new FocusTimeTracker();
+    isInitialized = true;
+    
+    // Notify any waiting content scripts
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        try {
+          chrome.tabs.sendMessage(tab.id, { type: 'EXTENSION_READY' });
+        } catch (e) {
+          // Tab may not have content script, ignore
+        }
+      });
+    });
+  } catch (e) {
+    console.error('Failed to initialize extension:', e);
+  }
+}
+
+// Handle extension lifecycle events
+chrome.runtime.onInstalled.addListener(initializeExtension);
+chrome.runtime.onStartup.addListener(initializeExtension);
+
+// Enhanced message handling
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Always respond to PING messages immediately
+  if (message.type === 'PING') {
+    sendResponse({ success: true, initialized: isInitialized });
+    return true;
+  }
+  
+  // For other messages, ensure we're initialized
+  if (!isInitialized) {
+    initializeExtension().then(() => {
+      // Handle the message after initialization
+      handleMessage(message, sender, sendResponse);
+    });
+    return true; // Keep channel open
+  }
+  
+  // Normal message handling
+  return handleMessage(message, sender, sendResponse);
+});
+
+function handleMessage(message, sender, sendResponse) {
+  // ... existing message handling logic ...
+}
