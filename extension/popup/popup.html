@@ -13,6 +13,7 @@
   
   <!-- Load ExtensionEventBus first -->
   <script src="../utils/ExtensionEventBus.js"></script>
+  <script src="../utils/MessageQueueManager.js"></script>
 </head>
 <body>
   <div class="popup-container">
@@ -202,20 +203,16 @@
     <div class="loading-text">Processing...</div>
   </div>
 
-  <!-- Firebase Scripts (Local Bundle for CSP Compliance) -->
-  <script src="/vendor/firebase/firebase-bundle.js"></script>
-  <script src="firebase-service.js"></script>
+  <!-- Firebase Scripts (Local Bundle for CSP Compliance) - DISABLED -->
+  <!-- <script src="/vendor/firebase/firebase-bundle.js"></script> -->
+  <script src="firebase-service.js"></script> <!-- Firebase disabled internally -->
 
   <!-- Component Scripts -->
   <script src="/components/chartComponents.js"></script>
   <script src="/components/analyticsUI.js"></script>
   
-  <!-- Utility Scripts -->
-  <script src="/utils/faviconUtils.js"></script>
-  
-  <!-- Load application scripts after ExtensionEventBus -->
+  <!-- Load application scripts after all dependencies -->
   <script src="popup.js"></script>
-  <script src="../test-realtime-stats.js"></script>
 
   <!-- Site Usage Item Template -->
   <template id="site-item-template">

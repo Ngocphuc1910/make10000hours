@@ -3,17 +3,98 @@
  * Handles UI interactions and communication with background script
  */
 
+/**
+ * Chrome Native Favicon API Helper
+ * Replaces FaviconService with Chrome's built-in favicon API
+ */
+/**
+ * Get favicon URL using Google's service (same as web app)
+ */
+async function getGoogleFavicon(domain, size = 32) {
+  try {
+    const cleanDomain = domain.replace(/^www\./, '').toLowerCase();
+    const googleUrl = `https://www.google.com/s2/favicons?domain=${cleanDomain}&sz=${size * 2}`;
+    
+    // Validate the favicon loads successfully
+    const isValid = await new Promise((resolve) => {
+      const img = new Image();
+      const timeoutId = setTimeout(() => {
+        resolve(false);
+      }, 2000); // 2 second timeout
+      
+      img.onload = () => {
+        clearTimeout(timeoutId);
+        // Check if it's not a default empty favicon
+        if (img.width > 16 || img.height > 16) {
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      };
+      
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        resolve(false);
+      };
+      
+      img.src = googleUrl;
+    });
+    
+    return isValid ? googleUrl : null;
+  } catch (error) {
+    console.warn('Google favicon service error:', error);
+    return null;
+  }
+}
+
+function getDomainFallbackIcon(domain) {
+  // Reuse existing icon mapping logic
+  const iconMap = {
+    'github.com': 'ri-github-fill',
+    'gmail.com': 'ri-mail-line',
+    'mail.google.com': 'ri-mail-line',
+    'youtube.com': 'ri-youtube-fill',
+    'facebook.com': 'ri-facebook-fill',
+    'twitter.com': 'ri-twitter-fill',
+    'linkedin.com': 'ri-linkedin-fill',
+    'reddit.com': 'ri-reddit-fill',
+    'netflix.com': 'ri-netflix-fill',
+    'amazon.com': 'ri-shopping-cart-line',
+    'google.com': 'ri-google-fill',
+    'instagram.com': 'ri-instagram-fill',
+    'figma.com': 'ri-shape-line',
+    'claude.ai': 'ri-robot-line',
+    'make10000hours.com': 'ri-focus-3-line',
+    'firebase.google.com': 'ri-fire-line',
+    'console.firebase.google.com': 'ri-fire-line'
+  };
+  
+  for (const [site, icon] of Object.entries(iconMap)) {
+    if (domain.includes(site)) return icon;
+  }
+  return 'ri-global-line';
+}
+
 class PopupManager {
   constructor() {
-    this.currentState = null;
-    this.todayStats = null;
-    this.userInfo = null;
-    this.sessionTimer = null;
+    // Core state that must exist
+    this.coreState = {
+      focusMode: false,
+      isTracking: false
+    };
+    
+    // Enhanced state that can load later
+    this.enhancedState = {
+      todayStats: null,
+      userInfo: null,
+      deepFocusStats: null
+    };
+
+    this.currentTab = 'site-usage';
     this.updateInterval = null;
     this.analyticsUI = null;
-    this.currentTab = 'site-usage'; // Updated for new 2-tab system
-    this.previousStats = null; // Add cache for previous stats
-    this.updateTimeout = null; // Add debounce timeout
+    this.previousStats = null;
+    this.updateTimeout = null;
     
     this.initialize();
 
@@ -28,139 +109,216 @@ class PopupManager {
   }
 
   /**
-   * Initialize popup manager
+   * Initialize core functionality
    */
-  async initialize() {
+  async initializeCore() {
     try {
-      // Show loading state
-      this.showLoading();
+      // Only get critical state first with shorter timeout
+      const stateResult = await this.sendMessageWithRetry(
+        'GET_CURRENT_STATE',
+        {},
+        3, // Reduced retries for faster core load
+        { timeout: 5000 }
+      );
 
-      // Initialize analytics UI component
+      if (stateResult?.success) {
+        this.coreState = {
+          ...this.coreState,
+          ...stateResult.data
+        };
+      }
+
+      // Initialize analytics UI if available
       if (window.AnalyticsUI) {
         this.analyticsUI = new window.AnalyticsUI();
       }
 
-      // Get initial state and stats with improved error handling and retries
-      const results = await Promise.allSettled([
-        this.sendMessageWithRetry('GET_CURRENT_STATE'),
-        this.sendMessageWithRetry('GET_REALTIME_STATS'),
-        this.sendMessageWithRetry('GET_FOCUS_STATE'),
-        this.sendMessageWithRetry('GET_USER_INFO', {}, 3) // More retries for user info
-      ]);
-
-      // Process results with fallbacks
-      const [stateResponse, statsResponse, focusStateResponse, userInfoResponse] = results;
-
-      if (stateResponse.status === 'fulfilled' && stateResponse.value?.success) {
-        this.currentState = stateResponse.value.data;
-      } else {
-        console.warn('Failed to get current state:', stateResponse.reason || 'Unknown error');
-        this.currentState = this.getDefaultState();
-      }
-
-      if (statsResponse.status === 'fulfilled' && statsResponse.value?.success) {
-        this.todayStats = statsResponse.value.data;
-      } else {
-        console.warn('Failed to get stats:', statsResponse.reason || 'Unknown error');
-        this.todayStats = this.getDefaultStats();
-      }
-
-      // Always ensure focus stats object exists
-      if (!this.currentState.focusStats) {
-        this.currentState.focusStats = {};
-      }
-
-      // Update focus state if available
-      if (focusStateResponse.status === 'fulfilled' && focusStateResponse.value?.success) {
-        this.currentState.focusStats.focusMode = focusStateResponse.value.data.focusMode;
-      } else {
-        console.warn('Failed to get focus state:', focusStateResponse.reason || 'Unknown error');
-        this.currentState.focusStats.focusMode = false;
-      }
-
-      // Handle user info with special care
-      if (userInfoResponse.status === 'fulfilled' && userInfoResponse.value?.success) {
-        this.userInfo = userInfoResponse.value.data;
-        console.log('✅ Got user info on init:', this.userInfo);
-      } else {
-        console.warn('Failed to get user info:', userInfoResponse.reason || 'Unknown error');
-        // Try to get from local storage as backup
-        try {
-          const localData = await chrome.storage.local.get(['userInfo']);
-          if (localData.userInfo) {
-            this.userInfo = localData.userInfo;
-            console.log('✅ Restored user info from local storage');
-          } else {
-            this.userInfo = this.getDefaultUserInfo();
-          }
-        } catch (error) {
-          console.error('Failed to get user info from local storage:', error);
-          this.userInfo = this.getDefaultUserInfo();
-        }
-      }
-
-      // Update UI with available data
-      this.updateUI();
+      // Show basic UI immediately
+      this.updateCoreUI();
       
-      // Load initial override time from localStorage
-      await this.updateLocalOverrideTime();
-      
-      this.hideLoading();
-
-      // Set up tab system
-      this.setupTabs();
-
-      // Set up periodic updates
-      this.updateInterval = setInterval(() => {
-        if (document.visibilityState === 'visible' && this.currentTab === 'site-usage') {
-          this.refreshState();
-        }
-      }, 5000);
-
-      // Set up event listeners
-      this.setupEventListeners();
-
-      // Listen for updates from background
-      chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        if (message.type === 'STATS_UPDATED') {
-          this.todayStats = message.payload;
-          this.updateUI();
-        } else if (message.type === 'FOCUS_STATE_CHANGED') {
-          this.currentState.focusStats.focusMode = message.payload.isActive;
-          this.updateUI();
-        } else if (message.type === 'USER_INFO_UPDATED') {
-          console.log('📱 Received user info update:', message.payload);
-          this.userInfo = message.payload;
-          // Save to local storage as backup
-          chrome.storage.local.set({ userInfo: message.payload });
-          this.updateUserInfo();
-        } else if (message.type === 'OVERRIDE_DATA_UPDATED') {
-          console.log('🔄 Override data updated, refreshing display');
-          this.updateLocalOverrideTime();
-        }
-        sendResponse({ success: true });
-        return true;
-      });
-
-      // Add visibility change handler
-      document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && this.currentTab === 'site-usage') {
-          setTimeout(() => {
-            this.refreshState();
-            // Also refresh user info when popup becomes visible
-            this.sendMessageWithRetry('GET_USER_INFO').then(response => {
-              if (response?.success) {
-                this.userInfo = response.data;
-                this.updateUserInfo();
-              }
-            });
-          }, 100);
-        }
-      });
+      return true;
     } catch (error) {
-      console.error('Error initializing popup:', error);
+      console.error('Core initialization failed:', error);
+      this.showError('Basic functionality unavailable');
+      return false;
+    }
+  }
+
+  /**
+   * Initialize enhanced features progressively
+   */
+  async initializeEnhanced() {
+    if (!this.coreState) return;
+
+    try {
+      // Load enhanced features in parallel but handle independently
+      const enhancedLoads = [
+        this.loadStats(),
+        this.loadUserInfo(),
+        this.loadFocusState()
+      ];
+
+      // Update UI as each feature becomes available
+      for (const loader of enhancedLoads) {
+        loader.then(result => {
+          if (result?.success) {
+            this.updateEnhancedUI(result.type);
+          }
+        }).catch(console.warn);
+      }
+    } catch (error) {
+      console.warn('Enhanced initialization partial failure:', error);
+    }
+  }
+
+  /**
+   * Load stats with retry
+   */
+  async loadStats() {
+    try {
+      console.log('📤 Popup requesting GET_REALTIME_STATS...');
+      const result = await this.sendMessageWithRetry('GET_REALTIME_STATS', {}, 3);
+      console.log('📥 Popup received stats response:', result);
+      if (result?.success) {
+        this.enhancedState.todayStats = result.data;
+        console.log('✅ Stats loaded successfully:', result.data);
+        return { success: true, type: 'stats', data: result.data };
+      } else {
+        console.error('❌ Stats request failed:', result);
+      }
+    } catch (error) {
+      console.warn('Failed to load stats:', error);
+    }
+    return { success: false, type: 'stats' };
+  }
+
+  /**
+   * Load user info with retry
+   */
+  async loadUserInfo() {
+    try {
+      const result = await this.sendMessageWithRetry('GET_USER_INFO', {}, 3);
+      if (result?.success) {
+        this.enhancedState.userInfo = result.data;
+        return { success: true, type: 'user', data: result.data };
+      }
+      
+      // Fallback to local storage
+      const localData = await chrome.storage.local.get(['userInfo']);
+      if (localData.userInfo) {
+        this.enhancedState.userInfo = localData.userInfo;
+        return { success: true, type: 'user', data: localData.userInfo };
+      }
+    } catch (error) {
+      console.warn('Failed to load user info:', error);
+    }
+    return { success: false, type: 'user' };
+  }
+
+  /**
+   * Load focus state with retry
+   */
+  async loadFocusState() {
+    try {
+      const result = await this.sendMessageWithRetry('GET_FOCUS_STATE', {}, 3);
+      if (result?.success) {
+        this.enhancedState.deepFocusStats = result.data;
+        return { success: true, type: 'focus', data: result.data };
+      }
+    } catch (error) {
+      console.warn('Failed to load focus state:', error);
+    }
+    return { success: false, type: 'focus' };
+  }
+
+  /**
+   * Update core UI elements
+   */
+  updateCoreUI() {
+    // Update focus mode toggle
+    const focusToggle = document.querySelector('#focus-mode-toggle');
+    if (focusToggle) {
+      focusToggle.checked = this.coreState.focusMode;
+      this.updateFocusModeSwitch();
+    }
+
+    // Setup tabs (core functionality)
+    this.setupTabs();
+  }
+
+  /**
+   * Update enhanced UI elements based on type
+   */
+  updateEnhancedUI(type) {
+    switch(type) {
+      case 'stats':
+        if (this.enhancedState.todayStats) {
+          this.updateStatsOverview();
+          // Always update top sites when stats are loaded, regardless of container state
+          if (this.currentTab === 'site-usage') {
+            this.updateTopSites();
+          }
+        }
+        break;
+      case 'user':
+        if (this.enhancedState.userInfo) {
+          this.updateUserInfo();
+        }
+        break;
+      case 'focus':
+        if (this.enhancedState.deepFocusStats) {
+          this.updateDeepFocusTimeDisplay(this.enhancedState.deepFocusStats.minutes || 0);
+        }
+        break;
+    }
+  }
+
+  /**
+   * Main initialization method
+   */
+  async initialize() {
+    try {
+      this.showLoading();
+
+      // Core initialization
+      const coreSuccess = await this.initializeCore();
+      
+      // Hide loading after core is ready
       this.hideLoading();
-      this.showError('Failed to initialize. Please try again.');
+      
+      // Start enhanced loading regardless of core success
+      this.initializeEnhanced().catch(console.warn);
+
+      // Setup event listeners only after core is ready
+      if (coreSuccess) {
+        this.setupEventListeners();
+        
+        // Set up periodic updates
+        this.updateInterval = setInterval(() => {
+          if (document.visibilityState === 'visible' && this.currentTab === 'site-usage') {
+            this.refreshState();
+          }
+        }, 5000);
+
+        // Add visibility change handler
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden && this.currentTab === 'site-usage') {
+            setTimeout(() => {
+              this.refreshState();
+              // Refresh user info when popup becomes visible
+              this.loadUserInfo().then(response => {
+                if (response?.success) {
+                  this.updateEnhancedUI('user');
+                }
+              });
+            }, 100);
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Initialization error:', error);
+      this.hideLoading();
+      this.showError('Failed to initialize');
     }
   }
 
@@ -168,6 +326,28 @@ class PopupManager {
    * Set up event listeners for UI elements
    */
   setupEventListeners() {
+    // Listen for updates from background
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === 'STATS_UPDATED') {
+        this.enhancedState.todayStats = message.payload;
+        this.updateEnhancedUI('stats');
+      } else if (message.type === 'FOCUS_STATE_CHANGED') {
+        this.coreState.focusMode = message.payload.isActive;
+        this.updateCoreUI();
+      } else if (message.type === 'USER_INFO_UPDATED') {
+        console.log('📱 Received user info update:', message.payload);
+        this.enhancedState.userInfo = message.payload;
+        // Save to local storage as backup
+        chrome.storage.local.set({ userInfo: message.payload });
+        this.updateEnhancedUI('user');
+      } else if (message.type === 'OVERRIDE_DATA_UPDATED') {
+        console.log('🔄 Override data updated, refreshing display');
+        this.updateLocalOverrideTime();
+      }
+      sendResponse({ success: true });
+      return true;
+    });
+
     // Focus mode toggle (new switch in header)
     const focusModeSwitch = document.querySelector('#focus-mode-toggle');
     if (focusModeSwitch) {
@@ -180,7 +360,7 @@ class PopupManager {
       console.error('❌ Focus mode switch not found!');
     }
 
-    // Block current site button (moved to header)
+    // Block current site button
     const blockCurrentBtn = document.getElementById('block-current-site');
     if (blockCurrentBtn) {
       console.log('🔧 Block current site button found, adding listener');
@@ -188,8 +368,6 @@ class PopupManager {
         console.log('🔧 Block current site button clicked');
         this.toggleCurrentSiteBlock();
       });
-    } else {
-      console.error('❌ Block current site button not found!');
     }
 
     // Add site to block button
@@ -198,36 +376,18 @@ class PopupManager {
       addSiteBtn.addEventListener('click', () => this.showAddSiteModal());
     }
 
-    // Settings button (legacy support)
-    const settingsBtn = document.getElementById('settings-btn');
-    if (settingsBtn) {
-      settingsBtn.addEventListener('click', () => this.openSettings());
+    // View all buttons
+    const viewAllBtnLoggedIn = document.getElementById('view-all-btn-logged-in');
+    const viewAllBtnAnonymous = document.getElementById('view-all-btn-anonymous');
+    
+    if (viewAllBtnLoggedIn) {
+      viewAllBtnLoggedIn.addEventListener('click', () => this.viewAllSites());
+    }
+    if (viewAllBtnAnonymous) {
+      viewAllBtnAnonymous.addEventListener('click', () => this.viewAllSites());
     }
 
-    // Export data button (legacy support)
-    const exportBtn = document.getElementById('export-data-btn');
-    if (exportBtn) {
-      exportBtn.addEventListener('click', () => this.exportData());
-    }
-
-    // View all sites button (now "View progress")
-    const viewAllBtn = document.getElementById('view-all-btn');
-    if (viewAllBtn) {
-      viewAllBtn.addEventListener('click', () => this.viewAllSites());
-    }
-
-    // Help and feedback (legacy support)
-    const helpBtn = document.getElementById('help-btn');
-    if (helpBtn) {
-      helpBtn.addEventListener('click', () => this.showHelp());
-    }
-
-    const feedbackBtn = document.getElementById('feedback-btn');
-    if (feedbackBtn) {
-      feedbackBtn.addEventListener('click', () => this.showFeedback());
-    }
-
-    // Modal close handlers
+    // Modal handlers
     const modalOverlay = document.getElementById('modal-overlay');
     const modalClose = document.getElementById('modal-close');
     const modalCancel = document.getElementById('modal-cancel');
@@ -243,25 +403,6 @@ class PopupManager {
     if (modalCancel) {
       modalCancel.addEventListener('click', () => this.hideModal());
     }
-
-    // Set up dynamic event listeners for unblock buttons
-    document.addEventListener('click', (e) => {
-      if (e.target.closest('[data-action="unblock"]')) {
-        const domain = e.target.closest('[data-domain]').dataset.domain;
-        this.unblockSite(domain);
-      }
-    });
-
-    // Add click handler for Detail Progress buttons
-    ['view-all-btn-logged-in', 'view-all-btn-anonymous'].forEach(btnId => {
-      const button = document.getElementById(btnId);
-      if (button) {
-        button.addEventListener('click', (e) => {
-          e.preventDefault(); // Prevent default navigation
-          chrome.tabs.create({ url: 'https://make10000hours.com/#/deep-focus' });
-        });
-      }
-    });
   }
 
   /**
@@ -361,7 +502,7 @@ class PopupManager {
     
     // Only update tab content if it's the site-usage tab and we have valid data
     // Don't reinitialize tab content automatically to prevent duplication
-    if (this.currentTab === 'site-usage' && this.todayStats) {
+    if (this.currentTab === 'site-usage' && this.enhancedState.todayStats) {
       this.updateTopSites();
     }
   }
@@ -377,7 +518,7 @@ class PopupManager {
     const animatedTitle = document.querySelector('.animated-title');
 
     if (focusModeSwitch) {
-      const isFocusModeActive = this.currentState?.focusStats?.focusMode || false;
+      const isFocusModeActive = this.coreState?.focusMode || false;
       focusModeSwitch.checked = isFocusModeActive;
 
       // Update container classes
@@ -417,13 +558,13 @@ class PopupManager {
     const noUserInfoElement = document.getElementById('no-user-info');
     const userNameElement = document.getElementById('user-name');
 
-    if (this.userInfo && this.userInfo.userId) {
+    if (this.enhancedState.userInfo && this.enhancedState.userInfo.userId) {
       // Show user info
       if (userInfoElement) userInfoElement.classList.remove('hidden');
       if (noUserInfoElement) noUserInfoElement.classList.add('hidden');
 
       // Update user name
-      const displayName = this.userInfo.displayName || this.userInfo.userEmail || 'User';
+      const displayName = this.enhancedState.userInfo.displayName || this.enhancedState.userInfo.userEmail || 'User';
       if (userNameElement) userNameElement.textContent = displayName;
 
       console.log('👤 User info displayed:', { displayName });
@@ -440,12 +581,12 @@ class PopupManager {
    * Update stats overview cards (new 3-card design)
    */
   updateStatsOverview() {
-    if (!this.todayStats) return;
+    if (!this.enhancedState.todayStats) return;
 
     // Total screen time
     const totalTimeEl = document.getElementById('total-time');
     if (totalTimeEl) {
-      totalTimeEl.textContent = this.formatTime(this.todayStats.totalTime || 0);
+      totalTimeEl.textContent = this.formatTime(this.enhancedState.todayStats.totalTime || 0);
     }
 
     // Deep focus time - fetch from local storage
@@ -585,52 +726,32 @@ class PopupManager {
       if (response.success && response.data && response.data.length > 0) {
         const currentSites = response.data;
         
-        // Check if we need to do a full refresh
-        const needsFullRefresh = !this.previousStats || 
-                                 this.previousStats.length !== currentSites.length ||
-                                 sitesListEl.querySelector('.loading-state');
+        // Always do a full refresh to prevent duplicates
+        sitesListEl.innerHTML = '';
         
-        if (needsFullRefresh) {
-          // Clear all existing content and rebuild
-          sitesListEl.innerHTML = '';
-          for (const site of currentSites) {
-            const siteItem = await this.createSiteItem(site);
-            sitesListEl.appendChild(siteItem);
+        // Create unique sites map to prevent duplicates
+        const uniqueSites = new Map();
+        currentSites.forEach(site => {
+          if (!uniqueSites.has(site.domain) || 
+              uniqueSites.get(site.domain).timeSpent < site.timeSpent) {
+            uniqueSites.set(site.domain, site);
           }
-        } else {
-          // Update existing cards
-          const totalTime = this.todayStats?.totalTime || 0;
-          
-          // Get current site elements (only real site items, not loading states)
-          const siteElements = sitesListEl.querySelectorAll('.site-item');
-          const currentDomains = currentSites.map(site => site.domain);
-          
-          // Update or remove existing elements
-          siteElements.forEach(element => {
-            const domain = element.querySelector('.site-name')?.textContent;
-            const siteData = currentSites.find(site => site.domain === domain);
-            
-            if (siteData) {
-              this.updateSiteCard(element, siteData, totalTime);
-            } else {
-              element.remove();
-            }
-          });
-          
-          // Add new sites that don't exist yet
-          for (const site of currentSites) {
-            const existingElements = sitesListEl.querySelectorAll('.site-item .site-name');
-            const exists = Array.from(existingElements).some(el => el.textContent === site.domain);
-            
-            if (!exists) {
-              const siteItem = await this.createSiteItem(site);
-              sitesListEl.appendChild(siteItem);
-            }
+        });
+        
+        // Convert back to array and sort by time spent
+        const sitesToRender = Array.from(uniqueSites.values())
+          .sort((a, b) => b.timeSpent - a.timeSpent);
+        
+        // Create site items
+        for (const site of sitesToRender) {
+          const siteItem = await this.createSiteItem(site);
+          if (siteItem) {
+            sitesListEl.appendChild(siteItem);
           }
         }
         
-        // Store current sites for next comparison
-        this.previousStats = currentSites;
+        // Store current sites for reference
+        this.previousStats = sitesToRender;
       } else {
         sitesListEl.innerHTML = `
           <div class="loading-state">
@@ -747,6 +868,11 @@ class PopupManager {
    */
   async createSiteItem(site) {
     const template = document.getElementById('site-item-template');
+    if (!template) {
+      console.error('Template element not found:', 'site-item-template');
+      return null;
+    }
+    
     const siteItem = template.content.cloneNode(true);
     
     // Set site icon with new favicon service
@@ -754,56 +880,52 @@ class PopupManager {
     const fallbackIcon = siteItem.querySelector('.site-icon-fallback');
     const progressFill = siteItem.querySelector('.progress-fill');
     
+    // Use Google's favicon service (same as web app)
+    let progressColor = this.getBrandColor(site.domain);
+    
     try {
-      // Add loading state
-      icon.classList.add('loading');
+      const faviconUrl = await getGoogleFavicon(site.domain, 32);
       
-      // Get favicon URL using our service
-      const faviconResult = await FaviconService.getFaviconUrl(site.domain, { size: 32 });
-      
-      // Try to get brand color first
-      let progressColor = this.getBrandColor(site.domain);
-      
-      if (faviconResult.isDefault) {
-        // Show fallback with Remix icon
-        icon.classList.add('error');
-        fallbackIcon.classList.remove('hidden');
-        const iconClass = FaviconService.getDomainIcon(site.domain);
-        fallbackIcon.querySelector('i').className = iconClass;
-        
-        // If no brand color, use the fallback color
-        if (!progressColor) {
-          progressColor = FaviconService.getColorForDomain(site.domain);
-        }
-      } else {
-        // Show the favicon
-        icon.src = faviconResult.url;
-        icon.classList.remove('loading');
+      if (faviconUrl) {
+        // Successfully got favicon from Google
+        icon.src = faviconUrl;
+        icon.style.display = 'block';
+        icon.onload = () => {
+          fallbackIcon.classList.add('hidden');
+        };
+        icon.onerror = () => {
+          // If image fails to load, show fallback
+          icon.style.display = 'none';
+          fallbackIcon.classList.remove('hidden');
+          fallbackIcon.querySelector('i').className = getDomainFallbackIcon(site.domain);
+        };
         fallbackIcon.classList.add('hidden');
-        
-        // If no brand color, try to extract from favicon
-        if (!progressColor) {
-          progressColor = await this.getImageColor(faviconResult.url) || FaviconService.getColorForDomain(site.domain);
-        }
+      } else {
+        // Google service didn't return valid favicon, use fallback
+        icon.style.display = 'none';
+        fallbackIcon.classList.remove('hidden');
+        fallbackIcon.querySelector('i').className = getDomainFallbackIcon(site.domain);
       }
-      
-      // Apply the color to progress bar
-      progressFill.style.backgroundColor = progressColor;
     } catch (error) {
-      console.warn('Failed to load favicon:', error);
-      // Show fallback on error
-      icon.classList.add('error');
+      // Error getting favicon, use fallback
+      console.warn('Error loading favicon for', site.domain, error);
+      icon.style.display = 'none';
       fallbackIcon.classList.remove('hidden');
-      progressFill.style.backgroundColor = FaviconService.getColorForDomain(site.domain);
+      fallbackIcon.querySelector('i').className = getDomainFallbackIcon(site.domain);
     }
+    
+    progressColor = progressColor || '#3B82F6';
+    
+    // Apply progress bar color
+    progressFill.style.backgroundColor = progressColor;
     
     // Set site info
     siteItem.querySelector('.site-name').textContent = site.domain;
     siteItem.querySelector('.site-sessions').textContent = `${site.visits} sessions`;
     
     // Calculate percentage
-    const percentage = this.todayStats?.totalTime ? 
-      Math.round((site.timeSpent / this.todayStats.totalTime) * 100) : 0;
+    const percentage = this.enhancedState.todayStats?.totalTime ? 
+      Math.round((site.timeSpent / this.enhancedState.todayStats.totalTime) * 100) : 0;
     
     // Set site stats
     siteItem.querySelector('.site-duration').textContent = this.formatTime(site.timeSpent);
@@ -909,55 +1031,43 @@ class PopupManager {
     const item = document.createElement('div');
     item.className = 'blocked-site-item';
     
+    // Try to get favicon from Google, fallback to icon
+    let iconHtml;
     try {
-      // Get favicon for blocked site
-      const faviconResult = await FaviconService.getFaviconUrl(domain, { size: 32 });
-      const iconHtml = faviconResult.isDefault ? 
-        `<div class="blocked-site-icon"><i class="${FaviconService.getDomainIcon(domain)}"></i></div>` :
-        `<div class="blocked-site-icon"><img src="${faviconResult.url}" alt="${domain}" class="site-icon"></div>`;
-      
-      item.innerHTML = `
-        <div class="blocked-site-left">
-          ${iconHtml}
-          <div class="blocked-site-name">${domain}</div>
-        </div>
-        <div class="blocked-site-controls">
-          <button class="btn-icon" title="Edit">
-            <i class="ri-edit-line"></i>
-          </button>
-          <button class="btn-icon" title="Delete" data-action="unblock" data-domain="${domain}">
-            <i class="ri-delete-bin-line"></i>
-          </button>
-          <label class="custom-switch">
-            <input type="checkbox" checked>
-            <span class="switch-slider"></span>
-          </label>
-        </div>
-      `;
-    } catch (error) {
-      console.warn('Failed to create blocked site item:', error);
-      // Fallback to simple version without favicon
-      item.innerHTML = `
-        <div class="blocked-site-left">
-          <div class="blocked-site-icon">
-            <i class="ri-global-line"></i>
+      const faviconUrl = await getGoogleFavicon(domain, 32);
+      if (faviconUrl) {
+        iconHtml = `<div class="blocked-site-icon">
+          <img src="${faviconUrl}" alt="${domain}" class="site-icon" 
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <div class="fallback-icon" style="display:none; align-items:center; justify-content:center; width:32px; height:32px;">
+            <i class="${getDomainFallbackIcon(domain)}"></i>
           </div>
-          <div class="blocked-site-name">${domain}</div>
-        </div>
-        <div class="blocked-site-controls">
-          <button class="btn-icon" title="Edit">
-            <i class="ri-edit-line"></i>
-          </button>
-          <button class="btn-icon" title="Delete" data-action="unblock" data-domain="${domain}">
-            <i class="ri-delete-bin-line"></i>
-          </button>
-          <label class="custom-switch">
-            <input type="checkbox" checked>
-            <span class="switch-slider"></span>
-          </label>
-        </div>
-      `;
+        </div>`;
+      } else {
+        iconHtml = `<div class="blocked-site-icon"><i class="${getDomainFallbackIcon(domain)}"></i></div>`;
+      }
+    } catch (error) {
+      iconHtml = `<div class="blocked-site-icon"><i class="${getDomainFallbackIcon(domain)}"></i></div>`;
     }
+      
+    item.innerHTML = `
+      <div class="blocked-site-left">
+        ${iconHtml}
+        <div class="blocked-site-name">${domain}</div>
+      </div>
+      <div class="blocked-site-controls">
+        <button class="btn-icon" title="Edit">
+          <i class="ri-edit-line"></i>
+        </button>
+        <button class="btn-icon" title="Delete" data-action="unblock" data-domain="${domain}">
+          <i class="ri-delete-bin-line"></i>
+        </button>
+        <label class="custom-switch">
+          <input type="checkbox" checked>
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+    `;
 
     return item;
   }
@@ -1059,14 +1169,7 @@ class PopupManager {
       const newFocusState = focusModeSwitch.checked;
       
       // Update UI immediately
-      if (this.currentState?.focusStats) {
-        this.currentState.focusStats.focusMode = newFocusState;
-      } else {
-        this.currentState = {
-          ...this.currentState,
-          focusStats: { focusMode: newFocusState }
-        };
-      }
+      this.coreState.focusMode = newFocusState;
       this.updateFocusModeSwitch();
       
       // Send message to background
@@ -1084,18 +1187,14 @@ class PopupManager {
         await this.refreshState();
       } else {
         // If failed, revert the switch state
-        if (this.currentState?.focusStats) {
-          this.currentState.focusStats.focusMode = !newFocusState;
-        }
+        this.coreState.focusMode = !newFocusState;
         this.updateFocusModeSwitch();
         this.showError('Failed to toggle focus mode: ' + response.error);
       }
     } catch (error) {
       console.error('Error toggling focus mode:', error);
       // Revert switch state on error
-      if (this.currentState?.focusStats) {
-        this.currentState.focusStats.focusMode = !focusModeSwitch.checked;
-      }
+      this.coreState.focusMode = !focusModeSwitch.checked;
       this.updateFocusModeSwitch();
       this.showError('Failed to toggle focus mode');
     } finally {
@@ -1132,36 +1231,41 @@ class PopupManager {
   }
 
   /**
-   * Refresh state with debouncing and diff checking
+   * Refresh state and update UI
    */
   async refreshState() {
-    this.debounce(async () => {
-      try {
-        const [stateResponse, statsResponse] = await Promise.all([
-          this.sendMessage('GET_CURRENT_STATE'),
-          this.sendMessage('GET_REALTIME_STATS')
-        ]);
-
-        if (statsResponse?.success) {
-          const newStats = statsResponse.data;
-          
-          // Only update if stats have changed
-          if (this.haveStatsChanged(newStats, this.todayStats)) {
-            this.todayStats = newStats;
-            this.updateUI(); // This will call updateTopSites() which now uses real-time data
-          }
-        }
-
-        if (stateResponse?.success) {
-          this.currentState = stateResponse.data;
-        }
-
-        // Always update local override time
-        await this.updateLocalOverrideTime();
-      } catch (error) {
-        console.error('Error refreshing state:', error);
+    try {
+      // Refresh core state
+      const stateResult = await this.sendMessageWithRetry('GET_CURRENT_STATE', {}, 2);
+      if (stateResult?.success) {
+        this.coreState = {
+          ...this.coreState,
+          ...stateResult.data
+        };
+        this.updateCoreUI();
       }
-    }, 200); // 200ms debounce
+
+      // Refresh enhanced state in parallel
+      const enhancedUpdates = [
+        this.loadStats(),
+        this.loadUserInfo(),
+        this.loadFocusState()
+      ];
+
+      // Update UI as each feature refreshes
+      for (const update of enhancedUpdates) {
+        update.then(result => {
+          if (result?.success) {
+            this.updateEnhancedUI(result.type);
+          }
+        }).catch(console.warn);
+      }
+
+      // Update override time
+      await this.updateLocalOverrideTime();
+    } catch (error) {
+      console.warn('Failed to refresh state:', error);
+    }
   }
 
   /**
@@ -1240,8 +1344,8 @@ class PopupManager {
    * Show site details modal
    */
   showSiteDetails(site) {
-    const percentage = this.todayStats?.totalTime ? 
-      Math.round((site.timeSpent / this.todayStats.totalTime) * 100) : 0;
+        const percentage = this.enhancedState.todayStats?.totalTime ?
+      Math.round((site.timeSpent / this.enhancedState.todayStats.totalTime) * 100) : 0;
 
     const iconInfo = this.getSiteIconInfo(site.domain);
 
@@ -1400,21 +1504,11 @@ class PopupManager {
     try {
       console.log(`📤 Sending message: ${type}`, payload);
       
-      const response = await new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage(
-          { type, payload },
-          (response) => {
-            if (chrome.runtime.lastError) {
-              console.error('❌ Chrome runtime error:', chrome.runtime.lastError);
-              reject(new Error(chrome.runtime.lastError.message));
-            } else {
-              console.log(`📥 Received response for ${type}:`, response);
-              resolve(response);
-            }
-          }
-        );
-      });
+      // Use MessageQueueManager for reliable message delivery
+      const messageQueue = new MessageQueueManager();
+      const response = await messageQueue.enqueue({ type, payload });
       
+      console.log(`📥 Received response for ${type}:`, response);
       return response;
     } catch (error) {
       console.error(`❌ Error sending message ${type}:`, error);
@@ -1426,22 +1520,13 @@ class PopupManager {
    * Send message with retry logic
    */
   async sendMessageWithRetry(type, payload = {}, maxRetries = 2) {
-    let lastError;
-    for (let i = 0; i <= maxRetries; i++) {
-      try {
-        const response = await this.sendMessage(type, payload);
-        if (response?.success) {
-          return response;
-        }
-        lastError = new Error(response?.error || 'Unknown error');
-      } catch (error) {
-        lastError = error;
-        if (i < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
-        }
-      }
+    try {
+      // MessageQueueManager handles retries internally
+      return await this.sendMessage(type, payload);
+    } catch (error) {
+      console.error('Failed to send message after retries:', error);
+      throw error;
     }
-    throw lastError;
   }
 
   /**
@@ -1590,10 +1675,22 @@ class PopupManager {
   }
 }
 
-// Initialize popup manager
-const popupManager = new PopupManager();
+// Initialize popup manager after DOM is ready
+let popupManager = null;
+
+// Wait for DOM to be fully loaded before initializing
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    popupManager = new PopupManager();
+  });
+} else {
+  // DOM already loaded
+  popupManager = new PopupManager();
+}
 
 // Cleanup on window unload
 window.addEventListener('unload', () => {
-  popupManager.cleanup();
+  if (popupManager) {
+    popupManager.cleanup();
+  }
 }); 

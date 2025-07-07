@@ -481,13 +481,28 @@ class StorageManager {
 
   async getTodayStats() {
     const today = new Date().toISOString().split('T')[0];
-    const storage = await chrome.storage.local.get(['stats']);
-    return storage.stats?.[today] || {
-      totalTime: 0,
-      sitesVisited: 0,
-      productivityScore: 0,
-      sites: {}
-    };
+    console.log('📅 Getting stats for date:', today);
+    
+    try {
+      const storage = await chrome.storage.local.get(['stats']);
+      const todayStats = storage.stats?.[today] || {
+        totalTime: 0,
+        sitesVisited: 0,
+        productivityScore: 0,
+        sites: {}
+      };
+      
+      console.log('📊 Today stats result:', todayStats);
+      return todayStats;
+    } catch (error) {
+      console.error('❌ Error in getTodayStats:', error);
+      return {
+        totalTime: 0,
+        sitesVisited: 0,
+        productivityScore: 0,
+        sites: {}
+      };
+    }
   }
 
   async getTimeData(startDate, endDate = null) {
@@ -553,7 +568,10 @@ class StorageManager {
    * Get real-time stats with current session data
    */
   async getRealTimeStatsWithSession() {
+    console.log('🔍 DEBUG: getRealTimeStatsWithSession called');
+    
     const storedStats = await this.getTodayStats();
+    console.log('🔍 DEBUG: storedStats from getTodayStats:', storedStats);
     
     // Clone stored stats to avoid mutation
     const realTimeStats = {
@@ -562,13 +580,19 @@ class StorageManager {
       sites: { ...(storedStats?.sites || {}) }
     };
     
+    console.log('🔍 DEBUG: Initial realTimeStats:', realTimeStats);
+    console.log('🔍 DEBUG: focusTimeTracker reference:', !!this.focusTimeTracker);
+    
     // Add current session time if actively tracking and we have tracker reference
     if (this.focusTimeTracker && this.focusTimeTracker.currentSession) {
       const currentSession = this.focusTimeTracker.currentSession;
+      console.log('🔍 DEBUG: Current session found:', currentSession);
       
       if (currentSession.isActive && currentSession.domain && currentSession.startTime) {
         const currentTime = Date.now();
         const sessionTime = currentTime - currentSession.startTime;
+        
+        console.log('🔍 DEBUG: Adding session time:', sessionTime, 'for domain:', currentSession.domain);
         
         // Update current domain stats
         if (!realTimeStats.sites[currentSession.domain]) {
@@ -581,8 +605,11 @@ class StorageManager {
         realTimeStats.sites[currentSession.domain].timeSpent += sessionTime;
         realTimeStats.totalTime += sessionTime;
       }
+    } else {
+      console.log('🔍 DEBUG: No active session or focusTimeTracker not set');
     }
     
+    console.log('🔍 DEBUG: Final realTimeStats:', realTimeStats);
     return realTimeStats;
   }
 
@@ -591,23 +618,30 @@ class StorageManager {
    * This provides the same real-time data as getRealTimeStatsWithSession but formatted for site list
    */
   async getRealTimeTopSites(limit = 20) {
-    const realTimeStats = await this.getRealTimeStatsWithSession();
-    
-    if (!realTimeStats || !realTimeStats.sites || Object.keys(realTimeStats.sites).length === 0) {
+    try {
+      const realTimeStats = await this.getRealTimeStatsWithSession();
+      
+      if (!realTimeStats || !realTimeStats.sites || Object.keys(realTimeStats.sites).length === 0) {
+        console.log('📊 No site data available for top sites');
+        return [];
+      }
+
+      const topSites = Object.entries(realTimeStats.sites)
+        .map(([domain, data]) => ({
+          domain,
+          timeSpent: data.timeSpent || 0,
+          visits: data.visits || 0
+        }))
+        .filter(site => site.timeSpent > 0)
+        .sort((a, b) => b.timeSpent - a.timeSpent)
+        .slice(0, limit);
+      
+      console.log('📊 Returning', topSites.length, 'top sites');
+      return topSites;
+    } catch (error) {
+      console.error('❌ Error in getRealTimeTopSites:', error);
       return [];
     }
-
-    const topSites = Object.entries(realTimeStats.sites)
-      .map(([domain, data]) => ({
-        domain,
-        timeSpent: data.timeSpent || 0,
-        visits: data.visits || 0
-      }))
-      .filter(site => site.timeSpent > 0) // Only include sites with actual time
-      .sort((a, b) => b.timeSpent - a.timeSpent)
-      .slice(0, limit);
-    
-    return topSites;
   }
 
   async getSettings() {
@@ -2104,6 +2138,7 @@ class FocusTimeTracker {
       console.log('🔄 Initializing StorageManager...');
       this.storageManager = new StorageManager();
       this.storageManager.setStateManager(this.stateManager);
+      this.storageManager.setFocusTimeTracker(this); // Connect to this tracker instance
       await this.storageManager.initialize();
       
       // Continue with other initialization
@@ -2112,17 +2147,8 @@ class FocusTimeTracker {
       this.blockingManager.setFocusTimeTracker(this);
       await this.blockingManager.initialize();
       
-      // Set initial Firebase config if not already set
-      const configResult = await this.configManager.getFirebaseConfig();
-      if (!configResult.config) {
-        await this.configManager.setFirebaseConfig({
-          // Your default Firebase config here
-          // This should be replaced with your actual config
-          projectId: "your-project-id",
-          apiKey: "your-api-key",
-          // ... other required Firebase config fields
-        });
-      }
+      // Skip Firebase initialization for now - extension works with local storage only
+      console.log('ℹ️ Firebase integration disabled - using local storage only');
 
       console.log('🚀 Initializing Focus Time Tracker...');
       
@@ -2194,11 +2220,8 @@ class FocusTimeTracker {
       }
     });
 
-    // Message handling from popup and content scripts
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      this.handleMessage(message, sender, sendResponse);
-      return true; // Keep message channel open for async responses
-    });
+    // Message handling is now handled by the global listener
+    // No need for duplicate listener here
 
     // External message handling from web apps (externally_connectable domains)
     chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
@@ -2306,17 +2329,13 @@ class FocusTimeTracker {
 
       switch (type) {
         case 'GET_FIREBASE_CONFIG':
-          const configResult = await this.configManager.getFirebaseConfig();
-          sendResponse(configResult);
+          // Firebase disabled - return empty config
+          sendResponse({ success: false, error: 'Firebase integration disabled' });
           return true;
 
         case 'SET_FIREBASE_CONFIG':
-          if (!payload) {
-            sendResponse({ success: false, error: 'No config provided' });
-            return true;
-          }
-          const saveResult = await this.configManager.setFirebaseConfig(payload);
-          sendResponse(saveResult);
+          // Firebase disabled - ignore config requests
+          sendResponse({ success: false, error: 'Firebase integration disabled' });
           return true;
 
         case 'GET_CURRENT_STATE':
@@ -2334,8 +2353,23 @@ class FocusTimeTracker {
           break;
 
         case 'GET_REALTIME_STATS':
+          console.log('📊 Processing GET_REALTIME_STATS request...');
           const realTimeStats = await this.storageManager.getRealTimeStatsWithSession();
+          console.log('📊 Retrieved real-time stats:', realTimeStats);
           sendResponse({ success: true, data: realTimeStats });
+          break;
+
+        case 'DEBUG_STORAGE':
+          console.log('🔍 Debug storage request received');
+          try {
+            // Get all storage data
+            const allData = await chrome.storage.local.get(null);
+            console.log('🔍 All storage data:', allData);
+            sendResponse({ success: true, data: allData });
+          } catch (error) {
+            console.error('❌ Debug storage error:', error);
+            sendResponse({ success: false, error: error.message });
+          }
           break;
 
         case 'GET_TIME_DATA_RANGE':
@@ -2360,8 +2394,13 @@ class FocusTimeTracker {
           break;
 
         case 'GET_REALTIME_TOP_SITES':
-          const realTimeTopSites = await this.storageManager.getRealTimeTopSites(message.payload?.limit || 20);
-          sendResponse({ success: true, data: realTimeTopSites });
+          try {
+            const realTimeTopSites = await this.storageManager.getRealTimeTopSites(message.payload?.limit || 20);
+            sendResponse({ success: true, data: realTimeTopSites });
+          } catch (error) {
+            console.error('❌ Error in GET_REALTIME_TOP_SITES:', error);
+            sendResponse({ success: false, error: error.message });
+          }
           break;
 
         case 'GET_LOCAL_DEEP_FOCUS_TIME':
@@ -3525,15 +3564,6 @@ class FocusTimeTracker {
 // Initialize the tracker when the service worker starts
 const focusTimeTracker = new FocusTimeTracker(); 
 
-// Add ping handler for context validation
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'PING') {
-    sendResponse({ success: true });
-    return true; // Keep channel open for async response
-  }
-  // ... existing message handlers ...
-});
-
 // Add initialization state tracking
 let isInitialized = false;
 
@@ -3542,9 +3572,11 @@ async function initializeExtension() {
   if (isInitialized) return;
   
   try {
+    console.log('🚀 Starting extension initialization...');
     // Initialize the tracker when the service worker starts
-    const focusTimeTracker = new FocusTimeTracker();
+    await focusTimeTracker.initialize();
     isInitialized = true;
+    console.log('✅ Extension initialized successfully');
     
     // Notify any waiting content scripts
     chrome.tabs.query({}, (tabs) => {
@@ -3557,7 +3589,7 @@ async function initializeExtension() {
       });
     });
   } catch (e) {
-    console.error('Failed to initialize extension:', e);
+    console.error('❌ Failed to initialize extension:', e);
   }
 }
 
@@ -3565,27 +3597,64 @@ async function initializeExtension() {
 chrome.runtime.onInstalled.addListener(initializeExtension);
 chrome.runtime.onStartup.addListener(initializeExtension);
 
-// Enhanced message handling
+// Initialize immediately
+initializeExtension();
+
+// Consolidated message handling - SINGLE LISTENER ONLY
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('📨 Received message:', message.type, 'from:', sender.tab?.url || 'popup');
+  
   // Always respond to PING messages immediately
   if (message.type === 'PING') {
     sendResponse({ success: true, initialized: isInitialized });
-    return true;
+    return false; // Don't keep channel open for sync response
   }
   
   // For other messages, ensure we're initialized
   if (!isInitialized) {
+    console.log('⚠️ Extension not initialized, initializing now...');
     initializeExtension().then(() => {
-      // Handle the message after initialization
-      handleMessage(message, sender, sendResponse);
+      if (focusTimeTracker && focusTimeTracker.handleMessage) {
+        try {
+          focusTimeTracker.handleMessage(message, sender, sendResponse);
+        } catch (error) {
+          console.error('❌ Error in delayed message handler:', error);
+          sendResponse({ success: false, error: 'Message handler error' });
+        }
+      } else {
+        sendResponse({ success: false, error: 'Extension initialization failed' });
+      }
+    }).catch(error => {
+      console.error('❌ Extension initialization error:', error);
+      sendResponse({ success: false, error: 'Extension initialization failed' });
     });
-    return true; // Keep channel open
+    return true; // Keep channel open for async response
   }
   
-  // Normal message handling
-  return handleMessage(message, sender, sendResponse);
+  // Route messages to the FocusTimeTracker instance
+  if (focusTimeTracker && focusTimeTracker.handleMessage) {
+    try {
+      const result = focusTimeTracker.handleMessage(message, sender, sendResponse);
+      // If handler returns a promise, handle it properly
+      if (result && typeof result.then === 'function') {
+        result.catch(error => {
+          console.error('❌ Async message handler error:', error);
+          try {
+            sendResponse({ success: false, error: error.message });
+          } catch (e) {
+            console.error('❌ Failed to send error response:', e);
+          }
+        });
+      }
+      return true; // Keep channel open for async handlers
+    } catch (error) {
+      console.error('❌ Message handler error:', error);
+      sendResponse({ success: false, error: error.message });
+      return false; // Don't keep channel open for sync errors
+    }
+  }
+  
+  console.warn('⚠️ FocusTimeTracker not available, message ignored:', message.type);
+  sendResponse({ success: false, error: 'Extension not properly initialized' });
+  return false; // Don't keep channel open for sync errors
 });
-
-function handleMessage(message, sender, sendResponse) {
-  // ... existing message handling logic ...
-}

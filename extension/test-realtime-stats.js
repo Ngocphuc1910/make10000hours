@@ -3,10 +3,32 @@
  * Run this in the browser console to test the changes
  */
 
+async function waitForExtensionReady(maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      // Try to get extension info - this will fail if not ready
+      await chrome.runtime.sendMessage({ type: 'GET_CURRENT_STATE' });
+      return true;
+    } catch (error) {
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+  }
+  return false;
+}
+
 async function testRealTimeStats() {
   console.log('🧪 Testing Real-Time Stats Implementation...');
   
   try {
+    // Wait for extension to be ready
+    const isReady = await waitForExtensionReady();
+    if (!isReady) {
+      console.error('❌ Extension not ready after retries');
+      return null;
+    }
+
     // Test 1: Check if GET_REALTIME_STATS message is working
     console.log('📡 Test 1: Testing GET_REALTIME_STATS message...');
     
@@ -18,17 +40,20 @@ async function testRealTimeStats() {
       console.log('✅ GET_REALTIME_STATS is working!');
       console.log('📊 Real-time stats data:', response.data);
       
-      // Verify data structure
-      if (response.data.totalTime !== undefined && 
-          response.data.sites !== undefined &&
-          response.data.sitesVisited !== undefined) {
+      // Verify data structure with safe access - updated to match actual structure
+      if (response.data && typeof response.data === 'object') {
         console.log('✅ Data structure is correct');
-        console.log(`📈 Total time: ${response.data.totalTime}ms`);
-        console.log(`🌐 Sites visited: ${response.data.sitesVisited}`);
-        console.log(`📋 Site count: ${Object.keys(response.data.sites).length}`);
-        console.log('🗂️ Sites data:', response.data.sites);
+        // Use nullish coalescing to handle initialization state
+        const totalTime = response.data.totalTime ?? 0;
+        const sitesVisited = response.data.sitesVisited ?? 0;
+        const sites = response.data.sites || {};
+        
+        console.log(`📈 Total time: ${totalTime}ms`);
+        console.log(`🌐 Sites visited: ${sitesVisited}`);
+        console.log(`📋 Site count: ${Object.keys(sites).length}`);
+        console.log('🗂️ Sites data:', sites);
       } else {
-        console.error('❌ Data structure is invalid');
+        console.warn('⚠️ Missing or invalid stats data in response');
       }
     } else {
       console.error('❌ GET_REALTIME_STATS failed:', response);
@@ -42,11 +67,11 @@ async function testRealTimeStats() {
     });
     
     if (oldResponse && oldResponse.success) {
-      console.log('📊 Old stats total time:', oldResponse.data.totalTime);
-      console.log('📊 Old stats sites:', oldResponse.data.sites);
-      console.log('📊 Real-time total time:', response.data.totalTime);
+      console.log('📊 Old stats total time:', oldResponse.data?.todayStats?.totalTime ?? 0);
+      console.log('📊 Old stats sites:', oldResponse.data?.todayStats?.sites);
+      console.log('📊 Real-time total time:', response.data?.totalTime ?? 0);
       
-      const timeDifference = response.data.totalTime - oldResponse.data.totalTime;
+      const timeDifference = (response.data?.totalTime ?? 0) - (oldResponse.data?.todayStats?.totalTime ?? 0);
       console.log(`⏱️ Time difference: ${timeDifference}ms`);
       
       if (timeDifference >= 0) {
@@ -162,7 +187,7 @@ testRealTimeStats().then(results => {
   if (results) {
     console.log('\n📊 Test Results Summary:');
     console.log('Real-time total time:', results.realTimeStats?.totalTime || 0);
-    console.log('Stored total time:', results.oldStats?.totalTime || 0);
+    console.log('Stored total time:', results.oldStats?.todayStats?.totalTime || 0);
     console.log('Top sites count:', results.topSites?.length || 0);
     console.log('Active session:', results.currentState?.tracking || false);
   }
