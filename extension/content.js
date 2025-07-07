@@ -10,15 +10,98 @@ class ExtensionCommunicator {
     this.maxRetries = 3;
     this.retryDelay = 1000;
     this.messageTimeout = 10000;
+    this.lastValidationTime = 0;
+    this.validationCacheTime = 5000;
+    this.connectionState = {
+      valid: true,
+      lastCheck: Date.now()
+    };
+    this.initializationDelay = 500; // Wait for extension to initialize
+    this.initialized = false;
+    
+    // Initialize connection state
+    this.initializeConnection();
+  }
+
+  async initializeConnection() {
+    // Wait for extension to be ready
+    await this.delay(this.initializationDelay);
+    
+    try {
+      // Attempt initial connection
+      const isValid = await this.validateContext();
+      this.initialized = true;
+      this.connectionState.valid = isValid;
+    } catch (e) {
+      console.warn('Initial connection validation failed, will retry on next message');
+      this.connectionState.valid = false;
+    }
+  }
+  
+  async validateContext() {
+    const now = Date.now();
+    
+    // During initialization phase, wait a bit
+    if (!this.initialized) {
+      await this.delay(100); // Small delay to let extension initialize
+    }
+    
+    // Use cached result if within cache time
+    if (now - this.lastValidationTime < this.validationCacheTime) {
+      return this.connectionState.valid;
+    }
+    
+    // Update validation time
+    this.lastValidationTime = now;
+    
+    try {
+      // Ensure runtime is available
+      if (!chrome?.runtime?.id) {
+        return false;
+      }
+      
+      // Check if extension is still valid
+      const extensionCheck = new Promise((resolve) => {
+        try {
+          chrome.runtime.sendMessage({ type: 'PING' }, (response) => {
+            const valid = !chrome.runtime.lastError && response?.success;
+            resolve(valid);
+          });
+          // Set a short timeout
+          setTimeout(() => resolve(false), 1000);
+        } catch (e) {
+          resolve(false);
+        }
+      });
+      
+      const isValid = await extensionCheck;
+      this.connectionState.valid = isValid;
+      return isValid;
+    } catch (e) {
+      this.connectionState.valid = false;
+      return false;
+    }
   }
   
   async sendMessage(message, options = {}) {
     const { timeout = this.messageTimeout, retries = this.maxRetries, fallback = null } = options;
     
-    if (!this.isExtensionContextValid()) {
-      console.warn('❌ Extension context invalid');
+    // Wait for initialization on first message
+    if (!this.initialized) {
+      await this.initializeConnection();
+    }
+    
+    if (!await this.validateContext()) {
+      // Only log warning if state changed from valid to invalid
+      if (this.connectionState.valid) {
+        console.warn('❌ Extension context invalid');
+        this.connectionState.valid = false;
+      }
       return fallback || { success: false, error: 'Extension context invalid' };
     }
+    
+    // Reset connection state if we got here
+    this.connectionState.valid = true;
     
     let attempt = 0;
     while (attempt <= retries) {
@@ -27,8 +110,11 @@ class ExtensionCommunicator {
       } catch (error) {
         attempt++;
         if (attempt <= retries) {
-          console.warn(`⚠️ Message attempt ${attempt} failed, retrying...`, error.message);
           await this.delay(this.retryDelay * attempt);
+          // Revalidate context before retry
+          if (!await this.validateContext()) {
+            return fallback || { success: false, error: 'Extension context invalid during retry' };
+          }
         } else {
           console.error('❌ Message failed after all retries:', error.message);
           return fallback || { success: false, error: error.message };
@@ -58,14 +144,6 @@ class ExtensionCommunicator {
         reject(error);
       }
     });
-  }
-  
-  isExtensionContextValid() {
-    try {
-      return chrome.runtime && chrome.runtime.id;
-    } catch (e) {
-      return false;
-    }
   }
   
   delay(ms) {
@@ -104,8 +182,6 @@ class ActivityDetector {
     this.initialize();
   }
 
-
-
   /**
    * Safe message sending using the simplified extension communicator
    */
@@ -122,8 +198,6 @@ class ActivityDetector {
       fallback
     });
   }
-
-
 
   /**
    * Initialize the activity detector
