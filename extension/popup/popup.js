@@ -126,6 +126,7 @@ class PopupManager {
           ...this.coreState,
           ...stateResult.data
         };
+        console.log('🔄 Popup initialized with focus mode:', this.coreState.focusMode, 'at', new Date().toISOString());
       }
 
       // Initialize analytics UI if available
@@ -302,8 +303,9 @@ class PopupManager {
 
         // Add visibility change handler
         document.addEventListener('visibilitychange', () => {
-          if (!document.hidden && this.currentTab === 'site-usage') {
+          if (!document.hidden) {
             setTimeout(() => {
+              // Always refresh core state (includes focus mode) when popup becomes visible
               this.refreshState();
               // Refresh user info when popup becomes visible
               this.loadUserInfo().then(response => {
@@ -332,8 +334,12 @@ class PopupManager {
         this.enhancedState.todayStats = message.payload;
         this.updateEnhancedUI('stats');
       } else if (message.type === 'FOCUS_STATE_CHANGED') {
+        console.log('📱 Popup received FOCUS_STATE_CHANGED:', message.payload, 'at', new Date().toISOString());
+        const previousFocusMode = this.coreState.focusMode;
         this.coreState.focusMode = message.payload.isActive;
+        console.log(`📱 Popup focus mode updated: ${previousFocusMode} → ${this.coreState.focusMode}`);
         this.updateCoreUI();
+        console.log('📱 Popup UI updated after focus state change');
       } else if (message.type === 'USER_INFO_UPDATED') {
         console.log('📱 Received user info update:', message.payload);
         this.enhancedState.userInfo = message.payload;
@@ -343,6 +349,14 @@ class PopupManager {
       } else if (message.type === 'OVERRIDE_DATA_UPDATED') {
         console.log('🔄 Override data updated, refreshing display');
         this.updateLocalOverrideTime();
+      } else if (message.type === 'FORCE_STATE_REFRESH') {
+        console.log('🔄 Forced state refresh received:', message.payload);
+        // Force refresh the current state from background
+        this.refreshState().then(() => {
+          console.log('✅ Forced state refresh completed');
+        }).catch(error => {
+          console.error('❌ Forced state refresh failed:', error);
+        });
       }
       sendResponse({ success: true });
       return true;
@@ -1247,14 +1261,21 @@ class PopupManager {
    */
   async refreshState() {
     try {
+      console.log('🔄 PopupManager.refreshState() called at', new Date().toISOString());
+      
       // Refresh core state
       const stateResult = await this.sendMessageWithRetry('GET_CURRENT_STATE', {}, 2);
+      console.log('📥 Received state from background:', stateResult);
+      
       if (stateResult?.success) {
+        const previousFocusMode = this.coreState.focusMode;
         this.coreState = {
           ...this.coreState,
           ...stateResult.data
         };
+        console.log(`📱 Core state updated - focus mode: ${previousFocusMode} → ${this.coreState.focusMode}`);
         this.updateCoreUI();
+        console.log('📱 Core UI updated after state refresh');
       }
 
       // Refresh enhanced state in parallel
@@ -1275,6 +1296,7 @@ class PopupManager {
 
       // Update override time
       await this.updateLocalOverrideTime();
+      console.log('✅ RefreshState completed successfully');
     } catch (error) {
       console.warn('Failed to refresh state:', error);
     }
