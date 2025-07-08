@@ -60,27 +60,56 @@ class ExtensionCommunicator {
     try {
       // Ensure runtime is available
       if (!chrome?.runtime?.id) {
+        console.warn('⚠️ Chrome runtime not available');
+        this.connectionState.valid = false;
         return false;
       }
       
       // Check if extension is still valid
       const extensionCheck = new Promise((resolve) => {
+        let resolved = false;
+        
         try {
           chrome.runtime.sendMessage({ type: 'PING' }, (response) => {
-            const valid = !chrome.runtime.lastError && response?.success;
-            resolve(valid);
+            if (!resolved) {
+              resolved = true;
+              if (chrome.runtime.lastError) {
+                console.warn('⚠️ PING validation failed:', chrome.runtime.lastError.message);
+                resolve(false);
+              } else {
+                const valid = response?.success === true;
+                resolve(valid);
+              }
+            }
           });
-          // Set a short timeout
-          setTimeout(() => resolve(false), 1000);
+          
+          // Set a reasonable timeout
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              console.warn('⚠️ PING validation timeout');
+              resolve(false);
+            }
+          }, 2000); // Increased from 1000ms to 2000ms
         } catch (e) {
-          resolve(false);
+          if (!resolved) {
+            resolved = true;
+            console.warn('⚠️ PING validation exception:', e.message);
+            resolve(false);
+          }
         }
       });
       
       const isValid = await extensionCheck;
       this.connectionState.valid = isValid;
+      
+      if (!isValid) {
+        console.warn('⚠️ Extension context validation failed');
+      }
+      
       return isValid;
     } catch (e) {
+      console.warn('⚠️ validateContext error:', e.message);
       this.connectionState.valid = false;
       return false;
     }
@@ -107,6 +136,20 @@ class ExtensionCommunicator {
     this.validateContext().catch(() => {}); // Silent catch - state will be updated by validateContext
     return this.connectionState.valid;
   }
+
+  /**
+   * Handle extension context invalidation gracefully
+   */
+  handleContextInvalidation() {
+    console.warn('🔄 Extension context invalidated - stopping all message attempts');
+    this.connectionState.valid = false;
+    this.lastValidationTime = Date.now();
+    
+    // Clear the message queue to prevent further attempts
+    if (this.messageQueue && this.messageQueue.clearQueue) {
+      this.messageQueue.clearQueue();
+    }
+  }
   
   /**
    * Enhanced message sending with queue management
@@ -118,6 +161,12 @@ class ExtensionCommunicator {
     }
     
     const { timeout = this.messageTimeout, retries = this.maxRetries, fallback = null } = options;
+    
+    // Pre-check: Don't even attempt to send if extension context is invalid
+    if (!await this.validateContext()) {
+      console.warn('⚠️ Extension context invalid, not sending message:', message.type);
+      return fallback || { success: false, error: 'Extension context invalid' };
+    }
     
     try {
       // Use queue manager for reliable delivery
@@ -132,6 +181,14 @@ class ExtensionCommunicator {
       return response;
     } catch (error) {
       console.error('❌ Message failed after all retries:', error.message);
+      
+      // If extension context was invalidated, stop trying
+      if (error.message && (error.message.includes('Extension context invalidated') || 
+                           error.message.includes('Could not establish connection') ||
+                           error.message.includes('receiving end does not exist'))) {
+        this.handleContextInvalidation();
+      }
+      
       return fallback || { success: false, error: error.message };
     }
   }
@@ -167,6 +224,21 @@ class ExtensionCommunicator {
 // Initialize global communicator
 const extensionCommunicator = new ExtensionCommunicator();
 console.log('✅ Extension communicator initialized');
+
+// Handle unhandled promise rejections to prevent console spam
+window.addEventListener('unhandledrejection', (event) => {
+  const error = event.reason;
+  if (error && error.message) {
+    // If it's an extension context error, handle it gracefully
+    if (error.message.includes('Extension context invalidated') || 
+        error.message.includes('Could not establish connection') ||
+        error.message.includes('receiving end does not exist')) {
+      console.warn('⚠️ Unhandled extension context error (handled):', error.message);
+      extensionCommunicator.handleContextInvalidation();
+      event.preventDefault(); // Prevent the error from appearing in console
+    }
+  }
+});
 
 // Enhanced Content Script with Activity Detection
 console.log('🚀 Content script loading on:', window.location.href);
