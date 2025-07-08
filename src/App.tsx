@@ -502,6 +502,7 @@ const App: React.FC = () => {
             <Route path="deep-focus" element={<DeepFocusPage />} />
             <Route path="data-sync" element={<DataSyncPageWithLayout />} />
             <Route path="support" element={<SupportPageWithLayout />} />
+            <Route path="privacy-policy" element={<Navigate to="/privacy-policy.html" replace />} />
           </Routes>
         </AnalyticsWrapper>
         <ToastContainer />

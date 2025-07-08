@@ -5,16 +5,6 @@
   <title>Page Not Found</title>
   <script>
     // Simple SPA fallback - redirect to index.html for React Router to handle
-    // But do NOT redirect privacy-policy.html requests
-    const path = window.location.pathname;
-    
-    // If it's privacy-policy, let it load the HTML file directly
-    if (path.includes('privacy-policy.html')) {
-      // Do nothing, let the HTML file load
-      return;
-    }
-    
-    // For other routes, redirect to SPA
     const segmentCount = 0;
     const l = window.location;
     window.history.replaceState(null, null,
