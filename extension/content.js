@@ -221,7 +221,141 @@ class ExtensionCommunicator {
   }
 }
 
-// Initialize global communicator
+// Extension Initialization Manager
+class ExtensionInitializationManager {
+  constructor() {
+    this.isBackgroundReady = false;
+    this.initializationAttempts = 0;
+    this.maxInitializationAttempts = 10;
+    this.initializationDelay = 500; // Start with 500ms
+    this.pendingMessages = [];
+    this.isShuttingDown = false;
+  }
+
+  async waitForBackgroundScript() {
+    return new Promise((resolve) => {
+      const checkBackground = async () => {
+        this.initializationAttempts++;
+        
+        try {
+          // Check if chrome runtime is available
+          if (!chrome?.runtime?.id) {
+            if (this.initializationAttempts < this.maxInitializationAttempts) {
+              setTimeout(checkBackground, this.initializationDelay);
+              return;
+            } else {
+              console.warn('⚠️ Chrome runtime not available after max attempts');
+              resolve(false);
+              return;
+            }
+          }
+
+          // Try to ping the background script
+          chrome.runtime.sendMessage({ type: 'PING' }, (response) => {
+            if (chrome.runtime.lastError) {
+              if (this.initializationAttempts < this.maxInitializationAttempts) {
+                // Exponential backoff
+                this.initializationDelay = Math.min(this.initializationDelay * 1.5, 3000);
+                setTimeout(checkBackground, this.initializationDelay);
+              } else {
+                console.warn('⚠️ Background script not responding after max attempts');
+                resolve(false);
+              }
+            } else if (response?.success) {
+              // Check if background script is fully initialized
+              if (response.initialized !== false) {
+                console.log('✅ Background script is ready and initialized');
+                this.isBackgroundReady = true;
+                resolve(true);
+              } else {
+                console.log('⏳ Background script responding but not fully initialized yet');
+                if (this.initializationAttempts < this.maxInitializationAttempts) {
+                  setTimeout(checkBackground, this.initializationDelay);
+                } else {
+                  resolve(false);
+                }
+              }
+            } else {
+              if (this.initializationAttempts < this.maxInitializationAttempts) {
+                setTimeout(checkBackground, this.initializationDelay);
+              } else {
+                resolve(false);
+              }
+            }
+          });
+        } catch (error) {
+          if (this.initializationAttempts < this.maxInitializationAttempts) {
+            setTimeout(checkBackground, this.initializationDelay);
+          } else {
+            console.warn('⚠️ Error checking background script:', error);
+            resolve(false);
+          }
+        }
+      };
+
+      checkBackground();
+    });
+  }
+
+  async safeMessageSend(message, options = {}) {
+    if (this.isShuttingDown) {
+      return { success: false, error: 'Extension shutting down' };
+    }
+
+    if (!this.isBackgroundReady) {
+      // Queue the message
+      return new Promise((resolve) => {
+        this.pendingMessages.push({ message, options, resolve });
+      });
+    }
+
+    try {
+      return await extensionCommunicator.sendMessage(message, options);
+    } catch (error) {
+      if (error.message && (error.message.includes('Extension context invalidated') ||
+                           error.message.includes('Could not establish connection') ||
+                           error.message.includes('receiving end does not exist'))) {
+        this.handleContextInvalidation();
+        return { success: false, error: 'Extension context invalidated' };
+      }
+      throw error;
+    }
+  }
+
+  async processPendingMessages() {
+    if (!this.isBackgroundReady || this.pendingMessages.length === 0) {
+      return;
+    }
+
+    console.log(`📨 Processing ${this.pendingMessages.length} pending messages`);
+    const messages = [...this.pendingMessages];
+    this.pendingMessages = [];
+
+    for (const { message, options, resolve } of messages) {
+      try {
+        const result = await this.safeMessageSend(message, options);
+        resolve(result);
+      } catch (error) {
+        resolve({ success: false, error: error.message });
+      }
+    }
+  }
+
+  handleContextInvalidation() {
+    console.warn('🔄 Extension context invalidated');
+    this.isBackgroundReady = false;
+    this.isShuttingDown = true;
+    
+    // Reject all pending messages
+    for (const { resolve } of this.pendingMessages) {
+      resolve({ success: false, error: 'Extension context invalidated' });
+    }
+    this.pendingMessages = [];
+  }
+}
+
+// Initialize global communicator and initialization manager
+const extensionInitManager = new ExtensionInitializationManager();
 const extensionCommunicator = new ExtensionCommunicator();
 console.log('✅ Extension communicator initialized');
 
@@ -233,8 +367,8 @@ window.addEventListener('unhandledrejection', (event) => {
     if (error.message.includes('Extension context invalidated') || 
         error.message.includes('Could not establish connection') ||
         error.message.includes('receiving end does not exist')) {
-      console.warn('⚠️ Unhandled extension context error (handled):', error.message);
-      extensionCommunicator.handleContextInvalidation();
+      console.debug('⚠️ Unhandled extension context error (handled):', error.message);
+      extensionInitManager.handleContextInvalidation();
       event.preventDefault(); // Prevent the error from appearing in console
     }
   }
@@ -264,12 +398,62 @@ class ActivityDetector {
     this.chromeListenerSetup = false;
     this.contextInvalidationLogged = false; // Track context invalidation logging
     
-    // Initialize immediately - no need to wait for utilities
-    this.initialize();
+    // Wait for background script before initializing
+    this.initializeWhenReady();
   }
 
   /**
-   * Safe message sending using the simplified extension communicator
+   * Initialize when background script is ready
+   */
+  async initializeWhenReady() {
+    try {
+      console.log('⏳ Waiting for background script to be ready...');
+      const isReady = await extensionInitManager.waitForBackgroundScript();
+      
+      if (isReady) {
+        await extensionInitManager.processPendingMessages();
+        this.initialize();
+      } else {
+        console.warn('⚠️ Background script not ready, running in limited mode');
+        // Initialize with limited functionality
+        this.initializeLimitedMode();
+      }
+    } catch (error) {
+      console.error('❌ Error during initialization:', error);
+      this.initializeLimitedMode();
+    }
+  }
+
+  /**
+   * Initialize with limited functionality when background script is not available
+   */
+  initializeLimitedMode() {
+    console.log('📱 Initializing ActivityDetector in limited mode');
+    // Only set up web app communication, no extension messaging
+    this.setupWebAppBridge();
+    this.isInitialized = true;
+  }
+
+  /**
+   * Set up only web app communication bridge (limited mode)
+   */
+  setupWebAppBridge() {
+    if (this.messageListenersSetup) {
+      return;
+    }
+
+    try {
+      // Set up message listener for web app communication only
+      window.addEventListener('message', this.createWebAppMessageHandler());
+      this.messageListenersSetup = true;
+      console.log('🌉 Web app communication bridge set up (limited mode)');
+    } catch (error) {
+      console.error('❌ Failed to set up web app bridge:', error);
+    }
+  }
+
+  /**
+   * Safe message sending using the initialization manager
    */
   async sendMessageSafely(message, options = {}) {
     const { 
@@ -278,7 +462,7 @@ class ActivityDetector {
       maxRetries = 3
     } = options;
 
-    return await extensionCommunicator.sendMessage(message, {
+    return await extensionInitManager.safeMessageSend(message, {
       timeout,
       retries: maxRetries,
       fallback
@@ -710,11 +894,15 @@ class ActivityDetector {
         activityThreshold: this.inactivityThreshold
       };
 
-      // Send enhanced message to background script
-      if (chrome.runtime && chrome.runtime.sendMessage) {
-        const response = await chrome.runtime.sendMessage({
+      // Send enhanced message to background script using safe method
+      try {
+        const response = await this.sendMessageSafely({
           type: 'ENHANCED_ACTIVITY_DETECTED',
           payload: activityData
+        }, {
+          timeout: 5000,
+          maxRetries: 1,
+          fallback: { success: false, error: 'Extension not available' }
         });
 
         if (response?.success) {
@@ -725,9 +913,12 @@ class ActivityDetector {
             isVisible: this.isPageVisible,
             isFocused: this.isWindowFocused
           });
-        } else {
-          console.warn('⚠️ Failed to report enhanced activity:', response?.error);
+        } else if (response?.error !== 'Extension not available') {
+          console.debug('⚠️ Failed to report enhanced activity:', response?.error);
         }
+      } catch (error) {
+        // Silently handle - this is expected during extension reload
+        console.debug('Enhanced activity reporting failed:', error.message);
       }
     } catch (error) {
       // Handle context invalidation errors gracefully
@@ -756,13 +947,12 @@ class ActivityDetector {
    */
   async checkFocusMode() {
     try {
-      // Check if extension context is valid before proceeding
-      if (!chrome.runtime || !chrome.runtime.id) {
-        return;
-      }
-
-      const response = await chrome.runtime.sendMessage({
+      const response = await this.sendMessageSafely({
         type: 'GET_CURRENT_STATE'
+      }, {
+        timeout: 3000,
+        maxRetries: 1,
+        fallback: { success: false, error: 'Extension not available' }
       });
 
       if (response?.success && response.data?.focusMode) {
@@ -772,11 +962,7 @@ class ActivityDetector {
         this.showFocusIndicator();
       }
     } catch (error) {
-      // Only log non-context invalidation errors
-      if (!error.message || (!error.message.includes('Extension context invalidated') && 
-                            !error.message.includes('receiving end does not exist'))) {
-        console.debug('Could not check focus mode:', error);
-      }
+      console.debug('Could not check focus mode:', error.message);
     }
   }
 
@@ -1017,11 +1203,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// Initialize activity detector
+// Initialize activity detector with proper timing
 const activityDetector = new ActivityDetector();
 window.activityDetector = activityDetector; // Make available for testing
 
+// Global error handler for extension-related errors
+window.addEventListener('error', (event) => {
+  if (event.error && event.error.message && 
+      (event.error.message.includes('Extension context invalidated') ||
+       event.error.message.includes('Could not establish connection') ||
+       event.error.message.includes('receiving end does not exist'))) {
+    console.debug('🔄 Extension connection error handled:', event.error.message);
+    extensionInitManager.handleContextInvalidation();
+    event.preventDefault();
+  }
+});
+
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
+  extensionInitManager.handleContextInvalidation();
   activityDetector.cleanup();
 }); 
