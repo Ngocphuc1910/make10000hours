@@ -9,8 +9,9 @@ import MainLayout from './components/layout/MainLayout';
 import { useTimerStore } from './store/timerStore';
 import TaskList from './components/tasks/TaskList';
 import { DashboardLayout } from './components/dashboard/layout/DashboardLayout';
-import { ProjectsPage } from './components/dashboard/ProjectsPage';
 import { Sidebar } from './components/layout/Sidebar';
+import TopBar from './components/layout/TopBar';
+import { ProjectsPage } from './components/dashboard/ProjectsPage';
 import ProjectsLayout from './components/dashboard/ProjectsLayout';
 import ToastContainer from './components/ui/ToastContainer';
 import { auth } from './api/firebase';
@@ -106,13 +107,10 @@ const SupportPage = () => (
         <div className="space-y-4">
           <h2 className="text-xl font-semibold text-text-primary">Documentation</h2>
           <div className="space-y-3">
-            <a 
-              href="/privacy-policy" 
-              className="block p-4 bg-background-secondary rounded-lg border border-border hover:bg-background-container transition-colors"
-            >
-              <h3 className="font-medium text-text-primary">Privacy Policy</h3>
+            <div className="bg-background-secondary rounded-lg border border-border p-4">
+              <h3 className="font-medium text-text-primary mb-2">Privacy Policy</h3>
               <p className="text-sm text-text-secondary">Learn how we protect your data and privacy</p>
-            </a>
+            </div>
           </div>
         </div>
 
@@ -129,6 +127,7 @@ const SupportPage = () => (
           </div>
         </div>
       </div>
+
 
       {/* Extension Information */}
       <div className="mt-8 pt-8 border-t border-border">
@@ -449,12 +448,53 @@ const App: React.FC = () => {
     </MainLayout>
   );
 
-  // Support page with layout
-  const SupportPageWithLayout = () => (
-    <MainLayout>
-      <SupportPage />
-    </MainLayout>
-  );
+  // Support page with custom layout (no right sidebar)
+  const SupportPageWithLayout = () => {
+    const { isLeftSidebarOpen } = useUIStore();
+    
+    return (
+      <div className="min-h-screen bg-background-primary">
+        <div className="flex h-screen overflow-hidden">
+          {/* Left Sidebar */}
+          <div className={`${isLeftSidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 overflow-hidden`}>
+            <Sidebar />
+          </div>
+          
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <TopBar />
+            <div className="flex-1 overflow-auto">
+              <SupportPage />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Privacy Policy page with custom layout (no right sidebar)
+  const PrivacyPolicyPageWithLayout = () => {
+    const { isLeftSidebarOpen } = useUIStore();
+    
+    return (
+      <div className="min-h-screen bg-background-primary">
+        <div className="flex h-screen overflow-hidden">
+          {/* Left Sidebar */}
+          <div className={`${isLeftSidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 overflow-hidden`}>
+            <Sidebar />
+          </div>
+          
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <TopBar />
+            <div className="flex-1 overflow-auto">
+              <PrivacyPolicyPage />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Projects page with its dedicated layout
   const ProjectsPageWithLayout = () => (
@@ -503,7 +543,7 @@ const App: React.FC = () => {
             <Route path="deep-focus" element={<DeepFocusPage />} />
             <Route path="data-sync" element={<DataSyncPageWithLayout />} />
             <Route path="support" element={<SupportPageWithLayout />} />
-            <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
+            <Route path="privacy-policy" element={<PrivacyPolicyPageWithLayout />} />
           </Routes>
         </AnalyticsWrapper>
         <ToastContainer />
