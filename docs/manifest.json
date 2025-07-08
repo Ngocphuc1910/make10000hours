@@ -1,0 +1,25 @@
+{
+  "short_name": "Make10000hours",
+  "name": "Make10000hours - Your Journey to Mastery",
+  "icons": [
+    {
+      "src": "icons/make10000hourlogo.png",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/make10000hourlogo.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "icons/make10000hourlogo.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#BA4949",
+  "background_color": "#ffffff"
+}

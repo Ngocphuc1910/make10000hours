@@ -28,6 +28,7 @@ import DeepFocusPage from './components/pages/DeepFocusPage';
 import { LoadingScreen } from './components/ui/LoadingScreen';
 import { ChatButton } from './components/chat/ChatButton';
 import DataSyncPage from './components/pages/DataSyncPage';
+import PrivacyPolicyPage from './components/pages/PrivacyPolicyPage';
 import { ChatIntegrationService } from './services/chatIntegration';
 import { useDeepFocusStore } from './store/deepFocusStore';
 import { DeepFocusProvider, useDeepFocusContext } from './contexts/DeepFocusContext';
@@ -96,9 +97,48 @@ const AnalyticsWrapper: React.FC<{ children: React.ReactNode }> = ({ children })
 
 // Keep the SupportPage component
 const SupportPage = () => (
-  <div className="w-full max-w-7xl mx-auto">
-    <h1 className="text-2xl font-bold mb-4">Help & Support</h1>
-    <p>This page is under construction</p>
+  <div className="w-full max-w-7xl mx-auto px-6 py-8">
+    <div className="bg-background-primary rounded-lg border border-border p-8">
+      <h1 className="text-3xl font-bold text-text-primary mb-8">Help & Support</h1>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Documentation Section */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-text-primary">Documentation</h2>
+          <div className="space-y-3">
+            <Link 
+              to="/privacy-policy" 
+              className="block p-4 bg-background-secondary rounded-lg border border-border hover:bg-background-container transition-colors"
+            >
+              <h3 className="font-medium text-text-primary">Privacy Policy</h3>
+              <p className="text-sm text-text-secondary">Learn how we protect your data and privacy</p>
+            </Link>
+          </div>
+        </div>
+
+        {/* Contact Section */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-text-primary">Contact Us</h2>
+          <div className="bg-background-secondary rounded-lg border border-border p-4">
+            <p className="text-text-secondary mb-2">
+              For support, feedback, or questions about the Focus Time Tracker extension:
+            </p>
+            <p className="text-text-primary">
+              <strong>Email:</strong> support@make10000hours.com
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Extension Information */}
+      <div className="mt-8 pt-8 border-t border-border">
+        <h2 className="text-xl font-semibold text-text-primary mb-4">About Focus Time Tracker</h2>
+        <p className="text-text-secondary">
+          Focus Time Tracker is a Chrome extension designed to help you track your website usage time and maintain focus during work sessions. 
+          All your data is stored locally on your device for maximum privacy and security.
+        </p>
+      </div>
+    </div>
   </div>
 );
 
@@ -430,6 +470,13 @@ const App: React.FC = () => {
     </MainLayout>
   );
 
+  // Privacy Policy page with layout
+  const PrivacyPolicyPageWithLayout = () => (
+    <MainLayout>
+      <PrivacyPolicyPage />
+    </MainLayout>
+  );
+
   // Global shortcuts now handled by GlobalKeyboardShortcuts component inside DeepFocusProvider
 
   // CRITICAL: Don't render main app until user authentication is initialized
@@ -461,6 +508,7 @@ const App: React.FC = () => {
             <Route path="deep-focus" element={<DeepFocusPage />} />
             <Route path="data-sync" element={<DataSyncPageWithLayout />} />
             <Route path="support" element={<SupportPageWithLayout />} />
+            <Route path="privacy-policy" element={<PrivacyPolicyPageWithLayout />} />
           </Routes>
         </AnalyticsWrapper>
         <ToastContainer />

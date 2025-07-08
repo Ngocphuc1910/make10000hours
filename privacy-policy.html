@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - Focus Time Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f9fafb;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 48px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .header h1 {
+            font-size: 36px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 12px;
+            letter-spacing: -0.025em;
+        }
+
+        .header p {
+            font-size: 18px;
+            color: #6b7280;
+            font-weight: 400;
+        }
+
+        .effective-date {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 40px;
+            font-weight: 500;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section h2 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 16px;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 8px;
+        }
+
+        .section h3 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 12px;
+            margin-top: 24px;
+        }
+
+        .section p {
+            color: #4b5563;
+            margin-bottom: 16px;
+            line-height: 1.7;
+        }
+
+        .highlight-box {
+            background-color: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 8px;
+            padding: 24px;
+            margin: 24px 0;
+        }
+
+        .highlight-box.green {
+            background-color: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .highlight-box h3 {
+            color: #0c4a6e;
+            margin-top: 0;
+        }
+
+        .highlight-box.green h3 {
+            color: #14532d;
+        }
+
+        .highlight-box p {
+            color: #0369a1;
+            margin-bottom: 16px;
+        }
+
+        .highlight-box.green p {
+            color: #15803d;
+        }
+
+        ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        ul li {
+            margin-bottom: 10px;
+            padding-left: 20px;
+            position: relative;
+            line-height: 1.6;
+        }
+
+        ul li::before {
+            content: "•";
+            color: #0ea5e9;
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+
+        .green ul li::before {
+            content: "✓";
+            color: #22c55e;
+        }
+
+        .contact-box {
+            background-color: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 16px;
+        }
+
+        .footer {
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        strong {
+            color: #1f2937;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 24px;
+            }
+            
+            .header h1 {
+                font-size: 28px;
+            }
+            
+            .section h2 {
+                font-size: 22px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Privacy Policy</h1>
+            <p>Focus Time Tracker Chrome Extension</p>
+        </div>
+
+        <div class="effective-date">
+            <strong>Effective Date:</strong> <span id="effective-date"></span>
+        </div>
+
+        <div class="section">
+            <h2>Introduction</h2>
+            <p>Focus Time Tracker ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how our Chrome browser extension collects, uses, and protects your information when you use our productivity and focus tracking service.</p>
+        </div>
+
+        <div class="section">
+            <h2>Information We Collect</h2>
+            
+            <div class="highlight-box">
+                <h3>Data Collected Locally</h3>
+                <p>Our extension collects and stores the following information locally on your device:</p>
+                <ul>
+                    <li><strong>Website URLs:</strong> The web addresses of sites you visit for time tracking purposes</li>
+                    <li><strong>Time Data:</strong> Duration spent on each website and total browsing time</li>
+                    <li><strong>User Activity:</strong> Active/inactive status to ensure accurate time tracking</li>
+                    <li><strong>Blocked Sites List:</strong> Websites you choose to block during focus sessions</li>
+                    <li><strong>Focus Session Data:</strong> Duration and statistics of your focus mode sessions</li>
+                    <li><strong>User Preferences:</strong> Your settings and configuration choices</li>
+                </ul>
+            </div>
+
+            <div class="highlight-box green">
+                <h3>Data We Do NOT Collect</h3>
+                <ul class="green">
+                    <li>Personal identifying information (name, email, address, phone number)</li>
+                    <li>Website content, page text, or form data</li>
+                    <li>Passwords or authentication information</li>
+                    <li>Financial or payment information</li>
+                    <li>Health information</li>
+                    <li>Location data</li>
+                    <li>Personal communications</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>How We Use Your Information</h2>
+            <p>The data we collect is used solely for the following purposes:</p>
+            <ul>
+                <li>Tracking time spent on websites to provide productivity insights</li>
+                <li>Enabling focus mode by blocking distracting websites</li>
+                <li>Displaying usage statistics and productivity metrics</li>
+                <li>Maintaining your preferences and settings</li>
+                <li>Providing the core functionality of our time tracking and focus features</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Data Storage and Security</h2>
+            
+            <h3>Local Storage</h3>
+            <p>All data is stored locally on your device using Chrome's secure storage APIs. No data is transmitted to external servers or third parties.</p>
+            
+            <h3>Data Security</h3>
+            <p>We implement appropriate security measures to protect your data:</p>
+            <ul>
+                <li>Data is stored using Chrome's secure local storage mechanisms</li>
+                <li>No data transmission over networks</li>
+                <li>Extension operates with minimal required permissions</li>
+                <li>Regular security updates and maintenance</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Data Sharing and Third Parties</h2>
+            <p><strong>We do not sell, trade, or transfer your data to third parties.</strong> Your information remains on your device and is not shared with:</p>
+            <ul>
+                <li>Advertising companies</li>
+                <li>Analytics services</li>
+                <li>Data brokers</li>
+                <li>Marketing companies</li>
+                <li>Any external parties</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Your Rights and Control</h2>
+            <p>You have complete control over your data:</p>
+            <ul>
+                <li><strong>Access:</strong> View all stored data through the extension interface</li>
+                <li><strong>Modify:</strong> Change or update your preferences and blocked sites</li>
+                <li><strong>Delete:</strong> Clear all stored data through Chrome's extension settings</li>
+                <li><strong>Export:</strong> Export your data for backup purposes</li>
+                <li><strong>Uninstall:</strong> Remove the extension to delete all associated data</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Chrome Extension Permissions</h2>
+            <p>Our extension requests the following permissions:</p>
+            <ul>
+                <li><strong>activeTab:</strong> To track the currently active tab for time measurement</li>
+                <li><strong>storage:</strong> To save your preferences and tracking data locally</li>
+                <li><strong>tabs:</strong> To monitor tab changes for accurate time tracking</li>
+                <li><strong>declarativeNetRequest:</strong> To block distracting websites during focus mode</li>
+                <li><strong>webNavigation:</strong> To detect page changes within tabs</li>
+                <li><strong>host permissions:</strong> To track time across all websites you choose to monitor</li>
+            </ul>
+            <p>These permissions are used exclusively for the extension's core functionality and are not used to collect unnecessary data.</p>
+        </div>
+
+        <div class="section">
+            <h2>Updates to This Policy</h2>
+            <p>We may update this Privacy Policy from time to time. Any changes will be posted on this page with an updated effective date. We encourage you to review this policy periodically to stay informed about how we protect your information.</p>
+        </div>
+
+        <div class="section">
+            <h2>Contact Information</h2>
+            <p>If you have any questions about this Privacy Policy or our data practices, please contact us at:</p>
+            <div class="contact-box">
+                <p><strong>Email:</strong> privacy@make10000hours.com</p>
+                <p><strong>Website:</strong> https://make10000hours.com/privacy-policy</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Compliance</h2>
+            <p>This extension operates in compliance with:</p>
+            <ul>
+                <li>Chrome Web Store Developer Program Policies</li>
+                <li>General Data Protection Regulation (GDPR) principles</li>
+                <li>California Consumer Privacy Act (CCPA) requirements</li>
+                <li>Privacy best practices for browser extensions</li>
+            </ul>
+        </div>
+
+        <div class="footer">
+            <p>This privacy policy is specific to the Focus Time Tracker Chrome extension and governs the collection and use of information through our browser extension only.</p>
+        </div>
+    </div>
+
+    <script>
+        // Set the effective date to today's date
+        const today = new Date();
+        const options = { year: 'numeric', month: 'long', day: 'numeric' };
+        document.getElementById('effective-date').textContent = today.toLocaleDateString('en-US', options);
+    </script>
+</body>
+</html>

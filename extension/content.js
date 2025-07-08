@@ -542,7 +542,7 @@ class ActivityDetector {
     // Enhanced message handling for web app communication
     const messageHandler = async (event) => {
       // Validate message origin
-      if (!event.data?.source?.includes('make10000hours')) {
+      if (!event.data?.source?.includes('make10000hours') && event.data?.type !== 'EXTENSION_REQUEST') {
         return;
       }
 
@@ -604,6 +604,82 @@ class ActivityDetector {
               queued: false
             });
           }
+        }
+
+        // Handle WEB_APP_FOCUS_STATE_CHANGED messages
+        if (type === 'WEB_APP_FOCUS_STATE_CHANGED') {
+          console.log('🔄 Received focus state change from web app:', payload);
+          
+          const message = {
+            type: 'WEB_APP_FOCUS_STATE_CHANGED',
+            payload: {
+              focusMode: payload.focusMode,
+              timestamp: payload.timestamp || Date.now(),
+              source: 'web-app'
+            }
+          };
+
+          try {
+            const response = await this.sendMessageSafely(message, {
+              timeout: 10000,
+              maxRetries: 2,
+              fallback: { 
+                success: false, 
+                error: 'Extension temporarily unavailable',
+                queued: false 
+              }
+            });
+            
+            console.log('✅ Forwarded focus state change to extension:', response);
+            sendResponse('WEB_APP_FOCUS_STATE_CHANGED_RESPONSE', response);
+            
+          } catch (error) {
+            console.error('❌ Failed to process focus state change:', error);
+            sendResponse('WEB_APP_FOCUS_STATE_CHANGED_RESPONSE', {
+              success: false,
+              error: error.message,
+              queued: false
+            });
+          }
+        }
+
+        // Handle EXTENSION_REQUEST messages (general extension communication)
+        if (type === 'EXTENSION_REQUEST') {
+          console.log('🔄 Received EXTENSION_REQUEST from web app:', payload);
+          
+          try {
+            const response = await this.sendMessageSafely(payload, {
+              timeout: 10000,
+              maxRetries: 2,
+              fallback: { 
+                success: false, 
+                error: 'Extension temporarily unavailable',
+                queued: false 
+              }
+            });
+            
+            console.log('✅ Forwarded extension request to background:', response);
+            
+            // Send response back to web app with expected structure
+            window.postMessage({
+              extensionResponseId: messageId,
+              response: response
+            }, '*');
+            
+          } catch (error) {
+            console.error('❌ Failed to process extension request:', error);
+            
+            // Send error response back to web app
+            window.postMessage({
+              extensionResponseId: messageId,
+              response: {
+                success: false,
+                error: error.message,
+                queued: false
+              }
+            }, '*');
+          }
+          return; // Early return since we handle the response differently
         }
         
       } catch (error) {
