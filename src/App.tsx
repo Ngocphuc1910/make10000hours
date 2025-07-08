@@ -105,13 +105,13 @@ const SupportPage = () => (
         <div className="space-y-4">
           <h2 className="text-xl font-semibold text-text-primary">Documentation</h2>
           <div className="space-y-3">
-            <Link 
-              to="/privacy-policy" 
+            <a 
+              href="/privacy-policy.html" 
               className="block p-4 bg-background-secondary rounded-lg border border-border hover:bg-background-container transition-colors"
             >
               <h3 className="font-medium text-text-primary">Privacy Policy</h3>
               <p className="text-sm text-text-secondary">Learn how we protect your data and privacy</p>
-            </Link>
+            </a>
           </div>
         </div>
 
