@@ -334,24 +334,30 @@ export class BlockingManager {
    */
   async setFocusMode(newFocusMode) {
     try {
-      console.log(`🔄 Setting focus mode to: ${newFocusMode}`);
+      console.log(`🔄 BlockingManager.setFocusMode called with: ${newFocusMode} at ${new Date().toISOString()}`);
       
       const previousMode = this.focusMode;
+      console.log(`🔍 Current focus mode before change: ${previousMode}`);
+      
       this.focusMode = newFocusMode;
+      console.log(`✅ Focus mode property updated to: ${this.focusMode}`);
       
       // Handle session management based on the new state
       if (this.focusMode && !previousMode) {
         // Turning on focus mode - start session
+        console.log('🚀 Starting local deep focus session...');
         await this.startLocalDeepFocusSession();
       } else if (!this.focusMode && previousMode) {
         // Turning off focus mode - complete session
+        console.log('🏁 Completing local deep focus session...');
         await this.completeLocalDeepFocusSession();
       }
       
       // Save the updated state
+      console.log('💾 Saving BlockingManager state...');
       await this.saveState();
       
-      console.log(`✅ Focus mode updated: ${previousMode} → ${this.focusMode}`);
+      console.log(`✅ Focus mode fully updated: ${previousMode} → ${this.focusMode} at ${new Date().toISOString()}`);
       return {
         success: true,
         focusMode: this.focusMode,

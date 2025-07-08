@@ -2505,6 +2505,20 @@ class FocusTimeTracker {
                 // Broadcast to other extension components (but not back to web app to avoid loop)
                 this.broadcastFocusStateChange(newFocusMode, { excludeWebApp: true });
                 
+                // Force immediate popup state refresh with a slight delay to ensure state is fully updated
+                setTimeout(() => {
+                  chrome.runtime.sendMessage({
+                    type: 'FORCE_STATE_REFRESH',
+                    payload: { 
+                      focusMode: this.blockingManager.getFocusStats().focusMode,
+                      timestamp: Date.now(),
+                      source: 'web-app-sync'
+                    }
+                  }).catch(() => {
+                    console.debug('📱 Popup not open for forced refresh');
+                  });
+                }, 100);
+                
                 sendResponse({ 
                   success: true, 
                   focusMode: newFocusMode,
@@ -3028,12 +3042,12 @@ class FocusTimeTracker {
                 type: 'FOCUS_MODE_CHANGED',
                 payload: { focusMode: true }
               });
-              // Broadcast state change to all listeners
-              this.broadcastFocusStateChange(true);
-              sendResponse({ success: true, data: { focusMode: true } });
-            } else {
-              sendResponse({ success: true, data: { focusMode: true } });
             }
+            // Always broadcast state change to sync popup UI (with small delay to ensure proper timing)
+            setTimeout(() => {
+              this.broadcastFocusStateChange(true);
+            }, 50);
+            sendResponse({ success: true, data: { focusMode: true } });
           } catch (error) {
             console.error('Error enabling focus mode:', error);
             sendResponse({ success: false, error: error.message });
@@ -3049,12 +3063,12 @@ class FocusTimeTracker {
                 type: 'FOCUS_MODE_CHANGED',
                 payload: { focusMode: false }
               });
-              // Broadcast state change to all listeners
-              this.broadcastFocusStateChange(false);
-              sendResponse({ success: true, data: { focusMode: false } });
-            } else {
-              sendResponse({ success: true, data: { focusMode: false } });
             }
+            // Always broadcast state change to sync popup UI (with small delay to ensure proper timing)
+            setTimeout(() => {
+              this.broadcastFocusStateChange(false);
+            }, 50);
+            sendResponse({ success: true, data: { focusMode: false } });
           } catch (error) {
             console.error('Error disabling focus mode:', error);
             sendResponse({ success: false, error: error.message });
@@ -3322,12 +3336,16 @@ class FocusTimeTracker {
    * Get current extension state
    */
   async getCurrentState() {
-    return {
+    const focusStats = this.blockingManager.getFocusStats();
+    const state = {
       currentSession: this.currentSession,
       tracking: this.currentSession.isActive,
-      focusMode: (await this.storageManager.getSettings()).focusMode,
+      focusMode: focusStats.focusMode,
       todayStats: await this.storageManager.getTodayStats()
     };
+    
+    console.log('🔍 getCurrentState called - returning focus mode:', focusStats.focusMode, 'at', new Date().toISOString());
+    return state;
   }
 
   /**
@@ -3575,11 +3593,15 @@ class FocusTimeTracker {
    * Broadcast focus state changes to all listeners (single channel to prevent duplicates)
    */
   broadcastFocusStateChange(isActive, options = {}) {
-    console.log(`🔄 Broadcasting focus state change: ${isActive}`, options);
+    console.log(`🔄 Broadcasting focus state change: ${isActive} at ${new Date().toISOString()}`, options);
     
     // Get current blocked sites from BlockingManager
     const blockedSites = Array.from(this.blockingManager.blockedSites || new Set());
-    console.log('📋 Current blocked sites in extension:', blockedSites);
+    console.log('📋 Current blocked sites in extension:', blockedSites.length);
+    
+    // Verify the current focus mode from BlockingManager
+    const currentFocusFromBM = this.blockingManager.getFocusStats().focusMode;
+    console.log('🔍 Current focus mode from BlockingManager:', currentFocusFromBM);
     
     const focusState = {
       isActive,
@@ -3594,6 +3616,8 @@ class FocusTimeTracker {
     chrome.runtime.sendMessage({
       type: 'FOCUS_STATE_CHANGED',
       payload: focusState
+    }).then(() => {
+      console.log('✅ FOCUS_STATE_CHANGED message sent to popup successfully');
     }).catch(() => {
       // Ignore errors when popup is not open
       console.debug('📱 Popup not open, focus state update skipped');
