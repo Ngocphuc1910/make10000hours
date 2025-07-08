@@ -2,23 +2,31 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Focus Time Tracker</title>
+  <title>Page Not Found</title>
   <script>
-    // Simple redirect logic
-    var path = window.location.pathname;
+    // Simple SPA fallback - redirect to index.html for React Router to handle
+    // But do NOT redirect privacy-policy.html requests
+    const path = window.location.pathname;
     
-    // For all routes, go to the SPA (React Router will handle routing)
-    var segmentCount = 0;
-    var l = window.location;
-    l.replace(
-      l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
-      l.pathname.split('/').slice(0, 1 + segmentCount).join('/') + '/?p=/' +
-      l.pathname.slice(1).split('/').slice(segmentCount).join('/').replace(/&/g, '~and~') +
-      (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+    // If it's privacy-policy, let it load the HTML file directly
+    if (path.includes('privacy-policy.html')) {
+      // Do nothing, let the HTML file load
+      return;
+    }
+    
+    // For other routes, redirect to SPA
+    const segmentCount = 0;
+    const l = window.location;
+    window.history.replaceState(null, null,
+      l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') + 
+      '/?p=' + l.pathname.slice(1) + 
+      (l.search ? '&q=' + l.search.slice(1) : '') + 
       l.hash
     );
+    window.location.replace('/');
   </script>
 </head>
 <body>
+  <h1>Redirecting...</h1>
 </body>
 </html>
