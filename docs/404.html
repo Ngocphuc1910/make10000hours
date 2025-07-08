@@ -1,22 +1,26 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Page Not Found</title>
-  <script>
-    // Simple SPA fallback - redirect to index.html for React Router to handle
-    const segmentCount = 0;
-    const l = window.location;
-    window.history.replaceState(null, null,
-      l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') + 
-      '/?p=' + l.pathname.slice(1) + 
-      (l.search ? '&q=' + l.search.slice(1) : '') + 
-      l.hash
-    );
-    window.location.replace('/');
-  </script>
+    <meta charset="utf-8">
+    <title>Redirecting...</title>
+    <script type="text/javascript">
+        // Single Page Apps for GitHub Pages
+        // MIT License
+        // https://github.com/rafgraph/spa-github-pages
+        // This script checks to see if a redirect is present in the query string
+        // and converts it back into the correct history.
+        // It handles the fallback (404) error when serving an SPA.
+        const l = window.location;
+        l.replace(
+            l.pathname.slice(1).split('/').slice(0, 1).join('/') + '/?p=/' +
+            l.pathname.slice(1).split('/').slice(1).join('/').replace(/&/g, '~and~') +
+            (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+            l.hash
+        );
+        window.history.replaceState({}, document.title, l.pathname.slice(0, -1) || '/');
+    </script>
 </head>
 <body>
-  <h1>Redirecting...</h1>
+    Redirecting...
 </body>
 </html>
