@@ -443,6 +443,44 @@ class ExtensionDataService {
     return colorMap[domain] || '#6B7280';
   }
 
+  static async syncBlockedSitesFromWebApp(sites: string[]): Promise<{ success: boolean; synced?: number; failed?: number; error?: string }> {
+    try {
+      const response = await this.sendMessage({ 
+        type: 'SYNC_BLOCKED_SITES_FROM_WEBAPP', 
+        payload: { sites } 
+      });
+      return response;
+    } catch (error) {
+      console.error('Failed to sync blocked sites from web app:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  static async updateExtensionSettings(settings: { blockedSites: string[] }): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await this.sendMessage({ 
+        type: 'UPDATE_SETTINGS_FROM_WEBAPP', 
+        payload: settings 
+      });
+      return response;
+    } catch (error) {
+      console.error('Failed to update extension settings:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  static async forceSyncFromWebApp(): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await this.sendMessage({ 
+        type: 'FORCE_SYNC_FROM_WEBAPP'
+      });
+      return response;
+    } catch (error) {
+      console.error('Failed to force sync from web app:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
   static resetCircuitBreaker(): void {
     // Only allow manual reset if circuit breaker is actually open or has failures
     const status = this.circuitBreaker.getStatus();

@@ -698,6 +698,26 @@ class ActivityDetector {
         console.error('❌ Unhandled error in message handler:', error);
       });
     });
+
+    // Listen for messages from extension background script (for extension → web app sync)
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      try {
+        if (message.type === 'EXTENSION_BLOCKED_SITES_UPDATED') {
+          console.log('📨 Received blocked sites update from extension:', message.payload);
+          
+          // Forward to web app
+          window.postMessage({
+            type: 'EXTENSION_BLOCKED_SITES_UPDATED',
+            payload: message.payload
+          }, '*');
+          
+          sendResponse({ success: true });
+        }
+      } catch (error) {
+        console.error('❌ Error handling extension message:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    });
     
     console.log('✅ Web app communication handler initialized');
   }
