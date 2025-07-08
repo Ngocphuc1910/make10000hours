@@ -28,6 +28,7 @@ import DeepFocusPage from './components/pages/DeepFocusPage';
 import { LoadingScreen } from './components/ui/LoadingScreen';
 import { ChatButton } from './components/chat/ChatButton';
 import DataSyncPage from './components/pages/DataSyncPage';
+import PrivacyPolicyPage from './components/pages/PrivacyPolicyPage';
 import { ChatIntegrationService } from './services/chatIntegration';
 import { useDeepFocusStore } from './store/deepFocusStore';
 import { DeepFocusProvider, useDeepFocusContext } from './contexts/DeepFocusContext';
@@ -469,6 +470,13 @@ const App: React.FC = () => {
     </MainLayout>
   );
 
+  // Privacy Policy page with layout
+  const PrivacyPolicyPageWithLayout = () => (
+    <MainLayout>
+      <PrivacyPolicyPage />
+    </MainLayout>
+  );
+
 
   // Global shortcuts now handled by GlobalKeyboardShortcuts component inside DeepFocusProvider
 
@@ -501,6 +509,7 @@ const App: React.FC = () => {
             <Route path="deep-focus" element={<DeepFocusPage />} />
             <Route path="data-sync" element={<DataSyncPageWithLayout />} />
             <Route path="support" element={<SupportPageWithLayout />} />
+            <Route path="privacy-policy" element={<PrivacyPolicyPageWithLayout />} />
           </Routes>
         </AnalyticsWrapper>
         <ToastContainer />
