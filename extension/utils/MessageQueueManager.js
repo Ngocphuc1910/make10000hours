@@ -18,6 +18,12 @@
         lastChecked: Date.now(),
         cacheTime: 30000 // Increased from 5000 to 30 seconds
       };
+      this.stats = {
+        totalMessages: 0,
+        successfulMessages: 0,
+        failedMessages: 0,
+        totalRetries: 0
+      };
     }
 
     /**
@@ -36,6 +42,8 @@
      */
     async enqueue(message, options = {}) {
       const messageId = crypto.randomUUID();
+      this.stats.totalMessages++;
+      
       return new Promise((resolve, reject) => {
         this.queue.set(messageId, {
           message,
@@ -75,12 +83,14 @@
             }
 
             const result = await this.sendWithRetry(item.message, item.options);
+            this.stats.successfulMessages++;
             item.resolve(result);
             this.queue.delete(messageId);
           } catch (error) {
             // Check if this is a context invalidation error
             if (error.message && (error.message.includes('Extension context invalidated') || 
-                                 error.message.includes('receiving end does not exist'))) {
+                                 error.message.includes('receiving end does not exist') ||
+                                 error.message.includes('Could not establish connection'))) {
               console.warn('🔄 Extension context invalidated - clearing message queue');
               this.clearQueue();
               return;
@@ -90,18 +100,29 @@
             
             if (item.attempts >= this.maxRetries) {
               console.error('Message failed after max retries:', error);
+              this.stats.failedMessages++;
               item.reject(error);
               this.queue.delete(messageId);
             } else {
               item.attempts++;
-              // Exponential backoff with context validation
-              await new Promise(r => setTimeout(r, this.retryDelay * Math.pow(2, item.attempts)));
+              this.stats.totalRetries++;
+              
+              // Exponential backoff with jitter to prevent thundering herd
+              const backoffTime = this.retryDelay * Math.pow(2, item.attempts) + Math.random() * 1000;
+              console.log(`🔄 Retrying message in ${Math.round(backoffTime)}ms (attempt ${item.attempts}/${this.maxRetries})`);
+              await new Promise(r => setTimeout(r, backoffTime));
               
               // Double-check context is still valid before continuing
               if (!chrome.runtime || !chrome.runtime.id) {
                 console.warn('🔄 Extension context no longer valid - clearing queue');
                 this.clearQueue();
                 return;
+              }
+              
+              // Additional check: if too many consecutive failures, clear cache
+              if (item.attempts >= 3) {
+                this.validationCache.isValid = false;
+                this.validationCache.lastChecked = 0;
               }
             }
           }
@@ -126,19 +147,41 @@
         // Ensure runtime is available
         if (!chrome?.runtime?.id) {
           this.validationCache.isValid = false;
+          this.validationCache.lastChecked = now;
           return false;
         }
         
-        // Check if extension is still valid
+        // Check if extension is still valid with proper timeout handling
         const response = await new Promise((resolve) => {
+          let resolved = false;
+          
           try {
             chrome.runtime.sendMessage({ type: 'PING' }, (response) => {
-              resolve(response?.success);
+              if (!resolved) {
+                resolved = true;
+                if (chrome.runtime.lastError) {
+                  console.warn('PING validation error:', chrome.runtime.lastError);
+                  resolve(false);
+                } else {
+                  resolve(response?.success === true);
+                }
+              }
             });
-            // Set a short timeout
-            setTimeout(() => resolve(false), 1000);
+            
+            // Set a reasonable timeout that matches the validation purpose
+            setTimeout(() => {
+              if (!resolved) {
+                resolved = true;
+                console.warn('PING validation timeout');
+                resolve(false);
+              }
+            }, 3000); // Increased from 1000ms to 3000ms
           } catch (e) {
-            resolve(false);
+            if (!resolved) {
+              resolved = true;
+              console.warn('PING validation exception:', e);
+              resolve(false);
+            }
           }
         });
 
@@ -146,6 +189,7 @@
         this.validationCache.lastChecked = now;
         return response;
       } catch (e) {
+        console.warn('validateContext error:', e);
         this.validationCache.isValid = false;
         this.validationCache.lastChecked = now;
         return false;
@@ -164,22 +208,38 @@
       }
 
       return new Promise((resolve, reject) => {
+        let resolved = false;
+        const timeoutDuration = options.timeout || 15000; // Increased from 10000ms to 15000ms
+        
         const timeout = setTimeout(() => {
-          reject(new Error('Message timeout'));
-        }, options.timeout || 10000);
+          if (!resolved) {
+            resolved = true;
+            reject(new Error(`Message timeout after ${timeoutDuration}ms`));
+          }
+        }, timeoutDuration);
 
         try {
           chrome.runtime.sendMessage(message, (response) => {
-            clearTimeout(timeout);
-            if (chrome.runtime.lastError) {
-              reject(chrome.runtime.lastError);
-            } else {
-              resolve(response);
+            if (!resolved) {
+              resolved = true;
+              clearTimeout(timeout);
+              
+              if (chrome.runtime.lastError) {
+                const error = chrome.runtime.lastError;
+                console.warn('Runtime error in sendWithRetry:', error);
+                reject(new Error(error.message || 'Runtime error'));
+              } else {
+                resolve(response);
+              }
             }
           });
         } catch (error) {
-          clearTimeout(timeout);
-          reject(error);
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            console.warn('Exception in sendWithRetry:', error);
+            reject(error);
+          }
         }
       });
     }
@@ -214,6 +274,36 @@
         type: 'CHUNKED_MESSAGE_COMPLETE',
         messageId
       }, options);
+    }
+
+    /**
+     * Get statistics and debug information
+     */
+    getStats() {
+      return {
+        ...this.stats,
+        queueSize: this.queue.size,
+        processing: this.processing,
+        validationCache: this.validationCache,
+        successRate: this.stats.totalMessages > 0 ? 
+          (this.stats.successfulMessages / this.stats.totalMessages * 100).toFixed(1) + '%' : '0%'
+      };
+    }
+
+    /**
+     * Log current queue status for debugging
+     */
+    logStatus() {
+      const stats = this.getStats();
+      console.log('📊 MessageQueueManager Status:', stats);
+      if (this.queue.size > 0) {
+        console.log('📋 Queued messages:', Array.from(this.queue.entries()).map(([id, item]) => ({
+          id,
+          type: item.message.type,
+          attempts: item.attempts,
+          age: Date.now() - item.timestamp
+        })));
+      }
     }
   }
 
