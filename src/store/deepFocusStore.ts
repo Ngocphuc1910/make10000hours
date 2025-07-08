@@ -149,6 +149,8 @@ interface DeepFocusStore extends DeepFocusData {
   syncFocusStatus: (isActive: boolean) => void;
   syncCompleteFocusState: (isActive: boolean, blockedSites: string[]) => Promise<void>;
   initializeFocusSync: () => Promise<void>;
+  syncBlockedSitesToExtension: () => Promise<void>;
+  handleExtensionBlockedSitesUpdate: (sites: string[]) => Promise<void>;
   syncWithExtension: (isActive: boolean) => Promise<void>;
   loadDeepFocusSessions: (userId: string, startDate?: Date, endDate?: Date) => Promise<void>;
   subscribeToSessions: (userId: string) => void;
@@ -301,6 +303,23 @@ const createTimers = (set: any, get: any, sessionId: string, startTime: Date) =>
   set({ timer, secondTimer });
   console.log('✅ New timers created for session:', sessionId);
 };
+
+// Add window message listener for extension communication
+if (typeof window !== 'undefined') {
+  window.addEventListener('message', (event) => {
+    if (event.data?.type === 'EXTENSION_BLOCKED_SITES_UPDATED') {
+      console.log('📨 Web app received blocked sites update from extension');
+      
+      // Get the store instance and call the handler
+      const store = useDeepFocusStore.getState();
+      if (store.handleExtensionBlockedSitesUpdate) {
+        store.handleExtensionBlockedSitesUpdate(event.data.payload.sites).catch(error => {
+          console.error('❌ Failed to handle extension blocked sites update:', error);
+        });
+      }
+    }
+  });
+}
 
 export const useDeepFocusStore = create<DeepFocusStore>()(
   persist(
@@ -477,6 +496,9 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         if (user?.uid) {
           await blockedSitesService.toggleBlockedSite(user.uid, id);
           await get().loadBlockedSites(user.uid);
+          
+          // Comprehensive sync is handled by loadBlockedSites, no need for individual sync
+          console.log('🔄 Blocked site toggled and synced via loadBlockedSites');
         }
       },
 
@@ -486,6 +508,9 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         if (user?.uid) {
           await blockedSitesService.removeBlockedSite(user.uid, id);
           await get().loadBlockedSites(user.uid);
+          
+          // Comprehensive sync is handled by loadBlockedSites, no need for individual sync
+          console.log('🔄 Blocked site removed and synced via loadBlockedSites');
         }
       },
 
@@ -497,6 +522,9 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           try {
             await blockedSitesService.addBlockedSite(user.uid, site);
             await get().loadBlockedSites(user.uid);
+            
+            // Comprehensive sync is handled by loadBlockedSites, no need for individual sync
+            console.log('🔄 Blocked site added and synced via loadBlockedSites');
           } catch (error) {
             console.error('Error in addBlockedSite:', error);
           }
@@ -509,6 +537,22 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         try {
           const sites = await blockedSitesService.getUserBlockedSites(userId);
           set({ blockedSites: sites });
+          
+          // Always sync to extension if installed (regardless of focus mode state)
+          if (ExtensionDataService.isExtensionInstalled()) {
+            try {
+              // First force clear extension to remove any default sites
+              await ExtensionDataService.forceSyncFromWebApp();
+              console.log('✅ Cleared default sites from extension');
+              
+              // Then sync current sites
+              const allSiteUrls = sites.map(site => site.url);
+              await ExtensionDataService.syncBlockedSitesFromWebApp(allSiteUrls);
+              console.log('🔄 Synced all blocking sites to extension:', allSiteUrls.length);
+            } catch (error) {
+              console.warn('⚠️ Failed to sync blocking sites to extension:', error);
+            }
+          }
         } catch (error) {
           console.error('Failed to load blocked sites:', error);
         }
@@ -612,6 +656,9 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
             return;
           }
           
+          // Sync blocked sites to extension first
+          await get().syncBlockedSitesToExtension();
+          
           // Get extension focus status with timeout
           let extensionStatus: { focusMode: boolean };
           try {
@@ -706,6 +753,94 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         }
       },
 
+      syncBlockedSitesToExtension: async () => {
+        try {
+          if (!ExtensionDataService.isExtensionInstalled()) {
+            console.log('📱 Extension not available, skipping sync');
+            return;
+          }
+
+          const blockedSites = get().blockedSites;
+          const siteUrls = blockedSites.map(site => site.url);
+          
+          console.log('🔄 Syncing blocked sites to extension:', siteUrls.length, siteUrls.length === 0 ? '(clearing all sites)' : 'sites');
+          
+          // Use the new sync method - this works for both adding sites and clearing all sites
+          const result = await ExtensionDataService.syncBlockedSitesFromWebApp(siteUrls);
+          
+          if (result.success) {
+            console.log(`✅ Successfully synced ${result.synced} sites to extension`);
+            if (result.failed && result.failed > 0) {
+              console.warn(`⚠️ ${result.failed} sites failed to sync`);
+            }
+            
+            // Special logging for clearing all sites
+            if (siteUrls.length === 0) {
+              console.log('🧹 All blocked sites cleared from extension');
+            }
+          } else {
+            console.warn('⚠️ Failed to sync blocked sites to extension:', result.error);
+          }
+        } catch (error) {
+          console.error('❌ Error syncing blocked sites to extension:', error);
+        }
+      },
+
+      handleExtensionBlockedSitesUpdate: async (sites: string[]) => {
+        try {
+          const { useUserStore } = await import('./userStore');
+          const user = useUserStore.getState().user;
+          if (!user?.uid) {
+            console.warn('⚠️ User not authenticated - cannot sync extension sites to web app');
+            return;
+          }
+
+          console.log('📨 Handling blocked sites update from extension:', sites.length);
+
+          // Get current blocked sites from Firebase
+          const currentSites = await blockedSitesService.getUserBlockedSites(user.uid);
+          const currentUrls = currentSites.map(site => site.url);
+
+          // Find sites to add and remove
+          const sitesToAdd = sites.filter(url => !currentUrls.includes(url));
+          const sitesToRemove = currentSites.filter(site => !sites.includes(site.url));
+
+          // Add new sites from extension
+          for (const url of sitesToAdd) {
+            try {
+              await blockedSitesService.addBlockedSite(user.uid, {
+                name: url.replace(/^www\./, '').split('.')[0] || url,
+                url: url,
+                icon: 'ri-global-line',
+                backgroundColor: '#6B7280',
+                isActive: true
+              });
+              console.log('✅ Added site from extension:', url);
+            } catch (error) {
+              console.warn('⚠️ Failed to add site from extension:', url, error);
+            }
+          }
+
+          // Remove sites that are no longer in extension
+          for (const site of sitesToRemove) {
+            try {
+              await blockedSitesService.removeBlockedSite(user.uid, site.id);
+              console.log('✅ Removed site synced from extension:', site.url);
+            } catch (error) {
+              console.warn('⚠️ Failed to remove site during extension sync:', site.url, error);
+            }
+          }
+
+          // Reload blocked sites to refresh the UI (but don't sync back to extension to avoid loop)
+          const updatedSites = await blockedSitesService.getUserBlockedSites(user.uid);
+          set({ blockedSites: updatedSites });
+          
+          console.log('✅ Successfully synced blocked sites from extension to web app');
+        } catch (error) {
+          console.error('❌ Failed to handle extension blocked sites update:', error);
+        }
+      },
+
       // Method to sync focus status without extension call (for internal state sync)
       syncFocusStatus: (isActive: boolean) => {
         set({ isDeepFocusActive: isActive });
@@ -761,6 +896,14 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
               isDeepFocusActive: true,
               blockedSites: updatedSites
             });
+
+            // Sync updated blocking sites list to Firebase
+            try {
+              await blockedSitesService.updateAllBlockedSites(user.uid, updatedSites);
+              console.log('🔄 Synced blocking sites to Firebase:', updatedSites.length);
+            } catch (error) {
+              console.warn('⚠️ Failed to sync blocking sites to Firebase:', error);
+            }
 
             // Use batch blocking for better performance and fewer API calls
             if (ExtensionDataService.isExtensionInstalled()) {
@@ -860,6 +1003,15 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
               timer: null,
               secondTimer: null
             });
+            
+            // Sync disabled state to Firebase
+            try {
+              await blockedSitesService.updateAllBlockedSites(user.uid, updatedSites);
+              console.log('🔄 Synced disabled blocking sites to Firebase');
+            } catch (error) {
+              console.warn('⚠️ Failed to sync disabled blocking sites to Firebase:', error);
+            }
+            
             console.log('✅ Focus state disabled - session ended and state cleared');
           }
         } catch (error) {

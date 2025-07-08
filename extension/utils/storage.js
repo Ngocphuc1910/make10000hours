@@ -208,7 +208,7 @@ class StorageManager {
         }
       },
       settings: {
-        blockedSites: ['facebook.com', 'twitter.com', 'instagram.com', 'tiktok.com'],
+        blockedSites: [], // No default blocked sites - should be empty
         trackingEnabled: true,
         focusMode: false,
         activityThreshold: 5000,
