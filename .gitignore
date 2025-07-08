@@ -41,6 +41,11 @@ figma-update-design.js
 temp-env-source.txt
 environment-config.md
 test-chatbot.html
+.env.production
+.env.local
+.env.development
+.env.staging
+*.env
 
 # Firebase Admin SDK and Service Accounts
 make10000hours-firebase-adminsdk-*.json

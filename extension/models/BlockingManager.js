@@ -330,6 +330,47 @@ export class BlockingManager {
   }
 
   /**
+   * Set focus mode directly (for web app sync)
+   */
+  async setFocusMode(newFocusMode) {
+    try {
+      console.log(`🔄 Setting focus mode to: ${newFocusMode}`);
+      
+      const previousMode = this.focusMode;
+      this.focusMode = newFocusMode;
+      
+      // Handle session management based on the new state
+      if (this.focusMode && !previousMode) {
+        // Turning on focus mode - start session
+        await this.startLocalDeepFocusSession();
+      } else if (!this.focusMode && previousMode) {
+        // Turning off focus mode - complete session
+        await this.completeLocalDeepFocusSession();
+      }
+      
+      // Save the updated state
+      await this.saveState();
+      
+      console.log(`✅ Focus mode updated: ${previousMode} → ${this.focusMode}`);
+      return {
+        success: true,
+        focusMode: this.focusMode,
+        sessionId: this.currentLocalSessionId,
+        previousMode
+      };
+    } catch (error) {
+      console.error('❌ Error setting focus mode:', error);
+      // Revert on error
+      this.focusMode = !newFocusMode;
+      return {
+        success: false,
+        error: error.message,
+        focusMode: this.focusMode
+      };
+    }
+  }
+
+  /**
    * Helper method to retry operations with backoff
    */
   async retryOperation(operation, operationName, maxRetries = 3) {

@@ -37,8 +37,8 @@ fi
 
 # Verify build output
 echo "Verifying build output..."
-if [ -d "build/static/js" ]; then
-    MAIN_JS_FILE=$(find build/static/js -name "main.*.js" | head -1)
+if [ -d "dist/assets" ]; then
+    MAIN_JS_FILE=$(find dist/assets -name "index-*.js" | head -1)
     if [ -n "$MAIN_JS_FILE" ]; then
         echo "✅ Main JavaScript bundle found: $MAIN_JS_FILE"
     else
@@ -47,7 +47,7 @@ if [ -d "build/static/js" ]; then
         exit 1
     fi
 else
-    echo "ERROR: JavaScript directory not found in build output!"
+    echo "ERROR: Assets directory not found in build output!"
     echo "Build process may have failed."
     exit 1
 fi
@@ -78,7 +78,7 @@ echo "Build completed successfully."
 # Copy files to docs directory (for GitHub Pages)
 echo "Copying files to docs directory..."
 mkdir -p docs
-cp -r build/* docs/
+cp -r dist/* docs/
 echo "Files copied to docs directory."
 
 # Create necessary files for GitHub Pages
