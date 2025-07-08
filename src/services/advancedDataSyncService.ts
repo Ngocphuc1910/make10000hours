@@ -166,6 +166,11 @@ export class AdvancedDataSyncService {
   }
 
   private static async clearExistingWeeklySummaries(userId: string): Promise<void> {
+    if (!supabase) {
+      console.warn('⚠️ Supabase not configured, skipping weekly summaries cleanup');
+      return;
+    }
+
     const { error } = await supabase
       .from('user_productivity_documents')
       .delete()
@@ -178,6 +183,11 @@ export class AdvancedDataSyncService {
   }
 
   private static async clearExistingMonthlySummaries(userId: string): Promise<void> {
+    if (!supabase) {
+      console.warn('⚠️ Supabase not configured, skipping monthly summaries cleanup');
+      return;
+    }
+
     const { error } = await supabase
       .from('user_productivity_documents')
       .delete()
@@ -190,6 +200,11 @@ export class AdvancedDataSyncService {
   }
 
   private static async clearExistingChunks(userId: string): Promise<void> {
+    if (!supabase) {
+      console.warn('⚠️ Supabase not configured, skipping chunks cleanup');
+      return;
+    }
+
     const { error } = await supabase
       .from('user_productivity_documents')
       .delete()
@@ -201,6 +216,11 @@ export class AdvancedDataSyncService {
   }
 
   private static async analyzeChunkDistribution(userId: string): Promise<Record<number, number>> {
+    if (!supabase) {
+      console.warn('⚠️ Supabase not configured, returning empty distribution');
+      return {};
+    }
+
     const { data, error } = await supabase
       .from('user_productivity_documents')
       .select('metadata')
@@ -272,6 +292,15 @@ export class AdvancedDataSyncService {
     errors: string[];
   }> {
     try {
+      if (!supabase) {
+        console.warn('⚠️ Supabase not configured, skipping synthetic chunks migration');
+        return {
+          success: false,
+          removedChunks: 0,
+          errors: ['Supabase not configured']
+        };
+      }
+
       // Delete chunks with generic synthetic_chunk content type
       const { data, error } = await supabase
         .from('user_productivity_documents')

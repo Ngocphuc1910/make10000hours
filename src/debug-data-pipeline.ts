@@ -48,6 +48,11 @@ export async function debugDataPipeline() {
   // Check Supabase documents
   console.log('\n🧠 Checking Supabase user_productivity_documents...');
   
+  if (!supabase) {
+    console.error('❌ Supabase not configured - cannot check documents');
+    return;
+  }
+  
   try {
     const { data: documents, error } = await supabase
       .from('user_productivity_documents')

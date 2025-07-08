@@ -5,6 +5,11 @@ import { auth } from './api/firebase';
 export async function debugSupabaseAuth() {
   console.log('🔍 Debugging Supabase Authentication...');
   
+  if (!supabase) {
+    console.error('❌ Supabase not configured - cannot debug authentication');
+    return;
+  }
+  
   // Check Firebase auth
   const firebaseUser = auth.currentUser;
   console.log('👤 Firebase user:', firebaseUser?.uid);

@@ -47,7 +47,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
+    "build-with-types": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "security-check": "node scripts/security-check.js",

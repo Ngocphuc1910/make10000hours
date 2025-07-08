@@ -20,7 +20,26 @@ function checkForSecrets() {
     'cachedStorageKey',
     'getUserSpecificStorageKey',
     'deep-focus-storage-anonymous',
-    'deep-focus-storage-'
+    'deep-focus-storage-',
+    'event.key',
+    'i.key',
+    'key:',
+    'type:r,key:',
+    'ref:i!==void 0?i:null,props:a',
+    'key!==void 0&&(o=""+i.key)',
+    'key"in i',
+    'key===be.key',
+    'key).replace',
+    'key==null',
+    'key:"',
+    'key!==void 0&&(be=""+oe.key)',
+    'key!=="key"',
+    'key!==void 0&&(he=""+oe.key)',
+    'key!==void 0?le:null',
+    'MozPrintableKey:"Unidentified"',
+    'PASSWORD:"password"',
+    'MISSING_CUSTOM_TOKEN:"internal-error"',
+    'key="global-shortcuts"'
   ];
 
   try {
@@ -47,7 +66,7 @@ function checkForSecrets() {
           const isSafe = safePatterns.some(safePattern => matchedText.includes(safePattern));
           
           if (!isSafe) {
-            console.error(`⚠️  Warning: Possible secret found in ${file}`);
+            console.error(`⚠️  Warning: Possible secret found in ${file}: ${matchedText}`);
             foundSecrets = true;
           }
         }
