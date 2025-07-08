@@ -8,15 +8,8 @@
     ],
     "rewrites": [
       {
-        "source": "**",
+        "source": "!/privacy_pocily{,/**}",
         "destination": "/index.html"
-      }
-    ],
-    "redirects": [
-      {
-        "source": "/privacy-policy",
-        "destination": "/privacy-policy.html",
-        "type": 301
       }
     ]
   },
