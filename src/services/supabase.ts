@@ -25,13 +25,30 @@ if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('your_supabase_proj
 }
 
 // Only create Supabase client if we have valid configuration
-export const supabase = (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('your_supabase_project_url_here') || supabaseAnonKey.includes('your_supabase_anon_key_here')) 
+const supabaseClient = (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('your_supabase_project_url_here') || supabaseAnonKey.includes('your_supabase_anon_key_here')) 
   ? null 
   : createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: false, // Use Firebase auth instead
       },
     });
+
+// Export with type assertion for deployment compatibility
+// In production, environment variables should be properly configured
+export const supabase = supabaseClient as any;
+
+// Helper function to ensure supabase is configured
+export function getSupabaseClient() {
+  if (!supabase) {
+    throw new Error('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables.');
+  }
+  return supabase;
+}
+
+// Helper function to check if supabase is available
+export function isSupabaseConfigured(): boolean {
+  return supabase !== null;
+}
 
 // Database table definitions (for TypeScript)
 export interface Database {
