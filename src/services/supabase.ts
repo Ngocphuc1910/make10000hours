@@ -12,23 +12,26 @@ if (import.meta.env.DEV) {
   console.log('All env vars:', Object.keys(import.meta.env).filter(key => key.startsWith('VITE_')));
 }
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  const errorMsg = `Missing Supabase environment variables:
-    - VITE_SUPABASE_URL: ${supabaseUrl ? '✅' : '❌ Missing'}
-    - VITE_SUPABASE_ANON_KEY: ${supabaseAnonKey ? '✅' : '❌ Missing'}
+if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('your_supabase_project_url_here') || supabaseAnonKey.includes('your_supabase_anon_key_here')) {
+  const errorMsg = `Missing or invalid Supabase environment variables:
+    - VITE_SUPABASE_URL: ${supabaseUrl ? (supabaseUrl.includes('your_supabase_project_url_here') ? '❌ Placeholder value' : '✅') : '❌ Missing'}
+    - VITE_SUPABASE_ANON_KEY: ${supabaseAnonKey ? (supabaseAnonKey.includes('your_supabase_anon_key_here') ? '❌ Placeholder value' : '✅') : '❌ Missing'}
     
     For production: Add these as GitHub repository secrets
     For development: Create a .env file in project root with these values`;
   
-  console.error('🚨 Supabase Configuration Error:', errorMsg);
-  throw new Error('Missing Supabase environment variables');
+  console.warn('⚠️ Supabase Configuration Warning:', errorMsg);
+  console.log('🔧 App will continue without Supabase features until configuration is complete');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: false, // Use Firebase auth instead
-  },
-});
+// Only create Supabase client if we have valid configuration
+export const supabase = (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('your_supabase_project_url_here') || supabaseAnonKey.includes('your_supabase_anon_key_here')) 
+  ? null 
+  : createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false, // Use Firebase auth instead
+      },
+    });
 
 // Database table definitions (for TypeScript)
 export interface Database {

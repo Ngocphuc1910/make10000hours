@@ -2473,6 +2473,64 @@ class FocusTimeTracker {
           sendResponse(toggleResult);
           break;
 
+        case 'WEB_APP_FOCUS_STATE_CHANGED':
+          try {
+            console.log('🔄 Received focus state change from web app:', message.payload);
+            
+            const newFocusMode = message.payload?.focusMode;
+            if (typeof newFocusMode !== 'boolean') {
+              throw new Error('Invalid focus mode value');
+            }
+
+            // Get current focus mode from blocking manager
+            const currentFocusMode = this.blockingManager.getFocusStats().focusMode;
+            
+            // Only update if the state is different
+            if (currentFocusMode !== newFocusMode) {
+              console.log(`🔄 Updating focus mode: ${currentFocusMode} → ${newFocusMode}`);
+              
+              // Update the blocking manager state directly
+              const updateResult = await this.blockingManager.setFocusMode(newFocusMode);
+              
+              if (updateResult.success) {
+                // Dispatch state change
+                await this.stateManager.dispatch({
+                  type: 'FOCUS_MODE_CHANGED',
+                  payload: { 
+                    focusMode: newFocusMode,
+                    source: 'web-app'
+                  }
+                });
+                
+                // Broadcast to other extension components (but not back to web app to avoid loop)
+                this.broadcastFocusStateChange(newFocusMode, { excludeWebApp: true });
+                
+                sendResponse({ 
+                  success: true, 
+                  focusMode: newFocusMode,
+                  previousMode: currentFocusMode
+                });
+              } else {
+                throw new Error(updateResult.error || 'Failed to update focus mode');
+              }
+            } else {
+              console.log('🔄 Focus mode already in correct state:', newFocusMode);
+              sendResponse({ 
+                success: true, 
+                focusMode: newFocusMode,
+                noChange: true
+              });
+            }
+          } catch (error) {
+            console.error('❌ Error processing web app focus state change:', error);
+            sendResponse({ 
+              success: false, 
+              error: error.message,
+              focusMode: this.blockingManager.getFocusStats().focusMode
+            });
+          }
+          break;
+
         case 'ADD_BLOCKED_SITE':
           const addResult = await this.blockingManager.addBlockedSite(message.payload?.domain);
           sendResponse(addResult);
@@ -3013,6 +3071,9 @@ class FocusTimeTracker {
       console.error('❌ Error handling message:', error);
       sendResponse({ success: false, error: error.message });
     }
+    
+    // Return true to keep the message channel open for async responses
+    return true;
   }
 
   /**
@@ -3217,6 +3278,35 @@ class FocusTimeTracker {
   }
 
   /**
+   * Check if URL is a web app URL that should be excluded from tracking
+   */
+  isWebAppUrl(url) {
+    if (!url) return false;
+    
+    try {
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname;
+      const port = parseInt(urlObj.port);
+      
+      // Check for localhost development URLs with common dev server ports
+      if (hostname === 'localhost' && port >= 3000 && port <= 9000) {
+        return true;
+      }
+      
+      // Check for production web app URLs
+      const productionDomains = [
+        'make10000hours.com',
+        'www.make10000hours.com'
+      ];
+      
+      return productionDomains.includes(hostname);
+    } catch (error) {
+      console.warn('Error parsing URL in isWebAppUrl:', error);
+      return false;
+    }
+  }
+
+  /**
    * Export tracking data
    */
   async exportData(format = 'json') {
@@ -3376,8 +3466,8 @@ class FocusTimeTracker {
   /**
    * Broadcast focus state changes to all listeners (single channel to prevent duplicates)
    */
-  broadcastFocusStateChange(isActive) {
-    console.log(`🔄 Broadcasting focus state change: ${isActive}`);
+  broadcastFocusStateChange(isActive, options = {}) {
+    console.log(`🔄 Broadcasting focus state change: ${isActive}`, options);
     
     // Get current blocked sites from BlockingManager
     const blockedSites = Array.from(this.blockingManager.blockedSites || new Set());
@@ -3392,11 +3482,25 @@ class FocusTimeTracker {
 
     console.log('📤 Broadcasting full focus state:', focusState);
 
-    // Use ONLY content script forwarding to prevent duplicate messages
-    // Remove direct web app forwarding to avoid race conditions
+    // 1. Send to popup context (if open)
+    chrome.runtime.sendMessage({
+      type: 'FOCUS_STATE_CHANGED',
+      payload: focusState
+    }).catch(() => {
+      // Ignore errors when popup is not open
+      console.debug('📱 Popup not open, focus state update skipped');
+    });
+
+    // 2. Send to content scripts in tabs
     chrome.tabs.query({}, (tabs) => {
       tabs.forEach(tab => {
         if (tab.id && this.isTrackableUrl(tab.url)) {
+          // Skip web app tabs if excludeWebApp option is enabled (prevents feedback loops)
+          if (options.excludeWebApp && this.isWebAppUrl(tab.url)) {
+            console.log('🚫 Skipping web app tab to prevent feedback loop:', tab.url);
+            return;
+          }
+          
           chrome.tabs.sendMessage(tab.id, {
             type: 'FOCUS_STATE_CHANGED',
             payload: focusState
