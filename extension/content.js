@@ -18,6 +18,7 @@ class ExtensionCommunicator {
     };
     this.initializationDelay = 500; // Wait for extension to initialize
     this.initialized = false;
+    this.isShuttingDown = false;
     
     // Create message queue manager instance
     this.messageQueue = new MessageQueueManager();
@@ -44,6 +45,11 @@ class ExtensionCommunicator {
   async validateContext() {
     const now = Date.now();
     
+    // If extension is shutting down, don't even try to validate
+    if (this.isShuttingDown) {
+      return false;
+    }
+    
     // During initialization phase, wait a bit
     if (!this.initialized) {
       await this.delay(100); // Small delay to let extension initialize
@@ -60,7 +66,7 @@ class ExtensionCommunicator {
     try {
       // Ensure runtime is available
       if (!chrome?.runtime?.id) {
-        console.warn('⚠️ Chrome runtime not available');
+        console.debug('🔌 Chrome runtime not available');
         this.connectionState.valid = false;
         return false;
       }
@@ -74,7 +80,7 @@ class ExtensionCommunicator {
             if (!resolved) {
               resolved = true;
               if (chrome.runtime.lastError) {
-                console.warn('⚠️ PING validation failed:', chrome.runtime.lastError.message);
+                console.debug('🔌 PING validation failed:', chrome.runtime.lastError.message);
                 resolve(false);
               } else {
                 const valid = response?.success === true;
@@ -87,14 +93,14 @@ class ExtensionCommunicator {
           setTimeout(() => {
             if (!resolved) {
               resolved = true;
-              console.warn('⚠️ PING validation timeout');
+              console.debug('🔌 PING validation timeout');
               resolve(false);
             }
           }, 2000); // Increased from 1000ms to 2000ms
         } catch (e) {
           if (!resolved) {
             resolved = true;
-            console.warn('⚠️ PING validation exception:', e.message);
+            console.debug('🔌 PING validation exception:', e.message);
             resolve(false);
           }
         }
@@ -104,12 +110,12 @@ class ExtensionCommunicator {
       this.connectionState.valid = isValid;
       
       if (!isValid) {
-        console.warn('⚠️ Extension context validation failed');
+        console.debug('🔌 Extension context validation failed');
       }
       
       return isValid;
     } catch (e) {
-      console.warn('⚠️ validateContext error:', e.message);
+      console.debug('🔌 validateContext error:', e.message);
       this.connectionState.valid = false;
       return false;
     }
@@ -141,8 +147,9 @@ class ExtensionCommunicator {
    * Handle extension context invalidation gracefully
    */
   handleContextInvalidation() {
-    console.warn('🔄 Extension context invalidated - stopping all message attempts');
+    console.debug('🔌 Extension context invalidated - stopping all message attempts');
     this.connectionState.valid = false;
+    this.isShuttingDown = true;
     this.lastValidationTime = Date.now();
     
     // Clear the message queue to prevent further attempts
@@ -155,6 +162,12 @@ class ExtensionCommunicator {
    * Enhanced message sending with queue management
    */
   async sendMessage(message, options = {}) {
+    // Don't send messages if extension is shutting down
+    if (this.isShuttingDown) {
+      console.debug('🔌 Extension shutting down, not sending message:', message.type);
+      return options.fallback || { success: false, error: 'Extension shutting down' };
+    }
+    
     // Wait for initialization on first message
     if (!this.initialized) {
       await this.initializeConnection();
@@ -164,7 +177,7 @@ class ExtensionCommunicator {
     
     // Pre-check: Don't even attempt to send if extension context is invalid
     if (!await this.validateContext()) {
-      console.warn('⚠️ Extension context invalid, not sending message:', message.type);
+      console.debug('🔌 Extension context invalid, not sending message:', message.type);
       return fallback || { success: false, error: 'Extension context invalid' };
     }
     
@@ -342,7 +355,7 @@ class ExtensionInitializationManager {
   }
 
   handleContextInvalidation() {
-    console.warn('🔄 Extension context invalidated');
+    console.debug('🔌 Extension context invalidated');
     this.isBackgroundReady = false;
     this.isShuttingDown = true;
     
