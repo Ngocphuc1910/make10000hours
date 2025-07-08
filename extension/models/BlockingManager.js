@@ -52,12 +52,20 @@ export class BlockingManager {
    */
   async handleDeepFocusUpdate(payload) {
     try {
-      // Broadcast to all extension components
+      // Broadcast to all extension components using proper error handling
       chrome.runtime.sendMessage({
         type: ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE,
         payload
-      }).catch(() => {
-        // Ignore errors when no listeners are connected
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          // Expected error when no listeners are connected - don't log as error
+          if (chrome.runtime.lastError.message?.includes('Could not establish connection') ||
+              chrome.runtime.lastError.message?.includes('receiving end does not exist')) {
+            console.debug('📡 No listeners for deep focus update');
+          } else {
+            console.warn('⚠️ Deep focus broadcast error:', chrome.runtime.lastError);
+          }
+        }
       });
       console.log('📢 Broadcasted deep focus time update:', payload.minutes, 'minutes');
     } catch (error) {

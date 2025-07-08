@@ -13,13 +13,30 @@ const ExtensionEventBus = {
   async emit(eventName, payload) {
     try {
       const manifestData = chrome.runtime.getManifest();
-      await chrome.runtime.sendMessage({
-        type: eventName,
-        payload: {
-          ...payload,
-          _version: manifestData.version,
-          _timestamp: Date.now()
-        }
+      
+      // Use a Promise wrapper to properly handle the async rejection
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({
+          type: eventName,
+          payload: {
+            ...payload,
+            _version: manifestData.version,
+            _timestamp: Date.now()
+          }
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            // Expected error when no listeners are connected
+            if (chrome.runtime.lastError.message?.includes('Could not establish connection') ||
+                chrome.runtime.lastError.message?.includes('receiving end does not exist')) {
+              console.debug(`📡 No listeners for event: ${eventName}`);
+            } else {
+              console.warn(`⚠️ Event emission error: ${eventName}`, chrome.runtime.lastError);
+            }
+            resolve(); // Don't reject, just resolve to prevent uncaught promise
+          } else {
+            resolve(response);
+          }
+        });
       });
     } catch (error) {
       console.warn(`⚠️ Event emission failed: ${eventName}`, error);
@@ -2591,9 +2608,12 @@ class FocusTimeTracker {
               chrome.runtime.sendMessage({
                 type: 'USER_INFO_UPDATED',
                 payload: this.userInfo
+              }).catch(() => {
+                // Popup might not be open, ignore error
+                console.debug('📝 Popup not available for user info update notification');
               });
             } catch (error) {
-              console.log('📝 Popup not available for user info update notification');
+              console.debug('📝 Failed to send user info update notification');
             }
             
             sendResponse({ success: true, userId: this.currentUserId });
@@ -3582,7 +3602,9 @@ async function initializeExtension() {
     chrome.tabs.query({}, (tabs) => {
       tabs.forEach(tab => {
         try {
-          chrome.tabs.sendMessage(tab.id, { type: 'EXTENSION_READY' });
+          chrome.tabs.sendMessage(tab.id, { type: 'EXTENSION_READY' }).catch(() => {
+            // Tab may not have content script, ignore error
+          });
         } catch (e) {
           // Tab may not have content script, ignore
         }
@@ -3593,12 +3615,22 @@ async function initializeExtension() {
   }
 }
 
-// Handle extension lifecycle events
-chrome.runtime.onInstalled.addListener(initializeExtension);
-chrome.runtime.onStartup.addListener(initializeExtension);
+// Handle extension lifecycle events with proper error handling
+chrome.runtime.onInstalled.addListener(() => {
+  initializeExtension().catch(error => {
+    console.error('❌ Extension installation initialization failed:', error);
+  });
+});
+chrome.runtime.onStartup.addListener(() => {
+  initializeExtension().catch(error => {
+    console.error('❌ Extension startup initialization failed:', error);
+  });
+});
 
-// Initialize immediately
-initializeExtension();
+// Initialize immediately with proper error handling
+initializeExtension().catch(error => {
+  console.error('❌ Top-level initialization failed:', error);
+});
 
 // Consolidated message handling - SINGLE LISTENER ONLY
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
