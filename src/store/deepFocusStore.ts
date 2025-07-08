@@ -1122,6 +1122,17 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
                     console.warn('⚠️ Batch blocking during enable failed (continuing anyway):', error);
                   }
                 }
+
+                // Also send the WEB_APP_FOCUS_STATE_CHANGED message for redundant sync
+                window.postMessage({
+                  type: 'WEB_APP_FOCUS_STATE_CHANGED',
+                  payload: {
+                    focusMode: true,
+                    timestamp: Date.now(),
+                    source: 'web-app-store'
+                  }
+                }, '*');
+                console.log('📡 Sent WEB_APP_FOCUS_STATE_CHANGED message for redundant sync');
               } catch (error) {
                 console.warn('⚠️ Extension communication failed (Deep Focus still enabled locally):', error);
               }
@@ -1217,6 +1228,17 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
                     console.warn('⚠️ Failed to unblock site in extension (continuing anyway):', site.url, error);
                   }
                 }
+
+                // Also send the WEB_APP_FOCUS_STATE_CHANGED message for redundant sync
+                window.postMessage({
+                  type: 'WEB_APP_FOCUS_STATE_CHANGED',
+                  payload: {
+                    focusMode: false,
+                    timestamp: Date.now(),
+                    source: 'web-app-store'
+                  }
+                }, '*');
+                console.log('📡 Sent WEB_APP_FOCUS_STATE_CHANGED message for redundant sync');
               } catch (error) {
                 console.warn('⚠️ Extension communication failed (Deep Focus still disabled locally):', error);
               }
