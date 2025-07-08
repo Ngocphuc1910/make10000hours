@@ -91,6 +91,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
     if (path === '/data-sync' && location.pathname === '/data-sync') {
       return true;
     }
+    if (path === '/privacy-policy' && location.pathname === '/privacy-policy') {
+      return true;
+    }
     if (path.startsWith('/dashboard/') && location.pathname.startsWith(path)) {
       return true;
     }
@@ -106,7 +109,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
     <>
       <aside
         id="sidebar"
-        className={`bg-background-secondary border-r border-border flex flex-col
+        className={`bg-background-secondary border-r border-border flex flex-col min-h-screen
         ${isLeftSidebarOpen ? 'w-64' : 'w-0'} ${className}`}
         style={{ zIndex: 40 }}
       >
@@ -157,17 +160,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
 
         <div className="p-4 border-t border-border">
           <Link
-            to="/support"
+            to="/privacy-policy"
             onClick={(e) => {
               e.preventDefault();
-              handleNavClick('/support');
+              handleNavClick('/privacy-policy');
             }}
-            className="flex items-center px-3 py-2 text-sm font-medium text-text-secondary rounded-md hover:bg-background-secondary"
+            className={`flex items-center px-3 py-2 text-sm font-medium rounded-md text-left
+            ${isRouteActive('/privacy-policy')
+                ? 'text-primary bg-indigo-50 dark:bg-primary/10'
+                : 'text-text-secondary hover:bg-background-primary'
+              }`}
           >
             <div className="w-5 h-5 flex items-center justify-center mr-3">
-              <Icon name="question-line" size={20} />
+              <Icon name="shield-line" size={20} />
             </div>
-            Help & Support
+            Privacy Policy
           </Link>
         </div>
       </aside>
