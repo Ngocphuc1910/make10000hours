@@ -403,6 +403,18 @@ class PopupManager {
     if (modalCancel) {
       modalCancel.addEventListener('click', () => this.hideModal());
     }
+
+    // Event delegation for dynamically created delete buttons
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-icon[data-action="unblock"]')) {
+        const button = e.target.closest('.btn-icon[data-action="unblock"]');
+        const domain = button.getAttribute('data-domain');
+        if (domain) {
+          console.log('🗑️ Delete button clicked for domain:', domain);
+          this.unblockSite(domain);
+        }
+      }
+    });
   }
 
   /**

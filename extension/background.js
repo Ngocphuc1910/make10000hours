@@ -2532,8 +2532,18 @@ class FocusTimeTracker {
           break;
 
         case 'ADD_BLOCKED_SITE':
-          const addResult = await this.blockingManager.addBlockedSite(message.payload?.domain);
-          sendResponse(addResult);
+          try {
+            const addResult = await this.blockingManager.addBlockedSite(message.payload?.domain);
+            sendResponse(addResult);
+            
+            // Sync back to web app after adding site
+            if (addResult.success) {
+              await this.syncBlockedSitesToWebApp();
+            }
+          } catch (error) {
+            console.error('❌ Error adding blocked site:', error);
+            sendResponse({ success: false, error: error.message });
+          }
           break;
 
         case 'BLOCK_MULTIPLE_SITES':
@@ -2578,8 +2588,18 @@ class FocusTimeTracker {
           break;
 
         case 'REMOVE_BLOCKED_SITE':
-          const removeResult = await this.blockingManager.removeBlockedSite(message.payload?.domain);
-          sendResponse(removeResult);
+          try {
+            const removeResult = await this.blockingManager.removeBlockedSite(message.payload?.domain);
+            sendResponse(removeResult);
+            
+            // Sync back to web app after removing site
+            if (removeResult.success) {
+              await this.syncBlockedSitesToWebApp();
+            }
+          } catch (error) {
+            console.error('❌ Error removing blocked site:', error);
+            sendResponse({ success: false, error: error.message });
+          }
           break;
 
         case 'BLOCK_CURRENT_SITE':
@@ -2608,6 +2628,76 @@ class FocusTimeTracker {
           sendResponse({ success: true, data: blockedSites });
           break;
 
+        case 'SYNC_BLOCKED_SITES_FROM_WEBAPP':
+          try {
+            const sites = message.payload?.sites || [];
+            console.log('🔄 Syncing blocked sites from web app:', sites.length);
+            
+            // Direct manipulation of blocked sites for efficiency
+            this.blockingManager.blockedSites = new Set();
+            
+            // Add new sites from web app directly to the Set
+            let successCount = 0;
+            let failureCount = 0;
+            for (const site of sites) {
+              try {
+                this.blockingManager.blockedSites.add(site);
+                successCount++;
+              } catch (error) {
+                console.warn('⚠️ Failed to add site to blocked set:', site, error);
+                failureCount++;
+              }
+            }
+            
+            // Update Chrome blocking rules to reflect the new state
+            try {
+              await this.blockingManager.updateBlockingRules();
+              console.log('✅ Updated Chrome blocking rules after sync');
+            } catch (error) {
+              console.error('❌ Failed to update blocking rules after sync:', error);
+              // Continue anyway - the Set is updated even if rules fail
+            }
+            
+            // Save the new state to storage
+            try {
+              await this.blockingManager.saveState();
+              console.log('💾 Saved blocking manager state after sync');
+            } catch (error) {
+              console.warn('⚠️ Failed to save state after sync:', error);
+            }
+            
+            console.log(`✅ Sync completed: ${successCount} success, ${failureCount} failed`);
+            sendResponse({ 
+              success: true, 
+              synced: successCount,
+              failed: failureCount 
+            });
+          } catch (error) {
+            console.error('❌ Failed to sync blocked sites from web app:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'UPDATE_SETTINGS_FROM_WEBAPP':
+          try {
+            const { blockedSites } = message.payload || {};
+            if (blockedSites && Array.isArray(blockedSites)) {
+              // Update extension settings with new blocked sites
+              const settings = await this.storageManager.getSettings();
+              settings.blockedSites = blockedSites;
+              await this.storageManager.updateSettings(settings);
+              
+              console.log('🔄 Updated extension settings from web app:', blockedSites.length, 'sites');
+              sendResponse({ success: true });
+            } else {
+              sendResponse({ success: false, error: 'Invalid blocked sites array' });
+            }
+          } catch (error) {
+            console.error('❌ Failed to update settings from web app:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
         case 'OVERRIDE_BLOCK':
           const overrideResult = await this.blockingManager.setTemporaryOverride(
             message.payload?.domain, 
@@ -2624,6 +2714,24 @@ class FocusTimeTracker {
         case 'RECORD_BLOCKED_ATTEMPT':
           this.blockingManager.recordBlockedAttempt(message.payload?.domain);
           sendResponse({ success: true });
+          break;
+
+        case 'FORCE_SYNC_FROM_WEBAPP':
+          try {
+            // Force sync blocked sites from web app to clear any default/stale sites
+            console.log('🔄 Force syncing blocked sites from web app...');
+            
+            // Send empty array to clear all sites first
+            this.blockingManager.blockedSites = new Set();
+            await this.blockingManager.updateBlockingRules();
+            await this.blockingManager.saveState();
+            
+            console.log('✅ Extension blocked sites cleared and ready for sync');
+            sendResponse({ success: true, message: 'Extension cleared and ready for sync' });
+          } catch (error) {
+            console.error('❌ Failed to force sync from web app:', error);
+            sendResponse({ success: false, error: error.message });
+          }
           break;
 
         case 'SET_USER_ID':
@@ -3681,6 +3789,59 @@ class FocusTimeTracker {
       
       // Save current progress
       await this.saveCurrentSession();
+    }
+  }
+
+  /**
+   * Sync blocked sites from extension back to web app
+   */
+  async syncBlockedSitesToWebApp() {
+    try {
+      // Get current blocked sites from extension
+      const blockedSitesArray = Array.from(this.blockingManager.blockedSites || []);
+      
+      console.log('🔄 Syncing blocked sites from extension to web app:', blockedSitesArray.length);
+      
+      // Send message to web app (if it's open) - support both localhost and production
+      chrome.tabs.query({ url: ['*://localhost:*/*', '*://*/make10000hours.com/*'] }, (tabs) => {
+        console.log('🔍 Found tabs for sync:', tabs.length, tabs.map(t => t.url));
+        
+        if (tabs.length === 0) {
+          console.warn('⚠️ No web app tabs found for sync');
+          return;
+        }
+        
+        tabs.forEach(tab => {
+          console.log('📡 Sending sync message to tab:', tab.id, tab.url);
+          chrome.tabs.sendMessage(tab.id, {
+            type: 'EXTENSION_BLOCKED_SITES_UPDATED',
+            payload: { sites: blockedSitesArray }
+          }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.debug('📡 Web app not listening for extension sync:', chrome.runtime.lastError.message);
+            } else {
+              console.log('✅ Synced blocked sites to web app:', tab.url);
+            }
+          });
+        });
+      });
+      
+      // Also try to sync via runtime message (for extension-to-extension communication)
+      try {
+        chrome.runtime.sendMessage({
+          type: 'EXTENSION_BLOCKED_SITES_UPDATED',
+          payload: { sites: blockedSitesArray }
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.debug('📡 No runtime listeners for blocked sites sync');
+          }
+        });
+      } catch (error) {
+        console.debug('📡 Runtime message failed (normal if no listeners)');
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to sync blocked sites to web app:', error);
     }
   }
 }
