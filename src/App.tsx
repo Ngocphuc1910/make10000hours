@@ -107,7 +107,7 @@ const SupportPage = () => (
           <h2 className="text-xl font-semibold text-text-primary">Documentation</h2>
           <div className="space-y-3">
             <a 
-              href="/privacy-policy.html" 
+              href="/privacy-policy" 
               className="block p-4 bg-background-secondary rounded-lg border border-border hover:bg-background-container transition-colors"
             >
               <h3 className="font-medium text-text-primary">Privacy Policy</h3>
@@ -504,7 +504,6 @@ const App: React.FC = () => {
             <Route path="data-sync" element={<DataSyncPageWithLayout />} />
             <Route path="support" element={<SupportPageWithLayout />} />
             <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
-            <Route path="privacy-policy.html" element={<PrivacyPolicyPage />} />
           </Routes>
         </AnalyticsWrapper>
         <ToastContainer />
