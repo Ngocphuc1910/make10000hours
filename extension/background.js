@@ -2247,12 +2247,12 @@ class FocusTimeTracker {
       return true; // Keep message channel open for async responses
     });
 
-    // Set up periodic save every 30 seconds
+    // Set up periodic save every 5 seconds
     this.saveInterval = setInterval(() => {
       if (this.currentSession.isActive) {
         this.saveCurrentSession();
       }
-    }, 30000); // Save every 30 seconds for more frequent updates
+    }, 5000); // Save every 5 seconds for more frequent updates
   }
 
   /**
@@ -3358,23 +3358,22 @@ class FocusTimeTracker {
         const grossTimeSpent = now - this.currentSession.startTime;
         const netTimeSpent = grossTimeSpent - this.totalPausedTime;
         
-        // Only save if we have at least 1 minute of activity
-        if (netTimeSpent >= 60000) {
-          const minutesToSave = Math.floor(netTimeSpent / 60000) * 60000;
-          await this.storageManager.saveTimeEntry(this.currentSession.domain, minutesToSave, 0);
+        // Only save if we have at least 10 seconds of activity
+        if (netTimeSpent >= 10000) {
+          const timeToSave = netTimeSpent;
+          await this.storageManager.saveTimeEntry(this.currentSession.domain, timeToSave, 0);
           
           // Update accumulated savedTime and reset counters
-          this.currentSession.savedTime = (this.currentSession.savedTime || 0) + minutesToSave;
-          const remainder = netTimeSpent - minutesToSave;
+          this.currentSession.savedTime = (this.currentSession.savedTime || 0) + timeToSave;
           
-          // Preserve remainder for continuous counting
-          this.currentSession.startTime = now - remainder;
+          // Reset tracking for next interval
+          this.currentSession.startTime = now;
           this.totalPausedTime = 0;
           
           console.log('💾 Session saved:', {
             domain: this.currentSession.domain,
-            savedMinutes: this.storageManager.formatTime(this.currentSession.savedTime),
-            remainingTime: this.storageManager.formatTime(netTimeSpent - minutesToSave)
+            savedTime: this.storageManager.formatTime(this.currentSession.savedTime),
+            justSaved: this.storageManager.formatTime(timeToSave)
           });
         }
       }
