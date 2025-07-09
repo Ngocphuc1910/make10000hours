@@ -236,15 +236,35 @@ class PopupManager {
    * Update core UI elements
    */
   updateCoreUI() {
-    // Update focus mode toggle
+    // Get current UI state for comparison
     const focusToggle = document.querySelector('#focus-mode-toggle');
-    if (focusToggle) {
-      focusToggle.checked = this.coreState.focusMode;
-      this.updateFocusModeSwitch();
-    }
+    const currentUIState = {
+      focusMode: focusToggle ? focusToggle.checked : false
+    };
+    
+    // Compare with desired state to prevent unnecessary updates
+    const needsUpdate = (
+      !this.lastCoreUIState ||
+      currentUIState.focusMode !== this.coreState.focusMode
+    );
+    
+    if (needsUpdate) {
+      console.log('🔄 Updating core UI - state changed');
+      
+      // Update focus mode toggle
+      if (focusToggle) {
+        focusToggle.checked = this.coreState.focusMode;
+        this.updateFocusModeSwitch();
+      }
 
-    // Setup tabs (core functionality)
-    this.setupTabs();
+      // Setup tabs (core functionality)
+      this.setupTabs();
+      
+      // Store current state for next comparison
+      this.lastCoreUIState = { ...currentUIState };
+    } else {
+      console.log('📱 Core UI unchanged, skipping update');
+    }
   }
 
   /**
@@ -294,28 +314,65 @@ class PopupManager {
       if (coreSuccess) {
         this.setupEventListeners();
         
-        // Set up periodic updates
-        this.updateInterval = setInterval(() => {
-          if (document.visibilityState === 'visible' && this.currentTab === 'site-usage') {
-            this.refreshState();
-          }
-        }, 5000);
+        // Feature flag for hybrid updates (set to false to revert to original behavior)
+        const USE_HYBRID_UPDATES = true;
+        
+        if (USE_HYBRID_UPDATES) {
+          // Hybrid approach: Event-driven for critical updates + periodic for stats
+          console.log('🔄 Initializing hybrid update system');
+          
+          // Critical state fallback - very infrequent backup for event failures
+          this.criticalInterval = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+              this.refreshCriticalState();
+            }
+          }, 60000); // 1 minute fallback for critical state
+          
+          // Statistics updates - periodic for time-sensitive but not critical data
+          this.statsInterval = setInterval(() => {
+            if (document.visibilityState === 'visible' && this.currentTab === 'site-usage') {
+              this.refreshStatistics();
+            }
+          }, 30000); // 30 seconds for statistics
+          
+          // Enhanced visibility handler - rely more on events
+          document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+              setTimeout(() => {
+                // Only refresh statistics when popup becomes visible
+                // Critical state updates come via events
+                this.refreshStatistics();
+                // User info is handled by events, but refresh as backup
+                this.loadUserInfo().then(response => {
+                  if (response?.success) {
+                    this.updateEnhancedUI('user');
+                  }
+                });
+              }, 100);
+            }
+          });
+        } else {
+          // Original approach - fallback for troubleshooting
+          console.log('🔄 Using original update system');
+          this.updateInterval = setInterval(() => {
+            if (document.visibilityState === 'visible' && this.currentTab === 'site-usage') {
+              this.refreshState_backup();
+            }
+          }, 5000);
 
-        // Add visibility change handler
-        document.addEventListener('visibilitychange', () => {
-          if (!document.hidden) {
-            setTimeout(() => {
-              // Always refresh core state (includes focus mode) when popup becomes visible
-              this.refreshState();
-              // Refresh user info when popup becomes visible
-              this.loadUserInfo().then(response => {
-                if (response?.success) {
-                  this.updateEnhancedUI('user');
-                }
-              });
-            }, 100);
-          }
-        });
+          document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+              setTimeout(() => {
+                this.refreshState_backup();
+                this.loadUserInfo().then(response => {
+                  if (response?.success) {
+                    this.updateEnhancedUI('user');
+                  }
+                });
+              }, 100);
+            }
+          });
+        }
       }
     } catch (error) {
       console.error('Initialization error:', error);
@@ -480,21 +537,35 @@ class PopupManager {
 
     // Handle tab-specific updates
     if (previousTab !== tabName) {
-      // Clear previous interval if switching from site-usage
+      // Clear previous intervals if switching from site-usage
       if (previousTab === 'site-usage') {
         clearInterval(this.updateInterval);
+        clearInterval(this.statsInterval);
       }
       
       // Initialize new tab content
       this.initializeTabContent(tabName);
       
-      // Set up new interval if switching to site-usage
+      // Set up new intervals if switching to site-usage
       if (tabName === 'site-usage') {
-        this.updateInterval = setInterval(() => {
-          if (document.visibilityState === 'visible') {
-            this.refreshState();
-          }
-        }, 5000); // Match the faster update frequency
+        // Check if we're using hybrid updates
+        const USE_HYBRID_UPDATES = true; // Should match the flag in initialize()
+        
+        if (USE_HYBRID_UPDATES) {
+          // Statistics updates for site-usage tab
+          this.statsInterval = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+              this.refreshStatistics();
+            }
+          }, 30000); // 30 seconds for statistics
+        } else {
+          // Original approach fallback
+          this.updateInterval = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+              this.refreshState_backup();
+            }
+          }, 5000);
+        }
       }
     }
   }
@@ -1303,6 +1374,136 @@ class PopupManager {
   }
 
   /**
+   * Refresh only critical state that needs immediate updates
+   * Used as fallback when events fail
+   */
+  async refreshCriticalState() {
+    try {
+      console.log('🔄 PopupManager.refreshCriticalState() called at', new Date().toISOString());
+      
+      // Only refresh core state for immediate needs
+      const stateResult = await this.sendMessageWithRetry('GET_CURRENT_STATE', {}, 2);
+      console.log('📥 Received critical state from background:', stateResult);
+      
+      if (stateResult?.success) {
+        const previousFocusMode = this.coreState.focusMode;
+        const newState = {
+          ...this.coreState,
+          ...stateResult.data
+        };
+        
+        // Only update if state actually changed
+        if (this.hasStateChanged(newState, this.coreState)) {
+          this.coreState = newState;
+          console.log(`📱 Critical state updated - focus mode: ${previousFocusMode} → ${this.coreState.focusMode}`);
+          this.updateCoreUI();
+          console.log('📱 Core UI updated after critical state refresh');
+        } else {
+          console.log('📱 Critical state unchanged, skipping UI update');
+        }
+      }
+      
+      console.log('✅ RefreshCriticalState completed successfully');
+    } catch (error) {
+      console.warn('Failed to refresh critical state:', error);
+    }
+  }
+
+  /**
+   * Refresh only statistics that can tolerate delays
+   * Used for periodic updates every 30 seconds
+   */
+  async refreshStatistics() {
+    try {
+      console.log('📊 PopupManager.refreshStatistics() called at', new Date().toISOString());
+      
+      // Refresh statistics in parallel
+      const statsUpdates = [
+        this.loadStats(),
+        this.loadFocusState()
+      ];
+
+      // Update UI as each statistic refreshes
+      for (const update of statsUpdates) {
+        update.then(result => {
+          if (result?.success) {
+            this.updateEnhancedUI(result.type);
+          }
+        }).catch(console.warn);
+      }
+
+      // Update override time
+      await this.updateLocalOverrideTime();
+      console.log('✅ RefreshStatistics completed successfully');
+    } catch (error) {
+      console.warn('Failed to refresh statistics:', error);
+    }
+  }
+
+  /**
+   * Check if state has actually changed to prevent unnecessary UI updates
+   */
+  hasStateChanged(newState, oldState) {
+    if (!oldState) return true;
+    
+    // Compare critical state properties
+    const criticalProps = ['focusMode', 'isTracking', 'currentDomain'];
+    for (const prop of criticalProps) {
+      if (newState[prop] !== oldState[prop]) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * Backup of original refreshState method for fallback
+   */
+  async refreshState_backup() {
+    try {
+      console.log('🔄 PopupManager.refreshState_backup() called at', new Date().toISOString());
+      
+      // Refresh core state
+      const stateResult = await this.sendMessageWithRetry('GET_CURRENT_STATE', {}, 2);
+      console.log('📥 Received state from background:', stateResult);
+      
+      if (stateResult?.success) {
+        const previousFocusMode = this.coreState.focusMode;
+        this.coreState = {
+          ...this.coreState,
+          ...stateResult.data
+        };
+        console.log(`📱 Core state updated - focus mode: ${previousFocusMode} → ${this.coreState.focusMode}`);
+        this.updateCoreUI();
+        console.log('📱 Core UI updated after state refresh');
+      }
+
+      // Refresh enhanced state in parallel
+      const enhancedUpdates = [
+        this.loadStats(),
+        this.loadUserInfo(),
+        this.loadFocusState()
+      ];
+
+      // Update UI as each feature refreshes
+      for (const update of enhancedUpdates) {
+        update.then(result => {
+          if (result?.success) {
+            this.updateEnhancedUI(result.type);
+          }
+        }).catch(console.warn);
+      }
+
+      // Update override time
+      await this.updateLocalOverrideTime();
+      console.log('✅ RefreshState_backup completed successfully');
+    } catch (error) {
+      console.warn('Failed to refresh state (backup):', error);
+    }
+  }
+
+  /**
    * Open settings page
    */
   openSettings() {
@@ -1692,6 +1893,12 @@ class PopupManager {
   cleanup() {
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
+    }
+    if (this.criticalInterval) {
+      clearInterval(this.criticalInterval);
+    }
+    if (this.statsInterval) {
+      clearInterval(this.statsInterval);
     }
     if (this.sessionTimer) {
       clearInterval(this.sessionTimer);
