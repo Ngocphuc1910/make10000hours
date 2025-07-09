@@ -7,7 +7,8 @@ import { useDashboardStore } from '../../../store/useDashboardStore';
 
 export const TopProjects: React.FC = React.memo(() => {
   const { workSessions, selectedRange } = useDashboardStore();
-  const { projects, tasks } = useTaskStore();
+  // Only subscribe to projects, not tasks, to avoid timeSpent update triggers
+  const projects = useTaskStore(state => state.projects);
   
   // TopProjects render tracking (logging removed to reduce console noise)
   

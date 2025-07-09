@@ -425,6 +425,98 @@ export class WorkSessionService {
   }
 
   /**
+   * Get work sessions for a specific date range
+   * Used by Productivity Insight page for efficient data loading
+   */
+  async getWorkSessionsForRange(
+    userId: string, 
+    startDate: Date, 
+    endDate: Date
+  ): Promise<WorkSession[]> {
+    try {
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
+      
+      console.log('WorkSessionService - Loading sessions for range:', {
+        userId,
+        startDate: startDateStr,
+        endDate: endDateStr
+      });
+      
+      // Use a simpler query that doesn't require a composite index
+      // Filter by userId only, then filter by date range in memory
+      // This matches the original subscribeToWorkSessions behavior
+      const q = query(
+        this.workSessionsCollection,
+        where('userId', '==', userId)
+        // No limit - get all sessions like the original subscription
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const allSessions = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: safeToDate(data.createdAt),
+          updatedAt: safeToDate(data.updatedAt),
+        };
+      }) as WorkSession[];
+      
+      // Filter by date range in memory
+      const filteredSessions = allSessions.filter(session => {
+        const sessionDate = session.date;
+        return sessionDate >= startDateStr && sessionDate <= endDateStr;
+      });
+      
+      // Sort by date descending in memory
+      filteredSessions.sort((a, b) => b.date.localeCompare(a.date));
+      
+      console.log('WorkSessionService - Loaded sessions:', filteredSessions.length, 'out of', allSessions.length);
+      return filteredSessions;
+    } catch (error) {
+      console.error('Error getting work sessions for range:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get ALL work sessions for a user (no limits)
+   * Used for "All time" filter in dashboard
+   */
+  async getAllWorkSessions(userId: string): Promise<WorkSession[]> {
+    try {
+      console.log('WorkSessionService - Loading ALL sessions for user:', userId);
+      
+      // Get all sessions for the user (no date filtering, no limit)
+      const q = query(
+        this.workSessionsCollection,
+        where('userId', '==', userId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const sessions = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: safeToDate(data.createdAt),
+          updatedAt: safeToDate(data.updatedAt),
+        };
+      }) as WorkSession[];
+      
+      // Sort by date descending in memory
+      sessions.sort((a, b) => b.date.localeCompare(a.date));
+      
+      console.log('WorkSessionService - Loaded ALL sessions:', sessions.length);
+      return sessions;
+    } catch (error) {
+      console.error('Error getting all work sessions:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get recent work sessions (last N sessions)
    */
   async getRecentWorkSessions(userId: string, limitCount: number = 50): Promise<WorkSession[]> {

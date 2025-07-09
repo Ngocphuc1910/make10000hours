@@ -12,6 +12,24 @@ export const TopTasks: React.FC = React.memo(() => {
   const { user } = useUserStore();
   const [isLoading, setIsLoading] = useState(false);
   
+  // Create stable reference for tasks that only changes when task structure changes (not timeSpent)
+  const stableTasksRef = useMemo(() => {
+    return tasks.map(task => ({
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      projectId: task.projectId,
+      userId: task.userId,
+      status: task.status,
+      priority: task.priority,
+      completed: task.completed,
+      order: task.order,
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+      // Exclude timeSpent to prevent re-renders on timer updates
+    }));
+  }, [tasks.map(t => `${t.id}-${t.title}-${t.status}-${t.projectId}-${t.completed}`).join('|')]);
+  
   // TopTasks render tracking (logging removed to reduce console noise)
   
   // Filter work sessions based on selected date range (same logic as other components)
@@ -63,7 +81,7 @@ export const TopTasks: React.FC = React.memo(() => {
     // Convert to dashboard tasks with filtered time data
     return Array.from(taskTimeMap.entries())
       .map(([taskId, totalTime]: [string, number]) => {
-        const task = tasks.find((t: any) => t.id === taskId);
+        const task = stableTasksRef.find((t: any) => t.id === taskId);
         if (!task) return null;
         
         const dashboardTask = taskToDashboardTask(task);
@@ -74,7 +92,7 @@ export const TopTasks: React.FC = React.memo(() => {
       })
       .filter((task): task is DashboardTask => task !== null && task.totalFocusTime > 0)
       .sort((a: DashboardTask, b: DashboardTask) => b.totalFocusTime - a.totalFocusTime);
-  }, [user, tasks, filteredWorkSessions]);
+  }, [user, stableTasksRef, filteredWorkSessions]);
   
   // Show empty state if no tasks
   if (isLoading) {
