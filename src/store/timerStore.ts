@@ -137,6 +137,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
       
       // Save immediately when starting
       get().saveToDatabase();
+      get().saveToLocalStorage();
     },
     
     pause: async () => {
@@ -151,6 +152,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
       
       // Save immediately when pausing to capture exact time
       get().saveToDatabase();
+      get().saveToLocalStorage();
     },
     
     reset: () => {
@@ -167,6 +169,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
         settings
       });
       get().saveToDatabase();
+      get().saveToLocalStorage();
     },
     
     skip: async () => {
@@ -294,6 +297,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
         settings
       });
       get().saveToDatabase();
+      get().saveToLocalStorage();
     },
     
     setCurrentTask: async (task: Task | null) => {
@@ -318,6 +322,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
       }
       
       get().saveToDatabase();
+      get().saveToLocalStorage();
     },
 
     setSettings: (settings: TimerSettings) => {
