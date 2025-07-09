@@ -39,7 +39,9 @@ function checkForSecrets() {
     'MozPrintableKey:"Unidentified"',
     'PASSWORD:"password"',
     'MISSING_CUSTOM_TOKEN:"internal-error"',
-    'key="global-shortcuts"'
+    'key="global-shortcuts"',
+    'dataKey="name"',
+    'dataKey="value"'
   ];
 
   try {
