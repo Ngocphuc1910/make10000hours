@@ -452,8 +452,12 @@ export class GoogleCalendarService {
    * Convert Google Calendar event to Task format
    */
   googleEventToTask(event: GoogleCalendarEvent): Partial<Task> {
+    if (!event) {
+      throw new Error('Event is required');
+    }
+
     const taskData: Partial<Task> = {
-      title: event.summary,
+      title: event.summary || 'Untitled Event',
       description: this.extractTaskDescription(event.description),
       googleCalendarEventId: event.id,
       syncStatus: 'synced',
@@ -466,7 +470,7 @@ export class GoogleCalendarService {
       if (event.start.dateTime) {
         // Timed event
         const startDate = new Date(event.start.dateTime);
-        const endDate = new Date(event.end.dateTime);
+        const endDate = event.end?.dateTime ? new Date(event.end.dateTime) : startDate;
         
         taskData.scheduledDate = startDate.toISOString().split('T')[0];
         taskData.scheduledStartTime = startDate.toTimeString().substring(0, 5);
@@ -486,25 +490,30 @@ export class GoogleCalendarService {
    * Extract task description from Google Calendar event description
    */
   private extractTaskDescription(description?: string): string {
-    if (!description) return '';
+    if (!description || typeof description !== 'string') return '';
     
-    // Remove our added metadata
-    const lines = description.split('\n');
-    const cleanLines = [];
-    
-    for (const line of lines) {
-      if (line.includes('--- Created by Make10000hours ---')) {
-        break;
+    try {
+      // Remove our added metadata
+      const lines = description.split('\n');
+      const cleanLines = [];
+      
+      for (const line of lines) {
+        if (line.indexOf('--- Created by Make10000hours ---') !== -1) {
+          break;
+        }
+        if (!line.startsWith('Project:') && 
+            !line.startsWith('Estimated time:') && 
+            !line.startsWith('Time spent:') && 
+            !line.startsWith('Status:')) {
+          cleanLines.push(line);
+        }
       }
-      if (!line.startsWith('Project:') && 
-          !line.startsWith('Estimated time:') && 
-          !line.startsWith('Time spent:') && 
-          !line.startsWith('Status:')) {
-        cleanLines.push(line);
-      }
+      
+      return cleanLines.join('\n').trim();
+    } catch (error) {
+      console.error('Error processing description:', error, { description });
+      return '';
     }
-    
-    return cleanLines.join('\n').trim();
   }
 
   /**
