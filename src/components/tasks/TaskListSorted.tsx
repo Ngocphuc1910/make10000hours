@@ -121,17 +121,20 @@ export const TaskListSorted: React.FC = () => {
     }
   };
 
-  // Sort tasks by order and filter to show relevant tasks
+  // Sort tasks by order and filter to show only "IN POMODORO" tasks
   // Keep completed tasks visible until manually archived
   const sortedTasks = [...tasks]
     .filter(task => {
       // Don't show archived tasks
       if (task.hideFromPomodoro) return false;
 
-      // Show all non-completed tasks (regardless of status)
+      // Only show tasks with status "pomodoro" (IN POMODORO)
+      if (task.status !== 'pomodoro') return false;
+
+      // Show non-completed pomodoro tasks
       if (!task.completed) return true;
 
-      // Show completed tasks until manually archived
+      // Show completed pomodoro tasks until manually archived
       if (task.completed) return true;
 
       return false;
