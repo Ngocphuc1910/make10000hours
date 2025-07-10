@@ -15,6 +15,12 @@ export interface Task {
   scheduledStartTime?: string; // HH:MM format
   scheduledEndTime?: string; // HH:MM format
   includeTime?: boolean; // whether time is included in the schedule
+  // Google Calendar sync fields
+  googleCalendarEventId?: string; // Google Calendar event ID
+  lastSyncedAt?: Date; // Last successful sync timestamp
+  syncStatus?: 'pending' | 'synced' | 'error' | 'disabled'; // Sync status
+  syncError?: string; // Error message if sync failed
+  googleCalendarModified?: boolean; // Flag if modified in Google Calendar
   createdAt: Date;
   updatedAt: Date;
 }
@@ -119,3 +125,71 @@ export interface DeepFocusSession {
 }
 
 export type Source = 'web' | 'extension';
+
+// Google Calendar sync state tracking
+export interface SyncState {
+  userId: string;
+  calendarId: string;
+  nextSyncToken?: string;
+  lastFullSync: Date;
+  lastIncrementalSync: Date;
+  isEnabled: boolean;
+  webhookChannelId?: string;
+  webhookResourceId?: string;
+  webhookExpirationTime?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Sync operation logs for debugging and monitoring
+export interface SyncLog {
+  id: string;
+  userId: string;
+  operation: 'create' | 'update' | 'delete';
+  direction: 'to_google' | 'from_google';
+  taskId?: string;
+  googleEventId?: string;
+  status: 'success' | 'error' | 'conflict';
+  error?: string;
+  conflictResolution?: 'user_chose_local' | 'user_chose_google' | 'last_modified_wins';
+  timestamp: Date;
+  metadata?: {
+    [key: string]: any;
+  };
+}
+
+// Google Calendar event representation
+export interface GoogleCalendarEvent {
+  id: string;
+  summary: string;
+  description?: string;
+  start: {
+    dateTime?: string;
+    date?: string;
+    timeZone?: string;
+  };
+  end: {
+    dateTime?: string;
+    date?: string;
+    timeZone?: string;
+  };
+  status?: 'confirmed' | 'tentative' | 'cancelled';
+  updated?: string;
+  created?: string;
+  creator?: {
+    email?: string;
+    displayName?: string;
+  };
+  organizer?: {
+    email?: string;
+    displayName?: string;
+  };
+  extendedProperties?: {
+    private?: {
+      [key: string]: string;
+    };
+    shared?: {
+      [key: string]: string;
+    };
+  };
+}
