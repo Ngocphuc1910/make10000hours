@@ -108,9 +108,20 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
   syncTask: async (taskId: string) => {
     const { syncEnabled, pendingTasks, errorTasks } = get();
-    if (!syncEnabled) return;
+    if (!syncEnabled) {
+      console.log('🔄 Sync not enabled, skipping task sync');
+      return;
+    }
 
     try {
+      // Validate user first
+      const { user } = useUserStore.getState();
+      if (!user) {
+        throw new Error('Firebase user undefined - user not authenticated');
+      }
+
+      console.log(`🔄 Syncing task ${taskId} for user ${user.uid}`);
+
       // Mark task as pending
       const newPendingTasks = new Set(pendingTasks);
       newPendingTasks.add(taskId);
@@ -124,20 +135,32 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       });
 
       const syncManager = get().getSyncManager();
-      if (!syncManager) throw new Error('Sync manager not available');
+      if (!syncManager) {
+        throw new Error('Sync manager not available - user may not be authenticated');
+      }
 
       // Get task and project data
       const { tasks, projects } = useTaskStore.getState();
       const task = tasks.find(t => t.id === taskId);
-      const project = task ? projects.find(p => p.id === task.projectId) : null;
-
-      if (!task || !project) {
-        throw new Error('Task or project not found');
+      
+      if (!task) {
+        throw new Error(`Task with ID ${taskId} not found`);
       }
+
+      // Find project, default to "No Project" if not found
+      let project = task.projectId ? projects.find(p => p.id === task.projectId) : null;
+      if (!project) {
+        project = { id: 'no-project', name: 'No Project', userId: user.uid } as Project;
+      }
+
+      console.log(`📋 Task found: ${task.title}, Project: ${project.name}, Scheduled: ${task.scheduledDate}`);
 
       // Only sync if task has a scheduled date
       if (task.scheduledDate) {
         await syncManager.syncTaskToGoogle(task, project);
+        console.log(`✅ Successfully synced task ${taskId} to Google Calendar`);
+      } else {
+        console.log(`⏭️ Task ${taskId} has no scheduled date, skipping sync`);
       }
 
       // Remove from pending tasks
