@@ -266,6 +266,10 @@ export class SyncManager {
     }
 
     try {
+      // Step 1: Sync tasks TO Google Calendar
+      await this.syncTasksToGoogleCalendar();
+
+      // Step 2: Sync FROM Google Calendar
       const response = await googleCalendarService.listEvents(
         new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
         new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)  // 30 days ahead
@@ -286,6 +290,116 @@ export class SyncManager {
       console.log(`🔄 Full sync completed: ${response.items.length} events processed`);
     } catch (error) {
       console.error('Error performing full sync:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Sync app tasks TO Google Calendar
+   */
+  async syncTasksToGoogleCalendar(): Promise<void> {
+    console.log('🔄 Starting sync tasks to Google Calendar...');
+
+    try {
+      // Get all scheduled tasks for this user
+      const tasksQuery = query(
+        collection(db, 'tasks'),
+        where('userId', '==', this.userId),
+        where('scheduledDate', '!=', null)
+      );
+
+      const tasksSnapshot = await getDocs(tasksQuery);
+      const tasks = tasksSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Task[];
+
+      // Get all projects for this user to include project names
+      const projectsQuery = query(
+        collection(db, 'projects'),
+        where('userId', '==', this.userId)
+      );
+
+      const projectsSnapshot = await getDocs(projectsQuery);
+      const projects = projectsSnapshot.docs.reduce((acc, doc) => {
+        acc[doc.id] = { id: doc.id, ...doc.data() } as Project;
+        return acc;
+      }, {} as Record<string, Project>);
+
+      console.log(`📋 Found ${tasks.length} scheduled tasks to sync`);
+
+      let syncedCount = 0;
+      let createdCount = 0;
+      let updatedCount = 0;
+
+      for (const task of tasks) {
+        try {
+          const project = task.projectId ? projects[task.projectId] : null;
+
+          if (task.googleCalendarEventId) {
+            // Task already has a Google Calendar event, update it
+            try {
+              await googleCalendarService.updateEvent(task.googleCalendarEventId, task, project);
+              updatedCount++;
+              console.log(`✅ Updated Google Calendar event for task: ${task.title}`);
+            } catch (error) {
+              // If update fails, create a new event
+              console.warn(`⚠️ Failed to update event, creating new one:`, error);
+              const eventId = await googleCalendarService.createEvent(task, project);
+              
+              // Update task with new event ID
+              await updateDoc(doc(db, 'tasks', task.id), {
+                googleCalendarEventId: eventId,
+                syncStatus: 'synced',
+                lastSyncedAt: new Date(),
+              });
+              createdCount++;
+              console.log(`✅ Created new Google Calendar event for task: ${task.title}`);
+            }
+          } else {
+            // Task doesn't have a Google Calendar event, create one
+            const eventId = await googleCalendarService.createEvent(task, project);
+            
+            // Update task with new event ID
+            await updateDoc(doc(db, 'tasks', task.id), {
+              googleCalendarEventId: eventId,
+              syncStatus: 'synced',
+              lastSyncedAt: new Date(),
+            });
+            createdCount++;
+            console.log(`✅ Created Google Calendar event for task: ${task.title}`);
+          }
+
+          syncedCount++;
+
+          await this.logSyncOperation({
+            userId: this.userId,
+            operation: task.googleCalendarEventId ? 'update' : 'create',
+            direction: 'to_google',
+            taskId: task.id,
+            googleEventId: task.googleCalendarEventId,
+            status: 'success',
+          });
+
+        } catch (error) {
+          console.error(`❌ Failed to sync task ${task.title} to Google Calendar:`, error);
+          
+          await this.logSyncOperation({
+            userId: this.userId,
+            operation: task.googleCalendarEventId ? 'update' : 'create',
+            direction: 'to_google',
+            taskId: task.id,
+            googleEventId: task.googleCalendarEventId,
+            status: 'error',
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      console.log(`🔄 Sync to Google Calendar completed: ${syncedCount} tasks processed (${createdCount} created, ${updatedCount} updated)`);
+
+    } catch (error) {
+      console.error('❌ Error syncing tasks to Google Calendar:', error);
       throw error;
     }
   }
