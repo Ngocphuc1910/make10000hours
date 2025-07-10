@@ -32,6 +32,16 @@ export interface Project {
   color?: string;
 }
 
+export interface UserGoogleToken {
+  userId: string;
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt: number;
+  grantedAt: Date;
+  lastUsed: Date;
+  revokedAt?: Date;
+}
+
 // separate collection for user data
 export interface UserData {
   uid: string;
