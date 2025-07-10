@@ -1,12 +1,10 @@
 // Google OAuth2 service for Calendar API access using Google Identity Services
 // This is separate from Firebase Auth and uses the proper client-side flow
+// Tokens are stored in Firestore for persistence across devices and sessions
 
-interface GoogleTokenInfo {
-  accessToken: string;
-  refreshToken?: string;
-  expiresAt: number;
-  userId: string; // Firebase user ID to ensure token belongs to current user
-}
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '../../api/firebase';
+import { UserGoogleToken } from '../../types/models';
 
 // Google Identity Services types
 declare global {
@@ -64,7 +62,6 @@ export class GoogleOAuthService {
       
       // Fallback: get from Firebase's localStorage keys
       // Firebase stores auth state with project-specific keys
-      const projectId = 'make10000hours'; // Your Firebase project ID
       const authKey = `firebase:authUser:${import.meta.env.VITE_FIREBASE_API_KEY}:[DEFAULT]`;
       
       const firebaseUser = localStorage.getItem(authKey);
@@ -83,9 +80,9 @@ export class GoogleOAuthService {
   }
 
   /**
-   * Get stored access token from localStorage for current user
+   * Get stored access token from Firestore for current user
    */
-  getStoredToken(): GoogleTokenInfo | null {
+  async getStoredToken(): Promise<UserGoogleToken | null> {
     try {
       const currentUserId = this.getCurrentUserId();
       
@@ -94,37 +91,45 @@ export class GoogleOAuthService {
         return null;
       }
 
-      const stored = localStorage.getItem('google_calendar_token');
-      console.log('🔍 Checking stored token:', stored ? 'Found' : 'Not found');
+      console.log('🔍 Checking Firestore for stored token...');
+      const tokenDoc = await getDoc(doc(db, 'userGoogleTokens', currentUserId));
       
-      if (!stored) return null;
-
-      const token = JSON.parse(stored);
-      
-      // Check if token belongs to current user
-      if (token.userId !== currentUserId) {
-        console.warn('⚠️ Token belongs to different user, removing...');
-        localStorage.removeItem('google_calendar_token');
+      if (!tokenDoc.exists()) {
+        console.log('🔍 No token found in Firestore');
+        // Check for legacy localStorage token and migrate if found
+        await this.migrateLegacyToken();
         return null;
       }
+
+      const tokenData = tokenDoc.data() as UserGoogleToken;
       
       console.log('🔍 Token details:', {
-        hasAccessToken: !!token.accessToken,
-        userId: token.userId,
-        currentUserId: currentUserId,
-        expiresAt: new Date(token.expiresAt).toISOString(),
-        isExpired: Date.now() >= token.expiresAt
+        hasAccessToken: !!tokenData.accessToken,
+        userId: tokenData.userId,
+        expiresAt: new Date(tokenData.expiresAt).toISOString(),
+        isExpired: Date.now() >= tokenData.expiresAt,
+        isRevoked: !!tokenData.revokedAt
       });
+
+      // Check if token is revoked
+      if (tokenData.revokedAt) {
+        console.warn('⚠️ Token has been revoked, removing...');
+        await this.deleteTokenFromFirestore(currentUserId);
+        return null;
+      }
       
       // Check if token is expired
-      if (Date.now() >= token.expiresAt) {
+      if (Date.now() >= tokenData.expiresAt) {
         console.warn('⚠️ Token expired, removing...');
-        localStorage.removeItem('google_calendar_token');
+        await this.deleteTokenFromFirestore(currentUserId);
         return null;
       }
 
+      // Update last used timestamp
+      await this.updateTokenLastUsed(currentUserId);
+
       console.log('✅ Valid token found for current user');
-      return token;
+      return tokenData;
     } catch (error) {
       console.error('Error reading stored token:', error);
       return null;
@@ -132,9 +137,9 @@ export class GoogleOAuthService {
   }
 
   /**
-   * Store access token in localStorage with user ID
+   * Store access token in Firestore
    */
-  private storeToken(tokenInfo: Omit<GoogleTokenInfo, 'userId'>): void {
+  private async storeToken(tokenInfo: { accessToken: string; expiresAt: number; refreshToken?: string }): Promise<void> {
     try {
       const currentUserId = this.getCurrentUserId();
       
@@ -142,16 +147,83 @@ export class GoogleOAuthService {
         throw new Error('No current user to store token for');
       }
 
-      const tokenWithUser: GoogleTokenInfo = {
-        ...tokenInfo,
-        userId: currentUserId
+      const userToken: Partial<UserGoogleToken> = {
+        userId: currentUserId,
+        accessToken: tokenInfo.accessToken,
+        expiresAt: tokenInfo.expiresAt,
+        grantedAt: new Date(),
+        lastUsed: new Date()
       };
 
-      localStorage.setItem('google_calendar_token', JSON.stringify(tokenWithUser));
-      console.log('✅ Token stored in localStorage for user:', currentUserId);
+      // Only include refreshToken if it exists
+      if (tokenInfo.refreshToken) {
+        userToken.refreshToken = tokenInfo.refreshToken;
+      }
+
+      await setDoc(doc(db, 'userGoogleTokens', currentUserId), userToken);
+      console.log('✅ Token stored in Firestore for user:', currentUserId);
+      
+      // Clean up legacy localStorage token
+      localStorage.removeItem('google_calendar_token');
     } catch (error) {
       console.error('Error storing token:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Update token last used timestamp
+   */
+  private async updateTokenLastUsed(userId: string): Promise<void> {
+    try {
+      await updateDoc(doc(db, 'userGoogleTokens', userId), {
+        lastUsed: new Date()
+      });
+    } catch (error) {
+      console.error('Error updating token last used:', error);
+    }
+  }
+
+  /**
+   * Delete token from Firestore
+   */
+  private async deleteTokenFromFirestore(userId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'userGoogleTokens', userId));
+      console.log('✅ Token deleted from Firestore for user:', userId);
+    } catch (error) {
+      console.error('Error deleting token from Firestore:', error);
+    }
+  }
+
+  /**
+   * Migrate legacy localStorage token to Firestore
+   */
+  private async migrateLegacyToken(): Promise<void> {
+    try {
+      const currentUserId = this.getCurrentUserId();
+      if (!currentUserId) return;
+
+      const legacyToken = localStorage.getItem('google_calendar_token');
+      if (!legacyToken) return;
+
+      console.log('🔄 Migrating legacy localStorage token to Firestore...');
+      const parsed = JSON.parse(legacyToken);
+      
+      if (parsed.userId === currentUserId && parsed.accessToken && Date.now() < parsed.expiresAt) {
+        await this.storeToken({
+          accessToken: parsed.accessToken,
+          refreshToken: parsed.refreshToken,
+          expiresAt: parsed.expiresAt
+        });
+        console.log('✅ Legacy token migrated successfully');
+      }
+      
+      // Clean up localStorage regardless
+      localStorage.removeItem('google_calendar_token');
+    } catch (error) {
+      console.error('Error migrating legacy token:', error);
+      localStorage.removeItem('google_calendar_token');
     }
   }
 
@@ -193,7 +265,7 @@ export class GoogleOAuthService {
     this.tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: this.clientId,
       scope: this.scope,
-      callback: (response: any) => {
+      callback: async (response: any) => {
         if (response.error) {
           console.error('❌ OAuth error:', response.error);
           throw new Error(`OAuth error: ${response.error}`);
@@ -204,11 +276,15 @@ export class GoogleOAuthService {
           expiresIn: response.expires_in
         });
         
-        // Store the token
-        this.storeToken({
-          accessToken: response.access_token,
-          expiresAt: Date.now() + (response.expires_in * 1000)
-        });
+        // Store the token in Firestore
+        try {
+          await this.storeToken({
+            accessToken: response.access_token,
+            expiresAt: Date.now() + (response.expires_in * 1000)
+          });
+        } catch (error) {
+          console.error('❌ Failed to store token:', error);
+        }
       }
     });
   }
@@ -241,7 +317,7 @@ export class GoogleOAuthService {
   async handleOAuthCallback(): Promise<boolean> {
     // With Google Identity Services, the callback is handled automatically
     // Check if we have a token stored
-    const token = this.getStoredToken();
+    const token = await this.getStoredToken();
     return !!token;
   }
 
@@ -249,7 +325,7 @@ export class GoogleOAuthService {
    * Check if user has calendar access
    */
   async hasCalendarAccess(): Promise<boolean> {
-    const token = this.getStoredToken();
+    const token = await this.getStoredToken();
     if (!token) return false;
 
     try {
@@ -260,7 +336,16 @@ export class GoogleOAuthService {
         },
       });
 
-      return response.ok;
+      if (!response.ok) {
+        // If token is invalid, remove it from Firestore
+        const currentUserId = this.getCurrentUserId();
+        if (currentUserId) {
+          await this.deleteTokenFromFirestore(currentUserId);
+        }
+        return false;
+      }
+
+      return true;
     } catch (error) {
       console.error('Error checking calendar access:', error);
       return false;
@@ -271,29 +356,39 @@ export class GoogleOAuthService {
    * Revoke access and clear stored tokens
    */
   async revokeAccess(): Promise<void> {
-    const token = this.getStoredToken();
+    const token = await this.getStoredToken();
+    const currentUserId = this.getCurrentUserId();
+    
     if (token) {
       try {
-        // Revoke the token
+        // Revoke the token with Google
         await fetch(`https://oauth2.googleapis.com/revoke?token=${token.accessToken}`, {
           method: 'POST',
         });
+        console.log('✅ Token revoked with Google');
       } catch (error) {
-        console.error('Error revoking token:', error);
+        console.error('Error revoking token with Google:', error);
       }
     }
 
-    // Clear stored token
+    // Clear stored token from Firestore
+    if (currentUserId) {
+      await this.deleteTokenFromFirestore(currentUserId);
+    }
+    
+    // Clean up legacy localStorage token
     localStorage.removeItem('google_calendar_token');
     console.log('✅ Google Calendar access revoked and token cleared');
   }
 
   /**
    * Clear token when user logs out (call this from auth service)
+   * Note: We don't clear from Firestore on logout - tokens persist across sessions
    */
   clearTokenOnLogout(): void {
+    // Only clear legacy localStorage token
     localStorage.removeItem('google_calendar_token');
-    console.log('✅ Google Calendar token cleared on logout');
+    console.log('✅ Legacy Google Calendar token cleared on logout (Firestore tokens persist)');
   }
 }
 
