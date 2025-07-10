@@ -275,10 +275,8 @@ export const useTaskStoreWithSync = () => {
   const addTask = async (taskData: Omit<Task, 'id' | 'order' | 'createdAt' | 'updatedAt'>) => {
     const taskId = await taskStore.addTask(taskData);
     
-    // Sync if task has scheduling
-    if (taskData.scheduledDate) {
-      await syncTaskAfterUpdate(taskId);
-    }
+    // Note: taskStore.addTask already handles auto-sync for scheduled tasks
+    // No need to sync again here to avoid duplicate calendar events
     
     return taskId;
   };

@@ -336,6 +336,12 @@ export class SyncManager {
         try {
           const project = task.projectId ? projects[task.projectId] : null;
 
+          // Skip if task is currently being synced (to prevent race conditions)
+          if (task.syncStatus === 'pending') {
+            console.log(`⏭️ Skipping task ${task.title} - sync already in progress`);
+            continue;
+          }
+
           if (task.googleCalendarEventId) {
             // Task already has a Google Calendar event, update it
             try {
@@ -357,6 +363,15 @@ export class SyncManager {
               console.log(`✅ Created new Google Calendar event for task: ${task.title}`);
             }
           } else {
+            // Check if task was created very recently (within last 5 seconds) to avoid race condition
+            const taskCreatedAt = task.createdAt instanceof Date ? task.createdAt : new Date(task.createdAt);
+            const timeSinceCreation = Date.now() - taskCreatedAt.getTime();
+            
+            if (timeSinceCreation < 5000) { // 5 seconds
+              console.log(`⏭️ Skipping recently created task ${task.title} - may be handled by auto-sync`);
+              continue;
+            }
+
             // Task doesn't have a Google Calendar event, create one
             const eventId = await googleCalendarService.createEvent(task, project);
             
