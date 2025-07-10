@@ -19,6 +19,11 @@ const firebaseConfig: FirebaseOptions = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
+// Expose auth globally for OAuth service
+if (typeof window !== 'undefined') {
+  (window as any).firebaseAuth = auth;
+}
+
 // CRITICAL: Explicitly set auth persistence to LOCAL to ensure 
 // user stays logged in across page reloads and browser sessions
 setPersistence(auth, browserLocalPersistence)

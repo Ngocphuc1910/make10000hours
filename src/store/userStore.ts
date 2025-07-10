@@ -81,6 +81,15 @@ export const useUserStore = create<UserState>((set, get) => {
               });
               
               console.log('✅ User authentication restored successfully');
+              
+              // Initialize sync for the authenticated user (dynamic import to avoid circular dependency)
+              try {
+                const { useSyncStore } = await import('./syncStore');
+                await useSyncStore.getState().initializeSync();
+                console.log('✅ Sync initialized for user');
+              } catch (syncError) {
+                console.error('❌ Failed to initialize sync:', syncError);
+              }
             } catch (error) {
               console.error('❌ Error creating user data:', error);
               set({ 
@@ -186,6 +195,15 @@ export const useUserStore = create<UserState>((set, get) => {
     signOut: async () => {
       try {
         set({ isLoading: true });
+        
+        // Clear Google Calendar token on logout
+        try {
+          const { googleOAuthService } = await import('../services/auth/googleOAuth');
+          googleOAuthService.clearTokenOnLogout();
+        } catch (error) {
+          console.warn('Failed to clear Google Calendar token:', error);
+        }
+        
         await firebaseSignOut(auth);
         set({ 
           user: null,

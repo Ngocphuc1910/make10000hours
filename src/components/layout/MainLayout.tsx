@@ -7,6 +7,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import TaskList from '../tasks/TaskList';
 import { Icon } from '../ui/Icon';
 import { Tooltip } from '../ui/Tooltip';
+import SyncDebugPanel from '../sync/SyncDebugPanel';
 
 interface MainLayoutProps {
   children?: React.ReactNode;
@@ -225,6 +226,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
       
       {/* Focus Mode */}
       <FocusMode />
+      
+      {/* Sync Debug Panel */}
+      <SyncDebugPanel />
     </div>
   );
 };

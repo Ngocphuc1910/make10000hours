@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useUserStore } from '../../store/userStore';
 import { DEFAULT_SETTINGS, type AppSettings, type TimerSettings } from '../../types/models';
 import { OpenAISettings } from '../settings/OpenAISettings';
+import GoogleCalendarSync from '../settings/GoogleCalendarSync';
 
 const SettingsPage = () => {
   const { user, updateUserData } = useUserStore();
@@ -211,6 +212,9 @@ const SettingsPage = () => {
             </div>
           </div>
         </section>
+
+        {/* Google Calendar Sync */}
+        <GoogleCalendarSync />
 
         {/* OpenAI Settings */}
         <OpenAISettings />

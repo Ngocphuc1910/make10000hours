@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { Task } from '../../types/models';
 import { useTaskStore } from '../../store/taskStore';
+import { useTaskStoreWithSync } from '../../store/syncStore';
 import { Icon } from '../ui/Icon';
 import { useUserStore } from '../../store/userStore';
 import { workSessionService } from '../../api/workSessionService';
@@ -23,9 +24,8 @@ interface TaskFormProps {
 }
 
 const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, initialStartTime, initialEndTime, isAllDay, onCancel, onSave }) => {
-  const addTask = useTaskStore(state => state.addTask);
-  const updateTask = useTaskStore(state => state.updateTask);
-  const deleteTask = useTaskStore(state => state.deleteTask);
+  const taskStoreWithSync = useTaskStoreWithSync();
+  const { addTask, updateTask, deleteTask } = taskStoreWithSync;
   const projects = useTaskStore(state => state.projects);
   const addProject = useTaskStore(state => state.addProject);
   const { user } = useUserStore();
