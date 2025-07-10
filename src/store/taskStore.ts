@@ -240,15 +240,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       const { tasks } = get();
       console.log('Current tasks count:', tasks.length);
       
-      // Add task with next order number
+      // Add task with next order number (find max order + 1)
+      const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order || 0)) : -1;
       const newTask = {
         ...taskData,
         userId: user.uid,
-        order: tasks.length,
+        order: maxOrder + 1,
         createdAt: new Date(),
         updatedAt: new Date()
       };
-      console.log('About to add task to Firestore:', newTask);
       
       // Fire and forget - don't wait for addDoc to complete since it hangs
       // The real-time listener will update the UI when the task is created
