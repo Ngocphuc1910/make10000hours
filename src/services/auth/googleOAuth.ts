@@ -24,7 +24,10 @@ export class GoogleOAuthService {
     this.clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || '';
     console.log('🔍 OAuth service initialized:', {
       clientId: this.clientId ? `${this.clientId.substring(0, 10)}...` : 'Not set',
-      scope: this.scope
+      scope: this.scope,
+      rawEnvValue: import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID,
+      envType: typeof import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID,
+      allEnvVars: import.meta.env
     });
   }
 
@@ -35,7 +38,12 @@ export class GoogleOAuthService {
     const configured = !!this.clientId;
     console.log('🔍 OAuth2 configuration check:', {
       clientId: this.clientId ? `${this.clientId.substring(0, 10)}...` : 'Not set',
-      configured
+      configured,
+      clientIdLength: this.clientId.length,
+      clientIdTrimmed: this.clientId.trim(),
+      isEmpty: this.clientId === '',
+      isUndefined: this.clientId === undefined,
+      isNull: this.clientId === null
     });
     return configured;
   }
