@@ -10,6 +10,8 @@ export default defineConfig({
   },
   define: {
     global: 'globalThis',
+    // Explicitly define environment variables for production builds
+    __VITE_GOOGLE_OAUTH_CLIENT_ID__: JSON.stringify(process.env.VITE_GOOGLE_OAUTH_CLIENT_ID),
   },
   build: {
     outDir: 'dist',

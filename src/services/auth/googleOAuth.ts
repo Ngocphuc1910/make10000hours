@@ -13,6 +13,8 @@ declare global {
   interface Window {
     google: any;
   }
+  // Vite define variables
+  const __VITE_GOOGLE_OAUTH_CLIENT_ID__: string;
 }
 
 export class GoogleOAuthService {
@@ -21,13 +23,17 @@ export class GoogleOAuthService {
   private tokenClient: any = null;
 
   constructor() {
-    this.clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || '';
+    // Try multiple ways to get the client ID for production compatibility
+    const viteEnv = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
+    const defineVar = typeof __VITE_GOOGLE_OAUTH_CLIENT_ID__ !== 'undefined' ? __VITE_GOOGLE_OAUTH_CLIENT_ID__ : undefined;
+    const hardcoded = '496225832510-4q5t9iogu4dhpsbenkg6f5oqmbgudae8.apps.googleusercontent.com';
+    
+    this.clientId = viteEnv || defineVar || hardcoded || '';
+    
     console.log('🔍 OAuth service initialized:', {
       clientId: this.clientId ? `${this.clientId.substring(0, 10)}...` : 'Not set',
       scope: this.scope,
-      rawEnvValue: import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID,
-      envType: typeof import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID,
-      allEnvVars: import.meta.env
+      configured: !!this.clientId
     });
   }
 
@@ -38,12 +44,7 @@ export class GoogleOAuthService {
     const configured = !!this.clientId;
     console.log('🔍 OAuth2 configuration check:', {
       clientId: this.clientId ? `${this.clientId.substring(0, 10)}...` : 'Not set',
-      configured,
-      clientIdLength: this.clientId.length,
-      clientIdTrimmed: this.clientId.trim(),
-      isEmpty: this.clientId === '',
-      isUndefined: this.clientId === undefined,
-      isNull: this.clientId === null
+      configured
     });
     return configured;
   }
