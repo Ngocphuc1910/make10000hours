@@ -4,6 +4,7 @@ import { useTaskStore } from '../../store/taskStore';
 import { useTimerStore } from '../../store/timerStore';
 import type { Task, Project } from '../../types/models';
 import CustomCheckbox from '../ui/CustomCheckbox';
+import SyncIndicator from '../sync/SyncIndicator';
 
 interface TaskItemProps {
   task: Task;
@@ -128,6 +129,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                 <i className="ri-time-line mr-1"></i>
                 {task.timeSpent}/{task.timeEstimated}m
               </span>
+              <SyncIndicator task={task} size="sm" className="ml-2" />
             </div>
             {isExpanded && task.description && task.description.trim() && (
               <div className="task-description mt-2">
