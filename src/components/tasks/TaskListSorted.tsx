@@ -121,18 +121,17 @@ export const TaskListSorted: React.FC = () => {
     }
   };
 
-  // Sort tasks by order and filter to show only Pomodoro tasks
+  // Sort tasks by order and filter to show relevant tasks
   // Keep completed tasks visible until manually archived
   const sortedTasks = [...tasks]
     .filter(task => {
       // Don't show archived tasks
       if (task.hideFromPomodoro) return false;
 
-      // Show active pomodoro tasks
-      if (task.status === 'pomodoro') return true;
+      // Show all non-completed tasks (regardless of status)
+      if (!task.completed) return true;
 
-      // Show completed tasks (regardless of current status, as long as they're marked completed)
-      // These should stay visible until manually archived
+      // Show completed tasks until manually archived
       if (task.completed) return true;
 
       return false;
@@ -145,6 +144,7 @@ export const TaskListSorted: React.FC = () => {
       {sortedTasks.map((task: Task) => {
         const project = projects.find(p => p.id === task.projectId);
 
+
         if (editingTaskId === task.id) {
           return (
             <TaskForm
@@ -155,7 +155,33 @@ export const TaskListSorted: React.FC = () => {
           );
         }
 
-        if (!project) return null;
+        if (!project) {
+          // Create a fallback project for tasks with missing projects
+          const fallbackProject = {
+            id: task.projectId || 'unknown',
+            name: 'Unknown Project',
+            userId: task.userId
+          };
+          
+          return (
+            <div
+              key={task.id}
+              draggable={true}
+              onDragStart={(e) => handleDragStart(e, task.id)}
+              onDragEnd={handleDragEnd}
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, task.id)}
+            >
+              <TaskItem
+                task={task}
+                project={fallbackProject}
+                onEdit={handleEditTask}
+              />
+            </div>
+          );
+        }
 
         return (
           <div

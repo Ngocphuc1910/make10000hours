@@ -147,7 +147,10 @@ export const TaskList: React.FC<TaskListProps> = ({
             {/* Task Creation Form */}
             {isAddingTask && (
               <div ref={taskFormRef}>
-                <TaskForm onCancel={handleCancelForm} />
+                <TaskForm 
+                  onCancel={handleCancelForm} 
+                  status="pomodoro"
+                />
               </div>
             )}
             
