@@ -257,6 +257,27 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       // Track task creation in Analytics
       trackTaskCreated(taskData.projectId);
       
+      // Auto-sync task to Google Calendar if it has a scheduled date
+      if (taskData.scheduledDate) {
+        try {
+          console.log('🔄 Auto-syncing new task to Google Calendar...');
+          const { useSyncStore } = await import('./syncStore');
+          
+          // Add a small delay to ensure task is in the store
+          setTimeout(async () => {
+            try {
+              await useSyncStore.getState().syncTask(docRef.id);
+              console.log('✅ Task auto-synced to Google Calendar');
+            } catch (syncError) {
+              console.error('❌ Failed to auto-sync task to Google Calendar:', syncError);
+            }
+          }, 1000);
+        } catch (syncError) {
+          console.error('❌ Failed to setup auto-sync for task:', syncError);
+          // Don't throw the error since task creation succeeded
+        }
+      }
+      
       console.log('Task creation initiated successfully');
       return docRef.id; // Return the new task ID
     } catch (error) {
@@ -305,6 +326,20 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           console.error('❌ Failed to update work sessions project ID:', error);
           // Don't throw here - the task update succeeded, this is just cleanup
           console.warn('⚠️ Task was updated but work session project IDs may be inconsistent');
+        }
+      }
+
+      // Auto-sync task to Google Calendar if it has scheduling information
+      const updatedTask = { ...currentTask, ...updates };
+      if (updatedTask.scheduledDate) {
+        try {
+          console.log('🔄 Auto-syncing updated task to Google Calendar...');
+          const { useSyncStore } = await import('./syncStore');
+          await useSyncStore.getState().syncTask(id);
+          console.log('✅ Task update auto-synced to Google Calendar');
+        } catch (syncError) {
+          console.error('❌ Failed to auto-sync updated task to Google Calendar:', syncError);
+          // Don't throw the error since task update succeeded
         }
       }
       
