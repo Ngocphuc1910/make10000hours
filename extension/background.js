@@ -2000,6 +2000,12 @@ class BlockingManager {
       this.sessionTimer = null;
       console.log('⏹️ Session timer stopped');
     }
+    
+    if (this.sleepDetectionInterval) {
+      clearInterval(this.sleepDetectionInterval);
+      this.sleepDetectionInterval = null;
+      console.log('⏹️ Sleep detection timer stopped');
+    }
   }
 
   /**
@@ -2116,13 +2122,6 @@ class FocusTimeTracker {
     this.currentUserId = null;
     this.userInfo = null;
     
-    // Add sleep tracking state
-    this.systemSleepState = {
-      isSleeping: false,
-      sleepStartTime: null,
-      lastWakeTime: null,
-      totalSleepTime: 0
-    };
     
     this.initialize();
   }
@@ -2246,6 +2245,12 @@ class FocusTimeTracker {
       this.handleMessage(message, sender, sendResponse);
       return true; // Keep message channel open for async responses
     });
+
+    // Timestamp-based sleep detection (more reliable than Chrome idle API)
+    this.lastHeartbeat = Date.now();
+    this.sleepDetectionInterval = setInterval(() => {
+      this.checkForSleep();
+    }, 10000); // Check every 10 seconds
 
     // Set up periodic save every 5 seconds
     this.saveInterval = setInterval(() => {
@@ -3168,13 +3173,6 @@ class FocusTimeTracker {
           }
           break;
 
-        case 'SYSTEM_SLEEP_DETECTED':
-          this.handleSystemSleep(message.timestamp);
-          break;
-
-        case 'SYSTEM_WAKE_DETECTED':
-          this.handleSystemWake(message.timestamp, message.sleepDuration);
-          break;
 
         case 'PING':
           // Health check ping from content scripts
@@ -3279,7 +3277,7 @@ class FocusTimeTracker {
       }
 
       const now = Date.now();
-      const timeSpent = now - this.currentSession.startTime + (this.currentSession.savedTime || 0);
+      const timeSpent = now - this.currentSession.startTime;
       const domain = this.currentSession.domain;
 
       // Only save if spent more than 1 second and round down to nearest second
@@ -3310,15 +3308,9 @@ class FocusTimeTracker {
    */
   async pauseTracking() {
     if (this.currentSession.isActive) {
-      const activeDuration = Date.now() - this.currentSession.startTime;
-      const totalDuration = (this.currentSession.savedTime || 0) + activeDuration;
-      if (totalDuration > 1000) {
-        await this.storageManager.saveTimeEntry(this.currentSession.domain, totalDuration, 0);
-      }
-      // Reset savedTime since we've persisted it
-      this.currentSession.savedTime = 0;
+      // Just pause, don't save yet - let saveCurrentSession handle it
       this.currentSession.isActive = false;
-      this.currentSession.startTime = null;
+      console.log('⏸️ Tracking paused for:', this.currentSession.domain);
     }
   }
 
@@ -3329,6 +3321,50 @@ class FocusTimeTracker {
     if (!this.currentSession.isActive && tab && this.isTrackableUrl(tab.url)) {
       this.currentSession.startTime = Date.now();
       this.currentSession.isActive = true;
+    }
+  }
+
+  /**
+   * Check for system sleep based on timestamp gaps
+   */
+  async checkForSleep() {
+    const now = Date.now();
+    const timeSinceLastHeartbeat = now - this.lastHeartbeat;
+    
+    // If more than 2 minutes have passed, assume system was sleeping
+    if (timeSinceLastHeartbeat > 120000) { // 2 minutes
+      console.log('💤 Sleep detected - time gap:', Math.round(timeSinceLastHeartbeat / 1000) + 's');
+      
+      // If we have an active session, pause it and adjust time
+      if (this.currentSession.isActive && this.currentSession.startTime) {
+        // Calculate time before sleep
+        const timeBeforeSleep = Math.max(0, this.lastHeartbeat - this.currentSession.startTime);
+        
+        // Save only the time before sleep
+        if (timeBeforeSleep > 1000) {
+          await this.storageManager.saveTimeEntry(this.currentSession.domain, timeBeforeSleep, 0);
+          console.log(`💾 Saved time before sleep: ${this.storageManager.formatTime(timeBeforeSleep)}`);
+        }
+        
+        // Reset session to current time (after wake)
+        this.currentSession.startTime = now;
+        this.currentSession.savedTime = 0;
+      }
+    }
+    
+    this.lastHeartbeat = now;
+  }
+
+  /**
+   * Get the currently active tab
+   */
+  async getActiveTab() {
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      return tabs[0] || null;
+    } catch (error) {
+      console.error('Error getting active tab:', error);
+      return null;
     }
   }
 
@@ -3353,27 +3389,27 @@ class FocusTimeTracker {
    */
   async saveCurrentSession() {
     try {
-      if (this.currentSession.isActive && this.currentSession.startTime && !this.systemSleepState.isSleeping) {
+      if (this.currentSession.isActive && this.currentSession.startTime) {
         const now = Date.now();
-        const grossTimeSpent = now - this.currentSession.startTime;
-        const netTimeSpent = grossTimeSpent - this.totalPausedTime;
+        const sessionDuration = now - this.currentSession.startTime;
+        
+        // Prevent saving if session duration is unreasonably long (indicates sleep)
+        if (sessionDuration > 3600000) { // 1 hour max per save cycle
+          console.log('⚠️ Session duration too long, likely due to sleep. Resetting...');
+          this.currentSession.startTime = now;
+          return;
+        }
         
         // Only save if we have at least 10 seconds of activity
-        if (netTimeSpent >= 10000) {
-          const timeToSave = netTimeSpent;
-          await this.storageManager.saveTimeEntry(this.currentSession.domain, timeToSave, 0);
-          
-          // Update accumulated savedTime and reset counters
-          this.currentSession.savedTime = (this.currentSession.savedTime || 0) + timeToSave;
+        if (sessionDuration >= 10000) {
+          await this.storageManager.saveTimeEntry(this.currentSession.domain, sessionDuration, 0);
           
           // Reset tracking for next interval
           this.currentSession.startTime = now;
-          this.totalPausedTime = 0;
           
           console.log('💾 Session saved:', {
             domain: this.currentSession.domain,
-            savedTime: this.storageManager.formatTime(this.currentSession.savedTime),
-            justSaved: this.storageManager.formatTime(timeToSave)
+            duration: this.storageManager.formatTime(sessionDuration)
           });
         }
       }
@@ -3775,45 +3811,6 @@ class FocusTimeTracker {
     }
   }
 
-  /**
-   * Handle system sleep detection
-   */
-  handleSystemSleep(timestamp) {
-    console.log('💤 System sleep detected at:', new Date(timestamp).toISOString());
-    
-    this.systemSleepState.isSleeping = true;
-    this.systemSleepState.sleepStartTime = timestamp;
-    
-    // Pause tracking
-    this.pauseTracking();
-  }
-
-  /**
-   * Handle system wake detection
-   */
-  async handleSystemWake(timestamp, sleepDuration) {
-    console.log('🌅 System wake detected:', {
-      timestamp: new Date(timestamp).toISOString(),
-      sleepDuration: Math.round(sleepDuration / 1000) + 's'
-    });
-    
-    // Update sleep state
-    this.systemSleepState.isSleeping = false;
-    this.systemSleepState.lastWakeTime = timestamp;
-    this.systemSleepState.totalSleepTime += sleepDuration;
-    
-    // Adjust current session if needed
-    if (this.currentSession.isActive) {
-      // Add sleep time to total paused time
-      this.totalPausedTime += sleepDuration;
-      
-      // Update session start time to account for sleep
-      this.currentSession.startTime = timestamp;
-      
-      // Save current progress
-      await this.saveCurrentSession();
-    }
-  }
 
   /**
    * Sync blocked sites from extension back to web app
