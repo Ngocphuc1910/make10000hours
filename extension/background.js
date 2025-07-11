@@ -643,13 +643,26 @@ class StorageManager {
         return [];
       }
 
-      const topSites = Object.entries(realTimeStats.sites)
-        .map(([domain, data]) => ({
-          domain,
-          timeSpent: data.timeSpent || 0,
-          visits: data.visits || 0
-        }))
-        .filter(site => site.timeSpent > 0)
+      // Create a map to ensure no duplicate domains
+      const uniqueDomains = new Map();
+      
+      Object.entries(realTimeStats.sites).forEach(([domain, data]) => {
+        const timeSpent = data.timeSpent || 0;
+        const visits = data.visits || 0;
+        
+        if (timeSpent > 0) {
+          if (!uniqueDomains.has(domain)) {
+            uniqueDomains.set(domain, { domain, timeSpent, visits });
+          } else {
+            // If domain already exists, combine the data
+            const existing = uniqueDomains.get(domain);
+            existing.timeSpent += timeSpent;
+            existing.visits += visits;
+          }
+        }
+      });
+      
+      const topSites = Array.from(uniqueDomains.values())
         .sort((a, b) => b.timeSpent - a.timeSpent)
         .slice(0, limit);
       
