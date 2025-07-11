@@ -129,17 +129,45 @@ class BlockedPage {
 
   async loadFocusStats() {
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_FOCUS_STATS' });
-      if (response && response.success) {
-        const stats = response.data;
-        document.getElementById('focusTime').textContent = this.formatTime(stats.focusTime || 0);
-        document.getElementById('blockedAttempts').textContent = stats.blockedAttempts || 0;
-        
-        // Try to get override time from localStorage first
-        await this.loadLocalOverrideTime();
-      }
+      // Load all three metrics: On Screen Time, Deep Focus Time, and Override Time
+      await this.loadOnScreenTime();
+      await this.loadLocalDeepFocusTime();
+      await this.loadLocalOverrideTime();
     } catch (error) {
       console.error('Error loading focus stats:', error);
+    }
+  }
+
+  async loadOnScreenTime() {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_TODAY_STATS' });
+      if (response && response.success) {
+        const totalTime = response.data.totalTime || 0;
+        document.getElementById('screenTime').textContent = this.formatTime(totalTime);
+        console.log('✅ Loaded on screen time:', totalTime + 'ms');
+      } else {
+        document.getElementById('screenTime').textContent = this.formatTime(0);
+      }
+    } catch (error) {
+      console.error('Error loading on screen time:', error);
+      document.getElementById('screenTime').textContent = this.formatTime(0);
+    }
+  }
+
+  async loadLocalDeepFocusTime() {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_LOCAL_DEEP_FOCUS_TIME' });
+      if (response && response.success) {
+        const focusMinutes = response.data.minutes || 0;
+        const focusMilliseconds = focusMinutes * 60 * 1000;
+        document.getElementById('focusTime').textContent = this.formatTime(focusMilliseconds);
+        console.log('✅ Loaded deep focus time:', focusMinutes + ' minutes');
+      } else {
+        document.getElementById('focusTime').textContent = this.formatTime(0);
+      }
+    } catch (error) {
+      console.error('Error loading deep focus time:', error);
+      document.getElementById('focusTime').textContent = this.formatTime(0);
     }
   }
 
