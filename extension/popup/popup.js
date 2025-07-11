@@ -817,6 +817,14 @@ class PopupManager {
     const sitesListEl = document.getElementById('top-sites-list');
     if (!sitesListEl) return;
 
+    // Prevent multiple simultaneous updates
+    if (this.updatingTopSites) {
+      console.log('🔄 Top sites update already in progress, skipping...');
+      return;
+    }
+    
+    this.updatingTopSites = true;
+
     try {
       const response = await this.sendMessage('GET_REALTIME_TOP_SITES', { limit: 20 });
       
@@ -866,6 +874,8 @@ class PopupManager {
           <div style="color: var(--text-muted); font-size: 0.875rem;">Error loading sites</div>
         </div>
       `;
+    } finally {
+      this.updatingTopSites = false;
     }
   }
 
