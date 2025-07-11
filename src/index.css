@@ -1060,7 +1060,8 @@ code {
 [data-theme="dark"] .pomodoro-page-container #timerSection,
 [data-theme="dark"] .pomodoro-page-container #rightSidebar,
 [data-theme="dark"] .pomodoro-page-container .bg-background-primary,
-[data-theme="dark"] .pomodoro-page-container .top-bar-header {
+[data-theme="dark"] .pomodoro-page-container .top-bar-header,
+[data-theme="dark"] .pomodoro-page-container .bg-background-secondary {
   background-color: #141414 !important;
 }
 
@@ -1069,7 +1070,8 @@ code {
 .dark .pomodoro-page-container #timerSection,
 .dark .pomodoro-page-container #rightSidebar,
 .dark .pomodoro-page-container .bg-background-primary,
-.dark .pomodoro-page-container .top-bar-header {
+.dark .pomodoro-page-container .top-bar-header,
+.dark .pomodoro-page-container .bg-background-secondary {
   background-color: #141414 !important;
 }
 
