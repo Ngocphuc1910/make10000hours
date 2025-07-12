@@ -145,23 +145,7 @@ export const TopTasks: React.FC = React.memo(() => {
         </button>
       }
     >
-      <div className="space-y-2 h-[360px] overflow-y-auto pr-1 custom-scrollbar">
-        <style>
-          {`
-          .custom-scrollbar::-webkit-scrollbar {
-            width: 0 !important;
-            display: none !important;
-          }
-          .custom-scrollbar {
-            scrollbar-width: none !important;
-            -ms-overflow-style: none !important;
-            overflow: -moz-scrollbars-none !important;
-          }
-          .custom-scrollbar {
-            -webkit-overflow-scrolling: touch;
-          }
-          `}
-        </style>
+      <div className="space-y-2 h-[360px] overflow-y-auto pr-1 scrollbar-thin">
         
         {displayTasks.map((task: DashboardTask, index: number) => {
           const project = projects.find((p: any) => p.id === task.projectId);

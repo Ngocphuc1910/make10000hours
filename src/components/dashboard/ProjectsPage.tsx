@@ -228,7 +228,7 @@ export const ProjectsPage: React.FC = () => {
       </div>
       
       {/* Scrollable Content */}
-      <div className="projects-scrollable-content flex-1 overflow-y-auto">
+      <div className="projects-scrollable-content flex-1 overflow-y-auto scrollbar-thin">
         {viewType === 'status' ? (
           <TaskStatusBoard />
         ) : (

@@ -56,7 +56,7 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-4">
+      <nav className="flex-1 overflow-y-auto p-4 scrollbar-thin">
         <ul className="space-y-1">
           {navItems.map((item) => (
             <li key={item.path}>

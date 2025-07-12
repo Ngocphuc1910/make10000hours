@@ -41,7 +41,11 @@ function checkForSecrets() {
     'MISSING_CUSTOM_TOKEN:"internal-error"',
     'key="global-shortcuts"',
     'dataKey="name"',
-    'dataKey="value"'
+    'dataKey="value"',
+    'metricKey: \'onScreenTime\'',
+    'metricKey: \'workingTime\'',
+    'metricKey: \'deepFocusTime\'',
+    'metricKey: \'overrideTime\''
   ];
 
   try {

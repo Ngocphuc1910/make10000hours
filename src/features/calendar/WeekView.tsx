@@ -372,7 +372,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
         </div>
 
         {/* Scrollable Content Area */}
-        <div className="calendar-scrollable col-span-8 grid grid-cols-subgrid overflow-auto bg-background-primary dark:bg-[#141414]" ref={scrollableRef}>
+        <div className="calendar-scrollable col-span-8 grid grid-cols-subgrid overflow-auto scrollbar-thin bg-background-primary dark:bg-[#141414]" ref={scrollableRef}>
           {/* Time Column for all hours */}
           <div className="calendar-week-time-column bg-background-primary dark:bg-[#141414] border-r border-border">
             {HOURS.map(hour => (

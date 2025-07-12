@@ -329,7 +329,7 @@ export const DayView: React.FC<DayViewProps> = ({
         </div>
 
         {/* Calendar Grid */}
-        <div className="flex-1 overflow-auto relative bg-background-primary dark:bg-[#141414]">
+        <div className="flex-1 overflow-auto scrollbar-thin relative bg-background-primary dark:bg-[#141414]">
           <div className="grid min-h-[1440px]" style={{ gridTemplateColumns: '64px 1fr' }}>
             {/* Time column */}
             <div className="bg-background-primary dark:bg-[#141414] border-r border-border">

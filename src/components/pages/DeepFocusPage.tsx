@@ -862,7 +862,7 @@ const DeepFocusPage: React.FC = () => {
         </div>
 
         {/* Main Content */}
-        <main className="flex-1 p-6 flex gap-6 overflow-y-auto relative">
+        <main className="flex-1 p-6 flex gap-6 overflow-y-auto scrollbar-thin relative">
           {/* Loading indicator for date range data */}
           {isLoading && (
             <div className="absolute inset-0 bg-background-primary/50 flex items-center justify-center z-10">
