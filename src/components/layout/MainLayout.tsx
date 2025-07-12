@@ -149,7 +149,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           {/* Timer Section */}
           <div 
             ref={timerSectionRef}
-            className="flex-1 flex flex-col items-center justify-center p-6 bg-background-primary relative min-w-[300px] overflow-y-auto" 
+            className="flex-1 flex flex-col items-center justify-center p-6 bg-background-primary relative min-w-[300px] overflow-y-auto scrollbar-thin" 
             id="timerSection" 
             style={
               // When both sidebars are hidden, remove width constraints for perfect centering
@@ -160,7 +160,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
               }
             }
           >
-            <div className="w-full h-full overflow-y-auto flex flex-col items-center justify-center">
+            <div className="w-full h-full overflow-y-auto scrollbar-thin flex flex-col items-center justify-center">
               {children || <Outlet />}
             </div>
           </div>

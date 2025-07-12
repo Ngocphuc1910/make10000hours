@@ -89,7 +89,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
       </div>
 
       {/* Calendar grid container - Scrollable for 6 rows */}
-      <div className={`flex-1 ${needsScrolling ? 'overflow-auto' : 'overflow-hidden'}`}>
+      <div className={`flex-1 ${needsScrolling ? 'overflow-auto scrollbar-thin' : 'overflow-hidden'}`}>
         <div 
           className="grid grid-cols-7 border-l border-t border-border"
           style={{ 
