@@ -107,55 +107,41 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
-/* Scrollbar styles for task lists */
+/* Calendar-style scrollbars for task lists */
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
-  transition: all 0.3s ease;
+  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-track {
-  background: var(--scrollbar-track);
-  border-radius: 6px;
+  background: transparent;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: var(--scrollbar-thumb);
-  border-radius: 6px;
-  transition: background-color 0.3s ease;
-}
-
-.scrollbar-thin:hover::-webkit-scrollbar-thumb {
-  background-color: var(--scrollbar-thumb-hover);
+  background-color: rgba(156, 163, 175, 0.3);
+  border-radius: 20px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background-color: var(--scrollbar-thumb-active);
+  background-color: rgba(156, 163, 175, 0.5);
 }
 
-/* Dark mode scrollbar styles */
+/* Dark mode scrollbars for task lists */
 [data-theme="dark"] .scrollbar-thin {
-  scrollbar-color: var(--scrollbar-thumb-dark) var(--scrollbar-track-dark);
-}
-
-[data-theme="dark"] .scrollbar-thin::-webkit-scrollbar-track {
-  background-color: var(--scrollbar-track-dark);
+  scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
 }
 
 [data-theme="dark"] .scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: var(--scrollbar-thumb-dark);
-}
-
-[data-theme="dark"] .scrollbar-thin:hover::-webkit-scrollbar-thumb {
-  background-color: var(--scrollbar-thumb-hover-dark);
+  background-color: rgba(156, 163, 175, 0.4);
 }
 
 [data-theme="dark"] .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background-color: var(--scrollbar-thumb-active-dark);
+  background-color: rgba(156, 163, 175, 0.6);
 }
 
 /* Task list container specific styles */
@@ -497,54 +483,41 @@ code {
   z-index: 5;
 }
 
-/* Thin auto-hiding scrollbars for task columns */
+/* Calendar-style scrollbars for task columns */
 .task-list-container {
   scrollbar-width: thin;
-  scrollbar-color: transparent var(--bg-container);
-  transition: scrollbar-color 0.3s ease;
-}
-
-.task-list-container:hover {
-  scrollbar-color: var(--border-color) var(--bg-container);
+  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
 }
 
 .task-list-container::-webkit-scrollbar {
-  width: 4px;
+  width: 8px;
+  height: 8px;
 }
 
 .task-list-container::-webkit-scrollbar-track {
-  background: var(--bg-container);
+  background: transparent;
 }
 
 .task-list-container::-webkit-scrollbar-thumb {
-  background-color: transparent;
-  border-radius: 4px;
-  transition: background-color 0.3s ease;
-}
-
-.task-list-container:hover::-webkit-scrollbar-thumb {
-  background-color: var(--border-color);
+  background-color: rgba(156, 163, 175, 0.3);
+  border-radius: 20px;
 }
 
 .task-list-container::-webkit-scrollbar-thumb:hover {
-  background-color: var(--text-secondary);
+  background-color: rgba(156, 163, 175, 0.5);
 }
 
-/* Dark mode overrides for task list scrollbars */
+/* Dark mode scrollbars for task columns */
 [data-theme="dark"] .task-list-container {
-  scrollbar-color: transparent var(--bg-container);
+  scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
 }
 
-[data-theme="dark"] .task-list-container:hover {
-  scrollbar-color: var(--text-secondary) var(--bg-container);
-}
-
-[data-theme="dark"] .task-list-container:hover::-webkit-scrollbar-thumb {
-  background-color: var(--border-color);
+[data-theme="dark"] .task-list-container::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.4);
 }
 
 [data-theme="dark"] .task-list-container::-webkit-scrollbar-thumb:hover {
-  background-color: var(--text-secondary);
+  background-color: rgba(156, 163, 175, 0.6);
 }
 
 /* Status Badge Colors */

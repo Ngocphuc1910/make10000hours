@@ -11,7 +11,7 @@ export const DashboardLayout: React.FC = () => {
       <main className="dashboard-main">
         <Header />
         
-        <div className="dashboard-content">
+        <div className="dashboard-content scrollbar-thin">
           <div className="max-w-7xl mx-auto">
             <Outlet />
           </div>

@@ -3244,15 +3244,26 @@ class FocusTimeTracker {
         return;
       }
 
-      // Save current session if exists
+      const domain = this.extractDomain(tab.url);
+      const now = Date.now();
+
+      // Check if we have a paused session for the same domain
+      if (!this.currentSession.isActive && this.currentSession.domain === domain) {
+        // Resume paused session
+        console.log('🔄 Resuming paused session for domain:', domain);
+        this.currentSession.tabId = tab.id;
+        this.currentSession.startTime = now;
+        this.currentSession.isActive = true;
+        console.log(`▶️ Resumed tracking: ${domain}, Tab ID: ${tab.id}`);
+        return;
+      }
+
+      // Save current session if exists and different domain
       if (this.currentSession.isActive) {
         await this.stopCurrentTracking();
       }
 
-      const domain = this.extractDomain(tab.url);
-      const now = Date.now();
-
-      console.log('✨ Starting tracking for domain:', domain);
+      console.log('✨ Starting new tracking session for domain:', domain);
 
       this.currentSession = {
         tabId: tab.id,
@@ -3332,8 +3343,18 @@ class FocusTimeTracker {
    */
   async resumeTracking(tab) {
     if (!this.currentSession.isActive && tab && this.isTrackableUrl(tab.url)) {
-      this.currentSession.startTime = Date.now();
-      this.currentSession.isActive = true;
+      const domain = this.extractDomain(tab.url);
+      
+      // Only resume if we have a paused session for the same domain
+      if (this.currentSession.domain === domain) {
+        this.currentSession.tabId = tab.id;
+        this.currentSession.startTime = Date.now();
+        this.currentSession.isActive = true;
+        console.log(`▶️ Resumed tracking from activity: ${domain}`);
+      } else {
+        // Different domain, start new tracking
+        await this.startTracking(tab);
+      }
     }
   }
 
@@ -3344,24 +3365,26 @@ class FocusTimeTracker {
     const now = Date.now();
     const timeSinceLastHeartbeat = now - this.lastHeartbeat;
     
-    // If more than 2 minutes have passed, assume system was sleeping
-    if (timeSinceLastHeartbeat > 120000) { // 2 minutes
+    // If more than 10 minutes have passed, assume system was sleeping
+    if (timeSinceLastHeartbeat > 600000) { // 10 minutes
       console.log('💤 Sleep detected - time gap:', Math.round(timeSinceLastHeartbeat / 1000) + 's');
       
-      // If we have an active session, pause it and adjust time
+      // If we have an active session, pause it instead of resetting
       if (this.currentSession.isActive && this.currentSession.startTime) {
         // Calculate time before sleep
         const timeBeforeSleep = Math.max(0, this.lastHeartbeat - this.currentSession.startTime);
         
-        // Save only the time before sleep
+        // Save accumulated time before sleep
         if (timeBeforeSleep > 1000) {
           await this.storageManager.saveTimeEntry(this.currentSession.domain, timeBeforeSleep, 0);
           console.log(`💾 Saved time before sleep: ${this.storageManager.formatTime(timeBeforeSleep)}`);
         }
         
-        // Reset session to current time (after wake)
-        this.currentSession.startTime = now;
-        this.currentSession.savedTime = 0;
+        // PAUSE session instead of reset - preserve domain and accumulated time
+        this.currentSession.isActive = false;
+        this.currentSession.startTime = null;
+        // Keep domain and savedTime intact for resume
+        console.log(`⏸️ Session paused for ${this.currentSession.domain} due to extended inactivity`)
       }
     }
     
@@ -3413,8 +3436,8 @@ class FocusTimeTracker {
           return;
         }
         
-        // Only save if we have at least 10 seconds of activity
-        if (sessionDuration >= 10000) {
+        // Only save if we have at least 5 seconds of activity
+        if (sessionDuration >= 5000) {
           await this.storageManager.saveTimeEntry(this.currentSession.domain, sessionDuration, 0);
           
           // Reset tracking for next interval
