@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { WorkSession } from '../types/models';
+import { toLocalISOString } from '../utils/timeUtils';
 
 const WORK_SESSIONS_COLLECTION = 'workSessions';
 
@@ -434,9 +435,9 @@ export class WorkSessionService {
     endDate: Date
   ): Promise<WorkSession[]> {
     try {
-      const startDateStr = startDate.toISOString().split('T')[0];
-      const endDateStr = endDate.toISOString().split('T')[0];
-      
+      const startDateStr = toLocalISOString(startDate).split('T')[0];
+      const endDateStr = toLocalISOString(endDate).split('T')[0];
+
       console.log('WorkSessionService - Loading sessions for range:', {
         userId,
         startDate: startDateStr,
