@@ -443,17 +443,15 @@ export class WorkSessionService {
         endDate: endDateStr
       });
       
-      // Use a simpler query that doesn't require a composite index
-      // Filter by userId only, then filter by date range in memory
-      // This matches the original subscribeToWorkSessions behavior
       const q = query(
         this.workSessionsCollection,
-        where('userId', '==', userId)
-        // No limit - get all sessions like the original subscription
+        where('userId', '==', userId),
+        where('date', '>=', startDateStr),
+        where('date', '<=', endDateStr),
       );
       
       const querySnapshot = await getDocs(q);
-      const allSessions = querySnapshot.docs.map(doc => {
+      const sessions = querySnapshot.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -463,17 +461,10 @@ export class WorkSessionService {
         };
       }) as WorkSession[];
       
-      // Filter by date range in memory
-      const filteredSessions = allSessions.filter(session => {
-        const sessionDate = session.date;
-        return sessionDate >= startDateStr && sessionDate <= endDateStr;
-      });
-      
       // Sort by date descending in memory
-      filteredSessions.sort((a, b) => b.date.localeCompare(a.date));
+      sessions.sort((a, b) => b.date.localeCompare(a.date));
       
-      console.log('WorkSessionService - Loaded sessions:', filteredSessions.length, 'out of', allSessions.length);
-      return filteredSessions;
+      return sessions;
     } catch (error) {
       console.error('Error getting work sessions for range:', error);
       throw error;
