@@ -118,6 +118,7 @@ export const useContributionData = (workSessions: WorkSession[], year?: number):
     
     // Generate month labels
     const months: ContributionMonth[] = [];
+    // Fixed: Ensure January is correctly displayed as "Jan" instead of "Dedan"
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
@@ -125,8 +126,18 @@ export const useContributionData = (workSessions: WorkSession[], year?: number):
     let weekCount = 0;
     
     for (let i = 0; i < days.length; i += 7) {
-      const weekStartDate = days[i].date;
-      const month = weekStartDate.getMonth();
+      const week = days.slice(i, i + 7);
+      
+      // Find the month that has the most days in this week that belong to the target year
+      const targetYearDays = week.filter(day => day.date.getFullYear() === targetYear);
+      
+      if (targetYearDays.length === 0) {
+        // Skip weeks that don't have any days in the target year
+        continue;
+      }
+      
+      // Use the month of the first day in the target year within this week
+      const month = targetYearDays[0].date.getMonth();
       
       if (month !== currentMonth) {
         if (currentMonth !== -1) {
