@@ -87,7 +87,7 @@ export const AverageFocusTime: React.FC = () => {
   if (isLoading) {
     return (
       <Card title="Average Focus Time">
-        <div className="flex items-center justify-center h-40">
+        <div className="flex items-center justify-center h-[200px]">
           <div className="text-text-secondary">Loading focus statistics...</div>
         </div>
       </Card>
@@ -96,22 +96,23 @@ export const AverageFocusTime: React.FC = () => {
 
   return (
     <Card title="Average Focus Time">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <div className="text-3xl font-bold text-text-primary">
-            {stats.dailyAverage.hours}h {stats.dailyAverage.minutes}m
+      <div className="h-[200px] flex flex-col justify-between">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <div className="text-3xl font-bold text-text-primary">
+              {stats.dailyAverage.hours}h {stats.dailyAverage.minutes}m
+            </div>
+            <p className="text-sm text-text-secondary mt-2">Daily average</p>
           </div>
-          <p className="text-sm text-text-secondary mt-2">Daily average</p>
-        </div>
-        <div>
-          <div className="text-3xl font-bold text-text-primary">
-            {stats.totalFocus.hours}h {stats.totalFocus.minutes}m
+          <div>
+            <div className="text-3xl font-bold text-text-primary">
+              {stats.totalFocus.hours}h {stats.totalFocus.minutes}m
+            </div>
+            <p className="text-sm text-text-secondary mt-2">Total focus time</p>
           </div>
-          <p className="text-sm text-text-secondary mt-2">Total focus time</p>
         </div>
-      </div>
 
-      <div className="space-y-6">
+        <div className="space-y-4 flex-shrink-0">
         {/* Weekly Goal Progress */}
         <div>
           <div className="flex items-center justify-between text-sm mb-1">
@@ -143,6 +144,7 @@ export const AverageFocusTime: React.FC = () => {
             ></div>
           </div>
         </div>
+      </div>
       </div>
     </Card>
   );

@@ -53,7 +53,6 @@ export const ContributionSquare: React.FC<ContributionSquareProps> = ({
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={onMouseLeave}
-      title={`${date.toLocaleDateString()} - ${focusMinutes} minutes`}
     />
   );
 };

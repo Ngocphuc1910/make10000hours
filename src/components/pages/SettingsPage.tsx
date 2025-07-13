@@ -3,6 +3,7 @@ import { useUserStore } from '../../store/userStore';
 import { DEFAULT_SETTINGS, type AppSettings, type TimerSettings } from '../../types/models';
 import { OpenAISettings } from '../settings/OpenAISettings';
 import GoogleCalendarSync from '../settings/GoogleCalendarSync';
+import WebhookDebugPanel from '../sync/WebhookDebugPanel';
 
 const SettingsPage = () => {
   const { user, updateUserData } = useUserStore();
@@ -215,6 +216,9 @@ const SettingsPage = () => {
 
         {/* Google Calendar Sync */}
         <GoogleCalendarSync />
+
+        {/* Webhook Debug Panel */}
+        <WebhookDebugPanel />
 
         {/* OpenAI Settings */}
         <OpenAISettings />

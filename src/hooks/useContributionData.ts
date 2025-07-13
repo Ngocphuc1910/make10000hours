@@ -16,27 +16,62 @@ export interface ContributionData {
   days: ContributionDay[];
   months: ContributionMonth[];
   currentStreak: number;
+  longestStreak: number;
   totalContributions: number;
+  dailyAverageMinutes: number; // For reference/debugging
 }
 
 export const useContributionData = (workSessions: WorkSession[], year?: number): ContributionData => {
   return useMemo(() => {
+    // Helper function to format date consistently (avoid timezone issues)
+    const formatDateString = (date: Date): string => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    
     // Use current year by default, or specified year
     const targetYear = year || new Date().getFullYear();
+    
+    // Calculate daily average from ALL work sessions (all-time data)
+    const calculateDailyAverage = () => {
+      if (workSessions.length === 0) return 0;
+      
+      // Group all sessions by date to get daily totals
+      const dailyTotals = new Map<string, number>();
+      workSessions.forEach(session => {
+        const dateKey = session.date;
+        const current = dailyTotals.get(dateKey) || 0;
+        dailyTotals.set(dateKey, current + (session.duration || 0));
+      });
+      
+      // Calculate average from days that have activity
+      const activeDays = Array.from(dailyTotals.values());
+      if (activeDays.length === 0) return 0;
+      
+      const totalMinutes = activeDays.reduce((sum, minutes) => sum + minutes, 0);
+      return totalMinutes / activeDays.length;
+    };
+    
+    const dailyAverageMinutes = calculateDailyAverage();
     
     // Start from January 1st of the target year
     const yearStart = new Date(targetYear, 0, 1); // January 1st
     const yearEnd = new Date(targetYear, 11, 31); // December 31st
     
-    // Calculate the start date (Sunday of the week containing January 1st)
+    // Calculate the start date (Monday of the week containing January 1st)
     const startDate = new Date(yearStart);
     const dayOfWeek = startDate.getDay();
-    startDate.setDate(startDate.getDate() - dayOfWeek);
+    // Convert Sunday (0) to 7 for easier Monday-based calculation
+    const mondayBasedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
+    startDate.setDate(startDate.getDate() - (mondayBasedDayOfWeek - 1));
     
-    // Calculate the end date (Saturday of the week containing December 31st)
+    // Calculate the end date (Sunday of the week containing December 31st)
     const endDate = new Date(yearEnd);
     const endDayOfWeek = endDate.getDay();
-    endDate.setDate(endDate.getDate() + (6 - endDayOfWeek));
+    const mondayBasedEndDayOfWeek = endDayOfWeek === 0 ? 7 : endDayOfWeek;
+    endDate.setDate(endDate.getDate() + (7 - mondayBasedEndDayOfWeek));
     
     // Group work sessions by date for quick lookup
     const sessionsByDate = new Map<string, WorkSession[]>();
@@ -53,7 +88,8 @@ export const useContributionData = (workSessions: WorkSession[], year?: number):
     const currentDate = new Date(startDate);
     
     while (currentDate <= endDate) {
-      const dateString = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      const dateString = formatDateString(currentDate);
+      
       const sessionsForDay = sessionsByDate.get(dateString) || [];
       
       // Calculate total focus minutes for this day
@@ -61,10 +97,14 @@ export const useContributionData = (workSessions: WorkSession[], year?: number):
         return total + (session.duration || 0);
       }, 0);
       
-      // Determine intensity level (will be refined later)
+      // Determine intensity level based on daily average
       let intensity: 0 | 1 | 2 = 0;
-      if (focusMinutes > 0) {
-        intensity = focusMinutes >= 90 ? 2 : 1; // Temporary logic
+      if (focusMinutes === 0) {
+        intensity = 0; // No activity
+      } else if (focusMinutes < dailyAverageMinutes) {
+        intensity = 1; // Medium activity (under daily average)
+      } else {
+        intensity = 2; // High activity (equal or more than daily average)
       }
       
       days.push({
@@ -110,18 +150,31 @@ export const useContributionData = (workSessions: WorkSession[], year?: number):
       });
     }
     
+    // Calculate longest streak from all days
+    let longestStreak = 0;
+    let tempStreak = 0;
+    
+    for (const day of days) {
+      if (day.focusMinutes > 0) {
+        tempStreak++;
+        longestStreak = Math.max(longestStreak, tempStreak);
+      } else {
+        tempStreak = 0;
+      }
+    }
+    
     // Calculate current streak (only if viewing current year)
     let currentStreak = 0;
     const currentYear = new Date().getFullYear();
     
     if (targetYear === currentYear) {
       const today = new Date();
-      const todayString = today.toISOString().split('T')[0];
+      const todayString = formatDateString(today);
       
       // Find today in the year view
-      const todayIndex = days.findIndex(day => 
-        day.date.toISOString().split('T')[0] === todayString
-      );
+      const todayIndex = days.findIndex(day => {
+        return formatDateString(day.date) === todayString;
+      });
       
       if (todayIndex !== -1) {
         const todayData = days[todayIndex];
@@ -152,7 +205,9 @@ export const useContributionData = (workSessions: WorkSession[], year?: number):
       days,
       months,
       currentStreak,
+      longestStreak,
       totalContributions,
+      dailyAverageMinutes,
     };
   }, [workSessions, year]);
 };
