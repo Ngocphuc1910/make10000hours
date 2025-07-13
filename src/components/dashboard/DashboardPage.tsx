@@ -19,23 +19,27 @@ export const DashboardContent: React.FC = () => {
     }
   }, [isAuthenticated, user?.uid, loadWorkSessionsForRange, selectedRange, useEventDrivenLoading]);
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 w-full max-w-none">
       {/* Focus Time Statistics Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <AverageFocusTime />
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
         <div className="lg:col-span-2">
+          <AverageFocusTime />
+        </div>
+        <div className="lg:col-span-3">
           <FocusStreak />
         </div>
       </div>
       
       {/* Projects and Tasks Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <TopProjects />
         <TopTasks />
       </div>
       
       {/* Focus Time Chart Section */}
-      <FocusTimeTrend />
+      <div className="w-full">
+        <FocusTimeTrend />
+      </div>
     </div>
   );
 }; 
