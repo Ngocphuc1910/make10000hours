@@ -1,30 +1,19 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { format } from 'date-fns';
 import Sidebar from '../layout/Sidebar';
 import { useDeepFocusStore } from '../../store/deepFocusStore';
-import { useExtensionSync } from '../../hooks/useExtensionSync';
 // Deep focus sync now handled by DeepFocusProvider context
-import { useExtensionDateRange } from '../../hooks/useExtensionDateRange';
-import { useDashboardStore } from '../../store/useDashboardStore';
 import { useDeepFocusDashboardStore } from '../../store/deepFocusDashboardStore';
 import { useUserStore } from '../../store/userStore';
 import { useUIStore } from '../../store/uiStore';
-import { siteUsageService } from '../../api/siteUsageService';
 import { Icon } from '../ui/Icon';
 import { Tooltip } from '../ui/Tooltip';
-import { formatTime, formatLocalDate } from '../../utils/timeUtils';
-import { formatElapsedTime } from '../../utils/timeFormat';
-import { debugDeepFocus } from '../../utils/debugUtils';
 import { FaviconService } from '../../utils/faviconUtils';
-import { testOverrideSchema } from '../../utils/testOverrideSchema';
 import { quickOverrideTest } from '../../utils/quickOverrideTest';
-import { formatComparisonResult, shouldShowComparison } from '../../utils/comparisonUtils';
+import { formatComparisonResult } from '../../utils/comparisonUtils';
 import { getProgressBarColor, extractDomain } from '../../utils/colorUtils';
 import type { ComparisonMetrics } from '../../types/deepFocus';
 
-import { testUserSync } from '../../utils/testUserSync';
-import { debugUserSync, forceUserSync } from '../../utils/debugUserSync';
 import '../../utils/debugOverrideSession'; // Import for console access
 import '../../utils/debugExtensionCommunication'; // Import debug extension utility
 
@@ -36,6 +25,7 @@ import SiteUsageCard from '../ui/SiteUsageCard';
 import BackupStatusIndicator from '../ui/BackupStatusIndicator';
 import flatpickr from 'flatpickr';
 import 'flatpickr/dist/flatpickr.min.css';
+import ExtensionDataService from '../../services/extensionDataService';
 
 // Define flatpickr instance type
 type FlatpickrInstance = {
