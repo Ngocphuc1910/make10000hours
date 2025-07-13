@@ -12,7 +12,7 @@ export const DashboardLayout: React.FC = () => {
         <Header />
         
         <div className="dashboard-content scrollbar-thin">
-          <div className="max-w-7xl mx-auto">
+          <div className="max-w-none mx-auto px-6">
             <Outlet />
           </div>
         </div>
