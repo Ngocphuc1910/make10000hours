@@ -4,6 +4,11 @@ import { DailyUsage, TimeMetrics, SiteUsage } from "../types/deepFocus";
 import { WorkSession, DeepFocusSession } from "../types/models";
 import ExtensionDataService from "../services/extensionDataService";
 
+const calculateDuration = (startTime: Date) => {
+  const now = new Date();
+  return Math.floor((now.getTime() - startTime.getTime()) / (1000 * 60)); // Duration in minutes
+}
+
 export const composeDeepFocusData = (input: {
   workSessions: WorkSession[];
   dailySiteUsages: DailySiteUsage[];
@@ -19,7 +24,8 @@ export const composeDeepFocusData = (input: {
   // Calculate TimeMetrics
   const onScreenTime = dailySiteUsages.reduce((total, usage) => total + Math.round(usage.totalTime / (1000 * 60)), 0);
   const workingTime = workSessions.reduce((total, session) => total + session.duration, 0);
-  const deepFocusTime = deepFocusSessions.reduce((total, session) => total + (session.duration || 0), 0);
+  const deepFocusTime = deepFocusSessions.reduce((total, session) => 
+    total + (session.status !== 'active' ? session.duration : calculateDuration(session.startTime)), 0);
   const overrideTime = overrideSessions.reduce((total, session) => total + session.duration, 0);
 
   const timeMetrics: TimeMetrics = {
@@ -62,7 +68,7 @@ export const composeDeepFocusData = (input: {
 
   // Add deep focus sessions to daily usage
   deepFocusSessions.forEach(session => {
-    if (session.duration) {
+    if (session.duration !== undefined || session.status === 'active') {
       const sessionDate = session.startTime.toISOString().split('T')[0]; // YYYY-MM-DD format
       if (!dailyUsageMap.has(sessionDate)) {
         dailyUsageMap.set(sessionDate, {
@@ -73,7 +79,12 @@ export const composeDeepFocusData = (input: {
         });
       }
       const dailyUsage = dailyUsageMap.get(sessionDate)!;
-      dailyUsage.deepFocusTime += session.duration;
+      if (session.status !== 'active') {
+        dailyUsage.deepFocusTime += session.duration;
+      } else {
+        // If session is active, it contributes to deep focus time
+        dailyUsage.deepFocusTime += calculateDuration(session.startTime);
+      }
     }
   });
 
