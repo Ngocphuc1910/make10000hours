@@ -1,7 +1,7 @@
 import React from 'react';
 
 export const DayLabels: React.FC = () => {
-  const days = ['Mon', '', 'Wed', '', 'Fri', '', ''];
+  const days = ['Mon', '', 'Wed', '', 'Fri', '', 'Sun'];
 
   return (
     <div className="flex flex-col gap-[2px] mr-2 w-10">

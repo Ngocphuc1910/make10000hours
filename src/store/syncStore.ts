@@ -11,6 +11,7 @@ interface SyncState {
   syncError: string | null;
   pendingTasks: Set<string>;
   errorTasks: Set<string>;
+  webhookMonitoringInterval: NodeJS.Timeout | null;
   
   // Actions
   initializeSync: () => Promise<void>;
@@ -21,6 +22,11 @@ interface SyncState {
   performManualSync: () => Promise<void>;
   clearSyncError: () => void;
   getSyncManager: () => any;
+  // Webhook lifecycle actions
+  setupWebhook: () => Promise<void>;
+  checkWebhookStatus: () => Promise<any>;
+  startWebhookMonitoring: () => void;
+  stopWebhookMonitoring: () => void;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -30,6 +36,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   syncError: null,
   pendingTasks: new Set(),
   errorTasks: new Set(),
+  webhookMonitoringInterval: null,
 
   getSyncManager: () => {
     const { user } = useUserStore.getState();
@@ -237,6 +244,83 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
   clearSyncError: () => {
     set({ syncError: null });
+  },
+
+  // ================ WEBHOOK LIFECYCLE METHODS ================
+
+  setupWebhook: async () => {
+    try {
+      set({ syncInProgress: true, syncError: null });
+      
+      const syncManager = get().getSyncManager();
+      if (!syncManager) throw new Error('Sync manager not available');
+
+      await syncManager.setupWebhook();
+      
+      set({ 
+        syncInProgress: false,
+        lastSyncTime: new Date(),
+      });
+    } catch (error) {
+      console.error('Error setting up webhook:', error);
+      set({ 
+        syncError: error.message,
+        syncInProgress: false,
+      });
+      // Don't throw - webhook failure should fall back to polling
+    }
+  },
+
+  checkWebhookStatus: async () => {
+    try {
+      const syncManager = get().getSyncManager();
+      if (!syncManager) return { isActive: false };
+
+      return await syncManager.getWebhookStatus();
+    } catch (error) {
+      console.error('Error checking webhook status:', error);
+      return { isActive: false };
+    }
+  },
+
+
+  startWebhookMonitoring: () => {
+    const store = get();
+    
+    // Stop existing monitoring
+    if (store.webhookMonitoringInterval) {
+      clearInterval(store.webhookMonitoringInterval);
+    }
+
+    console.log('🔔 Starting webhook monitoring');
+    
+    const monitoringInterval = setInterval(async () => {
+      try {
+        const syncManager = store.getSyncManager();
+        if (!syncManager) return;
+
+        // Check for webhook-triggered sync
+        await syncManager.checkWebhookTriggeredSync();
+        
+        // Check for webhook renewal
+        await syncManager.checkWebhookRenewal();
+        
+      } catch (error) {
+        console.error('Webhook monitoring error:', error);
+      }
+    }, 30000); // Check every 30 seconds
+
+    set({ webhookMonitoringInterval: monitoringInterval });
+  },
+
+  stopWebhookMonitoring: () => {
+    const { webhookMonitoringInterval } = get();
+    
+    if (webhookMonitoringInterval) {
+      clearInterval(webhookMonitoringInterval);
+      set({ webhookMonitoringInterval: null });
+      console.log('🔔 Webhook monitoring stopped');
+    }
   },
 }));
 

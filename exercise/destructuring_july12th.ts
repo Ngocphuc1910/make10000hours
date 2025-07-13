@@ -80,8 +80,6 @@ const [, , , , productivityLevel] = activityStats;
 
 
 
-
-
 //3. NESTED DESTRUCTURING
 
 // You have a deep focus session data object

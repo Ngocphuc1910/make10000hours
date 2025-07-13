@@ -1,20 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Card from '../../ui/Card';
-import { useDashboardStore } from '../../../store/useDashboardStore';
 import { useUserStore } from '../../../store/userStore';
+import { useFocusStreakStore } from '../../../store/focusStreakStore';
+import { useFocusStreakAutoRefresh } from '../../../hooks/useFocusStreakAutoRefresh';
 import { createTestWorkSessions } from '../../../utils/testWorkSessions';
 import { ContributionGrid } from './ContributionGrid';
 import { useContributionData } from '../../../hooks/useContributionData';
+import type { WorkSession } from '../../../types/models';
 
 export const FocusStreak: React.FC = () => {
-  const { workSessions } = useDashboardStore();
   const { user } = useUserStore();
+  const { getSessionsForYear, isLoading, clearCache } = useFocusStreakStore();
+  
+  // Auto-refresh hook to keep current year data fresh
+  useFocusStreakAutoRefresh();
   
   // Year navigation state
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [allWorkSessions, setAllWorkSessions] = useState<WorkSession[]>([]);
+  
+  // Load sessions for the selected year
+  useEffect(() => {
+    const loadYearData = async () => {
+      if (!user?.uid) {
+        setAllWorkSessions([]);
+        return;
+      }
+      
+      try {
+        const sessions = await getSessionsForYear(user.uid, selectedYear);
+        setAllWorkSessions(sessions);
+      } catch (error) {
+        console.error('Error loading Focus Streak data:', error);
+        setAllWorkSessions([]);
+      }
+    };
+    
+    loadYearData();
+    
+    // Listen for cache updates
+    const handleCacheUpdate = () => {
+      if (selectedYear === new Date().getFullYear()) {
+        loadYearData(); // Reload if viewing current year
+      }
+    };
+    
+    window.addEventListener('focus-streak-cache-updated', handleCacheUpdate);
+    
+    return () => {
+      window.removeEventListener('focus-streak-cache-updated', handleCacheUpdate);
+    };
+  }, [user?.uid, selectedYear, getSessionsForYear]);
   
   // Process work sessions into contribution data
-  const contributionData = useContributionData(workSessions, selectedYear);
+  const contributionData = useContributionData(allWorkSessions, selectedYear);
 
   // Year navigation functions
   const goToPreviousYear = () => {
@@ -37,6 +76,11 @@ export const FocusStreak: React.FC = () => {
         'test-task-id',
         'test-project-id'
       );
+      // Clear cache to refetch data
+      clearCache();
+      // Force refresh current year
+      const sessions = await getSessionsForYear(user.uid, selectedYear);
+      setAllWorkSessions(sessions);
     }
   };
 
@@ -47,7 +91,7 @@ export const FocusStreak: React.FC = () => {
   const yearNavigation = (
     <div className="flex items-center space-x-4">
       {/* Temporary test button */}
-      {workSessions.length === 0 && (
+      {allWorkSessions.length === 0 && !isLoading && (
         <button
           onClick={handleCreateTestSessions}
           className="px-4 py-1.5 text-sm font-medium bg-background-secondary border border-border rounded-button text-text-primary hover:bg-background-container"
@@ -88,37 +132,59 @@ export const FocusStreak: React.FC = () => {
 
   return (
     <Card title="Focus Streak" action={yearNavigation}>
-      {/* Stats Section */}
-      <div className="flex items-center space-x-4 mb-6">
-        {/* Streak counter - only show for current year */}
-        {isCurrentYear && (
-          <div className="flex items-center text-sm text-green-500 font-medium">
-            <div className="w-4 h-4 flex items-center justify-center mr-1">
-              <i className="ri-fire-line"></i>
-            </div>
-            <span>{contributionData.currentStreak} days</span>
+      {isLoading ? (
+        <div className="flex items-center justify-center h-[200px]">
+          <div className="text-sm text-text-secondary">Loading contribution data...</div>
+        </div>
+      ) : (
+        <div className="h-[200px] flex flex-col">
+          {/* GitHub-style contribution grid */}
+          <div className="flex-1 flex items-center justify-center mb-4">
+            <ContributionGrid data={contributionData} />
           </div>
-        )}
-        
-        {/* Stats */}
-        <div className="text-xs text-text-secondary">
-          <span>{contributionData.totalContributions} contributions in {selectedYear}</span>
+          
+          {/* Bottom section with streaks and legend */}
+          <div className="flex items-center justify-between flex-shrink-0">
+            {/* Left side - Streak information */}
+            <div className="flex items-center space-x-8">
+              {/* Current Streak - only show for current year */}
+              {isCurrentYear && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-text-secondary">Current streak:</span>
+                  <div className="flex items-center text-sm text-green-500 font-medium">
+                    <div className="w-4 h-4 flex items-center justify-center mr-1">
+                      <i className="ri-fire-line"></i>
+                    </div>
+                    <span>{contributionData.currentStreak} days</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Longest Streak */}
+              <div className="flex items-center space-x-2">
+                <span className="text-xs text-text-secondary">Longest streak:</span>
+                <div className="flex items-center text-sm text-orange-500 font-medium">
+                  <div className="w-4 h-4 flex items-center justify-center mr-1">
+                    <i className="ri-fire-line"></i>
+                  </div>
+                  <span>{contributionData.longestStreak} days</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Right side - Legend */}
+            <div className="flex items-center space-x-4 text-xs text-text-secondary">
+              <span>Less</span>
+              <div className="flex items-center space-x-1">
+                <div className="w-[12px] h-[12px] bg-gray-100 border border-gray-200 rounded-sm dark:bg-[#161b22] dark:border-[#21262d]"></div>
+                <div className="w-[12px] h-[12px] bg-[#BA4949]/50 rounded-sm dark:bg-[#da6868]"></div>
+                <div className="w-[12px] h-[12px] bg-[#BA4949] rounded-sm dark:bg-[#ef5350]"></div>
+              </div>
+              <span>More</span>
+            </div>
+          </div>
         </div>
-      </div>
-      
-      {/* GitHub-style contribution grid */}
-      <ContributionGrid data={contributionData} />
-      
-      {/* Legend */}
-      <div className="flex items-center justify-between mt-4 text-xs text-text-secondary">
-        <span>Less</span>
-        <div className="flex items-center space-x-1">
-          <div className="w-[12px] h-[12px] bg-gray-100 border border-gray-200 rounded-sm dark:bg-[#161b22] dark:border-[#21262d]"></div>
-          <div className="w-[12px] h-[12px] bg-[#BA4949]/50 rounded-sm dark:bg-[#da6868]"></div>
-          <div className="w-[12px] h-[12px] bg-[#BA4949] rounded-sm dark:bg-[#ef5350]"></div>
-        </div>
-        <span>More</span>
-      </div>
+      )}
     </Card>
   );
 };

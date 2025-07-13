@@ -45,7 +45,9 @@ function checkForSecrets() {
     'metricKey: \'onScreenTime\'',
     'metricKey: \'workingTime\'',
     'metricKey: \'deepFocusTime\'',
-    'metricKey: \'overrideTime\''
+    'metricKey: \'overrideTime\'',
+    'name: \'focus-streak-cache\'',
+    'focus-streak-last-date-check'
   ];
 
   try {
@@ -58,6 +60,9 @@ function checkForSecrets() {
 
     for (const file of stagedFiles) {
       if (!fs.existsSync(file)) continue;
+      
+      // Skip node_modules and functions/node_modules directories
+      if (file.includes('node_modules/') || file.includes('functions/node_modules/')) continue;
       
       // Skip binary files and certain extensions
       if (file.match(/\.(jpg|jpeg|png|gif|ico|woff|woff2|ttf|eot|mp4|mp3|avi|mov)$/i)) continue;
