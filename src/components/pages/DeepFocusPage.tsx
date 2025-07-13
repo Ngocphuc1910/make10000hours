@@ -539,7 +539,7 @@ const DeepFocusPage: React.FC = () => {
       
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header - Productivity Insights Style */}
-        <div className={`h-16 border-b border-border flex items-center justify-between px-4 bg-background-secondary transition-all duration-500 relative`}>
+        <div className={`h-16 border-b border-border flex items-center justify-between px-4 bg-background-secondary transition-colors duration-200 relative`}>
           <div className="flex items-center">
             {!isLeftSidebarOpen && (
               <button
