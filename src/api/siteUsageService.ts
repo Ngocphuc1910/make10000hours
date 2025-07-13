@@ -13,6 +13,7 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { toLocalISOString } from '../utils/timeUtils';
 
 export interface SiteUsageEntry {
   domain: string;
@@ -397,8 +398,8 @@ class SiteUsageService {
 
   async getDailyUsage(userId: string, startDate: Date, endDate: Date): Promise<DailySiteUsage[]> {
     try {
-      const startDateStr = startDate.toISOString().split('T')[0];
-      const endDateStr = endDate.toISOString().split('T')[0];
+      const startDateStr = toLocalISOString(startDate).split('T')[0];
+      const endDateStr = toLocalISOString(endDate).split('T')[0];
       
       const q = query(
         collection(db, this.collectionName),

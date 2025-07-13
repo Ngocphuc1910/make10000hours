@@ -211,3 +211,16 @@ export const calculateDurationInMinutes = (startTime: Date, endTime: Date): numb
   
   return durationMinutes;
 };
+
+export const toLocalISOString = (date: Date) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1); // Months are 0-based
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  const millis = String(date.getMilliseconds()).padStart(3, '0');
+
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${millis}`;
+};
