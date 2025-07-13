@@ -535,14 +535,69 @@ export const FocusTimeTrend: React.FC = React.memo(() => {
     return 45; // Optimized margin for horizontal labels
   };
 
-  // Custom label formatter for bars
+  // Helper function to determine if rounding should be applied based on view and data count
+  const shouldApplyRounding = () => {
+    const dataLength = chartData.length;
+    
+    if (focusTimeView === 'daily') {
+      // For daily view, apply rounding when range > 30 days
+      if (selectedRange.rangeType === 'all time') {
+        if (filteredWorkSessions.length > 0) {
+          const allDates = filteredWorkSessions.map(session => new Date(session.date));
+          const earliestDate = new Date(Math.min(...allDates.map(d => d.getTime())));
+          const latestDate = new Date(Math.max(...allDates.map(d => d.getTime())));
+          const diffTime = Math.abs(latestDate.getTime() - earliestDate.getTime());
+          const dayRange = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          return dayRange > 30;
+        }
+        return false;
+      }
+      
+      if (!selectedRange.startDate || !selectedRange.endDate) {
+        return false;
+      }
+      
+      const start = new Date(selectedRange.startDate);
+      const end = new Date(selectedRange.endDate);
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const dayRange = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return dayRange > 30;
+    } else if (focusTimeView === 'weekly') {
+      // For weekly view, apply rounding when more than 30 weeks
+      return dataLength > 30;
+    } else if (focusTimeView === 'monthly') {
+      // For monthly view, apply rounding when more than 30 months
+      return dataLength > 30;
+    }
+    
+    return false;
+  };
+
+  // Custom label formatter for bars - view-specific rounding logic
   const formatBarLabel = (value: number) => {
     if (value === 0) return '';
+    
+    const shouldRound = shouldApplyRounding();
+    
     const hours = Math.floor(value / 60);
     const minutes = value % 60;
-    if (hours === 0) return `${minutes}m`;
-    if (minutes === 0) return `${hours}h`;
-    return `${hours}h${minutes}m`;
+    
+    if (shouldRound) {
+      // Round the time for better space optimization
+      if (hours === 0) {
+        // For minutes only, round to nearest hour if >= 30 minutes
+        return minutes >= 30 ? '1h' : '';
+      } else {
+        // For hours + minutes, round to nearest hour
+        const roundedHours = minutes >= 30 ? hours + 1 : hours;
+        return `${roundedHours}h`;
+      }
+    } else {
+      // Show precise time for shorter ranges
+      if (hours === 0) return `${minutes}m`;
+      if (minutes === 0) return `${hours}h`;
+      return `${hours}h${minutes}m`;
+    }
   };
   
   // Time unit switch component for the header
