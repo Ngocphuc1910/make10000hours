@@ -8,6 +8,7 @@ import { overrideSessionService } from '../api/overrideSessionService';
 import { useUserStore } from './userStore';
 import { useDashboardStore } from './useDashboardStore';
 import { composeDeepFocusData } from '../utils/stats';
+import { workSessionService } from '../api/workSessionService';
 
 interface DeepFocusDashboardStore {
   timeMetrics: TimeMetrics;
@@ -51,7 +52,7 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
 
           set({ isLoading: true });
           const userId = user.uid;
-          const { workSessions } = useDashboardStore.getState();
+          const workSessions = await workSessionService.getWorkSessionsForRange(userId, startDate, endDate);
           const dailySiteUsages = await siteUsageService.getDailyUsage(userId, startDate, endDate);
           const deepFocusSessions = await deepFocusSessionService.getUserSessions(userId, startDate, endDate);
           const overrideSessions = await overrideSessionService.getUserOverrides(userId, startDate, endDate);
@@ -83,7 +84,7 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
 
           set({ isLoading: true });
           const userId = user.uid;
-          const { workSessions } = useDashboardStore.getState();
+          const workSessions = await workSessionService.getAllWorkSessions(userId);
           const dailySiteUsages = await siteUsageService.getAllTimeDailyUsage(userId);
           const deepFocusSessions = await deepFocusSessionService.getUserSessions(userId);
           const overrideSessions = await overrideSessionService.getUserOverrides(userId);
