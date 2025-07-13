@@ -60,9 +60,6 @@ const focusTracker: FocusTracker = {
 
 
 
-
-
-
 //Union Types Exercise
 // SAMPLE: Create a union type for notification priority
 type SamplePriority = 'low' | 'medium' | 'high';

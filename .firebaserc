@@ -1,5 +1,16 @@
 {
   "projects": {},
-  "targets": {},
+  "targets": {
+    "make10000hours": {
+      "hosting": {
+        "main": [
+          "make10000hours-web-app"
+        ],
+        "api": [
+          "make10000hours-api"
+        ]
+      }
+    }
+  },
   "etags": {}
 }

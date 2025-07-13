@@ -12,10 +12,18 @@ interface SyncStatus {
   errorTasks: number;
 }
 
+interface WebhookStatus {
+  isActive: boolean;
+  channelId?: string;
+  expirationTime?: Date;
+  timeUntilExpiration?: string;
+}
+
 const GoogleCalendarSync: React.FC = () => {
   const { user } = useUserStore();
   const { hasCalendarAccess, isCheckingAccess, error: authError, requestCalendarAccess } = useGoogleCalendarAuth();
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,8 +38,12 @@ const GoogleCalendarSync: React.FC = () => {
 
     try {
       const syncManager = createSyncManager(user.uid);
-      const status = await syncManager.getSyncStatus();
+      const [status, webhookStat] = await Promise.all([
+        syncManager.getSyncStatus(),
+        syncManager.getWebhookStatus()
+      ]);
       setSyncStatus(status);
+      setWebhookStatus(webhookStat);
     } catch (err) {
       console.error('Error loading sync status:', err);
       setError(err instanceof Error ? err.message : 'Failed to load sync status');
@@ -53,6 +65,15 @@ const GoogleCalendarSync: React.FC = () => {
       await syncManager.initializeSync();
       await syncManager.toggleSync(true);
       
+      // Try to set up webhook for real-time sync
+      try {
+        await syncManager.setupWebhook();
+        console.log('✅ Webhook setup successful');
+      } catch (webhookError) {
+        console.warn('⚠️ Webhook setup failed, falling back to polling:', webhookError);
+        // Don't throw error - sync will work with polling
+      }
+      
       await loadSyncStatus();
       console.log('✅ Google Calendar sync enabled');
     } catch (err) {
@@ -71,6 +92,16 @@ const GoogleCalendarSync: React.FC = () => {
 
     try {
       const syncManager = createSyncManager(user.uid);
+      
+      // Stop webhook if active
+      try {
+        await syncManager.stopWebhook();
+        console.log('✅ Webhook stopped');
+      } catch (webhookError) {
+        console.warn('⚠️ Error stopping webhook:', webhookError);
+        // Don't throw error - continue with disable
+      }
+      
       await syncManager.toggleSync(false);
       
       await loadSyncStatus();
@@ -245,6 +276,31 @@ const GoogleCalendarSync: React.FC = () => {
                 </div>
                 <p className="font-medium text-red-600">{syncStatus.errorTasks} tasks</p>
               </div>
+            </div>
+          )}
+
+          {/* Webhook Status */}
+          {syncStatus.isEnabled && webhookStatus && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <div className={`w-2 h-2 rounded-full ${webhookStatus.isActive ? 'bg-green-500' : 'bg-orange-500'}`}></div>
+                <span className="font-medium text-blue-900">
+                  Real-time Sync: {webhookStatus.isActive ? 'Active' : 'Polling Mode'}
+                </span>
+              </div>
+              
+              {webhookStatus.isActive ? (
+                <div className="text-sm text-blue-700">
+                  <p>✅ Receiving real-time notifications from Google Calendar</p>
+                  {webhookStatus.timeUntilExpiration && (
+                    <p className="mt-1">🔄 Auto-renewal in {webhookStatus.timeUntilExpiration}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="text-sm text-orange-700">
+                  <p>📊 Using polling mode - changes may take up to 5 minutes to sync</p>
+                </div>
+              )}
             </div>
           )}
         </div>

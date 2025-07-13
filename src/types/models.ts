@@ -21,6 +21,9 @@ export interface Task {
   syncStatus?: 'pending' | 'synced' | 'error' | 'disabled'; // Sync status
   syncError?: string; // Error message if sync failed
   googleCalendarModified?: boolean; // Flag if modified in Google Calendar
+  // Import tracking fields
+  isImported?: boolean; // Flag if task was imported from external source
+  importedFrom?: 'google_calendar'; // Source of import
   createdAt: Date;
   updatedAt: Date;
 }
@@ -147,6 +150,8 @@ export interface SyncState {
   webhookChannelId?: string;
   webhookResourceId?: string;
   webhookExpirationTime?: Date;
+  webhookTriggeredSync?: boolean;
+  lastWebhookNotification?: Date;
   createdAt: Date;
   updatedAt: Date;
 }

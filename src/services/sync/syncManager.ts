@@ -423,11 +423,22 @@ export class SyncManager {
    * Process a single Google Calendar event
    */
   private async processGoogleCalendarEvent(event: GoogleCalendarEvent): Promise<void> {
-    // Only process our events
-    if (!googleCalendarService.isOurEvent(event)) {
+    // Handle app-created events (existing logic)
+    if (googleCalendarService.isOurEvent(event)) {
+      await this.processAppCreatedEvent(event);
       return;
     }
 
+    // NEW: Handle external Google Calendar events
+    if (this.shouldImportExternalEvent(event)) {
+      await this.processExternalEvent(event);
+    }
+  }
+
+  /**
+   * Process events created by our app (existing logic)
+   */
+  private async processAppCreatedEvent(event: GoogleCalendarEvent): Promise<void> {
     const taskId = googleCalendarService.getTaskIdFromEvent(event);
     if (!taskId) {
       return;
@@ -465,13 +476,67 @@ export class SyncManager {
       // Update task from Google event
       await this.updateTaskFromGoogleEvent(task, event);
     } catch (error) {
-      console.error('Error processing Google Calendar event:', error);
+      console.error('Error processing app-created Google Calendar event:', error);
       
       await this.logSyncOperation({
         userId: this.userId,
         operation: 'update',
         direction: 'from_google',
         taskId: taskId,
+        googleEventId: event.id,
+        status: 'error',
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Process external Google Calendar events (new functionality)
+   */
+  private async processExternalEvent(event: GoogleCalendarEvent): Promise<void> {
+    try {
+      // Check if we already imported this event
+      const existingTaskQuery = query(
+        collection(db, 'tasks'),
+        where('userId', '==', this.userId),
+        where('googleCalendarEventId', '==', event.id)
+      );
+      
+      const existingTasks = await getDocs(existingTaskQuery);
+      
+      if (event.status === 'cancelled') {
+        // External event was deleted, remove imported task if exists
+        if (!existingTasks.empty) {
+          const taskDoc = existingTasks.docs[0];
+          await deleteDoc(taskDoc.ref);
+          console.log(`🗑️ Deleted imported task for cancelled external event: ${event.id}`);
+        }
+        return;
+      }
+
+      if (!existingTasks.empty) {
+        // Update existing imported task
+        const taskDoc = existingTasks.docs[0];
+        const existingTask = taskDoc.data() as Task;
+        
+        // Only update if the event was modified more recently
+        const eventModified = new Date(event.updated || Date.now());
+        const taskModified = this.toDate(existingTask.updatedAt);
+        
+        if (eventModified > taskModified) {
+          await this.updateImportedTaskFromEvent(taskDoc.id, event);
+        }
+      } else {
+        // Create new task from external event
+        await this.createTaskFromExternalEvent(event);
+      }
+    } catch (error) {
+      console.error('Error processing external Google Calendar event:', error);
+      
+      await this.logSyncOperation({
+        userId: this.userId,
+        operation: 'import',
+        direction: 'from_google',
         googleEventId: event.id,
         status: 'error',
         error: error.message,
@@ -705,6 +770,338 @@ export class SyncManager {
       pendingTasks,
       errorTasks,
     };
+  }
+
+  // ================ EXTERNAL EVENT PROCESSING METHODS ================
+
+  /**
+   * Determine if an external event should be imported
+   */
+  private shouldImportExternalEvent(event: GoogleCalendarEvent): boolean {
+    return !!(
+      event.start?.dateTime && 
+      event.end?.dateTime && 
+      event.status === 'confirmed' &&
+      !event.recurringEventId && // Skip recurring instances for now
+      event.summary && // Must have a title
+      !this.isWorkHoursOnlyFilter(event) // Optional: filter by work hours
+    );
+  }
+
+  /**
+   * Optional filter for work hours only (can be user preference)
+   */
+  private isWorkHoursOnlyFilter(event: GoogleCalendarEvent): boolean {
+    // For now, always allow - can be made configurable later
+    // const startHour = new Date(event.start.dateTime).getHours();
+    // return startHour < 9 || startHour > 18; // Outside 9 AM - 6 PM
+    return false;
+  }
+
+  /**
+   * Create task from external Google Calendar event
+   */
+  private async createTaskFromExternalEvent(event: GoogleCalendarEvent): Promise<void> {
+    try {
+      // Ensure "Imported" project exists
+      await this.ensureImportedProjectExists();
+      
+      const newTask: Task = {
+        id: doc(collection(db, 'tasks')).id,
+        userId: this.userId,
+        projectId: 'imported',
+        title: event.summary || 'Imported Event',
+        description: event.description || '',
+        scheduledDate: event.start!.dateTime!.split('T')[0],
+        scheduledStartTime: event.start!.dateTime!.split('T')[1].slice(0, 5),
+        scheduledEndTime: event.end!.dateTime!.split('T')[1].slice(0, 5),
+        includeTime: true,
+        googleCalendarEventId: event.id,
+        syncStatus: 'synced',
+        status: 'todo',
+        completed: false,
+        isImported: true,
+        importedFrom: 'google_calendar',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        timeSpent: 0,
+        timeEstimated: 0,
+        order: 0
+      };
+      
+      await setDoc(doc(db, 'tasks', newTask.id), newTask);
+      
+      console.log(`✅ Created task from external Google Calendar event: ${newTask.id}`);
+      
+      await this.logSyncOperation({
+        userId: this.userId,
+        operation: 'create',
+        direction: 'from_google',
+        taskId: newTask.id,
+        googleEventId: event.id,
+        status: 'success',
+      });
+    } catch (error) {
+      console.error('Error creating task from external event:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update imported task from external event changes
+   */
+  private async updateImportedTaskFromEvent(taskId: string, event: GoogleCalendarEvent): Promise<void> {
+    try {
+      const updateData: Partial<Task> = {
+        title: event.summary || 'Imported Event',
+        description: event.description || '',
+        scheduledDate: event.start!.dateTime!.split('T')[0],
+        scheduledStartTime: event.start!.dateTime!.split('T')[1].slice(0, 5),
+        scheduledEndTime: event.end!.dateTime!.split('T')[1].slice(0, 5),
+        updatedAt: new Date(),
+      };
+
+      await updateDoc(doc(db, 'tasks', taskId), updateData);
+      
+      console.log(`🔄 Updated imported task from external event: ${taskId}`);
+      
+      await this.logSyncOperation({
+        userId: this.userId,
+        operation: 'update',
+        direction: 'from_google',
+        taskId: taskId,
+        googleEventId: event.id,
+        status: 'success',
+      });
+    } catch (error) {
+      console.error('Error updating imported task from event:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Ensure "Imported" project exists for external events
+   */
+  private async ensureImportedProjectExists(): Promise<void> {
+    try {
+      const importedProjectRef = doc(db, 'projects', 'imported');
+      const importedProjectDoc = await getDoc(importedProjectRef);
+      
+      if (!importedProjectDoc.exists()) {
+        const importedProject: Project = {
+          id: 'imported',
+          name: 'Imported Events',
+          description: 'Events imported from Google Calendar',
+          color: '#94A3B8', // Gray color
+          userId: this.userId,
+          isDefault: false,
+          order: 999, // Put at end
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        
+        await setDoc(importedProjectRef, importedProject);
+        console.log('✅ Created "Imported Events" project');
+      }
+    } catch (error) {
+      console.error('Error ensuring imported project exists:', error);
+      // Don't throw - just log error and continue
+    }
+  }
+
+  // ================ WEBHOOK MANAGEMENT METHODS ================
+
+  /**
+   * Get webhook base URL for this environment
+   */
+  private getWebhookBaseUrl(): string {
+    // Use Firebase Hosting URL for webhook callbacks (will switch to custom domain after DNS setup)
+    return `https://make10000hours-api.web.app/calendarWebhook`;
+  }
+
+  /**
+   * Set up webhook for real-time sync
+   */
+  async setupWebhook(): Promise<void> {
+    try {
+      console.log('🔗 Setting up Google Calendar webhook...');
+      
+      const channelId = `make10000hours_${this.userId}_${Date.now()}`;
+      const webhookUrl = this.getWebhookBaseUrl();
+      
+      console.log('Webhook setup:', { channelId, webhookUrl });
+      
+      const webhookResult = await googleCalendarService.watchEvents(channelId, webhookUrl);
+
+      // Store webhook info in sync state
+      await this.updateSyncState({
+        webhookChannelId: webhookResult.channelId,
+        webhookResourceId: webhookResult.resourceId,
+        webhookExpirationTime: new Date(webhookResult.expiration),
+      });
+
+      console.log('✅ Webhook setup successful:', webhookResult);
+      return webhookResult;
+    } catch (error) {
+      console.error('❌ Webhook setup failed:', error);
+      // Fall back to polling if webhook fails
+      await this.startPolling();
+      throw error;
+    }
+  }
+
+  /**
+   * Stop existing webhook
+   */
+  async stopWebhook(): Promise<void> {
+    try {
+      const syncState = await this.getSyncState();
+      if (!syncState?.webhookChannelId || !syncState?.webhookResourceId) {
+        console.log('No active webhook to stop');
+        return;
+      }
+
+      console.log('🛑 Stopping webhook:', syncState.webhookChannelId);
+      
+      await googleCalendarService.stopChannel(
+        syncState.webhookChannelId,
+        syncState.webhookResourceId
+      );
+      
+      await this.updateSyncState({
+        webhookChannelId: null,
+        webhookResourceId: null,
+        webhookExpirationTime: null,
+      });
+
+      console.log('✅ Webhook stopped successfully');
+    } catch (error) {
+      console.error('Error stopping webhook:', error);
+      // Don't throw error - this is cleanup, continue anyway
+    }
+  }
+
+  /**
+   * Check and renew expiring webhooks
+   */
+  async checkWebhookRenewal(): Promise<void> {
+    try {
+      const syncState = await this.getSyncState();
+      if (!syncState?.webhookExpirationTime || !syncState?.isEnabled) {
+        return;
+      }
+
+      const expirationTime = this.toDate(syncState.webhookExpirationTime);
+      const now = new Date();
+      const hoursUntilExpiration = (expirationTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+      // Renew if expiring within 24 hours
+      if (hoursUntilExpiration < 24) {
+        console.log('🔄 Renewing webhook before expiration');
+        await this.stopWebhook();
+        await this.setupWebhook();
+      }
+    } catch (error) {
+      console.error('Error checking webhook renewal:', error);
+    }
+  }
+
+  /**
+   * Start polling as fallback when webhooks fail
+   */
+  private pollingInterval: NodeJS.Timeout | null = null;
+
+  async startPolling(): Promise<void> {
+    // Stop existing polling if running
+    this.stopPolling();
+    
+    console.log('📊 Starting polling fallback (5-minute intervals)');
+    
+    this.pollingInterval = setInterval(async () => {
+      try {
+        const syncState = await this.getSyncState();
+        if (!syncState?.isEnabled) {
+          this.stopPolling();
+          return;
+        }
+        
+        await this.performIncrementalSync();
+      } catch (error) {
+        console.error('Polling sync error:', error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+  }
+
+  private stopPolling(): void {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+      console.log('📊 Polling stopped');
+    }
+  }
+
+  /**
+   * Check for webhook-triggered sync flag
+   */
+  async checkWebhookTriggeredSync(): Promise<void> {
+    try {
+      const syncState = await this.getSyncState();
+      if (syncState?.webhookTriggeredSync) {
+        console.log('🔔 Webhook-triggered sync detected');
+        
+        // Clear the flag and perform sync
+        await this.updateSyncState({
+          webhookTriggeredSync: false,
+        });
+        
+        await this.performIncrementalSync();
+      }
+    } catch (error) {
+      console.error('Error checking webhook-triggered sync:', error);
+    }
+  }
+
+  /**
+   * Get webhook status information
+   */
+  async getWebhookStatus(): Promise<{
+    isActive: boolean;
+    channelId?: string;
+    expirationTime?: Date;
+    timeUntilExpiration?: string;
+  }> {
+    try {
+      const syncState = await this.getSyncState();
+      const isActive = !!(syncState?.webhookChannelId && syncState?.webhookResourceId);
+      
+      if (!isActive) {
+        return { isActive: false };
+      }
+
+      const expirationTime = syncState.webhookExpirationTime 
+        ? this.toDate(syncState.webhookExpirationTime)
+        : undefined;
+      
+      let timeUntilExpiration = '';
+      if (expirationTime) {
+        const hoursUntilExpiration = (expirationTime.getTime() - Date.now()) / (1000 * 60 * 60);
+        if (hoursUntilExpiration > 24) {
+          timeUntilExpiration = `${Math.floor(hoursUntilExpiration / 24)} days`;
+        } else {
+          timeUntilExpiration = `${Math.floor(hoursUntilExpiration)} hours`;
+        }
+      }
+
+      return {
+        isActive,
+        channelId: syncState.webhookChannelId,
+        expirationTime,
+        timeUntilExpiration
+      };
+    } catch (error) {
+      console.error('Error getting webhook status:', error);
+      return { isActive: false };
+    }
   }
 }
 
