@@ -545,48 +545,47 @@ export const FocusTimeTrend: React.FC = React.memo(() => {
     return `${hours}h${minutes}m`;
   };
   
+  // Time unit switch component for the header
+  const timeUnitSwitch = (
+    <div className="inline-flex rounded-full bg-background-container p-1">
+      <button 
+        type="button" 
+        className={`px-4 py-1.5 text-sm font-medium rounded-full ${
+          focusTimeView === 'daily' 
+            ? 'bg-background-primary text-text-primary shadow-sm' 
+            : 'text-text-secondary hover:text-text-primary'
+        }`}
+        onClick={() => handleTimeUnitChange('daily')}
+      >
+        Daily
+      </button>
+      <button 
+        type="button" 
+        className={`px-4 py-1.5 text-sm font-medium rounded-full ${
+          focusTimeView === 'weekly' 
+            ? 'bg-background-primary text-text-primary shadow-sm' 
+            : 'text-text-secondary hover:text-text-primary'
+        }`}
+        onClick={() => handleTimeUnitChange('weekly')}
+      >
+        Weekly
+      </button>
+      <button 
+        type="button" 
+        className={`px-4 py-1.5 text-sm font-medium rounded-full ${
+          focusTimeView === 'monthly' 
+            ? 'bg-background-primary text-text-primary shadow-sm' 
+            : 'text-text-secondary hover:text-text-primary'
+        }`}
+        onClick={() => handleTimeUnitChange('monthly')}
+      >
+        Monthly
+      </button>
+    </div>
+  );
+
   return (
-    <Card title="Focus Time Trend">
-      <div className="flex items-center justify-between mb-6">
-        <div></div>
-        <div className="flex items-center space-x-2">
-          <div className="inline-flex rounded-full bg-background-container p-1">
-            <button 
-              type="button" 
-              className={`px-4 py-1.5 text-sm font-medium rounded-full ${
-                focusTimeView === 'daily' 
-                  ? 'bg-background-primary text-text-primary shadow-sm' 
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-              onClick={() => handleTimeUnitChange('daily')}
-            >
-              Daily
-            </button>
-            <button 
-              type="button" 
-              className={`px-4 py-1.5 text-sm font-medium rounded-full ${
-                focusTimeView === 'weekly' 
-                  ? 'bg-background-primary text-text-primary shadow-sm' 
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-              onClick={() => handleTimeUnitChange('weekly')}
-            >
-              Weekly
-            </button>
-            <button 
-              type="button" 
-              className={`px-4 py-1.5 text-sm font-medium rounded-full ${
-                focusTimeView === 'monthly' 
-                  ? 'bg-background-primary text-text-primary shadow-sm' 
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-              onClick={() => handleTimeUnitChange('monthly')}
-            >
-              Monthly
-            </button>
-          </div>
-        </div>
-      </div>
+    <Card title="Focus Time Trend" action={timeUnitSwitch}>
       
       <div className="h-[28rem]">
         {chartData.length === 0 ? (
