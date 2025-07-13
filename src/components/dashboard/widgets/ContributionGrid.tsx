@@ -55,7 +55,7 @@ export const ContributionGrid: React.FC<ContributionGridProps> = ({ data }) => {
   }
 
   return (
-    <div className="contribution-grid w-full">
+    <div className="contribution-grid w-full overflow-hidden" style={{ contain: 'layout style' }}>
       {/* Month labels */}
       <div className="ml-12 mb-2">
         <MonthLabels months={data.months} />
@@ -69,7 +69,7 @@ export const ContributionGrid: React.FC<ContributionGridProps> = ({ data }) => {
         </div>
 
         {/* Contribution squares grid */}
-        <div className="flex-1 overflow-x-auto">
+        <div className="flex-1 overflow-x-auto overflow-y-hidden" style={{ contain: 'layout' }}>
           <div className="grid grid-flow-col gap-[2px] min-w-max">
             {weeks.map((week, weekIndex) => (
               <div key={weekIndex} className="grid grid-rows-7 gap-[2px]">
@@ -78,6 +78,8 @@ export const ContributionGrid: React.FC<ContributionGridProps> = ({ data }) => {
                     key={`${weekIndex}-${dayIndex}`}
                     onMouseEnter={(e) => handleSquareMouseEnter(e, day.date, day.focusMinutes)}
                     onMouseLeave={handleSquareMouseLeave}
+                    className="relative"
+                    style={{ contain: 'layout' }}
                   >
                     <ContributionSquare
                       date={day.date}
@@ -93,7 +95,7 @@ export const ContributionGrid: React.FC<ContributionGridProps> = ({ data }) => {
         </div>
       </div>
 
-      {/* Tooltip */}
+      {/* Tooltip - now rendered in portal, won't affect layout */}
       <ContributionTooltip
         date={tooltip.date}
         focusMinutes={tooltip.focusMinutes}
