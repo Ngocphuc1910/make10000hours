@@ -532,7 +532,7 @@ export const FocusTimeTrend: React.FC = React.memo(() => {
 
   // Get chart bottom margin for horizontal labels
   const getBottomMargin = () => {
-    return 45; // Optimized margin for horizontal labels
+    return 20; // Reduced margin to optimize space
   };
 
   // Helper function to determine if rounding should be applied based on view and data count
@@ -540,28 +540,9 @@ export const FocusTimeTrend: React.FC = React.memo(() => {
     const dataLength = chartData.length;
     
     if (focusTimeView === 'daily') {
-      // For daily view, apply rounding when range > 30 days
-      if (selectedRange.rangeType === 'all time') {
-        if (filteredWorkSessions.length > 0) {
-          const allDates = filteredWorkSessions.map(session => new Date(session.date));
-          const earliestDate = new Date(Math.min(...allDates.map(d => d.getTime())));
-          const latestDate = new Date(Math.max(...allDates.map(d => d.getTime())));
-          const diffTime = Math.abs(latestDate.getTime() - earliestDate.getTime());
-          const dayRange = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          return dayRange > 30;
-        }
-        return false;
-      }
-      
-      if (!selectedRange.startDate || !selectedRange.endDate) {
-        return false;
-      }
-      
-      const start = new Date(selectedRange.startDate);
-      const end = new Date(selectedRange.endDate);
-      const diffTime = Math.abs(end.getTime() - start.getTime());
-      const dayRange = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return dayRange > 30;
+      // For daily view, apply rounding when the displayed range > 30 days
+      // Use chartData.length as it represents the actual days being displayed
+      return dataLength > 30;
     } else if (focusTimeView === 'weekly') {
       // For weekly view, apply rounding when more than 30 weeks
       return dataLength > 30;
@@ -573,31 +554,60 @@ export const FocusTimeTrend: React.FC = React.memo(() => {
     return false;
   };
 
-  // Custom label formatter for bars - view-specific rounding logic
-  const formatBarLabel = (value: number) => {
-    if (value === 0) return '';
+  // Get today's date string in the same format used by chart data
+  const getTodayDateString = () => {
+    const today = new Date();
+    return today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  // Custom label component with better data access
+  const CustomBarLabel = (props: any) => {
+    const { x, y, width, height, value, index } = props;
+    
+    if (value === 0) return null;
     
     const shouldRound = shouldApplyRounding();
-    
     const hours = Math.floor(value / 60);
     const minutes = value % 60;
     
-    if (shouldRound) {
-      // Round the time for better space optimization
+    // Check if this is today's data using the index
+    let isToday = false;
+    if (focusTimeView === 'daily' && typeof index === 'number' && chartData[index]) {
+      const dataEntry = chartData[index];
+      const todayStr = getTodayDateString();
+      isToday = dataEntry.date === todayStr;
+    }
+    
+    let displayText = '';
+    if (shouldRound && !isToday) {
+      // Round the time for better space optimization (except for today)
       if (hours === 0) {
-        // For minutes only, round to nearest hour if >= 30 minutes
-        return minutes >= 30 ? '1h' : '';
+        displayText = minutes >= 30 ? '1h' : '';
       } else {
-        // For hours + minutes, round to nearest hour
         const roundedHours = minutes >= 30 ? hours + 1 : hours;
-        return `${roundedHours}h`;
+        displayText = `${roundedHours}h`;
       }
     } else {
-      // Show precise time for shorter ranges
-      if (hours === 0) return `${minutes}m`;
-      if (minutes === 0) return `${hours}h`;
-      return `${hours}h${minutes}m`;
+      // Show precise time for shorter ranges or today's data
+      if (hours === 0) displayText = `${minutes}m`;
+      else if (minutes === 0) displayText = `${hours}h`;
+      else displayText = `${hours}h${minutes}m`;
     }
+    
+    if (!displayText) return null;
+    
+    return (
+      <text
+        x={x + width / 2}
+        y={y - 5}
+        fill="var(--text-secondary)"
+        textAnchor="middle"
+        fontSize={12}
+        fontWeight={500}
+      >
+        {displayText}
+      </text>
+    );
   };
   
   // Time unit switch component for the header
@@ -642,7 +652,7 @@ export const FocusTimeTrend: React.FC = React.memo(() => {
   return (
     <Card title="Focus Time Trend" action={timeUnitSwitch}>
       
-      <div className="h-[28rem]">
+      <div className="h-[20rem]">
         {chartData.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-text-secondary">
@@ -670,7 +680,7 @@ export const FocusTimeTrend: React.FC = React.memo(() => {
                 interval={getLabelInterval()}
                 angle={0}
                 textAnchor="middle"
-                height={55}
+                height={25}
               />
               <YAxis 
                 axisLine={false}
@@ -691,13 +701,7 @@ export const FocusTimeTrend: React.FC = React.memo(() => {
                 radius={[6, 6, 0, 0]}
                 minPointSize={2}
                 barSize={getBarWidth()}
-                label={{
-                  position: 'top',
-                  fill: 'var(--text-secondary)',
-                  fontSize: 12,
-                  fontWeight: 500,
-                  formatter: formatBarLabel
-                }}
+                label={<CustomBarLabel />}
               >
                 {chartData.map((entry, index) => (
                   <Cell 
