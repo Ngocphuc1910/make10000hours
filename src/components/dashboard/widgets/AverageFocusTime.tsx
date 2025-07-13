@@ -15,7 +15,12 @@ export const AverageFocusTime: React.FC = () => {
       },
       weeklyGoal: {
         current: 0,
-        target: 25,
+        target: 50, // Changed from 25h to 50h
+        progress: 0
+      },
+      monthlyGoal: {
+        current: 0,
+        target: 200, // Monthly goal of 200h
         progress: 0
       },
       journey: {
@@ -26,6 +31,27 @@ export const AverageFocusTime: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
 
+  // Helper functions to get date ranges
+  const getCurrentWeekRange = () => {
+    const now = new Date();
+    const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1; // Monday = 0, Sunday = 6
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - dayOfWeek);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    
+    const formatDate = (date: Date) => {
+      return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    };
+    
+    return `${formatDate(weekStart)} - ${formatDate(weekEnd)}`;
+  };
+
+  const getCurrentMonth = () => {
+    const now = new Date();
+    return now.toLocaleDateString('en-US', { month: 'long' });
+  };
+
   useEffect(() => {
     const calculateFocusStats = () => {
       
@@ -33,10 +59,16 @@ export const AverageFocusTime: React.FC = () => {
         
         const timeSpentByDate: Record<string, number> = {};
         let currentWeekTimeSpent = 0;
+        let currentMonthTimeSpent = 0;
+        
         const currentWeekStart = new Date();
         const dayToMinus = currentWeekStart.getDay() === 0 ? 6 : currentWeekStart.getDay() - 1;
         currentWeekStart.setDate(currentWeekStart.getDate() - dayToMinus); // Set to start of the week (Monday)
         currentWeekStart.setHours(0, 0, 0, 0); // Normalize to start of the day
+
+        const currentMonthStart = new Date();
+        currentMonthStart.setDate(1); // Set to first day of current month
+        currentMonthStart.setHours(0, 0, 0, 0);
 
         // Filter out break sessions and calculate time spent
         workSessions
@@ -55,6 +87,11 @@ export const AverageFocusTime: React.FC = () => {
             if (sessionDate >= currentWeekStart) {
               currentWeekTimeSpent += duration;
             }
+
+            // Calculate monthly time spent
+            if (sessionDate >= currentMonthStart) {
+              currentMonthTimeSpent += duration;
+            }
           });
         const totalFocusMinutes = Object.values(timeSpentByDate).reduce((sum, minutes) => sum + minutes, 0);
         const dailyAverageMinutes = totalFocusMinutes / Object.keys(timeSpentByDate).length || 0;
@@ -69,8 +106,13 @@ export const AverageFocusTime: React.FC = () => {
           },
           weeklyGoal: {
             current: parseFloat(((currentWeekTimeSpent / 60).toFixed(1))),
-            target: 25, // Default weekly goal
-            progress: Math.min((currentWeekTimeSpent / 60 / 25) * 100, 100) // Calculate progress percentage
+            target: 50, // Updated weekly goal to 50h
+            progress: Math.min((currentWeekTimeSpent / 60 / 50) * 100, 100) // Calculate progress percentage
+          },
+          monthlyGoal: {
+            current: parseFloat(((currentMonthTimeSpent / 60).toFixed(1))),
+            target: 200, // Monthly goal of 200h
+            progress: Math.min((currentMonthTimeSpent / 60 / 200) * 100, 100) // Calculate progress percentage
           },
           journey: {
             current: Math.floor(totalFocusMinutes / 60),
@@ -86,7 +128,7 @@ export const AverageFocusTime: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Card title="Average Focus Time">
+      <Card title="Overal Insights">
         <div className="flex items-center justify-center h-[200px]">
           <div className="text-text-secondary">Loading focus statistics...</div>
         </div>
@@ -95,20 +137,20 @@ export const AverageFocusTime: React.FC = () => {
   }
 
   return (
-    <Card title="Average Focus Time">
+    <Card title="Overal Insights">
       <div className="h-[200px] flex flex-col justify-between">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <div className="text-3xl font-bold text-text-primary">
+            <div className="text-2xl font-bold text-text-primary">
               {stats.dailyAverage.hours}h {stats.dailyAverage.minutes}m
             </div>
-            <p className="text-sm text-text-secondary mt-2">Daily average</p>
+            <p className="text-sm text-text-secondary mt-1">Daily average</p>
           </div>
           <div>
-            <div className="text-3xl font-bold text-text-primary">
+            <div className="text-2xl font-bold text-text-primary">
               {stats.totalFocus.hours}h {stats.totalFocus.minutes}m
             </div>
-            <p className="text-sm text-text-secondary mt-2">Total focus time</p>
+            <p className="text-sm text-text-secondary mt-1">Total focus time</p>
           </div>
         </div>
 
@@ -116,15 +158,37 @@ export const AverageFocusTime: React.FC = () => {
         {/* Weekly Goal Progress */}
         <div>
           <div className="flex items-center justify-between text-sm mb-1">
-            <span className="text-text-secondary">Weekly goal (25h)</span>
+            <span className="text-text-secondary">Weekly goal ({getCurrentWeekRange()})</span>
             <span className="font-medium text-text-primary">
               {stats.weeklyGoal.current}h / {stats.weeklyGoal.target}h
             </span>
           </div>
           <div className="w-full h-2 bg-background-container rounded-full overflow-hidden">
             <div 
-              className="h-full bg-primary rounded-full" 
-              style={{ width: `${stats.weeklyGoal.progress}%` }}
+              className="h-full rounded-full" 
+              style={{ 
+                width: `${stats.weeklyGoal.progress}%`,
+                backgroundColor: '#BA4949'
+              }}
+            ></div>
+          </div>
+        </div>
+
+        {/* Monthly Goal Progress */}
+        <div>
+          <div className="flex items-center justify-between text-sm mb-1">
+            <span className="text-text-secondary">Monthly goal ({getCurrentMonth()})</span>
+            <span className="font-medium text-text-primary">
+              {stats.monthlyGoal.current}h / {stats.monthlyGoal.target}h
+            </span>
+          </div>
+          <div className="w-full h-2 bg-background-container rounded-full overflow-hidden">
+            <div 
+              className="h-full rounded-full" 
+              style={{ 
+                width: `${stats.monthlyGoal.progress}%`,
+                backgroundColor: '#BA4949'
+              }}
             ></div>
           </div>
         </div>
@@ -139,8 +203,11 @@ export const AverageFocusTime: React.FC = () => {
           </div>
           <div className="w-full h-2 bg-background-container rounded-full overflow-hidden">
             <div 
-              className="h-full bg-primary rounded-full" 
-              style={{ width: `${stats.journey.progress}%` }}
+              className="h-full rounded-full" 
+              style={{ 
+                width: `${stats.journey.progress}%`,
+                backgroundColor: '#BA4949'
+              }}
             ></div>
           </div>
         </div>
