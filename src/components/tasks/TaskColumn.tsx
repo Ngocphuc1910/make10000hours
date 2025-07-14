@@ -98,6 +98,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
             onStatusChange={onStatusChange}
             onReorder={handleTaskReorder}
             onCrossColumnMove={handleCrossColumnMove}
+            columnStatus={status}
           />
         ))}
       </div>

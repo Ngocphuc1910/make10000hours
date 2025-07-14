@@ -861,6 +861,7 @@ export const Calendar: React.FC = () => {
                   setClearDragIndicator(true);
                   setTimeout(() => setClearDragIndicator(false), 100);
                 }}
+                isCalendarContext={true}
               />
             </div>
           </div>
@@ -886,6 +887,7 @@ export const Calendar: React.FC = () => {
                   setClearDragIndicator(true);
                   setTimeout(() => setClearDragIndicator(false), 100);
                 }}
+                isCalendarContext={true}
               />
             </div>
           </div>
@@ -908,6 +910,7 @@ export const Calendar: React.FC = () => {
                   setIsTimeSlotTaskOpen(false);
                   setTimeSlotData(null);
                 }}
+                isCalendarContext={true}
               />
             </div>
           </div>
