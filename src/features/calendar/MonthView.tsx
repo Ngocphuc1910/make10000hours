@@ -69,10 +69,6 @@ export const MonthView: React.FC<MonthViewProps> = ({
   
   // Calculate number of rows needed (5 or 6)
   const numberOfRows = Math.ceil(days.length / 7);
-  
-  // Determine if we need scrolling (6 rows) or not (5 rows)
-  const needsScrolling = numberOfRows === 6;
-  const rowHeight = needsScrolling ? 140 : 'auto'; // Fixed height for 6 rows, flexible for 5
 
   return (
     <div className="w-full bg-background-primary h-full flex flex-col">
@@ -88,15 +84,12 @@ export const MonthView: React.FC<MonthViewProps> = ({
         ))}
       </div>
 
-      {/* Calendar grid container - Scrollable for 6 rows */}
-      <div className={`flex-1 ${needsScrolling ? 'overflow-auto scrollbar-thin' : 'overflow-hidden'}`}>
+      {/* Calendar grid container - Always responsive */}
+      <div className="flex-1 overflow-hidden">
         <div 
-          className="grid grid-cols-7 border-l border-t border-border"
+          className="grid grid-cols-7 border-l border-t border-border h-full"
           style={{ 
-            gridTemplateRows: needsScrolling 
-              ? `repeat(${numberOfRows}, ${rowHeight}px)` 
-              : `repeat(${numberOfRows}, minmax(140px, 1fr))`,
-            minHeight: needsScrolling ? `${numberOfRows * 140}px` : '100%'
+            gridTemplateRows: `repeat(${numberOfRows}, minmax(140px, 1fr))`
           }}
         >
         {days.map((day, idx) => {
