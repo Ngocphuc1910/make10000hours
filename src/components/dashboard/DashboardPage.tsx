@@ -21,11 +21,11 @@ export const DashboardContent: React.FC = () => {
   return (
     <div className="space-y-8 w-full max-w-none">
       {/* Focus Time Statistics Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
+        <div className="lg:col-span-3">
           <AverageFocusTime />
         </div>
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-7">
           <FocusStreak />
         </div>
       </div>
