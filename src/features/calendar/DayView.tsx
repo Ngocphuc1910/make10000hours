@@ -25,7 +25,7 @@ interface DragState {
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
-const TIME_SLOT_HEIGHT = 60; // pixels per hour
+const TIME_SLOT_HEIGHT = 60; // pixels per hour - fallback for calculations
 
 export const DayView: React.FC<DayViewProps> = ({
   currentDate,
@@ -61,6 +61,15 @@ export const DayView: React.FC<DayViewProps> = ({
 
   const dayColumnRef = useRef<HTMLDivElement>(null);
 
+  // Get dynamic time slot height
+  const getTimeSlotHeight = useCallback((): number => {
+    if (dayColumnRef.current) {
+      const containerHeight = dayColumnRef.current.offsetHeight;
+      return containerHeight / 24; // Divide by 24 hours
+    }
+    return TIME_SLOT_HEIGHT; // Fallback
+  }, []);
+
   // Get last used project color for drag indicator
   const getLastUsedProjectColor = useCallback(() => {
     const lastUsedProjectId = localStorage.getItem('lastUsedProjectId') || 'no-project';
@@ -90,18 +99,19 @@ export const DayView: React.FC<DayViewProps> = ({
 
   // Calculate event position and height
   const getEventStyle = (event: CalendarEvent) => {
+    const timeSlotHeight = getTimeSlotHeight();
     const startHour = event.start.getHours() + (event.start.getMinutes() / 60);
     const endHour = event.end.getHours() + (event.end.getMinutes() / 60);
     const duration = endHour - startHour;
     
     // For zero-duration events, use 30-minute height for display
     const displayHeight = duration === 0 
-      ? 30  // 30 minutes = 30px (since TIME_SLOT_HEIGHT is 60px per hour)
-      : Math.max(duration * TIME_SLOT_HEIGHT, 30);
+      ? timeSlotHeight * 0.5  // 30 minutes = half slot height
+      : Math.max(duration * timeSlotHeight, timeSlotHeight * 0.5);
 
     return {
       position: 'absolute' as const,
-      top: `${startHour * TIME_SLOT_HEIGHT + 2}px`,
+      top: `${startHour * timeSlotHeight + 2}px`,
       height: `${displayHeight - 4}px`,
       left: '4px',
       right: '4px',
@@ -144,7 +154,7 @@ export const DayView: React.FC<DayViewProps> = ({
 
     setDragIndicator({
       visible: true,
-      top: startY + (parseInt(element.getAttribute('data-hour') || '0') * TIME_SLOT_HEIGHT),
+      top: startY + (parseInt(element.getAttribute('data-hour') || '0') * getTimeSlotHeight()),
       height: 1,
       startTime,
       endTime: startTime
@@ -152,7 +162,7 @@ export const DayView: React.FC<DayViewProps> = ({
 
     // Prevent text selection during drag
     e.preventDefault();
-  }, [calculateTimeFromY]);
+  }, [calculateTimeFromY, getTimeSlotHeight]);
 
   // Handle mouse move
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -160,9 +170,10 @@ export const DayView: React.FC<DayViewProps> = ({
 
     const dayColumnRect = dayColumnRef.current.getBoundingClientRect();
     const currentY = e.clientY - dayColumnRect.top;
+    const timeSlotHeight = getTimeSlotHeight();
     
     // Find which hour slot we're in
-    const hourSlotIndex = Math.floor(currentY / TIME_SLOT_HEIGHT);
+    const hourSlotIndex = Math.floor(currentY / timeSlotHeight);
     const hourSlot = dayColumnRef.current.querySelector(`[data-hour="${hourSlotIndex}"]`) as HTMLElement;
     
     if (hourSlot) {
@@ -170,7 +181,7 @@ export const DayView: React.FC<DayViewProps> = ({
       const relativeY = e.clientY - hourSlotRect.top;
       const endTime = calculateTimeFromY(hourSlot, relativeY);
       
-      const startTop = dragState.startY + (parseInt(dragState.startElement.getAttribute('data-hour') || '0') * TIME_SLOT_HEIGHT);
+      const startTop = dragState.startY + (parseInt(dragState.startElement.getAttribute('data-hour') || '0') * timeSlotHeight);
       const endTop = currentY;
       
       const top = Math.min(startTop, endTop);
@@ -184,7 +195,7 @@ export const DayView: React.FC<DayViewProps> = ({
         startTime: endTime > dragState.startTime! ? dragState.startTime! : endTime
       }));
     }
-  }, [dragState, calculateTimeFromY]);
+  }, [dragState, calculateTimeFromY, getTimeSlotHeight]);
 
   // Handle mouse up
   const handleMouseUp = useCallback((e: MouseEvent) => {
@@ -248,13 +259,13 @@ export const DayView: React.FC<DayViewProps> = ({
   }, [clearDragIndicator]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full w-full">
       {/* Container with unified grid layout */}
-      <div className="flex flex-col h-full" style={{ '--scrollbar-width': '15px' } as React.CSSProperties}>
+      <div className="flex flex-col h-full w-full">
         
         {/* Header */}
         <div className="bg-background-primary dark:bg-[#141414] sticky top-0 z-20 border-b border-border">
-          <div className="grid" style={{ gridTemplateColumns: '64px 1fr', paddingRight: 'var(--scrollbar-width)' }}>
+          <div className="grid w-full" style={{ gridTemplateColumns: '64px 1fr' }}>
             {/* Time column header */}
             <div className="flex items-center justify-center text-xs text-text-secondary py-3 border-r border-border">
               GMT+07
@@ -272,7 +283,7 @@ export const DayView: React.FC<DayViewProps> = ({
 
         {/* All Day Row */}
         <div className="bg-background-primary dark:bg-[#141414] border-b border-border">
-          <div className="grid" style={{ gridTemplateColumns: '64px 1fr', paddingRight: 'var(--scrollbar-width)' }}>
+          <div className="grid w-full" style={{ gridTemplateColumns: '64px 1fr' }}>
             <div 
               className="flex items-center justify-center text-xs text-text-secondary border-r border-border"
               style={{ height: `${getAllDayRowHeight()}px` }}
@@ -330,18 +341,18 @@ export const DayView: React.FC<DayViewProps> = ({
 
         {/* Calendar Grid */}
         <div className="flex-1 overflow-auto scrollbar-thin relative bg-background-primary dark:bg-[#141414]">
-          <div className="grid min-h-[1440px]" style={{ gridTemplateColumns: '64px 1fr' }}>
+          <div className="grid h-full w-full" style={{ gridTemplateColumns: '64px 1fr', gridTemplateRows: '1fr' }}>
             {/* Time column */}
-            <div className="bg-background-primary dark:bg-[#141414] border-r border-border">
+            <div className="bg-background-primary dark:bg-[#141414] border-r border-border flex flex-col">
               {HOURS.map(hour => (
-                <div key={hour} className="h-[60px] border-b border-border flex items-start justify-center pt-1">
+                <div key={hour} className="flex-1 min-h-[60px] border-b border-border flex items-start justify-center pt-1">
                   <span className="text-xs text-text-secondary">{format(new Date().setHours(hour, 0), 'HH:mm')}</span>
                 </div>
               ))}
             </div>
 
             {/* Day column */}
-            <div className="relative" ref={dayColumnRef}>
+            <div className="relative flex flex-col" ref={dayColumnRef}>
               {/* Time slots grid */}
               {HOURS.map(hour => (
                 <DroppableTimeSlot
@@ -349,7 +360,7 @@ export const DayView: React.FC<DayViewProps> = ({
                   date={currentDate}
                   hour={hour}
                   onDrop={onEventDrop!}
-                  className="h-[60px] border-b border-border cursor-cell hover:bg-background-container hover:bg-opacity-50 relative"
+                  className="flex-1 min-h-[60px] border-b border-border cursor-cell hover:bg-background-container hover:bg-opacity-50 relative"
                 >
                   <div
                     className="w-full h-full"
@@ -368,8 +379,8 @@ export const DayView: React.FC<DayViewProps> = ({
                         
                         setDragIndicator({
                           visible: true,
-                          top: hour * TIME_SLOT_HEIGHT,
-                          height: TIME_SLOT_HEIGHT,
+                          top: hour * getTimeSlotHeight(),
+                          height: getTimeSlotHeight(),
                           startTime,
                           endTime
                         });
@@ -436,7 +447,7 @@ export const DayView: React.FC<DayViewProps> = ({
                 <div
                   className="current-time-indicator absolute"
                   style={{
-                    top: `${(new Date().getHours() * TIME_SLOT_HEIGHT) + ((new Date().getMinutes() / 60) * TIME_SLOT_HEIGHT)}px`,
+                    top: `${(new Date().getHours() * getTimeSlotHeight()) + ((new Date().getMinutes() / 60) * getTimeSlotHeight())}px`,
                     left: 0,
                     right: 0,
                     zIndex: 15,

@@ -75,6 +75,15 @@ export const WeekView: React.FC<WeekViewProps> = ({
   const weekGridRef = useRef<HTMLDivElement>(null);
   const scrollableRef = useRef<HTMLDivElement>(null);
 
+  // Get dynamic time slot height
+  const getTimeSlotHeight = useCallback((): number => {
+    if (scrollableRef.current) {
+      const containerHeight = scrollableRef.current.offsetHeight;
+      return containerHeight / 24; // Divide by 24 hours
+    }
+    return TIME_SLOT_HEIGHT; // Fallback
+  }, []);
+
   // Get last used project color for drag indicator
   const getLastUsedProjectColor = useCallback(() => {
     const lastUsedProjectId = localStorage.getItem('lastUsedProjectId') || 'no-project';
@@ -112,18 +121,19 @@ export const WeekView: React.FC<WeekViewProps> = ({
 
   // Calculate event position and height
   const getEventStyle = (event: CalendarEvent) => {
+    const timeSlotHeight = getTimeSlotHeight();
     const startHour = event.start.getHours() + (event.start.getMinutes() / 60);
     const endHour = event.end.getHours() + (event.end.getMinutes() / 60);
     const duration = endHour - startHour;
     
     // For zero-duration events, use 30-minute height for display
     const displayHeight = duration === 0 
-      ? 30  // 30 minutes = 30px (since TIME_SLOT_HEIGHT is 60px per hour)
-      : Math.max(duration * TIME_SLOT_HEIGHT, 30);
+      ? timeSlotHeight * 0.5  // 30 minutes = half slot height
+      : Math.max(duration * timeSlotHeight, timeSlotHeight * 0.5);
 
     return {
       position: 'absolute' as const,
-      top: `${startHour * TIME_SLOT_HEIGHT + 2}px`,
+      top: `${startHour * timeSlotHeight + 2}px`,
       height: `${displayHeight - 4}px`,
       left: '4px',
       right: '4px',
@@ -168,7 +178,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
 
     setDragIndicator({
       visible: true,
-      top: startY + (parseInt(element.getAttribute('data-hour') || '0') * TIME_SLOT_HEIGHT) + 80 + getAllDayRowHeight(),
+      top: startY + (parseInt(element.getAttribute('data-hour') || '0') * getTimeSlotHeight()) + 80 + getAllDayRowHeight(),
       height: 1,
       startTime,
       endTime: startTime,
@@ -177,7 +187,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
 
     // Prevent text selection during drag
     e.preventDefault();
-  }, [calculateTimeFromY]);
+  }, [calculateTimeFromY, getTimeSlotHeight]);
 
   // Handle mouse move
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -195,9 +205,10 @@ export const WeekView: React.FC<WeekViewProps> = ({
 
     const containerRect = timeSlotContainer.getBoundingClientRect();
     const currentY = e.clientY - containerRect.top;
+    const timeSlotHeight = getTimeSlotHeight();
     
     // Find which hour slot we're in
-    const hourSlotIndex = Math.floor(currentY / TIME_SLOT_HEIGHT);
+    const hourSlotIndex = Math.floor(currentY / timeSlotHeight);
     const hourSlot = targetDayColumn.querySelector(`[data-hour="${hourSlotIndex}"]`) as HTMLElement;
     
     if (hourSlot) {
@@ -205,7 +216,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
       const relativeY = e.clientY - hourSlotRect.top;
       const endTime = calculateTimeFromY(hourSlot, relativeY, dragState.dayIndex);
       
-      const startTop = dragState.startY + (parseInt(dragState.startElement.getAttribute('data-hour') || '0') * TIME_SLOT_HEIGHT);
+      const startTop = dragState.startY + (parseInt(dragState.startElement.getAttribute('data-hour') || '0') * timeSlotHeight);
       const endTop = currentY;
       
       const top = Math.min(startTop, endTop);
@@ -219,7 +230,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
         startTime: endTime > dragState.startTime! ? dragState.startTime! : endTime
       }));
     }
-  }, [dragState, calculateTimeFromY]);
+  }, [dragState, calculateTimeFromY, getTimeSlotHeight]);
 
   // Handle mouse up
   const handleMouseUp = useCallback((e: MouseEvent) => {
@@ -286,10 +297,11 @@ export const WeekView: React.FC<WeekViewProps> = ({
   }, [clearDragIndicator]);
 
   return (
-    <div className="calendar-week-container flex flex-col h-full bg-background-primary dark:bg-[#141414]">
+    <div className="calendar-week-container flex flex-col h-full w-full bg-background-primary dark:bg-[#141414]">
       {/* Unified Grid Container */}
-      <div className="grid grid-cols-8 flex-1" style={{ 
-        gridTemplateColumns: `${TIME_COLUMN_WIDTH}px repeat(7, minmax(0, 1fr))`
+      <div className="grid grid-cols-8 h-full w-full" style={{ 
+        gridTemplateColumns: `${TIME_COLUMN_WIDTH}px repeat(7, minmax(0, 1fr))`,
+        gridTemplateRows: 'auto auto 1fr'
       }}>
         
         {/* Fixed Date Headers Row */}
@@ -374,9 +386,9 @@ export const WeekView: React.FC<WeekViewProps> = ({
         {/* Scrollable Content Area */}
         <div className="calendar-scrollable col-span-8 grid grid-cols-subgrid overflow-auto scrollbar-thin bg-background-primary dark:bg-[#141414]" ref={scrollableRef}>
           {/* Time Column for all hours */}
-          <div className="calendar-week-time-column bg-background-primary dark:bg-[#141414] border-r border-border">
+          <div className="calendar-week-time-column bg-background-primary dark:bg-[#141414] border-r border-border flex flex-col">
             {HOURS.map(hour => (
-              <div key={hour} className="h-[60px] border-b border-border flex items-start justify-center pt-1">
+              <div key={hour} className="flex-1 min-h-[60px] border-b border-border flex items-start justify-center pt-1">
                 <span className="text-xs text-text-secondary">{format(new Date().setHours(hour, 0), 'HH:mm')}</span>
               </div>
             ))}
@@ -385,7 +397,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
           {/* Day Columns */}
           <div className="contents" ref={weekGridRef}>
             {weekDays.map((day, dayIndex) => (
-              <div key={dayIndex} className={`calendar-week-day-column relative day-column min-w-0 ${dayIndex < 6 ? 'border-r border-border' : ''}`}>
+              <div key={dayIndex} className={`calendar-week-day-column relative day-column min-w-0 flex flex-col ${dayIndex < 6 ? 'border-r border-border' : ''}`}>
               {/* Time slots grid */}
               {HOURS.map(hour => (
                 <DroppableTimeSlot
@@ -393,7 +405,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                   date={day}
                   hour={hour}
                   onDrop={onEventDrop!}
-                  className="h-[60px] border-b border-border cursor-cell hover:bg-background-container hover:bg-opacity-50 relative"
+                  className="flex-1 min-h-[60px] border-b border-border cursor-cell hover:bg-background-container hover:bg-opacity-50 relative"
                 >
                   <div
                     className="w-full h-full"
@@ -412,8 +424,8 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         
                         setDragIndicator({
                           visible: true,
-                          top: hour * TIME_SLOT_HEIGHT + 80 + getAllDayRowHeight(),
-                          height: TIME_SLOT_HEIGHT,
+                          top: hour * getTimeSlotHeight() + 80 + getAllDayRowHeight(),
+                          height: getTimeSlotHeight(),
                           startTime,
                           endTime,
                           dayIndex
@@ -483,7 +495,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                 <div
                   className="current-time-indicator absolute"
                   style={{
-                    top: `${(new Date().getHours() * TIME_SLOT_HEIGHT) + ((new Date().getMinutes() / 60) * TIME_SLOT_HEIGHT)}px`,
+                    top: `${(new Date().getHours() * getTimeSlotHeight()) + ((new Date().getMinutes() / 60) * getTimeSlotHeight())}px`,
                     left: 0,
                     right: 0,
                     zIndex: 15,
