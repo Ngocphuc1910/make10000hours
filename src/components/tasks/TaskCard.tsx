@@ -10,9 +10,10 @@ interface TaskCardProps {
   onStatusChange: (taskId: string, status: Task['status']) => void;
   onReorder?: (draggedTaskId: string, targetTaskId: string, insertAfter?: boolean) => void;
   onCrossColumnMove?: (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter?: boolean) => void;
+  columnStatus?: Task['status'];
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, onCrossColumnMove }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, onCrossColumnMove, columnStatus }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -107,7 +108,9 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
   };
 
   const handleCheckboxChange = () => {
-    toggleTaskCompletion(task.id);
+    // Pass context information to know which column the task was completed from
+    const context = columnStatus === 'todo' ? 'todo' : 'default';
+    toggleTaskCompletion(task.id, context);
     // Status changes and timer handling are now managed automatically in the store
   };
 

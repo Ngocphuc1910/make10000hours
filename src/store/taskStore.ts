@@ -458,11 +458,18 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       
       // Keep the original order when unchecking
       const taskRef = doc(db, 'tasks', id);
-      await updateDoc(taskRef, {
+      const updateData: any = {
         completed,
         status,
         updatedAt: new Date()
-      });
+      };
+      
+      // If completing a task from 'todo' column, hide it from pomodoro timer
+      if (completed && context === 'todo') {
+        updateData.hideFromPomodoro = true;
+      }
+      
+      await updateDoc(taskRef, updateData);
       
       // Track task completion in Analytics
       if (completed) {

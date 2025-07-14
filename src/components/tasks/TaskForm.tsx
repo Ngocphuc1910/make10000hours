@@ -21,9 +21,10 @@ interface TaskFormProps {
   isAllDay?: boolean;
   onCancel: () => void;
   onSave?: () => void;
+  isCalendarContext?: boolean;
 }
 
-const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, initialStartTime, initialEndTime, isAllDay, onCancel, onSave }) => {
+const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, initialStartTime, initialEndTime, isAllDay, onCancel, onSave, isCalendarContext = false }) => {
   const taskStoreWithSync = useTaskStoreWithSync();
   const { addTask, updateTask, deleteTask } = taskStoreWithSync;
   const projects = useTaskStore(state => state.projects);
@@ -385,6 +386,22 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
     }
   };
 
+  const handleComplete = () => {
+    if (task) {
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      const isScheduledForToday = task.scheduledDate === today;
+      
+      updateTask(task.id, {
+        ...task,
+        status: 'completed',
+        completed: true,
+        // Hide from pomodoro timer if not scheduled for today
+        hideFromPomodoro: !isScheduledForToday
+      });
+      onCancel();
+    }
+  };
+
   const handleCalendarClick = useCallback(() => {
     setShowDatePicker(!showDatePicker);
   }, [showDatePicker]);
@@ -733,6 +750,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                   >
                     {task.status === 'pomodoro' ? 'Work later' : 'Add to Pomodoro'}
                   </button>
+                  {isCalendarContext && !task.completed && (
+                    <button
+                      className="text-[#22C55E] hover:text-green-600 text-sm font-medium"
+                      onClick={handleComplete}
+                    >
+                      Complete
+                    </button>
+                  )}
                 </>
               )}
             </div>
