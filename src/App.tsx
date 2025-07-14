@@ -235,8 +235,8 @@ const GlobalKeyboardShortcuts: React.FC = React.memo(() => {
         toggleLeftSidebar();
       }
       
-      // Navigation shortcuts (only if not typing in form elements)
-      if (!isTypingInFormElement) {
+      // Navigation shortcuts (only if not typing in form elements and no modifier keys)
+      if (!isTypingInFormElement && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
         // Check for P to navigate to Pomodoro Timer
         if ((event.key === 'P' || event.key === 'p')) {
           console.log('🔑 P detected - navigating to Pomodoro Timer');
@@ -272,8 +272,8 @@ const GlobalKeyboardShortcuts: React.FC = React.memo(() => {
           navigateToRoute('/deep-focus');
         }
         
-        // Check for D to navigate to Calendar Day view (only if not Shift+D)
-        if ((event.key === 'D' || event.key === 'd') && !event.shiftKey) {
+        // Check for D to navigate to Calendar Day view
+        if ((event.key === 'D' || event.key === 'd')) {
           console.log('🔑 D detected - navigating to Calendar Day view');
           event.preventDefault();
           navigateToRoute('/calendar?view=day');
