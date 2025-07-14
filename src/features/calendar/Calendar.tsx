@@ -208,6 +208,21 @@ export const Calendar: React.FC = () => {
           event.preventDefault();
           handleNavigate('next');
           break;
+        case 'd':
+          event.preventDefault();
+          setCurrentView('day');
+          navigate('/calendar?view=day');
+          break;
+        case 'w':
+          event.preventDefault();
+          setCurrentView('week');
+          navigate('/calendar?view=week');
+          break;
+        case 'm':
+          event.preventDefault();
+          setCurrentView('month');
+          navigate('/calendar?view=month');
+          break;
       }
     };
 
