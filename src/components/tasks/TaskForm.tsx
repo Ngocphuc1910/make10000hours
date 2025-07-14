@@ -143,6 +143,21 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
     }
   }, [isCreatingNewProject]);
 
+  // ESC key handler to cancel editing
+  useEffect(() => {
+    const handleEscapeKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCancel();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscapeKey);
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [onCancel]);
+
   // Close date picker when clicking outside - handled by DatePicker component itself
 
   // DatePicker handles its own positioning with useSmartPosition hook
