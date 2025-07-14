@@ -37,6 +37,7 @@ interface TaskState {
   cleanupListeners: () => void;
   cleanupOrphanedWorkSessions: () => Promise<{ deletedCount: number; orphanedSessions: { id: string; taskId: string; duration: number; date: string; }[]; }>;
   getNextPomodoroTask: (currentTaskId: string) => Task | null;
+  hasSchedulingChanges: (currentTask: Task | undefined, updates: Partial<Task>) => boolean;
 }
 
 const tasksCollection = collection(db, 'tasks');
@@ -286,6 +287,18 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
   },
   
+  // Helper function to detect if scheduling-related fields have changed
+  hasSchedulingChanges: (currentTask: Task | undefined, updates: Partial<Task>): boolean => {
+    if (!currentTask) return false;
+    
+    const schedulingFields = ['scheduledDate', 'scheduledStartTime', 'scheduledEndTime', 'includeTime'];
+    return schedulingFields.some(field => {
+      const currentValue = currentTask[field as keyof Task];
+      const newValue = updates[field as keyof Task];
+      return newValue !== undefined && currentValue !== newValue;
+    });
+  },
+
   updateTask: async (id, updates) => {
     try {
       const { user } = useUserStore.getState();
@@ -297,6 +310,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       
       // Check if projectId is being updated
       const isProjectIdChanging = updates.projectId && currentTask && updates.projectId !== currentTask.projectId;
+      
+      // Check if scheduling-related fields are being updated
+      const hasSchedulingChanges = get().hasSchedulingChanges(currentTask, updates);
       
       // Filter out undefined values to prevent Firebase errors
       const filteredUpdates = Object.fromEntries(
@@ -329,16 +345,16 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         }
       }
 
-      // Auto-sync task to Google Calendar if it has scheduling information
+      // Only auto-sync to Google Calendar if scheduling information was modified
       const updatedTask = { ...currentTask, ...updates };
-      if (updatedTask.scheduledDate) {
+      if (hasSchedulingChanges && updatedTask.scheduledDate) {
         try {
-          console.log('🔄 Auto-syncing updated task to Google Calendar...');
+          console.log('🔄 Auto-syncing task with scheduling changes to Google Calendar...');
           const { useSyncStore } = await import('./syncStore');
           await useSyncStore.getState().syncTask(id);
-          console.log('✅ Task update auto-synced to Google Calendar');
+          console.log('✅ Task scheduling changes auto-synced to Google Calendar');
         } catch (syncError) {
-          console.error('❌ Failed to auto-sync updated task to Google Calendar:', syncError);
+          console.error('❌ Failed to auto-sync task scheduling changes to Google Calendar:', syncError);
           // Don't throw the error since task update succeeded
         }
       }
