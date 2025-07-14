@@ -124,22 +124,51 @@ export class SyncManager {
 
     try {
       if (task.googleCalendarEventId) {
-        // Update existing event
-        await googleCalendarService.updateEvent(task.googleCalendarEventId, task, project);
-        
-        await this.updateTaskSyncStatus(task.id, {
-          syncStatus: 'synced',
-          lastSyncedAt: new Date(),
-        });
+        // Try to update existing event, fallback to create if event doesn't exist
+        try {
+          await googleCalendarService.updateEvent(task.googleCalendarEventId, task, project);
+          
+          await this.updateTaskSyncStatus(task.id, {
+            syncStatus: 'synced',
+            lastSyncedAt: new Date(),
+          });
 
-        await this.logSyncOperation({
-          userId: this.userId,
-          operation: 'update',
-          direction: 'to_google',
-          taskId: task.id,
-          googleEventId: task.googleCalendarEventId,
-          status: 'success',
-        });
+          await this.logSyncOperation({
+            userId: this.userId,
+            operation: 'update',
+            direction: 'to_google',
+            taskId: task.id,
+            googleEventId: task.googleCalendarEventId,
+            status: 'success',
+          });
+        } catch (updateError) {
+          // If update fails with "Not Found", create a new event
+          const errorMessage = updateError instanceof Error ? updateError.message : String(updateError);
+          if (errorMessage.includes('Not Found') || errorMessage.includes('404')) {
+            console.log(`🔄 Event ${task.googleCalendarEventId} not found, creating new event for task ${task.id}`);
+            
+            // Create new event
+            const eventId = await googleCalendarService.createEvent(task, project);
+            
+            await this.updateTaskSyncStatus(task.id, {
+              googleCalendarEventId: eventId,
+              syncStatus: 'synced',
+              lastSyncedAt: new Date(),
+            });
+
+            await this.logSyncOperation({
+              userId: this.userId,
+              operation: 'create',
+              direction: 'to_google',
+              taskId: task.id,
+              googleEventId: eventId,
+              status: 'success',
+            });
+          } else {
+            // Re-throw other errors
+            throw updateError;
+          }
+        }
       } else {
         // Create new event
         const eventId = await googleCalendarService.createEvent(task, project);
