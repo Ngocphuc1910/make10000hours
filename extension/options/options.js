@@ -469,7 +469,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       <label for="projectId">Project ID:</label>
       <input type="text" id="projectId" value="${config.projectId || ''}" />
     </div>
-    <div class="form-group">
+    <!-- API Key input removed for Chrome Web Store compliance -->
+    <div class="form-group" style="display: none;">
       <label for="apiKey">API Key:</label>
       <input type="password" id="apiKey" value="${config.apiKey || ''}" />
     </div>

@@ -5,11 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Make10000hours - Deep Focus</title>
   <link rel="stylesheet" href="popup.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.6.0/remixicon.min.css">
+  <!-- CSS will be loaded dynamically to ensure correct paths -->
   
   <!-- Load ExtensionEventBus first -->
   <script src="../utils/ExtensionEventBus.js"></script>
@@ -203,13 +199,15 @@
     <div class="loading-text">Processing...</div>
   </div>
 
-  <!-- Firebase Scripts (Local Bundle for CSP Compliance) - DISABLED -->
-  <!-- <script src="/vendor/firebase/firebase-bundle.js"></script> -->
-  <script src="firebase-service.js"></script> <!-- Firebase disabled internally -->
+  <!-- Firebase integration removed for Chrome Web Store compliance -->
 
   <!-- Component Scripts -->
   <script src="/components/chartComponents.js"></script>
   <script src="/components/analyticsUI.js"></script>
+  
+  <!-- Load fixes first -->
+  <script src="favicon-fix.js"></script>
+  <script src="icon-fix.js"></script>
   
   <!-- Load application scripts after all dependencies -->
   <script src="popup.js"></script>

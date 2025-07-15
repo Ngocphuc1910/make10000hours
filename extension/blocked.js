@@ -1,7 +1,168 @@
 /**
  * Blocked Page Script - External file to avoid CSP issues
- * Enhanced with debugging to identify blocking source
+ * Enhanced with debugging to identify blocking source and font loading
  */
+
+// Enhanced CSS loading with font detection and debugging
+function loadCSS() {
+  console.log('🎨 Starting CSS loading...');
+  
+  return Promise.all([
+    loadSingleCSS('assets/fonts/fonts.css'),
+    loadSingleCSS('assets/icons/remixicon.css')
+  ]).then(() => {
+    console.log('✅ CSS files loaded, waiting for fonts...');
+    return waitForFonts();
+  }).catch(error => {
+    console.error('❌ CSS loading failed:', error);
+    // Fallback to inline styles
+    injectFallbackStyles();
+  });
+}
+
+function loadSingleCSS(path) {
+  return new Promise((resolve, reject) => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    const url = chrome.runtime.getURL(path);
+    link.href = url;
+    console.log(`📁 Loading CSS: ${url}`);
+    
+    link.onload = () => {
+      console.log(`✅ CSS loaded: ${path}`);
+      
+      // Fix RemixIcon font URLs after CSS is loaded
+      if (path.includes('remixicon.css')) {
+        fixRemixIconFontUrl();
+      }
+      
+      resolve(path);
+    };
+    link.onerror = () => {
+      console.error(`❌ CSS failed: ${path}`);
+      reject(new Error(`Failed to load ${path}`));
+    };
+    
+    document.head.appendChild(link);
+  });
+}
+
+function fixRemixIconFontUrl() {
+  console.log('🔧 Fixing RemixIcon font URL...');
+  
+  // Get the correct font URL for the extension
+  const fontUrl = chrome.runtime.getURL('assets/icons/remixicon.woff2');
+  console.log('📁 Font URL:', fontUrl);
+  
+  // Create a new style element with the correct font face
+  const style = document.createElement('style');
+  style.textContent = `
+    @font-face {
+      font-family: remixicon;
+      src: url('${fontUrl}') format("woff2");
+      font-display: swap;
+    }
+  `;
+  
+  // Add to head
+  document.head.appendChild(style);
+  console.log('✅ RemixIcon font URL fixed');
+}
+
+function waitForFonts() {
+  if (!document.fonts) {
+    console.warn('⚠️ CSS Font Loading API not supported, using timeout');
+    return new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  console.log('🔍 Checking for RemixIcon font...');
+  
+  return Promise.race([
+    document.fonts.load('1em remixicon').then(() => {
+      console.log('🎉 RemixIcon font loaded successfully!');
+      debugFontLoading();
+      return true;
+    }),
+    new Promise(resolve => {
+      setTimeout(() => {
+        console.warn('⏰ Font loading timeout, checking manually...');
+        const isLoaded = document.fonts.check('1em remixicon');
+        console.log('Manual font check result:', isLoaded);
+        if (!isLoaded) {
+          console.error('❌ RemixIcon font not available, using fallback');
+          document.body.classList.add('font-fallback');
+        }
+        resolve(isLoaded);
+      }, 3000);
+    })
+  ]);
+}
+
+function debugFontLoading() {
+  if (document.fonts) {
+    console.log('📊 Available fonts:', Array.from(document.fonts.values()).map(f => `${f.family} (${f.status})`));
+    
+    const remixIconLoaded = document.fonts.check('1em remixicon');
+    console.log('🔍 RemixIcon check result:', remixIconLoaded);
+    
+    // Test an actual icon element
+    const testIcon = document.createElement('div');
+    testIcon.className = 'ri-focus-2-line';
+    testIcon.style.position = 'absolute';
+    testIcon.style.left = '-9999px';
+    document.body.appendChild(testIcon);
+    
+    setTimeout(() => {
+      const computedStyle = window.getComputedStyle(testIcon);
+      console.log('🧪 Test icon font-family:', computedStyle.fontFamily);
+      console.log('🧪 Test icon content:', computedStyle.content);
+      document.body.removeChild(testIcon);
+    }, 100);
+  }
+}
+
+function injectFallbackStyles() {
+  console.log('🆘 Injecting fallback styles...');
+  
+  const style = document.createElement('style');
+  style.textContent = `
+    /* Fallback icon styles */
+    .font-fallback [class*=" ri-"]:before,
+    .font-fallback [class^="ri-"]:before {
+      content: "⚬" !important;
+      font-family: system-ui, sans-serif !important;
+    }
+    
+    /* Specific fallbacks for key icons */
+    .font-fallback .ri-focus-2-line:before { content: "🎯" !important; }
+    .font-fallback .ri-global-line:before { content: "🌐" !important; }
+    .font-fallback .ri-list-settings-line:before { content: "⚙️" !important; }
+    .font-fallback .ri-bar-chart-line:before { content: "📊" !important; }
+    .font-fallback .ri-time-line:before { content: "⏰" !important; }
+  `;
+  
+  document.head.appendChild(style);
+  document.body.classList.add('font-fallback');
+}
+
+// Enhanced initialization
+function initializeCSS() {
+  console.log('🚀 Initializing CSS loading...');
+  
+  loadCSS().then(() => {
+    console.log('🎉 CSS initialization complete!');
+  }).catch(error => {
+    console.error('💥 CSS initialization failed:', error);
+  });
+}
+
+// Load CSS when DOM is ready with enhanced error handling
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeCSS);
+} else {
+  initializeCSS();
+}
+
 
 class BlockedPage {
   constructor() {

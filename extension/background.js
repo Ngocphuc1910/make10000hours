@@ -2364,13 +2364,13 @@ class FocusTimeTracker {
 
       switch (type) {
         case 'GET_FIREBASE_CONFIG':
-          // Firebase disabled - return empty config
-          sendResponse({ success: false, error: 'Firebase integration disabled' });
+          // Firebase removed for Chrome Web Store compliance
+          sendResponse({ success: false, error: 'Firebase integration removed' });
           return true;
 
         case 'SET_FIREBASE_CONFIG':
-          // Firebase disabled - ignore config requests
-          sendResponse({ success: false, error: 'Firebase integration disabled' });
+          // Firebase removed for Chrome Web Store compliance  
+          sendResponse({ success: false, error: 'Firebase integration removed' });
           return true;
 
         case 'GET_CURRENT_STATE':

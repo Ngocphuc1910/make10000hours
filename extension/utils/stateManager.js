@@ -24,7 +24,7 @@ class StateManager {
         dataRetentionDays: 30,
         integrationEnabled: false,
         pomodoroApiUrl: '',
-        pomodoroApiKey: ''
+        pomodoroKey: ''
       },
       uiState: {
         popupOpen: false,
