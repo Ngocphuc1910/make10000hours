@@ -1083,7 +1083,7 @@ const DeepFocusPage: React.FC = () => {
                 </div>
                 <button 
                   onClick={() => setIsAddModalOpen(true)}
-                  className="p-2 bg-[#BB5F5A] text-white rounded-full hover:bg-opacity-90 transition-all duration-200 hover:scale-105"
+                  className="p-2 bg-[#BA4949] text-white rounded-full hover:bg-opacity-90 transition-all duration-200 hover:scale-105"
                 >
                   <Icon name="add-line" className="w-5 h-5" />
                 </button>
