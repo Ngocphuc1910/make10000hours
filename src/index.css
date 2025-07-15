@@ -1446,52 +1446,7 @@ code {
   background-color: rgba(42, 42, 42, 0.8) !important;
 }
 
-/* Radio button styling - consistent with theme */
-input[type="radio"][name="addSiteMethod"] + div {
-  transition: border-color 0.2s ease;
-  border-color: var(--border-color);
-}
-
-input[type="radio"][name="addSiteMethod"] + div:hover {
-  border-color: rgba(187, 95, 90, 0.6);
-}
-
-/* Radio button selected state - same color in all themes */
-input[type="radio"][name="addSiteMethod"]:checked + div {
-  border-color: #BB5F5A !important;
-}
-
-input[type="radio"][name="addSiteMethod"]:checked + div .w-2\.5 {
-  background-color: #BB5F5A !important;
-}
-
-/* Dark mode radio buttons */
-[data-theme="dark"] input[type="radio"][name="addSiteMethod"] + div,
-.dark input[type="radio"][name="addSiteMethod"] + div {
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-[data-theme="dark"] input[type="radio"][name="addSiteMethod"] + div:hover,
-.dark input[type="radio"][name="addSiteMethod"] + div:hover {
-  border-color: rgba(187, 95, 90, 0.7);
-}
-
-/* Ensure selected state is consistent across themes */
-[data-theme="dark"] input[type="radio"][name="addSiteMethod"]:checked + div,
-.dark input[type="radio"][name="addSiteMethod"]:checked + div {
-  border-color: #BB5F5A !important;
-}
-
-[data-theme="dark"] input[type="radio"][name="addSiteMethod"]:checked + div .w-2\.5,
-.dark input[type="radio"][name="addSiteMethod"]:checked + div .w-2\.5 {
-  background-color: #BB5F5A !important;
-}
-
-/* Focus states for accessibility */
-input[type="radio"][name="addSiteMethod"]:focus + div {
-  box-shadow: 0 0 0 2px rgba(187, 95, 90, 0.2);
-  outline: none;
-}
+/* NO CSS INTERFERENCE - All radio buttons are now completely custom divs */
 
 /* Checkbox consistency - maintain default behavior but ensure proper contrast */
 .add-site-modal-item .custom-checkbox {

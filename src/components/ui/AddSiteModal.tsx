@@ -163,48 +163,66 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
           </button>
         </div>
 
-        {/* Radio Button Selection */}
+        {/* Custom Radio Button Selection - COMPLETELY CUSTOM */}
         <div className="flex gap-6 mb-6 flex-shrink-0">
-          <label className="flex items-center gap-2 cursor-pointer hover:opacity-75 transition-opacity">
-            <input
-              type="radio"
-              name="addSiteMethod"
-              value="visited"
-              checked={method === 'visited'}
-              onChange={() => setMethod('visited')}
-              className="hidden"
-            />
-            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
-              method === 'visited' 
-                ? 'border-[#BB5F5A] bg-transparent' 
-                : 'border-border'
-            }`}>
-              <div className={`w-2.5 h-2.5 rounded-full bg-[#BB5F5A] transition-opacity duration-200 ${
-                method === 'visited' ? 'opacity-100' : 'opacity-0'
-              }`}></div>
+          <div 
+            className="flex items-center gap-2 cursor-pointer hover:opacity-75 transition-opacity"
+            onClick={() => setMethod('visited')}
+          >
+            <div 
+              style={{
+                width: '20px',
+                height: '20px',
+                borderRadius: '50%',
+                border: method === 'visited' ? '2px solid #BA4949' : '2px solid #d1d5db',
+                backgroundColor: '#00000000', // Fully transparent
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <div 
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: method === 'visited' ? '#BA4949' : '#00000000',
+                  transition: 'all 0.2s ease'
+                }}
+              ></div>
             </div>
             <span className="text-base text-text-primary">Select visited sites</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer hover:opacity-75 transition-opacity">
-            <input
-              type="radio"
-              name="addSiteMethod"
-              value="manual"
-              checked={method === 'manual'}
-              onChange={() => setMethod('manual')}
-              className="hidden"
-            />
-            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
-              method === 'manual' 
-                ? 'border-[#BB5F5A] bg-transparent' 
-                : 'border-border'
-            }`}>
-              <div className={`w-2.5 h-2.5 rounded-full bg-[#BB5F5A] transition-opacity duration-200 ${
-                method === 'manual' ? 'opacity-100' : 'opacity-0'
-              }`}></div>
+          </div>
+          <div 
+            className="flex items-center gap-2 cursor-pointer hover:opacity-75 transition-opacity"
+            onClick={() => setMethod('manual')}
+          >
+            <div 
+              style={{
+                width: '20px',
+                height: '20px',
+                borderRadius: '50%',
+                border: method === 'manual' ? '2px solid #BA4949' : '2px solid #d1d5db',
+                backgroundColor: '#00000000', // Fully transparent
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <div 
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: method === 'manual' ? '#BA4949' : '#00000000',
+                  transition: 'all 0.2s ease'
+                }}
+              ></div>
             </div>
             <span className="text-base text-text-primary">Input site URL</span>
-          </label>
+          </div>
         </div>
 
         {/* Content Container with proper height management */}
@@ -218,7 +236,7 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#BB5F5A] focus:border-transparent bg-background-container text-text-primary placeholder-text-secondary"
+                  className="w-full pl-10 pr-4 py-2.5 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-background-container text-text-primary placeholder-text-secondary"
                   placeholder="Search sites..."
                 />
                 <div className="absolute left-3 top-2.5 flex items-center h-5 text-text-secondary pointer-events-none">
@@ -231,7 +249,7 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
                 <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
                   {isLoading ? (
                     <div className="flex items-center justify-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#BB5F5A]"></div>
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                       <span className="ml-3 text-text-secondary">Loading sites...</span>
                     </div>
                   ) : filteredSites.length === 0 ? (
@@ -252,7 +270,7 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
                         />
                         <span className="text-base font-medium text-text-primary">Select all sites</span>
                         {selectedSites.size > 0 && (
-                          <span className="text-sm text-[#BB5F5A] font-medium ml-auto">
+                          <span className="text-sm text-primary font-medium ml-auto">
                             {selectedSites.size} selected
                           </span>
                         )}
@@ -299,7 +317,7 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
                   type="text"
                   value={manualUrl}
                   onChange={(e) => setManualUrl(e.target.value)}
-                  className="w-full px-4 py-3 text-base border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#BB5F5A] focus:border-transparent bg-background-container text-text-primary placeholder-text-secondary"
+                  className="w-full px-4 py-3 text-base border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-background-container text-text-primary placeholder-text-secondary"
                   placeholder="https://www.facebook.com/"
                 />
               </div>
@@ -331,7 +349,7 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({ isOpen, onClose, onAddSites
             disabled={selectedCount === 0}
             className={`px-6 py-2 rounded-lg font-medium transition-colors ${
               selectedCount > 0
-                ? 'bg-[#BB5F5A] text-white hover:bg-[#A54F4A]'
+                ? 'bg-primary text-white hover:bg-primary/90'
                 : 'bg-background-container text-text-secondary cursor-not-allowed'
             }`}
           >
