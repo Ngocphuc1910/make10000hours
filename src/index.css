@@ -1449,9 +1449,15 @@ code {
 /* NO CSS INTERFERENCE - All radio buttons are now completely custom divs */
 
 /* Checkbox consistency - maintain default behavior but ensure proper contrast */
-.add-site-modal-item .custom-checkbox {
+.add-site-modal-item .custom-checkbox:not(:checked) {
   background-color: transparent;
   transition: all 0.2s ease;
+}
+
+/* Ensure checked checkboxes show proper red color */
+.add-site-modal-item .custom-checkbox:checked {
+  background-color: #BA4949 !important;
+  border-color: #BA4949 !important;
 }
 
 /* Preserve checkbox states during item hover */
