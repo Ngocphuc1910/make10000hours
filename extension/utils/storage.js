@@ -215,7 +215,7 @@ class StorageManager {
         dataRetentionDays: 30,
         integrationEnabled: false,
         pomodoroApiUrl: '',
-        pomodoroApiKey: '',
+        pomodoroKey: '',
         notifications: {
           dailyReport: true,
           focusReminders: true,
