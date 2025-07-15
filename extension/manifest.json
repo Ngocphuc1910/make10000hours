@@ -2,7 +2,8 @@
   "manifest_version": 3,
   "name": "Focus Time Tracker",
   "version": "1.0.0",
-  "description": "Track website usage time and block distracting sites during focus sessions.",
+  "description": "Track website usage time and block distracting sites during focus sessions. Needs access to all sites.",
+  "homepage_url": "https://make10000hours.com",
   
   "permissions": [
     "storage",
@@ -20,7 +21,7 @@
   ],
   
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self';"
+    "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: chrome-extension:; connect-src 'self'; object-src 'none';"
   },
   
   "background": {
@@ -75,7 +76,13 @@
         "blocked.js", 
         "icons/*", 
         "components/*",
-        "_favicon/*"
+        "assets/fonts/*.woff2",
+        "assets/fonts/*.woff",
+        "assets/fonts/*.ttf",
+        "assets/fonts/fonts.css",
+        "assets/icons/*.woff2",
+        "assets/icons/*.woff",
+        "assets/icons/remixicon.css"
       ],
       "matches": ["<all_urls>"]
     }
@@ -83,22 +90,8 @@
   
   "externally_connectable": {
     "matches": [
-      "http://localhost:*/*",
-      "https://localhost:*/*",
-      "http://127.0.0.1:*/*",
-      "https://127.0.0.1:*/*",
-      "http://0.0.0.0:*/*",
-      "https://0.0.0.0:*/*",
-      "http://*.local:*/*",
-      "https://*.local:*/*",
-      "http://*.localhost:*/*",
-      "https://*.localhost:*/*",
       "https://make10000hours.com/*",
-      "https://www.make10000hours.com/*",
-      "https://*.vercel.app/*",
-      "https://*.netlify.app/*",
-      "https://*.web.app/*",
-      "https://*.firebaseapp.com/*"
+      "https://www.make10000hours.com/*"
     ]
   }
 } 

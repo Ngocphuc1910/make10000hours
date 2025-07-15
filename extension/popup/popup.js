@@ -1,77 +1,489 @@
 /**
  * Popup Script for Make10000hours Extension
  * Handles UI interactions and communication with background script
+ * Enhanced with font loading debugging
  */
+
+// Enhanced CSS loading with font detection and debugging
+function loadCSS() {
+  console.log('🎨 [POPUP] Starting CSS loading...');
+  
+  return Promise.all([
+    loadSingleCSS('assets/fonts/fonts.css'),
+    loadSingleCSS('assets/icons/remixicon.css')
+  ]).then(() => {
+    console.log('✅ [POPUP] CSS files loaded, waiting for fonts...');
+    return waitForFonts();
+  }).catch(error => {
+    console.error('❌ [POPUP] CSS loading failed:', error);
+    // Fallback to inline styles
+    injectFallbackStyles();
+  });
+}
+
+function loadSingleCSS(path) {
+  return new Promise((resolve, reject) => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    const url = chrome.runtime.getURL(path);
+    link.href = url;
+    console.log(`📁 [POPUP] Loading CSS: ${url}`);
+    
+    link.onload = () => {
+      console.log(`✅ [POPUP] CSS loaded: ${path}`);
+      
+      // Fix RemixIcon font URLs after CSS is loaded
+      if (path.includes('remixicon.css')) {
+        fixRemixIconFontUrl();
+      }
+      
+      resolve(path);
+    };
+    link.onerror = () => {
+      console.error(`❌ [POPUP] CSS failed: ${path}`);
+      reject(new Error(`Failed to load ${path}`));
+    };
+    
+    document.head.appendChild(link);
+  });
+}
+
+function fixRemixIconFontUrl() {
+  console.log('🔧 [POPUP] Fixing RemixIcon font URL...');
+  
+  // Get the correct font URL for the extension
+  const fontUrl = chrome.runtime.getURL('assets/icons/remixicon.woff2');
+  console.log('📁 [POPUP] Font URL:', fontUrl);
+  
+  // Create a new style element with the correct font face
+  const style = document.createElement('style');
+  style.textContent = `
+    @font-face {
+      font-family: remixicon;
+      src: url('${fontUrl}') format("woff2");
+      font-display: swap;
+    }
+  `;
+  
+  // Add to head
+  document.head.appendChild(style);
+  console.log('✅ [POPUP] RemixIcon font URL fixed');
+}
+
+function waitForFonts() {
+  if (!document.fonts) {
+    console.warn('⚠️ [POPUP] CSS Font Loading API not supported, using timeout');
+    return new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  console.log('🔍 [POPUP] Checking for RemixIcon font...');
+  
+  return Promise.race([
+    document.fonts.load('1em remixicon').then(() => {
+      console.log('🎉 [POPUP] RemixIcon font loaded successfully!');
+      debugFontLoading();
+      return true;
+    }),
+    new Promise(resolve => {
+      setTimeout(() => {
+        console.warn('⏰ [POPUP] Font loading timeout, checking manually...');
+        const isLoaded = document.fonts.check('1em remixicon');
+        console.log('[POPUP] Manual font check result:', isLoaded);
+        if (!isLoaded) {
+          console.error('❌ [POPUP] RemixIcon font not available after timeout');
+          // Don't add fallback class immediately, try debugging first
+          checkFontStatus();
+        }
+        resolve(isLoaded);
+      }, 3000);
+    })
+  ]);
+}
+
+function debugFontLoading() {
+  if (document.fonts) {
+    console.log('📊 [POPUP] Available fonts:', Array.from(document.fonts.values()).map(f => `${f.family} (${f.status})`));
+    
+    const remixIconLoaded = document.fonts.check('1em remixicon');
+    console.log('🔍 [POPUP] RemixIcon check result:', remixIconLoaded);
+    
+    // Test an actual icon element
+    const testIcon = document.createElement('div');
+    testIcon.className = 'ri-computer-line';
+    testIcon.style.position = 'absolute';
+    testIcon.style.left = '-9999px';
+    document.body.appendChild(testIcon);
+    
+    setTimeout(() => {
+      const computedStyle = window.getComputedStyle(testIcon);
+      console.log('🧪 [POPUP] Test icon font-family:', computedStyle.fontFamily);
+      console.log('🧪 [POPUP] Test icon content:', computedStyle.content);
+      document.body.removeChild(testIcon);
+    }, 100);
+  }
+}
+
+function injectFallbackStyles() {
+  console.log('🆘 [POPUP] Font loading failed, checking CSS and font files...');
+  
+  // Don't inject fallback styles immediately, let's debug first
+  setTimeout(() => {
+    checkFontStatus();
+  }, 1000);
+}
+
+function checkFontStatus() {
+  console.log('🔍 [POPUP] Debugging font status...');
+  
+  // Check if RemixIcon CSS is loaded
+  const cssLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+  const remixIconCSS = cssLinks.find(link => link.href.includes('remixicon.css'));
+  console.log('📄 [POPUP] RemixIcon CSS link:', remixIconCSS?.href);
+  
+  // Check computed styles on actual icon elements
+  const iconElements = document.querySelectorAll('[class*="ri-"]');
+  console.log('🔍 [POPUP] Found', iconElements.length, 'icon elements');
+  
+  iconElements.forEach((el, index) => {
+    const styles = window.getComputedStyle(el, '::before');
+    console.log(`🧪 [POPUP] Icon ${index + 1} (${el.className}):`, {
+      fontFamily: styles.fontFamily,
+      content: styles.content,
+      fontSize: styles.fontSize
+    });
+  });
+  
+  // Force reload RemixIcon if needed
+  if (!document.fonts.check('1em remixicon')) {
+    console.log('🔄 [POPUP] RemixIcon not loaded, forcing reload...');
+    forceReloadRemixIcon();
+  }
+}
+
+function forceReloadRemixIcon() {
+  // Remove existing RemixIcon CSS
+  const existingCSS = document.querySelector('link[href*="remixicon.css"]');
+  if (existingCSS) {
+    existingCSS.remove();
+  }
+  
+  // Add a small delay then reload
+  setTimeout(() => {
+    const newLink = document.createElement('link');
+    newLink.rel = 'stylesheet';
+    newLink.href = chrome.runtime.getURL('assets/icons/remixicon.css') + '?v=' + Date.now();
+    newLink.onload = () => {
+      console.log('🎉 [POPUP] RemixIcon CSS reloaded!');
+      // Wait for font to load
+      setTimeout(() => {
+        if (document.fonts.check('1em remixicon')) {
+          console.log('✅ [POPUP] RemixIcon font now available!');
+          document.body.classList.remove('font-fallback');
+        } else {
+          console.log('❌ [POPUP] RemixIcon still not available after reload');
+        }
+      }, 500);
+    };
+    document.head.appendChild(newLink);
+  }, 100);
+}
+
+// Enhanced initialization
+function initializeCSS() {
+  console.log('🚀 [POPUP] Initializing CSS loading...');
+  
+  loadCSS().then(() => {
+    console.log('🎉 [POPUP] CSS initialization complete!');
+  }).catch(error => {
+    console.error('💥 [POPUP] CSS initialization failed:', error);
+  });
+}
+
+// Load CSS when DOM is ready with enhanced error handling
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeCSS);
+} else {
+  initializeCSS();
+}
 
 /**
  * Chrome Native Favicon API Helper
  * Replaces FaviconService with Chrome's built-in favicon API
  */
 /**
- * Get favicon URL using Google's service (same as web app)
+ * Get favicon URL using Chrome extension safe methods
  */
-async function getGoogleFavicon(domain, size = 32) {
+async function getSafeFavicon(domain, size = 32) {
+  console.log(`🔍 Getting favicon for ${domain} (size: ${size})`);
+  
   try {
-    const cleanDomain = domain.replace(/^www\./, '').toLowerCase();
-    const googleUrl = `https://www.google.com/s2/favicons?domain=${cleanDomain}&sz=${size * 2}`;
-    
-    // Validate the favicon loads successfully
-    const isValid = await new Promise((resolve) => {
-      const img = new Image();
-      const timeoutId = setTimeout(() => {
-        resolve(false);
-      }, 2000); // 2 second timeout
-      
-      img.onload = () => {
-        clearTimeout(timeoutId);
-        // Check if it's not a default empty favicon
-        if (img.width > 16 || img.height > 16) {
-          resolve(true);
-        } else {
-          resolve(false);
+    // Use the FaviconService utility if available
+    if (typeof FaviconService !== 'undefined') {
+      console.log(`📚 Using FaviconService for ${domain}`);
+      const result = await FaviconService.getFaviconUrl(domain, { size });
+      if (result && result.url) {
+        console.log(`✅ FaviconService found: ${result.url} (source: ${result.source})`);
+        return result.url;
+      }
+      console.log(`❌ FaviconService failed for ${domain}`);
+    }
+
+    // Chrome Extension Manifest V3 favicon API
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      const cleanDomain = domain.replace(/^www\./, '').toLowerCase();
+      const urls = [
+        `https://${cleanDomain}`,
+        `https://www.${cleanDomain}`,
+        `http://${cleanDomain}`,
+        `http://www.${cleanDomain}`
+      ];
+
+      for (const url of urls) {
+        const faviconUrl = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(url)}&size=${size}`;
+        
+        // Test if favicon loads successfully
+        const isValid = await new Promise((resolve) => {
+          const img = new Image();
+          const timeoutId = setTimeout(() => resolve(false), 3000);
+          
+          img.onload = () => {
+            clearTimeout(timeoutId);
+            resolve(img.width > 8 && img.height > 8);
+          };
+          
+          img.onerror = () => {
+            clearTimeout(timeoutId);
+            resolve(false);
+          };
+          
+          img.src = faviconUrl;
+        });
+        
+        if (isValid) {
+          return faviconUrl;
         }
-      };
-      
-      img.onerror = () => {
-        clearTimeout(timeoutId);
-        resolve(false);
-      };
-      
-      img.src = googleUrl;
-    });
+      }
+    }
+
+    // Try third-party favicon services (dynamic, no hardcoding)
+    // Updated 2024 with best coverage services + aggressive fallbacks
+    const cleanDomain = domain.replace(/^www\./, '').toLowerCase();
     
-    return isValid ? googleUrl : null;
+    // Get domain variations for popular services
+    const getDomainVariations = (domain) => {
+      const variations = [domain];
+      const domainMap = {
+        'messenger.com': ['facebook.com', 'meta.com'],
+        'facebook.com': ['facebook.com', 'meta.com'],
+        'instagram.com': ['instagram.com', 'facebook.com'],
+        'youtube.com': ['youtube.com', 'google.com'],
+        'gmail.com': ['gmail.com', 'google.com'],
+        'linkedin.com': ['linkedin.com'],
+        'twitter.com': ['twitter.com', 'x.com'],
+        'reddit.com': ['reddit.com'],
+        'github.com': ['github.com'],
+        'stackoverflow.com': ['stackoverflow.com'],
+        'medium.com': ['medium.com'],
+        'notion.so': ['notion.so', 'notion.com'],
+        'figma.com': ['figma.com'],
+        'discord.com': ['discord.com'],
+        'slack.com': ['slack.com']
+      };
+      
+      if (domainMap[domain]) {
+        variations.push(...domainMap[domain]);
+      }
+      
+      return [...new Set(variations)];
+    };
+    
+    const domainVariations = getDomainVariations(cleanDomain);
+    console.log(`🔄 Trying domain variations for ${cleanDomain}:`, domainVariations);
+    
+    // All external favicon services removed for Chrome Web Store compliance
+    const services = [];
+
+    // Try each service with each domain variation
+    for (const service of services) {
+      for (const domainVariation of domainVariations) {
+        try {
+          const faviconUrl = service.url(domainVariation);
+          console.log(`🔍 Testing ${service.name} for ${domainVariation}: ${faviconUrl}`);
+          
+          const isValid = await new Promise((resolve) => {
+            const img = new Image();
+            const timeoutId = setTimeout(() => {
+              console.log(`⏰ Timeout for ${service.name} (${domainVariation})`);
+              resolve(false);
+            }, service.timeout);
+            
+            img.onload = () => {
+              clearTimeout(timeoutId);
+              // More robust validation - check for valid favicon characteristics
+              const isValidFavicon = img.width > 8 && img.height > 8 && 
+                                   img.naturalWidth > 0 && img.naturalHeight > 0 &&
+                                   !img.src.includes('data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP'); // not transparent pixel
+              
+              console.log(`${isValidFavicon ? '✅' : '❌'} ${service.name} validation result for ${domainVariation}: ${img.width}x${img.height}`);
+              resolve(isValidFavicon);
+            };
+            
+            img.onerror = () => {
+              clearTimeout(timeoutId);
+              console.log(`❌ ${service.name} load error for ${domainVariation}`);
+              resolve(false);
+            };
+            
+            img.src = faviconUrl;
+          });
+          
+          if (isValid) {
+            console.log(`✅ Favicon found via ${service.name} for ${domainVariation} (original: ${cleanDomain})`);
+            return faviconUrl;
+          }
+        } catch (error) {
+          console.warn(`❌ ${service.name} failed for ${domainVariation}:`, error);
+          continue;
+        }
+      }
+    }
+
+    // Direct favicon access removed for Chrome Web Store compliance
+    // Extension will now use fallback icons only
+    
+    return null;
   } catch (error) {
-    console.warn('Google favicon service error:', error);
+    console.warn('Safe favicon service error:', error);
     return null;
   }
 }
 
 function getDomainFallbackIcon(domain) {
-  // Reuse existing icon mapping logic
+  console.log(`🎯 Getting fallback icon for ${domain}`);
+  
+  // Comprehensive icon mapping with better coverage
   const iconMap = {
-    'github.com': 'ri-github-fill',
+    // Social Media
+    'facebook.com': 'ri-facebook-fill',
+    'messenger.com': 'ri-messenger-line',
+    'instagram.com': 'ri-instagram-fill',
+    'twitter.com': 'ri-twitter-fill',
+    'x.com': 'ri-twitter-fill',
+    'linkedin.com': 'ri-linkedin-fill',
+    'youtube.com': 'ri-youtube-fill',
+    'reddit.com': 'ri-reddit-fill',
+    'pinterest.com': 'ri-pinterest-line',
+    'snapchat.com': 'ri-snapchat-line',
+    'tiktok.com': 'ri-music-line',
+    'discord.com': 'ri-discord-line',
+    'slack.com': 'ri-slack-line',
+    'whatsapp.com': 'ri-whatsapp-line',
+    'telegram.org': 'ri-telegram-line',
+    
+    // Google Services  
+    'google.com': 'ri-google-fill',
     'gmail.com': 'ri-mail-line',
     'mail.google.com': 'ri-mail-line',
-    'youtube.com': 'ri-youtube-fill',
-    'facebook.com': 'ri-facebook-fill',
-    'twitter.com': 'ri-twitter-fill',
-    'linkedin.com': 'ri-linkedin-fill',
-    'reddit.com': 'ri-reddit-fill',
-    'netflix.com': 'ri-netflix-fill',
-    'amazon.com': 'ri-shopping-cart-line',
-    'google.com': 'ri-google-fill',
-    'instagram.com': 'ri-instagram-fill',
+    'docs.google.com': 'ri-google-line',
+    'sheets.google.com': 'ri-google-line',
+    'slides.google.com': 'ri-google-line',
+    'drive.google.com': 'ri-google-line',
+    
+    // Development & Tools
+    'github.com': 'ri-github-fill',
+    'gitlab.com': 'ri-git-branch-line',
+    'stackoverflow.com': 'ri-stack-line',
+    'stackexchange.com': 'ri-stack-line',
+    'codepen.io': 'ri-codepen-line',
+    'jsfiddle.net': 'ri-code-line',
+    'replit.com': 'ri-terminal-line',
+    'dev.to': 'ri-code-line',
+    
+    // Design & Creative
     'figma.com': 'ri-shape-line',
+    'sketch.com': 'ri-pencil-line',
+    'dribbble.com': 'ri-dribbble-line',
+    'behance.net': 'ri-behance-line',
+    'canva.com': 'ri-palette-line',
+    'adobe.com': 'ri-brush-line',
+    
+    // Productivity
+    'notion.so': 'ri-file-text-line',
+    'notion.com': 'ri-file-text-line',
+    'trello.com': 'ri-trello-line',
+    'asana.com': 'ri-task-line',
+    'todoist.com': 'ri-todo-line',
+    'monday.com': 'ri-calendar-line',
+    'airtable.com': 'ri-table-line',
+    
+    // Cloud Storage
+    'dropbox.com': 'ri-dropbox-line',
+    'onedrive.live.com': 'ri-microsoft-line',
+    'box.com': 'ri-folder-cloud-line',
+    'icloud.com': 'ri-cloud-line',
+    
+    // Entertainment
+    'netflix.com': 'ri-netflix-fill',
+    'spotify.com': 'ri-spotify-line',
+    'soundcloud.com': 'ri-soundcloud-line',
+    'twitch.tv': 'ri-twitch-line',
+    'vimeo.com': 'ri-vimeo-line',
+    'disney.com': 'ri-film-line',
+    'hulu.com': 'ri-tv-line',
+    
+    // E-commerce
+    'amazon.com': 'ri-shopping-cart-line',
+    'ebay.com': 'ri-auction-line',
+    'etsy.com': 'ri-store-line',
+    'shopify.com': 'ri-shopping-bag-line',
+    
+    // Business & Analytics
+    'salesforce.com': 'ri-line-chart-line',
+    'hubspot.com': 'ri-pie-chart-line',
+    'mailchimp.com': 'ri-mail-send-line',
+    'zendesk.com': 'ri-customer-service-line',
+    
+    // News & Media
+    'medium.com': 'ri-medium-line',
+    'wordpress.com': 'ri-wordpress-line',
+    'blogger.com': 'ri-edit-line',
+    'substack.com': 'ri-newsletter-line',
+    
+    // AI & Tech
     'claude.ai': 'ri-robot-line',
+    'openai.com': 'ri-brain-line',
+    'chatgpt.com': 'ri-chat-3-line',
+    
+    // My App
     'make10000hours.com': 'ri-focus-3-line',
+    
+    // Cloud Services
     'firebase.google.com': 'ri-fire-line',
-    'console.firebase.google.com': 'ri-fire-line'
+    'console.firebase.google.com': 'ri-fire-line',
+    'aws.amazon.com': 'ri-cloud-line',
+    'azure.microsoft.com': 'ri-cloud-line',
+    
+    // Communication
+    'zoom.us': 'ri-video-line',
+    'teams.microsoft.com': 'ri-team-line',
+    'meet.google.com': 'ri-video-chat-line'
   };
   
-  for (const [site, icon] of Object.entries(iconMap)) {
-    if (domain.includes(site)) return icon;
+  // Check exact domain match first
+  if (iconMap[domain]) {
+    console.log(`✅ Exact fallback icon found for ${domain}: ${iconMap[domain]}`);
+    return iconMap[domain];
   }
+  
+  // Check partial matches
+  for (const [site, icon] of Object.entries(iconMap)) {
+    if (domain.includes(site.replace('.com', '').replace('.org', '').replace('.net', ''))) {
+      console.log(`✅ Partial fallback icon found for ${domain}: ${icon}`);
+      return icon;
+    }
+  }
+  
+  console.log(`❌ No fallback icon found for ${domain}, using default`);
   return 'ri-global-line';
 }
 
@@ -832,7 +1244,9 @@ class PopupManager {
         const currentSites = response.data;
         
         // Always do a full refresh to prevent duplicates
-        sitesListEl.innerHTML = '';
+        while (sitesListEl.firstChild) {
+          sitesListEl.removeChild(sitesListEl.firstChild);
+        }
         
         // Create unique sites map to prevent duplicates
         const uniqueSites = new Map();
@@ -858,22 +1272,50 @@ class PopupManager {
         // Store current sites for reference
         this.previousStats = sitesToRender;
       } else {
-        sitesListEl.innerHTML = `
-          <div class="loading-state">
-            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
-            <div style="color: var(--text-muted); font-size: 0.875rem;">No sites tracked today</div>
-          </div>
-        `;
+        // Clear and add empty state safely
+        while (sitesListEl.firstChild) {
+          sitesListEl.removeChild(sitesListEl.firstChild);
+        }
+        const emptyState = document.createElement('div');
+        emptyState.className = 'loading-state';
+        
+        const icon = document.createElement('div');
+        icon.style.fontSize = '2rem';
+        icon.style.marginBottom = '0.5rem';
+        icon.textContent = '📊';
+        
+        const text = document.createElement('div');
+        text.style.color = 'var(--text-muted)';
+        text.style.fontSize = '0.875rem';
+        text.textContent = 'No sites tracked today';
+        
+        emptyState.appendChild(icon);
+        emptyState.appendChild(text);
+        sitesListEl.appendChild(emptyState);
       }
       
     } catch (error) {
       console.error('Error updating top sites:', error);
-      sitesListEl.innerHTML = `
-        <div class="loading-state">
-          <div style="font-size: 2rem; margin-bottom: 0.5rem;">⚠️</div>
-          <div style="color: var(--text-muted); font-size: 0.875rem;">Error loading sites</div>
-        </div>
-      `;
+      // Clear and add error state safely
+      while (sitesListEl.firstChild) {
+        sitesListEl.removeChild(sitesListEl.firstChild);
+      }
+      const errorState = document.createElement('div');
+      errorState.className = 'loading-state';
+      
+      const icon = document.createElement('div');
+      icon.style.fontSize = '2rem';
+      icon.style.marginBottom = '0.5rem';
+      icon.textContent = '⚠️';
+      
+      const text = document.createElement('div');
+      text.style.color = 'var(--text-muted)';
+      text.style.fontSize = '0.875rem';
+      text.textContent = 'Error loading sites';
+      
+      errorState.appendChild(icon);
+      errorState.appendChild(text);
+      sitesListEl.appendChild(errorState);
     } finally {
       this.updatingTopSites = false;
     }
@@ -987,14 +1429,14 @@ class PopupManager {
     const fallbackIcon = siteItem.querySelector('.site-icon-fallback');
     const progressFill = siteItem.querySelector('.progress-fill');
     
-    // Use Google's favicon service (same as web app)
+    // Use Chrome extension safe favicon service
     let progressColor = this.getBrandColor(site.domain);
     
     try {
-      const faviconUrl = await getGoogleFavicon(site.domain, 32);
+      const faviconUrl = await getSafeFavicon(site.domain, 32);
       
       if (faviconUrl) {
-        // Successfully got favicon from Google
+        // Successfully got favicon using safe methods
         icon.src = faviconUrl;
         icon.style.display = 'block';
         icon.onload = () => {
@@ -1107,27 +1549,51 @@ class PopupManager {
       const response = await this.sendMessage('GET_BLOCKED_SITES');
       
       if (response.success && response.data.length > 0) {
-        blockedSitesListEl.innerHTML = '';
+        while (blockedSitesListEl.firstChild) {
+          blockedSitesListEl.removeChild(blockedSitesListEl.firstChild);
+        }
         
         for (const domain of response.data) {
           const blockedSiteItem = await this.createBlockedSiteItem(domain);
           blockedSitesListEl.appendChild(blockedSiteItem);
         }
       } else {
-        blockedSitesListEl.innerHTML = `
-          <div class="loading-state">
-            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🛡️</div>
-            <div style="color: var(--text-muted); font-size: 0.875rem;">No blocked sites</div>
-          </div>
-        `;
+        // Clear and add empty state safely
+        while (blockedSitesListEl.firstChild) {
+          blockedSitesListEl.removeChild(blockedSitesListEl.firstChild);
+        }
+        const emptyState = document.createElement('div');
+        emptyState.className = 'loading-state';
+        
+        const icon = document.createElement('div');
+        icon.style.fontSize = '2rem';
+        icon.style.marginBottom = '0.5rem';
+        icon.textContent = '🛡️';
+        
+        const text = document.createElement('div');
+        text.style.color = 'var(--text-muted)';
+        text.style.fontSize = '0.875rem';
+        text.textContent = 'No blocked sites';
+        
+        emptyState.appendChild(icon);
+        emptyState.appendChild(text);
+        blockedSitesListEl.appendChild(emptyState);
       }
     } catch (error) {
       console.error('Error updating blocked sites:', error);
-      blockedSitesListEl.innerHTML = `
-        <div class="loading-state">
-          <div style="color: var(--accent-red);">Failed to load blocked sites</div>
-        </div>
-      `;
+      // Clear and add error state safely
+      while (blockedSitesListEl.firstChild) {
+        blockedSitesListEl.removeChild(blockedSitesListEl.firstChild);
+      }
+      const errorState = document.createElement('div');
+      errorState.className = 'loading-state';
+      
+      const text = document.createElement('div');
+      text.style.color = 'var(--accent-red)';
+      text.textContent = 'Failed to load blocked sites';
+      
+      errorState.appendChild(text);
+      blockedSitesListEl.appendChild(errorState);
     }
   }
 
@@ -1138,43 +1604,102 @@ class PopupManager {
     const item = document.createElement('div');
     item.className = 'blocked-site-item';
     
-    // Try to get favicon from Google, fallback to icon
-    let iconHtml;
+    // Create left section
+    const leftSection = document.createElement('div');
+    leftSection.className = 'blocked-site-left';
+    
+    // Create icon container
+    const iconContainer = document.createElement('div');
+    iconContainer.className = 'blocked-site-icon';
+    
+    // Try to get favicon using safe methods, fallback to icon
     try {
-      const faviconUrl = await getGoogleFavicon(domain, 32);
+      const faviconUrl = await getSafeFavicon(domain, 32);
       if (faviconUrl) {
-        iconHtml = `<div class="blocked-site-icon">
-          <img src="${faviconUrl}" alt="${domain}" class="site-icon" 
-               onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-          <div class="fallback-icon" style="display:none; align-items:center; justify-content:center; width:32px; height:32px;">
-            <i class="${getDomainFallbackIcon(domain)}"></i>
-          </div>
-        </div>`;
+        const img = document.createElement('img');
+        img.src = faviconUrl;
+        img.alt = domain;
+        img.className = 'site-icon';
+        
+        const fallback = document.createElement('div');
+        fallback.className = 'fallback-icon';
+        fallback.style.display = 'none';
+        fallback.style.alignItems = 'center';
+        fallback.style.justifyContent = 'center';
+        fallback.style.width = '32px';
+        fallback.style.height = '32px';
+        
+        const fallbackIcon = document.createElement('i');
+        fallbackIcon.className = getDomainFallbackIcon(domain);
+        fallback.appendChild(fallbackIcon);
+        
+        img.onerror = () => {
+          img.style.display = 'none';
+          fallback.style.display = 'flex';
+        };
+        
+        iconContainer.appendChild(img);
+        iconContainer.appendChild(fallback);
       } else {
-        iconHtml = `<div class="blocked-site-icon"><i class="${getDomainFallbackIcon(domain)}"></i></div>`;
+        const fallbackIcon = document.createElement('i');
+        fallbackIcon.className = getDomainFallbackIcon(domain);
+        iconContainer.appendChild(fallbackIcon);
       }
     } catch (error) {
-      iconHtml = `<div class="blocked-site-icon"><i class="${getDomainFallbackIcon(domain)}"></i></div>`;
+      const fallbackIcon = document.createElement('i');
+      fallbackIcon.className = getDomainFallbackIcon(domain);
+      iconContainer.appendChild(fallbackIcon);
     }
-      
-    item.innerHTML = `
-      <div class="blocked-site-left">
-        ${iconHtml}
-        <div class="blocked-site-name">${domain}</div>
-      </div>
-      <div class="blocked-site-controls">
-        <button class="btn-icon" title="Edit">
-          <i class="ri-edit-line"></i>
-        </button>
-        <button class="btn-icon" title="Delete" data-action="unblock" data-domain="${domain}">
-          <i class="ri-delete-bin-line"></i>
-        </button>
-        <label class="custom-switch">
-          <input type="checkbox" checked>
-          <span class="switch-slider"></span>
-        </label>
-      </div>
-    `;
+    
+    // Create domain name
+    const domainName = document.createElement('div');
+    domainName.className = 'blocked-site-name';
+    domainName.textContent = domain;
+    
+    leftSection.appendChild(iconContainer);
+    leftSection.appendChild(domainName);
+    
+    // Create controls section
+    const controls = document.createElement('div');
+    controls.className = 'blocked-site-controls';
+    
+    // Edit button
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn-icon';
+    editBtn.title = 'Edit';
+    const editIcon = document.createElement('i');
+    editIcon.className = 'ri-edit-line';
+    editBtn.appendChild(editIcon);
+    
+    // Delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn-icon';
+    deleteBtn.title = 'Delete';
+    deleteBtn.setAttribute('data-action', 'unblock');
+    deleteBtn.setAttribute('data-domain', domain);
+    const deleteIcon = document.createElement('i');
+    deleteIcon.className = 'ri-delete-bin-line';
+    deleteBtn.appendChild(deleteIcon);
+    
+    // Switch
+    const switchLabel = document.createElement('label');
+    switchLabel.className = 'custom-switch';
+    const switchInput = document.createElement('input');
+    switchInput.type = 'checkbox';
+    switchInput.checked = true;
+    const switchSlider = document.createElement('span');
+    switchSlider.className = 'switch-slider';
+    
+    switchLabel.appendChild(switchInput);
+    switchLabel.appendChild(switchSlider);
+    
+    controls.appendChild(editBtn);
+    controls.appendChild(deleteBtn);
+    controls.appendChild(switchLabel);
+    
+    // Assemble the item
+    item.appendChild(leftSection);
+    item.appendChild(controls);
 
     return item;
   }
