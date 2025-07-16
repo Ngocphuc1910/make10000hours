@@ -121,8 +121,9 @@ class ExtensionDataService {
   private static readonly CRITICAL_DEBOUNCE_MS = 200; // For focus mode and blocking operations
 
   static isExtensionInstalled(): boolean {
-    return typeof (window as any).chrome !== 'undefined' && 
-           !!(window as any).chrome.runtime;
+    // Since we use window.postMessage communication, we don't need chrome.runtime
+    // Just check if we're in a browser environment that supports postMessage
+    return typeof window !== 'undefined' && typeof window.postMessage === 'function';
   }
 
   private static isCriticalOperation(message: any): boolean {

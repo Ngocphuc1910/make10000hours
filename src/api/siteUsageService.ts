@@ -13,7 +13,7 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { toLocalISOString } from '../utils/timeUtils';
+import { toLocalISOString, formatLocalDate } from '../utils/timeUtils';
 
 export interface SiteUsageEntry {
   domain: string;
@@ -217,7 +217,7 @@ class SiteUsageService {
     try {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - keepDays);
-      const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+      const cutoffDateStr = formatLocalDate(cutoffDate);
       
       const q = query(
         collection(db, this.collectionName),
@@ -327,10 +327,10 @@ class SiteUsageService {
     productivityTrend: number;
   }> {
     try {
-      const endDate = new Date().toISOString().split('T')[0];
+      const endDate = formatLocalDate(new Date());
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
-      const startDateStr = startDate.toISOString().split('T')[0];
+      const startDateStr = formatLocalDate(startDate);
       
       const data = await this.getUserData(userId, startDateStr, endDate);
       
