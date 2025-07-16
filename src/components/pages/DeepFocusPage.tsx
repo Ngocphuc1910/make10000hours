@@ -112,10 +112,29 @@ const DeepFocusPage: React.FC = () => {
   // Flag to prevent automatic closing
   const [isInitializing, setIsInitializing] = useState(false);
 
-  const { timeMetrics, dailyUsage, siteUsage, isLoading, loadExtensionData, loadAllTimeExtensionData } = useDeepFocusDashboardStore();
+  const { timeMetrics, dailyUsage, siteUsage, isLoading: isDashboardLoading, loadExtensionData, loadAllTimeExtensionData } = useDeepFocusDashboardStore();
+  
+  // Loading timeout state to prevent indefinite loading
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  
+  // Unified loading state - combines all loading states for better UX
+  const isUnifiedLoading = (isDashboardLoading || isBackingUp || isLoadingComparison) && !loadingTimeout;
   
   // Initialize extension sync for immediate data loading and backup
   useExtensionSync();
+  
+  // Loading timeout mechanism to prevent indefinite loading
+  useEffect(() => {
+    if (isBackingUp || isDashboardLoading || isLoadingComparison) {
+      setLoadingTimeout(false);
+      const timer = setTimeout(() => {
+        setLoadingTimeout(true);
+        console.warn('⚠️ Loading operation timed out after 8 seconds');
+      }, 8000); // 8 second timeout
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isBackingUp, isDashboardLoading, isLoadingComparison]);
   
   // Expose backup function globally for debugging
   React.useEffect(() => {
@@ -331,8 +350,8 @@ const DeepFocusPage: React.FC = () => {
       }
     };
     
-    // Wait a bit for extension to be ready, then sync
-    setTimeout(triggerImmediateSync, 2000);
+    // Reduced delay for faster initial sync
+    setTimeout(triggerImmediateSync, 500);
   }, [initializeDailyBackup, backupTodayData, user?.uid]);
 
   // Preload favicons for better UX
@@ -965,16 +984,22 @@ const DeepFocusPage: React.FC = () => {
 
         {/* Main Content */}
         <main className="flex-1 p-6 flex gap-6 overflow-y-auto scrollbar-thin relative">
-          {/* Loading indicator for date range data */}
-          {isLoading && (
+          {/* Unified loading indicator */}
+          {isUnifiedLoading && (
             <div className="absolute inset-0 bg-background-primary/50 flex items-center justify-center z-10">
               <div className="bg-background-secondary rounded-lg p-6 shadow-lg border border-border">
                 <div className="flex items-center space-x-3">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
                   <span className="text-text-primary font-medium">
-                    {selectedRange.rangeType === 'today' 
-                      ? 'Refreshing today\'s data...' 
-                      : `Loading ${getLabel().toLowerCase()} data...`}
+                    {isBackingUp 
+                      ? 'Syncing with extension...' 
+                      : isLoadingComparison 
+                        ? 'Loading comparison data...'
+                        : isDashboardLoading
+                          ? selectedRange.rangeType === 'today' 
+                            ? 'Loading today\'s data...' 
+                            : `Loading ${getLabel().toLowerCase()} data...`
+                          : 'Loading...'}
                   </span>
                 </div>
               </div>
@@ -1066,9 +1091,6 @@ const DeepFocusPage: React.FC = () => {
                   </div>
                   <div className={`flex items-center mt-3 text-xs font-medium ${comparisonResult.color}`}>
                     <span>{comparisonResult.label}</span>
-                    {isLoadingComparison && (
-                      <div className="ml-2 animate-spin rounded-full h-3 w-3 border-b border-gray-400"></div>
-                    )}
                   </div>
                 </div>
                 )
