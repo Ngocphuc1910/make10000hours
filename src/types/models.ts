@@ -129,10 +129,19 @@ export interface ActiveSession {
 export interface DeepFocusSession {
   id: string;
   userId: string;
-  startTime: Date;
-  endTime?: Date;
-  duration?: number; // in minutes, calculated when session ends
+  startTime: Date;           // UTC timestamp
+  endTime: Date | null;      // UTC timestamp
+  duration: number;          // Minutes
   status: 'active' | 'completed' | 'suspended';
+  source: 'extension';       // Always extension (web app removed)
+  
+  // Extension session tracking to prevent duplicates
+  extensionSessionId?: string; // Original extension session ID for duplicate detection
+  
+  // Future timezone support (store but don't use for filtering yet)
+  timezone: string;          // User's timezone when session created
+  localDate: string;         // "2023-01-22" - for future date filtering
+  
   createdAt: Date;
   updatedAt: Date;
 }

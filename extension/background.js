@@ -4,7 +4,66 @@
  */
 
 // Load timezone-safe date utilities
-importScripts('./utils/dateUtils.js');
+// importScripts('./utils/dateUtils.js'); // Commented out for service worker compatibility
+
+// Define DateUtils directly in service worker context
+const DateUtils = {
+  getLocalDateString: function() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  },
+  
+  getLocalDateStringFromDate: function(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  },
+  
+  getYesterdayLocalDateString: function() {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return DateUtils.getLocalDateStringFromDate(yesterday);
+  },
+  
+  getLocalDateStringDaysAgo: function(daysAgo) {
+    const date = new Date();
+    date.setDate(date.getDate() - daysAgo);
+    return DateUtils.getLocalDateStringFromDate(date);
+  },
+  
+  generateLocalDateRange: function(days) {
+    const dates = [];
+    for (let i = 0; i < days; i++) {
+      dates.push(DateUtils.getLocalDateStringDaysAgo(i));
+    }
+    return dates;
+  },
+  
+  hasLocalDateChanged: function(previousDate) {
+    return DateUtils.getLocalDateString() !== previousDate;
+  },
+  
+  getLocalDayStart: function() {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return startOfDay.getTime();
+  },
+  
+  getLocalDayEnd: function() {
+    const now = new Date();
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    return endOfDay.getTime();
+  },
+  
+  isTimestampToday: function(timestamp) {
+    const date = new Date(timestamp);
+    return DateUtils.getLocalDateStringFromDate(date) === DateUtils.getLocalDateString();
+  }
+};
 
 // At the top of the file
 const ExtensionEventBus = {
@@ -1232,6 +1291,67 @@ class StorageManager {
   }
 
   /**
+   * Get deep focus sessions for a date range
+   */
+  async getDeepFocusSessionsForDateRange(startDate, endDate) {
+    try {
+      const storage = await this.getDeepFocusStorage();
+      const sessions = [];
+      
+      // Convert dates to local date strings
+      const startStr = typeof startDate === 'string' ? startDate : DateUtils.getLocalDateStringFromDate(new Date(startDate));
+      const endStr = typeof endDate === 'string' ? endDate : DateUtils.getLocalDateStringFromDate(new Date(endDate));
+      
+      // Iterate through all dates in range
+      const currentDate = new Date(startStr);
+      const endDateObj = new Date(endStr);
+      
+      while (currentDate <= endDateObj) {
+        const dateStr = DateUtils.getLocalDateStringFromDate(currentDate);
+        if (storage[dateStr]) {
+          sessions.push(...storage[dateStr]);
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      
+      // Sort by creation time (newest first)
+      sessions.sort((a, b) => b.createdAt - a.createdAt);
+      
+      console.log('📖 Retrieved sessions for date range', startStr, 'to', endStr, ':', sessions.length, 'sessions');
+      return sessions;
+    } catch (error) {
+      console.error('❌ Failed to get sessions for date range:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get all deep focus sessions
+   */
+  async getAllDeepFocusSessions() {
+    try {
+      const storage = await this.getDeepFocusStorage();
+      const sessions = [];
+      
+      // Flatten all sessions from all dates
+      Object.values(storage).forEach(daySessions => {
+        if (Array.isArray(daySessions)) {
+          sessions.push(...daySessions);
+        }
+      });
+      
+      // Sort by creation time (newest first)
+      sessions.sort((a, b) => b.createdAt - a.createdAt);
+      
+      console.log('📖 Retrieved all sessions:', sessions.length, 'sessions');
+      return sessions;
+    } catch (error) {
+      console.error('❌ Failed to get all sessions:', error);
+      return [];
+    }
+  }
+
+  /**
    * Calculate total deep focus time for today
    */
   async getTodayDeepFocusTime() {
@@ -2258,7 +2378,12 @@ class FocusTimeTracker {
     // External message handling from web apps (externally_connectable domains)
     chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
       console.log('📨 External message received from:', sender.origin);
-      this.handleMessage(message, sender, sendResponse);
+      if (focusTimeTracker && focusTimeTracker.handleMessage) {
+        focusTimeTracker.handleMessage(message, sender, sendResponse);
+      } else {
+        console.error('❌ focusTimeTracker not available for external message');
+        sendResponse({ success: false, error: 'Extension not initialized' });
+      }
       return true; // Keep message channel open for async responses
     });
 
@@ -2364,6 +2489,8 @@ class FocusTimeTracker {
   async handleMessage(message, sender, sendResponse) {
     try {
       const { type, payload } = message;
+      console.log('🔍 DEBUG: handleMessage called with type:', type, 'payload:', payload);
+      console.log('🔍 DEBUG: Extension version with Deep Focus handlers - Build:', new Date().toISOString());
 
       switch (type) {
         case 'GET_FIREBASE_CONFIG':
@@ -3199,8 +3326,52 @@ class FocusTimeTracker {
           });
           break;
 
+        // Deep Focus session data retrieval handlers
+        case 'GET_DEEP_FOCUS_SESSIONS_DATE_RANGE':
+          try {
+            const { startDate, endDate } = message.payload || {};
+            const sessions = await this.storageManager.getDeepFocusSessionsForDateRange(startDate, endDate);
+            sendResponse({ success: true, data: sessions });
+          } catch (error) {
+            console.error('Error getting deep focus sessions for date range:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'GET_TODAY_DEEP_FOCUS_SESSIONS':
+          try {
+            const todaySessions = await this.storageManager.getTodayDeepFocusSessions();
+            sendResponse({ success: true, data: todaySessions });
+          } catch (error) {
+            console.error('Error getting today deep focus sessions:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'GET_ACTIVE_DEEP_FOCUS_SESSION':
+          try {
+            const activeSession = await this.storageManager.getActiveDeepFocusSession();
+            sendResponse({ success: true, data: activeSession });
+          } catch (error) {
+            console.error('Error getting active deep focus session:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'GET_ALL_DEEP_FOCUS_SESSIONS':
+          try {
+            const allSessions = await this.storageManager.getAllDeepFocusSessions();
+            sendResponse({ success: true, data: allSessions });
+          } catch (error) {
+            console.error('Error getting all deep focus sessions:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
         default:
           console.warn('❓ Unknown message type:', type);
+          console.log('🔍 DEBUG: Full message object:', message);
+          console.log('🔍 DEBUG: Available message types should include GET_TODAY_DEEP_FOCUS_SESSIONS');
           sendResponse({ success: false, error: 'Unknown message type' });
       }
     } catch (error) {
@@ -3917,6 +4088,8 @@ async function initializeExtension() {
   
   try {
     console.log('🚀 Starting extension initialization...');
+console.log('📋 EXTENSION VERSION CHECK: Deep Focus handlers should be available');
+console.log('📋 BUILD TIMESTAMP:', new Date().toISOString());
     // Initialize the tracker when the service worker starts
     await focusTimeTracker.initialize();
     isInitialized = true;
@@ -3959,6 +4132,7 @@ initializeExtension().catch(error => {
 // Consolidated message handling - SINGLE LISTENER ONLY
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('📨 Received message:', message.type, 'from:', sender.tab?.url || 'popup');
+  console.log('🔍 DEBUG: Extension background script is running and receiving messages');
   
   // Always respond to PING messages immediately
   if (message.type === 'PING') {

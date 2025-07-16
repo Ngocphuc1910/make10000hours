@@ -1211,11 +1211,18 @@ class StorageManager {
       const newSession = {
         id: sessionId,
         userId: this.currentUserId,
-        startTime: now.getTime(),
+        startTime: now.toISOString(),
+        endTime: null,
         duration: 0,
         status: 'active',
-        createdAt: now.getTime(),
-        updatedAt: now.getTime()
+        source: 'extension',
+        
+        // Future timezone support (store but don't use yet)
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        localDate: now.toLocaleDateString('en-CA'), // YYYY-MM-DD
+        
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString()
       };
 
       if (this.mockMode) {
@@ -1263,7 +1270,7 @@ class StorageManager {
         const sessionIndex = storage[today].findIndex(s => s.id === sessionId);
         if (sessionIndex !== -1) {
           storage[today][sessionIndex].duration = duration;
-          storage[today][sessionIndex].updatedAt = now.getTime();
+          storage[today][sessionIndex].updatedAt = now.toISOString();
           await this.saveDeepFocusStorage(storage);
           console.log('✅ Updated local session duration:', sessionId, duration, 'minutes');
           
@@ -1304,8 +1311,8 @@ class StorageManager {
         const sessionIndex = storage[today].findIndex(s => s.id === sessionId);
         if (sessionIndex !== -1) {
           storage[today][sessionIndex].status = 'completed';
-          storage[today][sessionIndex].endTime = now.getTime();
-          storage[today][sessionIndex].updatedAt = now.getTime();
+          storage[today][sessionIndex].endTime = now.toISOString();
+          storage[today][sessionIndex].updatedAt = now.toISOString();
           await this.saveDeepFocusStorage(storage);
           console.log('✅ Completed local deep focus session:', sessionId);
           
@@ -1395,6 +1402,61 @@ class StorageManager {
     } catch (error) {
       console.error('❌ Failed to get active session:', error);
       return null;
+    }
+  }
+
+  /**
+   * Get deep focus sessions for a date range
+   */
+  async getDeepFocusSessionsForDateRange(startDate, endDate) {
+    try {
+      const storage = await this.getDeepFocusStorage();
+      const sessions = [];
+      
+      // Convert dates to local date strings
+      const startDateStr = typeof startDate === 'string' ? startDate : DateUtils.getLocalDateStringFromDate(new Date(startDate));
+      const endDateStr = typeof endDate === 'string' ? endDate : DateUtils.getLocalDateStringFromDate(new Date(endDate));
+      
+      // Iterate through all dates in the range
+      const currentDate = new Date(startDateStr);
+      const finalDate = new Date(endDateStr);
+      
+      while (currentDate <= finalDate) {
+        const dateStr = DateUtils.getLocalDateStringFromDate(currentDate);
+        if (storage[dateStr]) {
+          sessions.push(...storage[dateStr]);
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      
+      console.log('📅 Retrieved', sessions.length, 'sessions for date range', startDateStr, 'to', endDateStr);
+      return sessions;
+    } catch (error) {
+      console.error('❌ Failed to get deep focus sessions for date range:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get all deep focus sessions
+   */
+  async getAllDeepFocusSessions() {
+    try {
+      const storage = await this.getDeepFocusStorage();
+      const sessions = [];
+      
+      // Flatten all sessions from all dates
+      Object.keys(storage).forEach(date => {
+        if (storage[date] && Array.isArray(storage[date])) {
+          sessions.push(...storage[date]);
+        }
+      });
+      
+      console.log('🗂️ Retrieved all', sessions.length, 'deep focus sessions');
+      return sessions;
+    } catch (error) {
+      console.error('❌ Failed to get all deep focus sessions:', error);
+      return [];
     }
   }
 
