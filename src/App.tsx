@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import './App.css';
 import './typography.css';
 import './styles.css';
+import ExtensionDebugger from './utils/extensionDebugger';
 import { Routes, Route, Navigate, Link, HashRouter as Router, useLocation, useNavigate } from 'react-router-dom';
 import PomodoroPage from './components/pages/PomodoroPage';
 import DashboardPage from './components/pages/DashboardPage';
@@ -34,6 +35,7 @@ import { ChatIntegrationService } from './services/chatIntegration';
 import { useDeepFocusStore } from './store/deepFocusStore';
 import { DeepFocusProvider, useDeepFocusContext } from './contexts/DeepFocusContext';
 import { testDeepFocusFixes } from './utils/testDeepFocusFix';
+import DeepFocusCleanup from './utils/deepFocusCleanup';
 
 // Import test utilities in development mode
 if (process.env.NODE_ENV === 'development') {
@@ -382,6 +384,145 @@ const App: React.FC = () => {
     
     // Initialize chat integration
     ChatIntegrationService.initialize();
+
+    // Setup extension debugger for console access
+    (window as any).debugExtension = async () => {
+      const extDebugger = new ExtensionDebugger();
+      return await extDebugger.runAllTests();
+    };
+    
+    // Setup Deep Focus cleanup utilities
+    (window as any).cleanupDuplicates = async () => {
+      try {
+        const { DeepFocusSync } = await import('./services/deepFocusSync');
+        const { useUserStore } = await import('./store/userStore');
+        const user = useUserStore.getState().user;
+        
+        if (!user?.uid) {
+          console.error('❌ User not authenticated');
+          return { success: false, error: 'User not authenticated' };
+        }
+        
+        console.log('🧹 Starting duplicate cleanup...');
+        const result = await DeepFocusSync.removeDuplicateSessions(user.uid);
+        
+        if (result.success) {
+          console.log(`✅ Cleanup completed: ${result.removedCount} duplicate sessions removed`);
+        } else {
+          console.error('❌ Cleanup failed:', result.error);
+        }
+        
+        return result;
+      } catch (error) {
+        console.error('❌ Cleanup error:', error);
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    };
+
+    // Debug Deep Focus sessions count
+    (window as any).checkDeepFocusSessions = async () => {
+      try {
+        const { deepFocusSessionService } = await import('./api/deepFocusSessionService');
+        const { useUserStore } = await import('./store/userStore');
+        const user = useUserStore.getState().user;
+        
+        if (!user?.uid) {
+          console.error('❌ User not authenticated');
+          return;
+        }
+        
+        console.log('🔍 Checking Deep Focus sessions...');
+        
+        // Get today's sessions
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+        
+        const todaySessions = await deepFocusSessionService.getUserSessions(user.uid, todayStart, todayEnd);
+        
+        console.log(`📊 Today's Deep Focus sessions: ${todaySessions.length}`);
+        console.log('Sessions:', todaySessions.map(s => ({ 
+          id: s.id.substring(0, 8), 
+          extensionId: s.extensionSessionId?.substring(0, 8) || 'none',
+          duration: s.duration, 
+          status: s.status,
+          createdAt: s.createdAt.toISOString()
+        })));
+        
+        // Calculate total time
+        const totalTime = todaySessions
+          .filter(s => s.status === 'completed' && s.duration)
+          .reduce((total, s) => total + (s.duration || 0), 0);
+        
+        console.log(`⏱️ Total Deep Focus time: ${Math.floor(totalTime / 60)}h ${totalTime % 60}m`);
+        
+        // Check for duplicates
+        const grouped = todaySessions.reduce((acc, session) => {
+          if (session.extensionSessionId) {
+            if (!acc[session.extensionSessionId]) {
+              acc[session.extensionSessionId] = [];
+            }
+            acc[session.extensionSessionId].push(session);
+          }
+          return acc;
+        }, {});
+        
+        const duplicates = Object.keys(grouped).filter(key => grouped[key].length > 1);
+        
+        if (duplicates.length > 0) {
+          console.log('⚠️ Found duplicates:', duplicates.length);
+          duplicates.forEach(extId => {
+            console.log(`🔍 Extension ID ${extId.substring(0, 8)}:`, grouped[extId].map(s => ({ 
+              id: s.id.substring(0, 8), 
+              duration: s.duration, 
+              status: s.status 
+            })));
+          });
+        } else {
+          console.log('✅ No duplicates found');
+        }
+        
+        return { sessions: todaySessions, totalTime, duplicates: duplicates.length };
+      } catch (error) {
+        console.error('❌ Check sessions error:', error);
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
+    };
+    
+    (window as any).testDeepFocusSync = async () => {
+      try {
+        const { DeepFocusSync } = await import('./services/deepFocusSync');
+        const { useUserStore } = await import('./store/userStore');
+        const user = useUserStore.getState().user;
+        
+        if (!user?.uid) {
+          console.error('❌ User not authenticated');
+          return;
+        }
+        
+        console.log('🧪 Testing Deep Focus sync process...');
+        const result = await DeepFocusSync.syncTodaySessionsFromExtension(user.uid);
+        console.log('🔄 Sync result:', result);
+        
+        if (result.success) {
+          console.log(`✅ Sync test passed: ${result.synced} sessions synced`);
+        } else {
+          console.error('❌ Sync test failed:', result.error);
+        }
+        
+        return result;
+      } catch (error) {
+        console.error('❌ Sync test error:', error);
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    };
+    
+    // Log debug instructions
+    console.log('🔧 Extension Debug Available:');
+    console.log('  Run debugExtension() in console to test extension communication');
+    console.log('  Run cleanupDuplicates() in console to remove duplicate sessions');
+    console.log('  Run testDeepFocusSync() in console to test sync process');
+    console.log('  Run checkDeepFocusSessions() in console to check session count and duplicates');
 
     // Verify Analytics setup
     setTimeout(() => {
