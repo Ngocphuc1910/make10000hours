@@ -2251,6 +2251,11 @@ class FocusTimeTracker {
     this.lastActivityTime = Date.now();
     this.autoManagementEnabled = true;
     
+    // IMPROVEMENT #2: Tab Switching Grace Period
+    this.graceTimer = null;
+    this.gracePeriod = 15000; // 15 seconds grace period
+    this.pendingSessionData = null;
+    
     // Focus state tracking
     this.latestFocusState = false;
     
@@ -2408,15 +2413,31 @@ class FocusTimeTracker {
     try {
       console.log('🔄 Tab activated:', activeInfo.tabId);
       
-      // Stop tracking current tab
-      await this.stopCurrentTracking();
+      // IMPROVEMENT #2: Cancel any pending grace timer
+      if (this.graceTimer) {
+        clearTimeout(this.graceTimer);
+        this.graceTimer = null;
+        console.log('⏱️ Grace period cancelled - user returned quickly');
+      }
       
       // Get new tab info
       const tab = await chrome.tabs.get(activeInfo.tabId);
       console.log('📍 New tab URL:', tab.url);
       
-      // Start tracking new tab
-      await this.startTracking(tab);
+      const newDomain = this.extractDomain(tab.url);
+      
+      // Check if we're returning to the same domain within grace period
+      if (this.pendingSessionData && this.pendingSessionData.domain === newDomain) {
+        console.log('🎯 Returning to same domain within grace period - continuing session');
+        // Restore the pending session
+        this.currentSession = this.pendingSessionData;
+        this.pendingSessionData = null;
+      } else {
+        // Different domain - stop current tracking with grace period
+        await this.stopCurrentTrackingWithGrace();
+        // Start tracking new tab
+        await this.startTracking(tab);
+      }
     } catch (error) {
       console.error('❌ Error handling tab activation:', error);
     }
@@ -3462,7 +3483,72 @@ class FocusTimeTracker {
   }
 
   /**
-   * Stop tracking current website and save data
+   * IMPROVEMENT #2: Stop current tracking with grace period for tab switching
+   */
+  async stopCurrentTrackingWithGrace() {
+    try {
+      if (!this.currentSession.isActive || !this.currentSession.startTime) {
+        return;
+      }
+
+      console.log('⏱️ Starting grace period for tab switch');
+      
+      // Store current session data for potential restoration
+      this.pendingSessionData = { ...this.currentSession };
+      
+      // Set grace timer
+      this.graceTimer = setTimeout(async () => {
+        console.log('⏰ Grace period expired - finalizing session stop');
+        await this.finalizeSessionStop();
+        this.graceTimer = null;
+        this.pendingSessionData = null;
+      }, this.gracePeriod);
+      
+    } catch (error) {
+      console.error('❌ Error in stopCurrentTrackingWithGrace:', error);
+    }
+  }
+
+  /**
+   * Finalize stopping the session after grace period expires
+   */
+  async finalizeSessionStop() {
+    try {
+      if (!this.pendingSessionData) {
+        return;
+      }
+
+      const now = Date.now();
+      const timeSpent = now - this.pendingSessionData.startTime;
+      const domain = this.pendingSessionData.domain;
+
+      // IMPROVEMENT #1: Reduce threshold from 1000ms to 500ms and improve rounding
+      if (timeSpent > 500 && domain) {
+        const roundedTime = Math.round(timeSpent / 1000) * 1000;
+        await this.storageManager.saveTimeEntry(domain, roundedTime, 1);
+        console.log(`Stopped tracking (after grace): ${domain}, Time: ${this.storageManager.formatTime(roundedTime)}`);
+      }
+
+      await this.stateManager.dispatch({
+        type: 'STOP_TRACKING'
+      });
+      
+      // Reset session
+      this.currentSession = {
+        tabId: null,
+        domain: null,
+        startTime: null,
+        savedTime: 0,
+        isActive: false
+      };
+      
+    } catch (error) {
+      console.error('❌ Error in finalizeSessionStop:', error);
+    }
+  }
+
+  /**
+   * Stop tracking current website and save data (immediate, no grace period)
    */
   async stopCurrentTracking() {
     try {
@@ -3478,9 +3564,9 @@ class FocusTimeTracker {
       const timeSpent = now - this.currentSession.startTime;
       const domain = this.currentSession.domain;
 
-      // Only save if spent more than 1 second and round down to nearest second
-              if (timeSpent > 1000 && domain) {
-          const roundedTime = Math.floor(timeSpent / 1000) * 1000; // Round to nearest second
+      // IMPROVEMENT #1: Reduce threshold from 1000ms to 500ms and improve rounding
+              if (timeSpent > 500 && domain) {
+          const roundedTime = Math.round(timeSpent / 1000) * 1000; // Round instead of floor for better accuracy
           await this.storageManager.saveTimeEntry(domain, roundedTime, 1);
           console.log(`Stopped tracking: ${domain}, Time: ${this.storageManager.formatTime(roundedTime)}`);
         }
@@ -3610,8 +3696,8 @@ class FocusTimeTracker {
           return;
         }
         
-        // Only save if we have at least 5 seconds of activity
-        if (sessionDuration >= 5000) {
+        // IMPROVEMENT #1: Reduce periodic save threshold from 5 seconds to 2 seconds
+        if (sessionDuration >= 2000) {
           await this.storageManager.saveTimeEntry(this.currentSession.domain, sessionDuration, 0);
           
           // Reset tracking for next interval
