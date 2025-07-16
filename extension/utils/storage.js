@@ -3,7 +3,7 @@
  * Handles data persistence with Chrome Storage API and provides mock data for development
  */
 
-import { ExtensionEventBus } from './ExtensionEventBus.js';
+// ExtensionEventBus and DateUtils will be available globally
 
 class StorageManager {
   constructor() {
@@ -30,6 +30,9 @@ class StorageManager {
     }
 
     try {
+      // Migrate UTC dates to local dates if needed
+      await this.migrateUTCtoLocalDates();
+
       // Initialize storage with default settings if needed
       const settings = await this.getSettings();
       if (!settings) {
@@ -102,6 +105,76 @@ class StorageManager {
     return false;
   }
 
+  /**
+   * Migrate data from UTC dates to local dates if timezone difference exists
+   */
+  async migrateUTCtoLocalDates() {
+    try {
+      const migrationInfo = DateUtils.checkDateMigrationNeeded();
+      console.log('🔄 Checking date migration:', migrationInfo);
+      
+      if (!migrationInfo.needsMigration) {
+        console.log('✅ No date migration needed');
+        return;
+      }
+
+      console.log(`🔄 Migrating data from UTC date ${migrationInfo.utcDate} to local date ${migrationInfo.localDate}`);
+      
+      // Migrate stats data
+      const storage = await chrome.storage.local.get(['stats']);
+      if (storage.stats?.[migrationInfo.utcDate]) {
+        if (!storage.stats[migrationInfo.localDate]) {
+          storage.stats[migrationInfo.localDate] = storage.stats[migrationInfo.utcDate];
+          console.log('📊 Migrated stats data to local date');
+        }
+        // Keep UTC data for now to avoid data loss
+      }
+
+      // Migrate daily stats data  
+      const utcStatsKey = `dailyStats_${migrationInfo.utcDate}`;
+      const localStatsKey = `dailyStats_${migrationInfo.localDate}`;
+      const dailyData = await chrome.storage.local.get([utcStatsKey]);
+      
+      if (dailyData[utcStatsKey]) {
+        const existingLocalData = await chrome.storage.local.get([localStatsKey]);
+        if (!existingLocalData[localStatsKey]) {
+          await chrome.storage.local.set({
+            [localStatsKey]: dailyData[utcStatsKey]
+          });
+          console.log('📊 Migrated daily stats to local date');
+        }
+      }
+
+      // Migrate deep focus sessions
+      const utcDeepFocusKey = `deepFocusSessions_${migrationInfo.utcDate}`;
+      const localDeepFocusKey = `deepFocusSessions_${migrationInfo.localDate}`;
+      const deepFocusData = await chrome.storage.local.get([utcDeepFocusKey]);
+      
+      if (deepFocusData[utcDeepFocusKey]) {
+        const existingLocalFocusData = await chrome.storage.local.get([localDeepFocusKey]);
+        if (!existingLocalFocusData[localDeepFocusKey]) {
+          await chrome.storage.local.set({
+            [localDeepFocusKey]: deepFocusData[utcDeepFocusKey]
+          });
+          console.log('🧘 Migrated deep focus sessions to local date');
+        }
+      }
+
+      // Set migration flag to avoid re-migration
+      await chrome.storage.local.set({
+        dateMigrationCompleted: true,
+        lastMigrationDate: migrationInfo.localDate,
+        migrationTimestamp: Date.now()
+      });
+
+      console.log('✅ Date migration completed successfully');
+      
+    } catch (error) {
+      console.error('❌ Error during date migration:', error);
+      // Don't throw to avoid breaking initialization
+    }
+  }
+
   async validateAndRecoverUserState() {
     if (this.currentUserId) return true;
     
@@ -131,8 +204,8 @@ class StorageManager {
    * Generate realistic mock data for development and testing
    */
   generateMockData() {
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const today = DateUtils.getLocalDateString();
+    const yesterday = DateUtils.getLocalDateStringDaysAgo(1);
     
     return {
       dailyStats: {
@@ -243,11 +316,9 @@ class StorageManager {
    */
   generateWeeklyMockData() {
     const weeklyData = {};
-    const today = new Date();
     
     for (let i = 0; i < 7; i++) {
-      const date = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = DateUtils.getLocalDateStringDaysAgo(i);
       
       weeklyData[dateStr] = {
         totalTime: Math.floor(Math.random() * 18000000) + 3600000, // 1-5 hours
@@ -264,11 +335,9 @@ class StorageManager {
    */
   generateMonthlyMockData() {
     const monthlyData = {};
-    const today = new Date();
     
     for (let i = 0; i < 30; i++) {
-      const date = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = DateUtils.getLocalDateStringDaysAgo(i);
       
       monthlyData[dateStr] = {
         totalTime: Math.floor(Math.random() * 18000000) + 1800000, // 0.5-5 hours
@@ -289,8 +358,7 @@ class StorageManager {
     
     // Generate sessions for the last 7 days
     for (let i = 0; i < 7; i++) {
-      const date = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = DateUtils.getLocalDateStringDaysAgo(i);
       
       // Generate 0-3 completed sessions per day
       const sessionCount = Math.floor(Math.random() * 4);
@@ -323,7 +391,7 @@ class StorageManager {
     // Add an active session for today if it's during work hours
     const currentHour = today.getHours();
     if (currentHour >= 9 && currentHour <= 17) {
-      const todayStr = today.toISOString().split('T')[0];
+      const todayStr = DateUtils.getLocalDateString();
       if (!sessions[todayStr]) sessions[todayStr] = [];
       
       const activeSessionStart = new Date();
@@ -352,8 +420,7 @@ class StorageManager {
 
     // Generate 90 days of historical data
     for (let i = 0; i < 90; i++) {
-      const date = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = DateUtils.getLocalDateStringDaysAgo(i);
       
       mockData[dateStr] = {
         totalTime: Math.floor(Math.random() * 21600000) + 1800000, // 0.5-6 hours
@@ -443,8 +510,8 @@ class StorageManager {
         type: 'daily',
         target: 4 * 60 * 60 * 1000, // 4 hours
         current: 2.5 * 60 * 60 * 1000, // 2.5 hours current
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: new Date().toISOString().split('T')[0],
+        startDate: DateUtils.getLocalDateString(),
+        endDate: DateUtils.getLocalDateString(),
         description: 'Spend 4 hours on productive websites daily'
       },
       weekly: {
@@ -452,8 +519,8 @@ class StorageManager {
         type: 'weekly',
         target: 25, // 25 focus sessions
         current: 18, // 18 completed
-        startDate: weekStart.toISOString().split('T')[0],
-        endDate: new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        startDate: DateUtils.getLocalDateStringFromDate(weekStart),
+        endDate: DateUtils.getLocalDateStringFromDate(new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)),
         description: 'Complete 25 focus sessions this week'
       },
       monthly: {
@@ -461,8 +528,8 @@ class StorageManager {
         type: 'monthly',
         target: 75, // Average 75% productivity
         current: 72, // Current average
-        startDate: monthStart.toISOString().split('T')[0],
-        endDate: new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).toISOString().split('T')[0],
+        startDate: DateUtils.getLocalDateStringFromDate(monthStart),
+        endDate: DateUtils.getLocalDateStringFromDate(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0)),
         description: 'Maintain 75% average productivity score'
       }
     };
@@ -491,7 +558,7 @@ class StorageManager {
    * Save time entry for a specific domain
    */
   async saveTimeEntry(domain, timeSpent, visits = 1) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = DateUtils.getLocalDateString();
     
     if (this.mockMode) {
       // Update mock data
@@ -586,7 +653,7 @@ class StorageManager {
       const end = new Date(endDate);
       
       for (let date = start; date <= end; date.setDate(date.getDate() + 1)) {
-        keys.push(`dailyStats_${date.toISOString().split('T')[0]}`);
+        keys.push(`dailyStats_${DateUtils.getLocalDateStringFromDate(date)}`);
       }
       
       const result = await chrome.storage.local.get(keys);
@@ -601,7 +668,7 @@ class StorageManager {
    * Get today's statistics
    */
   async getTodayStats() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = DateUtils.getLocalDateString();
     const data = await this.getTimeData(today);
     
     if (this.mockMode) {
@@ -683,8 +750,8 @@ class StorageManager {
    * Get weekly statistics
    */
   async getWeeklyStats() {
-    const endDate = new Date().toISOString().split('T')[0];
-    const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const endDate = DateUtils.getLocalDateString();
+    const startDate = DateUtils.getLocalDateStringDaysAgo(7);
     
     if (this.mockMode) {
       return this.mockData.weeklyStats;
@@ -699,8 +766,7 @@ class StorageManager {
   async cleanOldData() {
     const settings = await this.getSettings();
     const retentionDays = settings.dataRetentionDays || 30;
-    const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000)
-      .toISOString().split('T')[0];
+    const cutoffDate = DateUtils.getLocalDateStringDaysAgo(retentionDays);
     
     if (this.mockMode) {
       Object.keys(this.mockData.dailyStats).forEach(date => {
@@ -862,7 +928,7 @@ class StorageManager {
       }
 
       // Real data implementation
-      const timeData = await this.getTimeData(startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]);
+      const timeData = await this.getTimeData(DateUtils.getLocalDateStringFromDate(startDate), DateUtils.getLocalDateStringFromDate(endDate));
       return this.aggregateAnalyticsData(timeData, period);
 
     } catch (error) {
@@ -888,8 +954,7 @@ class StorageManager {
     };
 
     for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = DateUtils.getLocalDateStringDaysAgo(i);
       
       const dayData = {
         date: dateStr,
@@ -1085,7 +1150,7 @@ class StorageManager {
    * Generate storage key for deep focus sessions by date
    */
   getDeepFocusStorageKey(date) {
-    const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+    const dateStr = typeof date === 'string' ? date : DateUtils.getLocalDateStringFromDate(date);
     return `deepFocusSessions_${dateStr}`;
   }
 
@@ -1109,7 +1174,7 @@ class StorageManager {
       }
 
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
+      const today = DateUtils.getLocalDateString();
       const sessionId = this.generateSessionId();
       
       const newSession = {
@@ -1157,7 +1222,7 @@ class StorageManager {
   async updateDeepFocusSessionDuration(sessionId, duration) {
     try {
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
+      const today = DateUtils.getLocalDateString();
 
       console.log('⏱️ Updating session duration:', sessionId, 'to', duration, 'minutes');
 
@@ -1198,7 +1263,7 @@ class StorageManager {
   async completeDeepFocusSession(sessionId) {
     try {
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
+      const today = DateUtils.getLocalDateString();
 
       console.log('🏁 Completing deep focus session:', sessionId);
 
@@ -1236,7 +1301,7 @@ class StorageManager {
    */
   async getDeepFocusSessionsForDate(date) {
     try {
-      const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+      const dateStr = typeof date === 'string' ? date : DateUtils.getLocalDateStringFromDate(date);
 
       if (this.mockMode) {
         // Return mock data
@@ -1309,7 +1374,7 @@ class StorageManager {
     try {
       const retentionDays = 30;
       const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
-      const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+      const cutoffDateStr = DateUtils.getLocalDateStringFromDate(cutoffDate);
 
       if (this.mockMode) {
         // Clean mock data
