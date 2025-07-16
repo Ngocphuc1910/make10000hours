@@ -92,7 +92,9 @@
   "externally_connectable": {
     "matches": [
       "https://make10000hours.com/*",
-      "https://www.make10000hours.com/*"
+      "https://www.make10000hours.com/*",
+      "http://localhost:*/*",
+      "https://localhost:*/*"
     ]
   }
 } 

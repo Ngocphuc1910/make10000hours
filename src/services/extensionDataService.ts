@@ -135,7 +135,11 @@ class ExtensionDataService {
       'GET_FOCUS_STATE',
       'ADD_BLOCKED_SITE',
       'REMOVE_BLOCKED_SITE',
-      'BLOCK_MULTIPLE_SITES' // Add batch blocking as critical operation
+      'BLOCK_MULTIPLE_SITES', // Add batch blocking as critical operation
+      'GET_TODAY_DEEP_FOCUS_SESSIONS',
+      'GET_DEEP_FOCUS_SESSIONS_DATE_RANGE',
+      'GET_ACTIVE_DEEP_FOCUS_SESSION',
+      'GET_ALL_DEEP_FOCUS_SESSIONS'
     ];
     return criticalTypes.includes(message.type);
   }
@@ -502,6 +506,32 @@ class ExtensionDataService {
     } catch (error) {
       return false;
     }
+  }
+
+  // Deep Focus session data retrieval methods
+  static async getDeepFocusSessionsForDateRange(startDate: string, endDate: string): Promise<ExtensionResponse<any[]>> {
+    return await this.sendMessage({
+      type: 'GET_DEEP_FOCUS_SESSIONS_DATE_RANGE',
+      payload: { startDate, endDate }
+    });
+  }
+
+  static async getTodayDeepFocusSessions(): Promise<ExtensionResponse<any[]>> {
+    return await this.sendMessage({
+      type: 'GET_TODAY_DEEP_FOCUS_SESSIONS'
+    });
+  }
+
+  static async getActiveDeepFocusSession(): Promise<ExtensionResponse<any | null>> {
+    return await this.sendMessage({
+      type: 'GET_ACTIVE_DEEP_FOCUS_SESSION'
+    });
+  }
+
+  static async getAllDeepFocusSessions(): Promise<ExtensionResponse<any[]>> {
+    return await this.sendMessage({
+      type: 'GET_ALL_DEEP_FOCUS_SESSIONS'
+    });
   }
 }
 

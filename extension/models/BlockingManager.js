@@ -193,7 +193,7 @@ export class BlockingManager {
           // Calculate elapsed time
           const activeSession = await this.storageManager.getActiveDeepFocusSession();
           if (activeSession) {
-            const elapsedMs = Date.now() - activeSession.startTime;
+            const elapsedMs = Date.now() - new Date(activeSession.startTime).getTime();
             const elapsedMinutes = Math.floor(elapsedMs / (60 * 1000));
             
             // Update session duration with retry
