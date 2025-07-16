@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../layout/Sidebar';
 import { useDeepFocusStore } from '../../store/deepFocusStore';
 // Deep focus sync now handled by DeepFocusProvider context
+import { useDeepFocusContext } from '../../contexts/DeepFocusContext';
 import { useDeepFocusDashboardStore } from '../../store/deepFocusDashboardStore';
 import { useUserStore } from '../../store/userStore';
 import { useUIStore } from '../../store/uiStore';
@@ -46,6 +47,10 @@ interface DateRange {
 }
 
 const DeepFocusPage: React.FC = () => {
+  // Get enable/disable methods from context
+  const { enableDeepFocus, disableDeepFocus } = useDeepFocusContext();
+  
+  // Get other methods from store
   const { 
     blockedSites, 
     isExtensionConnected,
@@ -61,8 +66,6 @@ const DeepFocusPage: React.FC = () => {
     loadBlockedSites,
     blockSiteInExtension,
     unblockSiteInExtension,
-    enableDeepFocus,
-    disableDeepFocus,
     toggleDeepFocus,
     loadFocusStatus,
     activeSessionId,
