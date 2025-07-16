@@ -3,6 +3,8 @@
  * Handles state synchronization across background, popup, and content scripts
  */
 
+// DateUtils will be available globally
+
 class StateManager {
   constructor() {
     this.state = {
@@ -15,7 +17,7 @@ class StateManager {
       todayStats: {
         totalTime: 0,
         sites: {},
-        lastUpdated: new Date().toISOString().split('T')[0]
+        lastUpdated: DateUtils.getLocalDateString()
       },
       settings: {
         blockedSites: [],
@@ -242,7 +244,7 @@ class StateManager {
   }
 
   async updateTime({ domain, timeSpent, visits = 1 }) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = DateUtils.getLocalDateString();
     const todayStats = this.state.todayStats;
     
     // Initialize today's data if needed

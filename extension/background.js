@@ -3,6 +3,9 @@
  * Handles time tracking, tab management, and extension coordination
  */
 
+// Load timezone-safe date utilities
+importScripts('./utils/dateUtils.js');
+
 // At the top of the file
 const ExtensionEventBus = {
   EVENTS: {
@@ -148,7 +151,7 @@ class OverrideSessionManager {
   }
 
   getCurrentDate() {
-    return new Date().toISOString().split('T')[0];
+    return DateUtils.getLocalDateString();
   }
 
   validateOverrideData(data) {
@@ -286,7 +289,7 @@ class OverrideSessionManager {
       
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
-      const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+      const cutoffDateStr = DateUtils.getLocalDateStringFromDate(cutoffDate);
       
       let deletedCount = 0;
       const updatedData = {};
@@ -385,7 +388,7 @@ class StorageManager {
         await this.saveSettings(this.getDefaultSettings());
       }
       if (!storage.stats) {
-        const today = new Date().toISOString().split('T')[0];
+        const today = DateUtils.getLocalDateString();
         await chrome.storage.local.set({ 
           stats: {
             [today]: {
@@ -429,7 +432,7 @@ class StorageManager {
 
   async saveTimeEntry(domain, timeSpent, visits = 1) {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = DateUtils.getLocalDateString();
       const storage = await chrome.storage.local.get(['stats']);
       
       // Initialize today's stats if not exists
@@ -497,8 +500,8 @@ class StorageManager {
   }
 
   async getTodayStats() {
-    const today = new Date().toISOString().split('T')[0];
-    console.log('📅 Getting stats for date:', today);
+    const today = DateUtils.getLocalDateString();
+    console.log('📅 Getting stats for date (local):', today);
     
     try {
       const storage = await chrome.storage.local.get(['stats']);
@@ -847,7 +850,7 @@ class StorageManager {
 
     for (let i = days - 1; i >= 0; i--) {
       const date = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = DateUtils.getLocalDateStringFromDate(date);
       
       const dayData = {
         date: dateStr,
@@ -1093,7 +1096,7 @@ class StorageManager {
       }
 
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
+      const today = DateUtils.getLocalDateString();
       const sessionId = this.generateSessionId();
       
       const newSession = {
@@ -1129,7 +1132,7 @@ class StorageManager {
   async updateDeepFocusSessionDuration(sessionId, duration) {
     try {
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
+      const today = DateUtils.getLocalDateString();
 
       console.log('⏱️ Updating session duration:', sessionId, 'to', duration, 'minutes');
 
@@ -1170,7 +1173,7 @@ class StorageManager {
   async completeDeepFocusSession(sessionId) {
     try {
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
+      const today = DateUtils.getLocalDateString();
 
       console.log('🏁 Completing deep focus session:', sessionId);
 
@@ -1208,7 +1211,7 @@ class StorageManager {
    */
   async getDeepFocusSessionsForDate(date) {
     try {
-      const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+      const dateStr = typeof date === 'string' ? date : DateUtils.getLocalDateStringFromDate(date);
       const storage = await this.getDeepFocusStorage();
       const sessions = storage[dateStr] || [];
       
@@ -1290,7 +1293,7 @@ class StorageManager {
     try {
       const retentionDays = 30;
       const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
-      const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+      const cutoffDateStr = DateUtils.getLocalDateStringFromDate(cutoffDate);
 
       const storage = await this.getDeepFocusStorage();
       const updatedStorage = {};
@@ -1976,7 +1979,7 @@ class BlockingManager {
       try {
         if (this.currentLocalSessionId) {
           const storage = await this.storageManager.getDeepFocusStorage();
-          const today = new Date().toISOString().split('T')[0];
+          const today = DateUtils.getLocalDateString();
           
           if (storage[today]) {
             const session = storage[today].find(s => s.id === this.currentLocalSessionId);
@@ -2064,7 +2067,7 @@ class BlockingManager {
       const storage = await this.storageManager.getDeepFocusStorage();
       console.log('🔍 Deep Focus Storage Debug:', storage);
       
-      const today = new Date().toISOString().split('T')[0];
+      const today = DateUtils.getLocalDateString();
       const todaySessions = storage[today] || [];
       
       console.log('📅 Today\'s Sessions:', todaySessions);
