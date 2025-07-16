@@ -116,7 +116,28 @@ const DeepFocusPage: React.FC = () => {
   
   // Expose backup function globally for debugging
   React.useEffect(() => {
-    (window as any).debugBackupTodayData = backupTodayData;
+    (window as any).debugBackupTodayData = async () => {
+      try {
+        console.log('🔧 Manual debug backup triggered...');
+        await backupTodayData();
+        console.log('✅ Manual debug backup completed');
+        
+        // Reload data after manual sync
+        console.log('🔄 Reloading data after manual sync...');
+        if (selectedRange.rangeType === 'all time') {
+          loadAllTimeExtensionData();
+        } else {
+          const startDate = selectedRange.startDate || new Date();
+          const endDate = selectedRange.endDate || new Date();
+          if (startDate && endDate) {
+            loadExtensionData(startDate, endDate);
+          }
+        }
+        console.log('✅ Data reloaded after manual sync');
+      } catch (error) {
+        console.error('❌ Manual debug backup failed:', error);
+      }
+    };
     (window as any).debugUser = user;
     (window as any).resetBackupState = () => {
       console.log('🔧 Manually resetting backup state...');
@@ -156,7 +177,22 @@ const DeepFocusPage: React.FC = () => {
   };
 
   const handleLoadData = async () => {
+    console.log('🔄 handleLoadData called for range:', selectedRange.rangeType);
+    
+    // Trigger sync to ensure latest data before loading
+    if (user?.uid) {
+      try {
+        console.log('🚀 Triggering sync before loading data...');
+        await backupTodayData();
+        console.log('✅ Sync completed before data load');
+      } catch (error) {
+        console.error('❌ Sync failed before data load:', error);
+      }
+    }
+    
+    // Always reload data after sync to show latest information
     if (selectedRange.rangeType === 'all time') {
+      console.log('🔄 Reloading all time data after sync...');
       loadAllTimeExtensionData();
     } else {
       // Load data for the selected range
@@ -165,6 +201,7 @@ const DeepFocusPage: React.FC = () => {
       
       // Ensure we load data only if dates are valid
       if (startDate && endDate) {
+        console.log('🔄 Reloading range data after sync...', { startDate, endDate });
         loadExtensionData(startDate, endDate);
       }
     }
@@ -255,16 +292,29 @@ const DeepFocusPage: React.FC = () => {
     // Trigger immediate backup to sync extension data to Firebase
     const triggerImmediateSync = async () => {
       try {
-        console.log('🔍 triggerImmediateSync called');
+        console.log('🔍 triggerImmediateSync called (page load/reload)');
         console.log('🔍 user:', user);
         console.log('🔍 user?.uid:', user?.uid);
         console.log('🔍 backupTodayData type:', typeof backupTodayData);
         
         if (user?.uid) {
-          console.log('🚀 Deep Focus page loaded - triggering immediate sync...');
+          console.log('🚀 Deep Focus page loaded/reloaded - triggering immediate sync...');
           console.log('🔍 About to call backupTodayData...');
           await backupTodayData();
-          console.log('✅ Immediate sync completed');
+          console.log('✅ Immediate sync completed on page load');
+          
+          // Reload data after sync to show latest information
+          console.log('🔄 Reloading data after initial sync...');
+          if (selectedRange.rangeType === 'all time') {
+            loadAllTimeExtensionData();
+          } else {
+            const startDate = selectedRange.startDate || new Date();
+            const endDate = selectedRange.endDate || new Date();
+            if (startDate && endDate) {
+              loadExtensionData(startDate, endDate);
+            }
+          }
+          console.log('✅ Data reloaded after initial sync');
         } else {
           console.warn('⚠️ User not authenticated, skipping immediate sync');
         }
