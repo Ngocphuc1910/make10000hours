@@ -2,6 +2,8 @@
  * Override Session Manager for Chrome Extension Local Storage
  * Manages override sessions with date-based organization and consistency with database schema
  */
+
+// DateUtils will be available globally
 class OverrideSessionManager {
   constructor() {
     this.storageKey = 'overrideSessions';
@@ -16,10 +18,10 @@ class OverrideSessionManager {
   }
 
   /**
-   * Get current date in YYYY-MM-DD format
+   * Get current date in YYYY-MM-DD format (local timezone)
    */
   getCurrentDate() {
-    return new Date().toISOString().split('T')[0];
+    return DateUtils.getLocalDateString();
   }
 
   /**
@@ -194,7 +196,7 @@ class OverrideSessionManager {
       
       // Iterate through date range
       for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = DateUtils.getLocalDateStringFromDate(date);
         if (data[dateStr]) {
           sessions.push(...data[dateStr]);
         }
@@ -226,7 +228,7 @@ class OverrideSessionManager {
       
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
-      const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+      const cutoffDateStr = DateUtils.getLocalDateStringFromDate(cutoffDate);
       
       let deletedCount = 0;
       const updatedData = {};
