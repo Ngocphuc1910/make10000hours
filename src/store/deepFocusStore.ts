@@ -30,6 +30,8 @@ interface DeepFocusStore extends DeepFocusData {
   blockSiteInExtension: (domain: string) => Promise<void>;
   unblockSiteInExtension: (domain: string) => Promise<void>;
   toggleDeepFocus: () => Promise<void>;
+  enableDeepFocus: (source?: Source) => Promise<void>;
+  disableDeepFocus: () => Promise<void>;
   loadFocusStatus: () => Promise<void>;
   syncFocusStatus: (isActive: boolean) => void;
   syncCompleteFocusState: (isActive: boolean, blockedSites: string[]) => Promise<void>;
@@ -414,8 +416,9 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           const focusStatus = await ExtensionDataService.getFocusStatus();
           const currentLocalState = get().isDeepFocusActive;
           
-          // DISABLED: Web app no longer manages sessions directly
-          // Extension handles all session management
+          console.log('🔍 loadFocusStatus - Extension state:', focusStatus.focusMode, 'Local state:', currentLocalState);
+          
+          // Clean up orphaned sessions without changing the focus state
           if (currentLocalState && !get().recoveryInProgress) {
             set({recoveryInProgress: true});
             try {
@@ -430,42 +433,28 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
                   await get().loadDeepFocusSessions(user.uid);
                 }
                 
-                // Reset state since web app no longer manages sessions
-                set({
-                  isDeepFocusActive: false,
-                  recoveryInProgress: false
-                });
-                
-                console.log('🔄 Reset deep focus state (web app no longer manages sessions)');
+                console.log('🔄 Session cleanup completed, maintaining focus state');
               }
             } catch (error) {
               console.error('❌ Failed to handle session cleanup:', error);
+            } finally {
               set({recoveryInProgress: false});
             }
           }
           
-          // Only update local state if extension state differs AND we don't have a persisted state
+          // Always sync web app state to match extension state (extension is source of truth)
           if (focusStatus.focusMode !== currentLocalState) {
-            // Check if this is the first load (no persisted state) or if extension was manually changed
-            const hasPersistedState = localStorage.getItem('deep-focus-storage');
+            console.log(`🔄 Syncing web app state to match extension: ${currentLocalState} → ${focusStatus.focusMode}`);
             
-            if (!hasPersistedState) {
-              // No persisted state exists, use extension state
-              set({ isDeepFocusActive: focusStatus.focusMode });
-              
-              // Sync focus status across all components
-              window.dispatchEvent(new CustomEvent('deepFocusChanged', { 
-                detail: { isActive: focusStatus.focusMode } 
-              }));
-            } else {
-              // Persisted state exists, prioritize it and sync extension to match
-              console.log('Prioritizing persisted local state over extension state');
-              if (currentLocalState) {
-                await ExtensionDataService.enableFocusMode();
-              } else {
-                await ExtensionDataService.disableFocusMode();
-              }
-            }
+            // Update local state to match extension
+            set({ isDeepFocusActive: focusStatus.focusMode });
+            
+            // Notify all components about the state change
+            window.dispatchEvent(new CustomEvent('deepFocusChanged', { 
+              detail: { isActive: focusStatus.focusMode, fromExtension: true } 
+            }));
+          } else {
+            console.log('✅ Web app and extension states already match:', focusStatus.focusMode);
           }
         } catch (error) {
           console.error('Failed to load focus status:', error);
@@ -791,6 +780,66 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         } catch (error) {
           console.error('❌ Failed to toggle Deep Focus:', error);
           set({ backupError: 'Failed to toggle Deep Focus mode' });
+        }
+      },
+
+      // Enable Deep Focus - called from web app
+      enableDeepFocus: async (source?: Source) => {
+        const state = get();
+        
+        // Guard against double enable
+        if (state.isDeepFocusActive) {
+          console.log('🟢 Deep Focus already active, skipping enable');
+          return;
+        }
+        
+        try {
+          console.log('🟢 Enabling Deep Focus from source:', source);
+          
+          // Enable extension focus mode
+          await ExtensionDataService.enableFocusMode();
+          set({ isDeepFocusActive: true });
+          
+          // Sync after enable (give extension time to create session)
+          setTimeout(() => {
+            // TODO: Implement in Phase 4
+            // get().syncDeepFocusSessionsFromExtension();
+          }, 3000);
+          
+        } catch (error) {
+          console.error('❌ Failed to enable Deep Focus:', error);
+          set({ backupError: 'Failed to enable Deep Focus mode' });
+          throw error;
+        }
+      },
+
+      // Disable Deep Focus - called from web app
+      disableDeepFocus: async () => {
+        const state = get();
+        
+        // Guard against double disable
+        if (!state.isDeepFocusActive) {
+          console.log('🔴 Deep Focus already inactive, skipping disable');
+          return;
+        }
+        
+        try {
+          console.log('🔴 Disabling Deep Focus');
+          
+          // Disable extension focus mode
+          await ExtensionDataService.disableFocusMode();
+          set({ isDeepFocusActive: false });
+          
+          // Sync after disable (give extension time to complete session)
+          setTimeout(() => {
+            // TODO: Implement in Phase 4
+            // get().syncDeepFocusSessionsFromExtension();
+          }, 3000);
+          
+        } catch (error) {
+          console.error('❌ Failed to disable Deep Focus:', error);
+          set({ backupError: 'Failed to disable Deep Focus mode' });
+          throw error;
         }
       },
 
