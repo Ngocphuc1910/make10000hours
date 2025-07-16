@@ -68,8 +68,6 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
     syncFocusStatus, 
     loadFocusStatus,
     isDeepFocusActive,
-    enableDeepFocus: storeEnableDeepFocus,
-    disableDeepFocus: storeDisableDeepFocus,
     syncCompleteFocusState,
     recordOverrideSession,
     loadOverrideSessions
@@ -125,31 +123,17 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
           });
         }
         
-        // DISABLED: Context recovery logic that was creating sessions at wrong times
-        // Only clean up orphaned sessions, don't auto-create new ones
-        if (currentState.isDeepFocusActive && !currentState.activeSessionId && !currentState.recoveryInProgress) {
-          console.log('🔄 Context: Deep Focus active but no session - cleaning up and resetting state...');
-          
-          // Clean up any orphaned sessions first
-          const cleanedCount = await deepFocusSessionService.cleanupOrphanedSessions(user.uid);
-          if (cleanedCount > 0) {
-            console.log(`✅ Context: Cleaned up ${cleanedCount} orphaned session(s)`);
+        // Clean up orphaned sessions but don't reset Deep Focus state
+        // Extension is the source of truth for all Deep Focus state
+        if (!currentState.recoveryInProgress) {
+          try {
+            const cleanedCount = await deepFocusSessionService.cleanupOrphanedSessions(user.uid);
+            if (cleanedCount > 0) {
+              console.log(`✅ Context: Cleaned up ${cleanedCount} orphaned session(s) without affecting Deep Focus state`);
+            }
+          } catch (error) {
+            console.error('❌ Context: Failed to cleanup orphaned sessions:', error);
           }
-          
-          // Reset state to inactive since no active session exists
-          useDeepFocusStore.setState({
-            isDeepFocusActive: false,
-            activeSessionId: null,
-            activeSessionStartTime: null,
-            activeSessionDuration: 0,
-            activeSessionElapsedSeconds: 0,
-            timer: null,
-            secondTimer: null,
-            hasRecoveredSession: false,
-            recoveryInProgress: false
-          });
-          
-          console.log('✅ Context: Reset deep focus state to inactive (no active session)');
         }
         
         hasInitialized = true;
@@ -404,10 +388,11 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
       lastVisibilityChange = now;
       
       if (!document.hidden && wasHidden) {
-        console.log('📖 Context: Page became visible - checking for extension state updates');
-        setTimeout(() => {
-          loadFocusStatus();
-        }, 1000);
+        console.log('📖 Context: Page became visible - but skipping loadFocusStatus to maintain state consistency');
+        // DISABLED: This was causing the Deep Focus switch to turn off when switching tabs
+        // setTimeout(() => {
+        //   loadFocusStatus();
+        // }, 1000);
       }
       wasHidden = document.hidden;
     };
@@ -454,12 +439,12 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
     console.log('🟢 Context: enableDeepFocus called for user:', user.uid);
     
     try {
-      await storeEnableDeepFocus(source);
+      await useDeepFocusStore.getState().enableDeepFocus(source);
     } catch (error) {
       console.error('❌ Context: Failed to enable deep focus:', error);
       throw error;
     }
-  }, [user?.uid, storeEnableDeepFocus]);
+  }, [user?.uid]);
 
   const disableDeepFocus = useCallback(async () => {
     if (!user?.uid) {
@@ -470,12 +455,12 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
     console.log('🔴 Context: disableDeepFocus called for user:', user.uid);
     
     try {
-      await storeDisableDeepFocus();
+      await useDeepFocusStore.getState().disableDeepFocus();
     } catch (error) {
       console.error('❌ Context: Failed to disable deep focus:', error);
       throw error;
     }
-  }, [user?.uid, storeDisableDeepFocus]);
+  }, [user?.uid]);
 
   // Memoize toggleDeepFocus to prevent infinite re-renders
   const toggleDeepFocus = useCallback(async () => {
