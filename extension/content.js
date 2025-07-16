@@ -411,6 +411,9 @@ class ActivityDetector {
     this.chromeListenerSetup = false;
     this.contextInvalidationLogged = false; // Track context invalidation logging
     
+    // IMPROVEMENT #3: Activity detection optimization
+    this.pendingActivityReport = null;
+    
     // Wait for background script before initializing
     this.initializeWhenReady();
   }
@@ -841,20 +844,27 @@ class ActivityDetector {
   }
 
   /**
-   * Update last activity timestamp
+   * IMPROVEMENT #3: Update last activity timestamp with optimized throttling
    */
   updateActivity() {
     const now = Date.now();
     const timeSinceLastActivity = now - this.lastActivity;
     
-    // Only update if enough time has passed to avoid spam
-    if (timeSinceLastActivity > 1000) { // 1 second throttle
+    // IMPROVEMENT #3: Reduce throttling from 1000ms to 250ms for better responsiveness
+    if (timeSinceLastActivity > 250) { // Reduced from 1000ms
       this.lastActivity = now;
       this.isActive = true;
       
-      // Report activity immediately if it was inactive
-      if (!this.isActive || this.wasSleeping) {
-        this.reportActivity();
+      // IMPROVEMENT #3: Batch activity reports instead of immediate reporting
+      if (!this.pendingActivityReport) {
+        this.pendingActivityReport = setTimeout(() => {
+          this.reportActivity();
+          this.pendingActivityReport = null;
+        }, 5000); // Report every 5 seconds instead of 10
+      }
+      
+      // Reset sleeping state
+      if (this.wasSleeping) {
         this.wasSleeping = false;
       }
     }
@@ -943,14 +953,14 @@ class ActivityDetector {
   }
 
   /**
-   * Start periodic activity reporting
+   * IMPROVEMENT #3: Start periodic activity reporting with optimized frequency
    */
   startReporting() {
-    // Report activity every 10 seconds
+    // IMPROVEMENT #3: Report activity every 8 seconds instead of 10 for better tracking
     this.reportingInterval = setInterval(() => {
       this.checkActiveStatus();
       this.reportActivity();
-    }, 10000);
+    }, 8000); // Reduced from 10000ms to 8000ms
   }
 
   /**
