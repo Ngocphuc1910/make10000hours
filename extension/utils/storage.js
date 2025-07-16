@@ -669,7 +669,10 @@ class StorageManager {
    */
   async getTodayStats() {
     const today = DateUtils.getLocalDateString();
+    console.log('🔍 Extension getTodayStats - today calculated as:', today);
+    
     const data = await this.getTimeData(today);
+    console.log('🔍 Extension getTodayStats - raw data:', data);
     
     if (this.mockMode) {
       return this.mockData.dailyStats[today] || {
@@ -680,13 +683,41 @@ class StorageManager {
       };
     }
     
-    return data[`dailyStats_${today}`] || {
+    const todayKey = `dailyStats_${today}`;
+    const todayData = data[todayKey];
+    console.log('🔍 Extension getTodayStats - looking for key:', todayKey);
+    console.log('🔍 Extension getTodayStats - found data:', todayData);
+    
+    // If no data for today, check if yesterday has data (migration scenario)
+    if (!todayData || todayData.totalTime === 0) {
+      console.log('🔍 Extension getTodayStats - no data for today, checking available keys...');
+      const allKeys = Object.keys(data);
+      console.log('🔍 Extension getTodayStats - available keys:', allKeys);
+      
+      // Check if yesterday has significant data
+      const yesterday = DateUtils.getLocalDateStringDaysAgo(1);
+      const yesterdayKey = `dailyStats_${yesterday}`;
+      const yesterdayData = data[yesterdayKey];
+      
+      console.log('🔍 Extension getTodayStats - yesterday key:', yesterdayKey);
+      console.log('🔍 Extension getTodayStats - yesterday data:', yesterdayData);
+      
+      if (yesterdayData && yesterdayData.totalTime > 0) {
+        console.log('⚠️ Extension getTodayStats - returning yesterday data due to migration/timing issue');
+        return yesterdayData;
+      }
+    }
+    
+    const result = todayData || {
       date: today,
       totalTime: 0,
       sitesVisited: 0,
       sites: {},
       productivityScore: 0
     };
+    
+    console.log('🔍 Extension getTodayStats - final result:', result);
+    return result;
   }
 
   /**

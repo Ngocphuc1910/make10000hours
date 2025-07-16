@@ -5,12 +5,12 @@ import { DeepFocusSession, Source } from '../types/models';
 import ExtensionDataService from '../services/extensionDataService';
 import { deepFocusSessionService } from '../api/deepFocusSessionService';
 import { siteUsageService } from '../api/siteUsageService';
+import { formatLocalDate } from '../utils/timeUtils';
 import HybridDataService from '../api/hybridDataService';
 import { overrideSessionService, OverrideSession } from '../api/overrideSessionService';
 import { blockedSitesService } from '../api/blockedSitesService';
 import { useUserStore } from './userStore';
 import { calculateComparisonDateRange, formatComparisonResult, calculatePercentageChange } from '../utils/comparisonUtils';
-import { formatLocalDate } from '../utils/timeUtils';
 
 interface DeepFocusStore extends DeepFocusData {
   isExtensionConnected: boolean;
@@ -1331,8 +1331,35 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
 
       // Site usage backup methods
       backupTodayData: async () => {
+        console.log('🔍 backupTodayData called');
         const state = get();
-        if (state.isBackingUp) return; // Prevent concurrent backups
+        console.log('🔍 state.isBackingUp:', state.isBackingUp);
+        
+        // Check if backup has been stuck for too long (over 2 minutes)
+        const now = Date.now();
+        let lastBackupTime = 0;
+        if (state.lastBackupTime) {
+          // Handle both Date objects and timestamp strings/numbers
+          if (typeof state.lastBackupTime === 'object' && state.lastBackupTime.getTime) {
+            lastBackupTime = state.lastBackupTime.getTime();
+          } else if (typeof state.lastBackupTime === 'string') {
+            lastBackupTime = new Date(state.lastBackupTime).getTime();
+          } else if (typeof state.lastBackupTime === 'number') {
+            lastBackupTime = state.lastBackupTime;
+          }
+        }
+        const timeSinceLastBackup = now - lastBackupTime;
+        console.log('🔍 Backup timing check:', { now, lastBackupTime, timeSinceLastBackup });
+        
+        if (state.isBackingUp && timeSinceLastBackup > 120000) { // 2 minutes
+          console.log('⚠️ Backup appears stuck, resetting state...');
+          set({ isBackingUp: false, backupError: 'Previous backup was stuck and was reset' });
+        }
+        
+        if (state.isBackingUp) {
+          console.log('⚠️ Backup already in progress, returning early');
+          return; // Prevent concurrent backups
+        }
         
         try {
           set({ isBackingUp: true, backupError: null });
@@ -1340,18 +1367,25 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           
           const { useUserStore } = await import('./userStore');
           const user = useUserStore.getState().user;
+          console.log('🔍 user from userStore:', user?.uid);
           
           // Authentication guard - prevent backup if user not authenticated
           if (!user?.uid) {
             console.warn('⚠️ User not authenticated, skipping backup');
+            set({ isBackingUp: false });
             return;
           }
 
           // Get today's data from extension with timeout - no circuit breaker reset
-          if (!ExtensionDataService.isExtensionInstalled()) {
+          const isExtensionAvailable = ExtensionDataService.isExtensionInstalled();
+          console.log('🔍 Extension detection result:', isExtensionAvailable);
+          console.log('🔍 window.chrome exists:', typeof (window as any).chrome);
+          console.log('🔍 chrome.runtime exists:', !!(window as any).chrome?.runtime);
+          
+          if (!isExtensionAvailable) {
             console.log('📱 Extension not available, using fallback backup mode');
             // Fallback: Create minimal backup entry to maintain sync schedule
-            const today = new Date().toISOString().split('T')[0];
+            const today = formatLocalDate(new Date());
             const fallbackData = {
               totalTime: 0,
               sitesVisited: 0,
@@ -1378,13 +1412,19 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
             )
           ]);
           
+          console.log('🔍 Extension response:', extensionResponse);
+          
           if (extensionResponse.success === false) {
             throw new Error(extensionResponse.error || 'Failed to get extension data');
           }
 
-          const today = new Date().toISOString().split('T')[0];
+          const today = formatLocalDate(new Date());
+          const dataToBackup = extensionResponse.data || extensionResponse;
+          console.log('🔍 Date calculated:', today);
+          console.log('🔍 Data to backup:', dataToBackup);
+          console.log('🔍 Document ID will be:', `${user.uid}_${today}`);
           console.log('💾 Saving backup data to Firebase...');
-          await siteUsageService.backupDayData(user.uid, today, extensionResponse.data || extensionResponse);
+          await siteUsageService.backupDayData(user.uid, today, dataToBackup);
           
           set({ lastBackupTime: new Date(), backupError: null });
           console.log('✅ Successfully backed up today\'s data');
@@ -1399,7 +1439,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
               const user = useUserStore.getState().user;
               
               if (user?.uid) {
-                const today = new Date().toISOString().split('T')[0];
+                const today = formatLocalDate(new Date());
                 const fallbackData = {
                   totalTime: 0,
                   sitesVisited: 0,

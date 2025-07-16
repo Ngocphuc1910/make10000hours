@@ -6,6 +6,7 @@ import { useDeepFocusStore } from '../../store/deepFocusStore';
 import { useDeepFocusDashboardStore } from '../../store/deepFocusDashboardStore';
 import { useUserStore } from '../../store/userStore';
 import { useUIStore } from '../../store/uiStore';
+import { useExtensionSync } from '../../hooks/useExtensionSync';
 import { Icon } from '../ui/Icon';
 import { Tooltip } from '../ui/Tooltip';
 import { FaviconService } from '../../utils/faviconUtils';
@@ -109,6 +110,35 @@ const DeepFocusPage: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(false);
 
   const { timeMetrics, dailyUsage, siteUsage, isLoading, loadExtensionData, loadAllTimeExtensionData } = useDeepFocusDashboardStore();
+  
+  // Initialize extension sync for immediate data loading and backup
+  useExtensionSync();
+  
+  // Expose backup function globally for debugging
+  React.useEffect(() => {
+    (window as any).debugBackupTodayData = backupTodayData;
+    (window as any).debugUser = user;
+    (window as any).resetBackupState = () => {
+      console.log('🔧 Manually resetting backup state...');
+      const store = useDeepFocusStore.getState();
+      console.log('🔍 Current state:', { 
+        isBackingUp: store.isBackingUp, 
+        lastBackupTime: store.lastBackupTime,
+        backupError: store.backupError 
+      });
+      useDeepFocusStore.setState({ 
+        isBackingUp: false, 
+        backupError: null,
+        lastBackupTime: new Date()
+      });
+      console.log('✅ Backup state reset');
+    };
+    console.log('🔧 Debug functions exposed:', { 
+      debugBackupTodayData: typeof backupTodayData,
+      debugUser: user?.uid || 'No user',
+      resetBackupState: 'function'
+    });
+  }, [backupTodayData, user]);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -218,10 +248,39 @@ const DeepFocusPage: React.FC = () => {
     });
   }, [isLeftSidebarOpen]);
 
-  // Initialize daily backup system (extension data loading handled by useExtensionSync)
+  // Initialize daily backup system and trigger immediate sync
   useEffect(() => {
     initializeDailyBackup();
-  }, [initializeDailyBackup]);
+    
+    // Trigger immediate backup to sync extension data to Firebase
+    const triggerImmediateSync = async () => {
+      try {
+        console.log('🔍 triggerImmediateSync called');
+        console.log('🔍 user:', user);
+        console.log('🔍 user?.uid:', user?.uid);
+        console.log('🔍 backupTodayData type:', typeof backupTodayData);
+        
+        if (user?.uid) {
+          console.log('🚀 Deep Focus page loaded - triggering immediate sync...');
+          console.log('🔍 About to call backupTodayData...');
+          await backupTodayData();
+          console.log('✅ Immediate sync completed');
+        } else {
+          console.warn('⚠️ User not authenticated, skipping immediate sync');
+        }
+      } catch (error) {
+        console.error('❌ Immediate sync failed:', error);
+        console.error('🔍 Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+      }
+    };
+    
+    // Wait a bit for extension to be ready, then sync
+    setTimeout(triggerImmediateSync, 2000);
+  }, [initializeDailyBackup, backupTodayData, user?.uid]);
 
   // Preload favicons for better UX
   useEffect(() => {
