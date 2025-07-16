@@ -1017,6 +1017,12 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           set({ isBackingUp: true, backupError: null });
           console.log('🔄 Starting backup of today\'s data...');
           
+          // Optimistic loading - reset backing up state faster for better UX
+          const optimisticTimer = setTimeout(() => {
+            console.log('🚀 Optimistic loading - showing UI while sync continues in background');
+            set({ isBackingUp: false });
+          }, 3000); // Show UI after 3 seconds even if sync is still running
+          
           const { useUserStore } = await import('./userStore');
           const user = useUserStore.getState().user;
           console.log('🔍 user from userStore:', user?.uid);
@@ -1060,7 +1066,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           const extensionResponse = await Promise.race([
             ExtensionDataService.getTodayStats(),
             new Promise<never>((_, reject) => 
-              setTimeout(() => reject(new Error('Extension backup timeout')), 15000)
+              setTimeout(() => reject(new Error('Extension backup timeout')), 5000)
             )
           ]);
           
@@ -1075,28 +1081,43 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           console.log('🔍 Date calculated:', today);
           console.log('🔍 Data to backup:', dataToBackup);
           console.log('🔍 Document ID will be:', `${user.uid}_${today}`);
-          console.log('💾 Saving backup data to Firebase...');
-          await siteUsageService.backupDayData(user.uid, today, dataToBackup);
+          // Run both operations in parallel for better performance
+          console.log('💾 Saving backup data to Firebase and syncing Deep Focus sessions...');
+          const backupPromise = siteUsageService.backupDayData(user.uid, today, dataToBackup);
           
-          // Sync Deep Focus sessions
-          console.log('🎯 Syncing Deep Focus sessions...');
-          try {
-            const { DeepFocusSync } = await import('../services/deepFocusSync');
-            const syncResult = await DeepFocusSync.syncTodaySessionsFromExtension(user.uid);
-            
-            if (syncResult.success) {
-              console.log(`✅ Deep Focus sync completed: ${syncResult.synced} sessions synced`);
-            } else {
-              console.warn(`⚠️ Deep Focus sync partial failure: ${syncResult.synced} sessions synced, error: ${syncResult.error}`);
+          // Start Deep Focus sync in parallel (don't await)
+          const deepFocusSyncPromise = (async () => {
+            try {
+              console.log('🎯 Syncing Deep Focus sessions...');
+              const { DeepFocusSync } = await import('../services/deepFocusSync');
+              const syncResult = await DeepFocusSync.syncTodaySessionsFromExtension(user.uid);
+              
+              if (syncResult.success) {
+                console.log(`✅ Deep Focus sync completed: ${syncResult.synced} sessions synced`);
+              } else {
+                console.warn(`⚠️ Deep Focus sync partial failure: ${syncResult.synced} sessions synced, error: ${syncResult.error}`);
+              }
+              return syncResult;
+            } catch (deepFocusError) {
+              console.error('❌ Deep Focus sync failed:', deepFocusError);
+              return { success: false, error: deepFocusError.message };
             }
-          } catch (deepFocusError) {
-            console.error('❌ Deep Focus sync failed:', deepFocusError);
-            // Don't fail the entire backup if Deep Focus sync fails
-          }
+          })();
           
-          set({ lastBackupTime: new Date(), backupError: null });
-          console.log('✅ Successfully backed up today\'s data and Deep Focus sessions');
+          // Wait for main backup to complete (faster feedback to user)
+          await backupPromise;
+          clearTimeout(optimisticTimer);
+          set({ lastBackupTime: new Date(), backupError: null, isBackingUp: false });
+          console.log('✅ Site usage backup completed');
+          
+          // Deep Focus sync continues in background (don't block UI)
+          deepFocusSyncPromise.then((result) => {
+            if (result.success) {
+              console.log('🎯 Background Deep Focus sync completed');
+            }
+          });
         } catch (error) {
+          clearTimeout(optimisticTimer);
           console.error('❌ Failed to backup today\'s data:', error);
           
           // If extension timeout, try fallback backup
