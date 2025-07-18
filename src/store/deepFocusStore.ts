@@ -55,6 +55,10 @@ interface DeepFocusStore extends DeepFocusData {
   isBackingUp: boolean;
   lastBackupTime: Date | null;
   backupError: string | null;
+  // Deep Focus specific sync state
+  isDeepFocusSyncing: boolean;
+  lastDeepFocusSyncTime: Date | null;
+  deepFocusSyncError: string | null;
   // Activity detection and auto-session management
   isSessionPaused: boolean;
   pausedAt: Date | null;
@@ -69,11 +73,16 @@ interface DeepFocusStore extends DeepFocusData {
   loadOverrideSessions: (userId: string, startDate?: Date, endDate?: Date) => Promise<void>;
   // Manual retry method for users
   retryBackup: () => Promise<void>;
+  // Manual retry method specifically for Deep Focus sync
+  retryDeepFocusSync: () => Promise<void>;
   // Get current sync status including circuit breaker info
   getSyncStatus: () => {
     isBackingUp: boolean;
     lastBackupTime: Date | null;
     backupError: string | null;
+    isDeepFocusSyncing: boolean;
+    lastDeepFocusSyncTime: Date | null;
+    deepFocusSyncError: string | null;
     circuitBreaker: { state: string };
     canRetry: boolean;
   };
@@ -195,6 +204,9 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       isBackingUp: false,
       lastBackupTime: null,
       backupError: null,
+      isDeepFocusSyncing: false,
+      lastDeepFocusSyncTime: null,
+      deepFocusSyncError: null,
       isSessionPaused: false,
       pausedAt: null,
       totalPausedTime: 0,
@@ -985,7 +997,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       backupTodayData: async () => {
         console.log('🔍 backupTodayData called');
         const state = get();
-        console.log('🔍 state.isBackingUp:', state.isBackingUp);
+        console.log('🔍 state.isBackingUp:', state.isBackingUp, 'state.isDeepFocusSyncing:', state.isDeepFocusSyncing);
         
         // Check if backup has been stuck for too long (over 2 minutes)
         const now = Date.now();
@@ -1004,37 +1016,74 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         console.log('🔍 Backup timing check:', { now, lastBackupTime, timeSinceLastBackup });
         
         if (state.isBackingUp && timeSinceLastBackup > 120000) { // 2 minutes
-          console.log('⚠️ Backup appears stuck, resetting state...');
-          set({ isBackingUp: false, backupError: 'Previous backup was stuck and was reset' });
+          console.log('⚠️ Site usage backup appears stuck, resetting state...');
+          set({ isBackingUp: false, backupError: 'Previous site usage backup was stuck and was reset' });
+        }
+        
+        // Check Deep Focus sync stuck state separately
+        let lastDeepFocusSyncTime = 0;
+        if (state.lastDeepFocusSyncTime) {
+          if (typeof state.lastDeepFocusSyncTime === 'object' && state.lastDeepFocusSyncTime.getTime) {
+            lastDeepFocusSyncTime = state.lastDeepFocusSyncTime.getTime();
+          } else if (typeof state.lastDeepFocusSyncTime === 'string') {
+            lastDeepFocusSyncTime = new Date(state.lastDeepFocusSyncTime).getTime();
+          } else if (typeof state.lastDeepFocusSyncTime === 'number') {
+            lastDeepFocusSyncTime = state.lastDeepFocusSyncTime;
+          }
+        }
+        const timeSinceLastDeepFocusSync = now - lastDeepFocusSyncTime;
+        
+        if (state.isDeepFocusSyncing && timeSinceLastDeepFocusSync > 120000) { // 2 minutes
+          console.log('⚠️ Deep Focus sync appears stuck, resetting state...');
+          set({ isDeepFocusSyncing: false, deepFocusSyncError: 'Previous Deep Focus sync was stuck and was reset' });
         }
         
         if (state.isBackingUp) {
-          console.log('⚠️ Backup already in progress, returning early');
-          return; // Prevent concurrent backups
+          console.log('⚠️ Site usage backup already in progress, returning early');
+          return; // Prevent concurrent site usage backups
         }
+        
+        let optimisticTimer: NodeJS.Timeout;
         
         try {
           set({ isBackingUp: true, backupError: null });
           console.log('🔄 Starting backup of today\'s data...');
           
-          // Optimistic loading - reset backing up state faster for better UX
-          const optimisticTimer = setTimeout(() => {
+          // Optimistic loading - reset backing up state faster for better UX (UI state only)
+          optimisticTimer = setTimeout(() => {
             console.log('🚀 Optimistic loading - showing UI while sync continues in background');
-            set({ isBackingUp: false });
-          }, 3000); // Show UI after 3 seconds even if sync is still running
+            // Only reset the UI loading state, not the actual sync states
+            const currentState = get();
+            if (!currentState.isDeepFocusSyncing) {
+              set({ isBackingUp: false });
+            }
+          }, 3000);
           
           const { useUserStore } = await import('./userStore');
           const user = useUserStore.getState().user;
           console.log('🔍 user from userStore:', user?.uid);
           
+          // Try to get user ID from multiple sources
+          let userId = user?.uid;
+          if (!userId) {
+            // Fallback to task store which seems to have the user ID
+            const { useTaskStore } = await import('./taskStore');
+            const taskState = useTaskStore.getState();
+            userId = taskState.userId || taskState.currentUserId;
+            console.log('🔍 fallback userId from taskStore:', userId);
+          }
+          
           // Authentication guard - prevent backup if user not authenticated
-          if (!user?.uid) {
+          if (!userId) {
             console.warn('⚠️ User not authenticated, skipping backup');
             set({ isBackingUp: false });
+            clearTimeout(optimisticTimer);
             return;
           }
+          
+          console.log('✅ Using userId for backup:', userId);
 
-          // Get today's data from extension with timeout - no circuit breaker reset
+          // Get today's data from extension with timeout
           const isExtensionAvailable = ExtensionDataService.isExtensionInstalled();
           console.log('🔍 Extension detection result:', isExtensionAvailable);
           console.log('🔍 window.chrome exists:', typeof (window as any).chrome);
@@ -1053,10 +1102,12 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
               source: 'fallback'
             };
             
-            await siteUsageService.backupDayData(user.uid, today, fallbackData);
+            await siteUsageService.backupDayData(userId, today, fallbackData);
+            clearTimeout(optimisticTimer);
             set({ 
               lastBackupTime: new Date(),
-              backupError: 'Extension offline - using fallback mode'
+              backupError: 'Extension offline - using fallback mode',
+              isBackingUp: false
             });
             console.log('✅ Fallback backup completed');
             return;
@@ -1080,42 +1131,73 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           const dataToBackup = extensionResponse.data || extensionResponse;
           console.log('🔍 Date calculated:', today);
           console.log('🔍 Data to backup:', dataToBackup);
-          console.log('🔍 Document ID will be:', `${user.uid}_${today}`);
-          // Run both operations in parallel for better performance
-          console.log('💾 Saving backup data to Firebase and syncing Deep Focus sessions...');
-          const backupPromise = siteUsageService.backupDayData(user.uid, today, dataToBackup);
+          console.log('🔍 Document ID will be:', `${userId}_${today}`);
           
-          // Start Deep Focus sync in parallel (don't await)
+          // Start both site usage backup and Deep Focus sync
+          console.log('💾 Starting site usage backup and Deep Focus sync...');
+          const backupPromise = siteUsageService.backupDayData(userId, today, dataToBackup);
+          
+          // Start Deep Focus sync with proper state tracking
           const deepFocusSyncPromise = (async () => {
             try {
-              console.log('🎯 Syncing Deep Focus sessions...');
+              // Set Deep Focus syncing state
+              set({ isDeepFocusSyncing: true, deepFocusSyncError: null });
+              console.log('🎯 Starting Deep Focus sessions sync...');
+              
               const { DeepFocusSync } = await import('../services/deepFocusSync');
-              const syncResult = await DeepFocusSync.syncTodaySessionsFromExtension(user.uid);
+              const syncResult = await DeepFocusSync.syncTodaySessionsFromExtension(userId);
               
               if (syncResult.success) {
                 console.log(`✅ Deep Focus sync completed: ${syncResult.synced} sessions synced`);
+                set({ 
+                  lastDeepFocusSyncTime: new Date(), 
+                  deepFocusSyncError: null,
+                  isDeepFocusSyncing: false 
+                });
               } else {
                 console.warn(`⚠️ Deep Focus sync partial failure: ${syncResult.synced} sessions synced, error: ${syncResult.error}`);
+                set({ 
+                  lastDeepFocusSyncTime: new Date(), 
+                  deepFocusSyncError: syncResult.error || 'Partial sync failure',
+                  isDeepFocusSyncing: false 
+                });
               }
               return syncResult;
             } catch (deepFocusError) {
               console.error('❌ Deep Focus sync failed:', deepFocusError);
-              return { success: false, error: deepFocusError.message };
+              const errorMessage = deepFocusError instanceof Error ? deepFocusError.message : 'Deep Focus sync failed';
+              set({ 
+                deepFocusSyncError: errorMessage,
+                isDeepFocusSyncing: false 
+              });
+              return { success: false, error: errorMessage };
             }
           })();
           
-          // Wait for main backup to complete (faster feedback to user)
-          await backupPromise;
-          clearTimeout(optimisticTimer);
-          set({ lastBackupTime: new Date(), backupError: null, isBackingUp: false });
-          console.log('✅ Site usage backup completed');
+          // Wait for both operations to complete
+          const [backupResult, deepFocusResult] = await Promise.allSettled([
+            backupPromise,
+            deepFocusSyncPromise
+          ]);
           
-          // Deep Focus sync continues in background (don't block UI)
-          deepFocusSyncPromise.then((result) => {
-            if (result.success) {
-              console.log('🎯 Background Deep Focus sync completed');
-            }
-          });
+          clearTimeout(optimisticTimer);
+          
+          // Handle site usage backup result
+          if (backupResult.status === 'fulfilled') {
+            console.log('✅ Site usage backup completed');
+            set({ lastBackupTime: new Date(), backupError: null });
+          } else {
+            console.error('❌ Site usage backup failed:', backupResult.reason);
+            set({ backupError: backupResult.reason instanceof Error ? backupResult.reason.message : 'Site usage backup failed' });
+          }
+          
+          // Deep Focus result is already handled in the promise above
+          if (deepFocusResult.status === 'fulfilled') {
+            console.log('🎯 Deep Focus sync promise completed');
+          } else {
+            console.error('❌ Deep Focus sync promise failed:', deepFocusResult.reason);
+          }
+          
         } catch (error) {
           clearTimeout(optimisticTimer);
           console.error('❌ Failed to backup today\'s data:', error);
@@ -1124,10 +1206,8 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           if (error instanceof Error && error.message.includes('timeout')) {
             console.log('🔄 Extension timeout detected, attempting fallback backup...');
             try {
-              const { useUserStore } = await import('./userStore');
-              const user = useUserStore.getState().user;
-              
-              if (user?.uid) {
+              // Use the same user ID we found earlier
+              if (userId) {
                 const today = formatLocalDate(new Date());
                 const fallbackData = {
                   totalTime: 0,
@@ -1138,7 +1218,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
                   source: 'timeout-fallback'
                 };
                 
-                await siteUsageService.backupDayData(user.uid, today, fallbackData);
+                await siteUsageService.backupDayData(userId, today, fallbackData);
                 set({ 
                   lastBackupTime: new Date(),
                   backupError: 'Extension timeout - fallback backup used'
@@ -1287,6 +1367,56 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         }, 1000);
       },
 
+      // Manual retry method specifically for Deep Focus sync
+      retryDeepFocusSync: async () => {
+        console.log('🔄 Manual Deep Focus sync retry triggered');
+        const state = get();
+        
+        if (state.isDeepFocusSyncing) {
+          console.log('⚠️ Deep Focus sync already in progress, skipping retry');
+          return;
+        }
+        
+        const { useUserStore } = await import('./userStore');
+        const user = useUserStore.getState().user;
+        
+        if (!user?.uid) {
+          console.warn('⚠️ User not authenticated, cannot retry Deep Focus sync');
+          return;
+        }
+        
+        try {
+          set({ isDeepFocusSyncing: true, deepFocusSyncError: null });
+          console.log('🎯 Retrying Deep Focus sessions sync...');
+          
+          const { DeepFocusSync } = await import('../services/deepFocusSync');
+          const syncResult = await DeepFocusSync.syncTodaySessionsFromExtension(user.uid);
+          
+          if (syncResult.success) {
+            console.log(`✅ Deep Focus sync retry completed: ${syncResult.synced} sessions synced`);
+            set({ 
+              lastDeepFocusSyncTime: new Date(), 
+              deepFocusSyncError: null,
+              isDeepFocusSyncing: false 
+            });
+          } else {
+            console.warn(`⚠️ Deep Focus sync retry partial failure: ${syncResult.synced} sessions synced, error: ${syncResult.error}`);
+            set({ 
+              lastDeepFocusSyncTime: new Date(), 
+              deepFocusSyncError: syncResult.error || 'Partial sync failure',
+              isDeepFocusSyncing: false 
+            });
+          }
+        } catch (error) {
+          console.error('❌ Deep Focus sync retry failed:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Deep Focus sync retry failed';
+          set({ 
+            deepFocusSyncError: errorMessage,
+            isDeepFocusSyncing: false 
+          });
+        }
+      },
+
       // Get current sync status including circuit breaker info
       getSyncStatus: () => {
         const state = get();
@@ -1296,8 +1426,11 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           isBackingUp: state.isBackingUp,
           lastBackupTime: state.lastBackupTime,
           backupError: state.backupError,
+          isDeepFocusSyncing: state.isDeepFocusSyncing,
+          lastDeepFocusSyncTime: state.lastDeepFocusSyncTime,
+          deepFocusSyncError: state.deepFocusSyncError,
           circuitBreaker: circuitBreakerStatus,
-          canRetry: !state.isBackingUp && circuitBreakerStatus.state !== 'OPEN'
+          canRetry: !state.isBackingUp && !state.isDeepFocusSyncing && circuitBreakerStatus.state !== 'OPEN'
         };
       },
 
