@@ -37,9 +37,9 @@ export class DeepFocusSync {
       for (const session of extensionSessions) {
         try {
           const result = await this.syncSingleSession(userId, session);
-          if (result !== 'skipped') {
+          if (result === 'synced' || result === 'updated') {
             syncedCount++;
-            console.log(`✅ Synced session ${session.id}`);
+            console.log(`✅ ${result === 'synced' ? 'Synced' : 'Updated'} session ${session.id}`);
           } else {
             skippedCount++;
           }
@@ -68,9 +68,9 @@ export class DeepFocusSync {
   }
 
   /**
-   * Check if a session already exists in Firebase
+   * Get existing session from Firebase if it exists
    */
-  private static async sessionExists(userId: string, extensionSessionId: string): Promise<boolean> {
+  private static async getExistingSession(userId: string, extensionSessionId: string): Promise<{ exists: boolean; docId?: string; data?: any }> {
     try {
       const q = query(
         collection(db, 'deepFocusSessions'),
@@ -79,25 +79,52 @@ export class DeepFocusSync {
       );
       
       const querySnapshot = await getDocs(q);
-      return !querySnapshot.empty;
+      if (querySnapshot.empty) {
+        return { exists: false };
+      }
+      
+      const doc = querySnapshot.docs[0];
+      return { 
+        exists: true, 
+        docId: doc.id, 
+        data: doc.data() 
+      };
     } catch (error) {
       console.error('❌ Error checking session existence:', error);
-      return false; // If check fails, assume session doesn't exist to avoid blocking sync
+      return { exists: false }; // If check fails, assume session doesn't exist to avoid blocking sync
     }
   }
 
   /**
    * Sync a single session from extension to Firebase
    */
-  private static async syncSingleSession(userId: string, extensionSession: any): Promise<'synced' | 'skipped'> {
+  private static async syncSingleSession(userId: string, extensionSession: any): Promise<'synced' | 'updated' | 'skipped'> {
     const collectionName = 'deepFocusSessions';
     
     try {
       // Check if session already exists in Firebase
-      const exists = await this.sessionExists(userId, extensionSession.id);
-      if (exists) {
-        console.log(`⏭️ Session ${extensionSession.id} already exists in Firebase, skipping`);
-        return 'skipped';
+      const existingSession = await this.getExistingSession(userId, extensionSession.id);
+      
+      if (existingSession.exists) {
+        // For active sessions, update with latest data from extension
+        if (extensionSession.status === 'active') {
+          console.log(`🔄 Session ${extensionSession.id} is active, updating with latest data`);
+          
+          const updateData = {
+            duration: extensionSession.duration || 0,
+            endTime: extensionSession.endTime ? Timestamp.fromDate(new Date(extensionSession.endTime)) : null,
+            status: extensionSession.status,
+            updatedAt: serverTimestamp()
+          };
+          
+          await updateDoc(doc(db, collectionName, existingSession.docId!), updateData);
+          console.log(`🔄 Successfully updated active session ${extensionSession.id}`);
+          return 'updated';
+        } else {
+          // For completed sessions, skip if already exists
+          console.log(`⏭️ Session ${extensionSession.id} already exists in Firebase, skipping`);
+          return 'skipped';
+        }
       }
 
       // Transform extension session to Firebase format
@@ -164,14 +191,16 @@ export class DeepFocusSync {
       for (const session of todaySessions) {
         try {
           const result = await this.syncSingleSession(userId, session);
-          if (result !== 'skipped') {
+          if (result === 'synced' || result === 'updated') {
             syncedCount++;
+            console.log(`✅ ${result === 'synced' ? 'Synced' : 'Updated'} session ${session.id}`);
           } else {
             skippedCount++;
           }
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
           errors.push(`Session ${session.id}: ${errorMsg}`);
+          console.error(`❌ Failed to sync session ${session.id}:`, error);
         }
       }
 
@@ -223,7 +252,7 @@ export class DeepFocusSync {
       for (const session of rangeSessions) {
         try {
           const result = await this.syncSingleSession(userId, session);
-          if (result !== 'skipped') {
+          if (result === 'synced' || result === 'updated') {
             syncedCount++;
           } else {
             skippedCount++;
