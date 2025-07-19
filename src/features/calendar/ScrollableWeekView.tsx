@@ -61,16 +61,33 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
 }, ref) => {
   const { projects } = useTaskStore();
   
-  // Initialize date range with proper Monday-Sunday view and 7-week buffer
+  // Initialize date range with continuous day-based approach (not week-based)
   const [dateRange, setDateRange] = useState<CalendarDateRange>(() => {
-    const centerWeekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-    const startDate = addDays(centerWeekStart, -21); // 3 weeks before
-    const endDate = addDays(centerWeekStart, 27); // 4 weeks after (total 49 days / 7 weeks)
+    // Start with current date in the center, extend days in both directions
+    const startDate = addDays(currentDate, -24); // 24 days before current date
+    const endDate = addDays(currentDate, 24); // 24 days after current date (total 49 days)
     
-    // Calculate scroll position to show Monday-Sunday of current week
-    // Default viewport should show the current week in the middle of the 7-week range
-    // So scroll to position 21 * DAY_WIDTH to align current week Monday at left edge
-    const initialScrollOffset = DAY_WIDTH * 21; // 3 weeks * 7 days
+    // For default view, position to show Monday-Sunday of current week
+    // Manual Monday calculation to ensure we start on Monday
+    const currentDayOfWeek = currentDate.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+    const daysToSubtract = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1; // If Sunday, go back 6 days to Monday
+    const mondayOfCurrentWeek = addDays(currentDate, -daysToSubtract);
+    
+    // Ensure we have the start of the day (00:00:00)
+    const currentWeekStart = new Date(mondayOfCurrentWeek);
+    currentWeekStart.setHours(0, 0, 0, 0);
+    
+    console.log('Manual Monday calculation:', { 
+      currentDate, 
+      currentDayOfWeek, 
+      daysToSubtract, 
+      mondayOfCurrentWeek, 
+      currentWeekStart,
+      expectedDay: currentWeekStart.getDay() // Should be 1 for Monday
+    });
+    
+    const daysFromStartToCurrentWeek = Math.floor((currentWeekStart.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const initialScrollOffset = daysFromStartToCurrentWeek * DAY_WIDTH;
     
     return {
       startDate,
@@ -129,16 +146,19 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
     return lastUsedProject?.color || '#EF4444';
   }, [projects]);
 
-  // Update date range based on scroll position - passive tracking only
+  // Update date range based on scroll position - truly continuous day-based approach
   const updateDateRangeFromScroll = useCallback((scrollLeft: number) => {
-    // Only update internal state tracking - don't modify scroll position
+    // Calculate which day is at the left edge of the viewport
     const dayOffset = Math.floor(scrollLeft / DAY_WIDTH);
-    const newCenterDate = addDays(dateRange.startDate, dayOffset + 21);
+    const firstVisibleDate = addDays(dateRange.startDate, dayOffset);
+    
+    // Update center date to be the middle of the visible range (assuming ~7 days visible)
+    const newCenterDate = addDays(firstVisibleDate, 3); // Middle of visible range
     
     // Use functional update to avoid potential state conflicts
     setDateRange(prev => {
       // Only update if there's a meaningful change to avoid unnecessary renders
-      if (Math.abs(prev.scrollOffset - scrollLeft) < 5) {
+      if (Math.abs(prev.scrollOffset - scrollLeft) < 10) {
         return prev;
       }
       
@@ -149,16 +169,14 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
       };
     });
 
-    // Calculate visible range with debounced callback to parent
-    const visibleStartDate = addDays(dateRange.startDate, dayOffset);
-    const visibleEndDate = addDays(visibleStartDate, 6);
+    // Calculate the actual visible range (the exact days being shown)
+    // Don't force it to be Monday-Sunday - let it be any 7-day range
+    const visibleStartDate = firstVisibleDate;
+    const visibleEndDate = addDays(firstVisibleDate, 6); // Show exactly 7 days from start
     
-    // Debounce the callback to parent to avoid excessive updates
+    // Throttle parent callback to reduce excessive updates during smooth scrolling
     if (onDateRangeChange) {
-      clearTimeout(updateDateRangeFromScroll.timeoutId);
-      updateDateRangeFromScroll.timeoutId = setTimeout(() => {
-        onDateRangeChange(visibleStartDate, visibleEndDate);
-      }, 50);
+      onDateRangeChange(visibleStartDate, visibleEndDate);
     }
   }, [dateRange.startDate, onDateRangeChange]);
 
@@ -170,34 +188,30 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
     
     const scrollLeft = e.currentTarget.scrollLeft;
     
-    // Only update internal state, don't try to \"correct\" scroll position
-    // Use setTimeout to avoid any potential blocking of scroll events
-    setTimeout(() => {
+    // Update date range with minimal interference for smooth scrolling
+    // Use requestAnimationFrame to avoid blocking scroll momentum
+    requestAnimationFrame(() => {
       updateDateRangeFromScroll(scrollLeft);
-    }, 0);
+    });
 
     // Very conservative infinite scroll - only when truly at the edges
     const now = Date.now();
     const timeSinceLastExpansion = now - lastExpansionTime.current;
     
-    if (timeSinceLastExpansion < 500) return; // Increased debounce to reduce interference
+    if (timeSinceLastExpansion < 1000) return; // Very conservative debounce to prevent interference
     
     const containerWidth = e.currentTarget.offsetWidth;
     const scrollWidth = e.currentTarget.scrollWidth;
     
-    // Only expand when very close to edges to minimize interference
-    const leftThreshold = DAY_WIDTH * 7; // 1 week threshold
-    const rightThreshold = scrollWidth - containerWidth - (DAY_WIDTH * 7);
+    // Only expand when extremely close to edges - much more conservative
+    const leftThreshold = DAY_WIDTH * 3; // Only 3 days from edge
+    const rightThreshold = scrollWidth - containerWidth - (DAY_WIDTH * 3);
     
-    // Very large safe zone with extensive buffer room
-    const safeZoneStart = DAY_WIDTH * 21; // 3 weeks from left
-    const safeZoneEnd = scrollWidth - containerWidth - (DAY_WIDTH * 21); // 3 weeks from right
-    
-    // Only expand when absolutely necessary
-    if (scrollLeft < leftThreshold && scrollLeft < safeZoneStart) {
+    // Only expand when truly at the edges to prevent interference with normal scrolling
+    if (scrollLeft < leftThreshold) {
       lastExpansionTime.current = now;
       expandDateRange('left');
-    } else if (scrollLeft > rightThreshold && scrollLeft > safeZoneEnd) {
+    } else if (scrollLeft > rightThreshold) {
       lastExpansionTime.current = now;
       expandDateRange('right');
     }
@@ -214,16 +228,16 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
         // When expanding left, we need to adjust scroll position to maintain visual position
         const newScrollOffset = prev.scrollOffset + (DAY_WIDTH * 7);
         
-        // Update scroll position after state update with better performance
-        requestAnimationFrame(() => {
-          if (scrollContainerRef.current) {
+        // Update scroll position smoothly without interrupting user interaction
+        setTimeout(() => {
+          if (scrollContainerRef.current && !isScrollingProgrammatically.current) {
             isScrollingProgrammatically.current = true;
             scrollContainerRef.current.scrollLeft = newScrollOffset;
-            requestAnimationFrame(() => {
+            setTimeout(() => {
               isScrollingProgrammatically.current = false;
-            });
+            }, 0);
           }
-        });
+        }, 0);
         
         return {
           ...prev,
@@ -273,14 +287,14 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
   }, [dateRange.startDate]);
 
   // Update scroll position when currentDate changes (external navigation only)
-  // This should only trigger for programmatic date changes, not user scrolling
+  // This should only trigger for major programmatic date changes, not user scrolling
   useEffect(() => {
-    // Only auto-scroll if the currentDate change is significant (more than 1 week difference)
-    // This prevents bounce-back during normal user scrolling
+    // Only auto-scroll if the currentDate change is very significant (more than 4 weeks difference)
+    // This should only happen for major navigation like "Today" button or month changes
     const daysDifference = Math.abs((currentDate.getTime() - dateRange.centerDate.getTime()) / (1000 * 60 * 60 * 24));
     
-    if (daysDifference > 7 && !isScrollingProgrammatically.current) {
-      // This is likely a programmatic date change (like clicking "Today" button)
+    if (daysDifference > 28 && !isScrollingProgrammatically.current) {
+      // This is likely a major programmatic date change (like clicking "Today" button from far away)
       const centerWeekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
       
       isScrollingProgrammatically.current = true;
@@ -296,7 +310,7 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
         isScrollingProgrammatically.current = false;
       }, 300);
     }
-  }, [currentDate]); // Removed dateRange.centerDate dependency to prevent constant checking
+  }, [currentDate]); // Very conservative - only for major date jumps
 
   // Initialize scroll position with precise alignment - one time only
   useEffect(() => {
@@ -474,7 +488,7 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
   }, [dragState, calculateTimeFromY, getTimeSlotHeight, allDays.length]);
 
   // Handle mouse up
-  const handleMouseUp = useCallback((e: MouseEvent) => {
+  const handleMouseUp = useCallback(() => {
     if (!dragState.isDragging || !dragIndicator.startTime || !dragIndicator.endTime) {
       setDragState({
         isDragging: false,
@@ -552,9 +566,8 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
     // Get the first visible day (leftmost day in viewport)
     const firstVisibleDate = addDays(dateRange.startDate, currentDayOffset);
     
-    // For week navigation, we want to find the Monday of the week that contains
-    // the majority of the currently visible 7-day range
-    // Get the middle day of the current 7-day viewport for more accurate week detection
+    // For arrow navigation, always snap to Monday-Sunday boundaries
+    // Get the middle day of the current 7-day viewport for week detection
     const middleVisibleDate = addDays(firstVisibleDate, 3); // 3 days into the 7-day range
     const currentWeekStart = startOfWeek(middleVisibleDate, { weekStartsOn: 1 });
     
@@ -562,7 +575,7 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
     const moveWeeks = direction === 'next' ? 1 : -1;
     const newWeekStart = addWeeks(currentWeekStart, moveWeeks);
     
-    // Ensure smooth animation for navigation
+    // Scroll to the Monday of the target week
     scrollToDate(newWeekStart, true);
   }, [dateRange.startDate, scrollToDate]);
 
@@ -575,13 +588,13 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
   return (
     <div className="calendar-week-container flex flex-col h-full w-full bg-background-primary dark:bg-[#141414]">
       {/* Unified scroll container with sticky time column */}
-      <div className="h-full w-full flex justify-center">
+      <div className="h-full w-full">
         <div 
           ref={scrollContainerRef}
           className="h-full overflow-auto scrollbar-thin"
           onScroll={handleScroll}
           style={{ 
-            width: `${TIME_COLUMN_WIDTH + (7 * DAY_WIDTH)}px`,
+            width: '100%', // Allow full width to show partial weeks across boundaries
             maxWidth: '100%',
             scrollBehavior: 'auto', // Use auto for better trackpad responsiveness
             WebkitOverflowScrolling: 'touch', // iOS momentum scrolling
@@ -589,8 +602,7 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
             scrollSnapType: 'none', // Disable snap to allow free scrolling
             overscrollBehavior: 'auto', // Allow natural overscroll
             // Optimize for trackpad sensitivity
-            scrollbarWidth: 'thin',
-            MozScrollbarWidth: 'thin'
+            scrollbarWidth: 'thin'
           }}
         >
           {/* Content grid with sticky time column */}
@@ -655,7 +667,7 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
                         }
                       }}
                     >
-                      {getAllDayEvents(day).map((event, index) => (
+                      {getAllDayEvents(day).map((event) => (
                         <div
                           key={event.id}
                           className="flex-shrink-0 relative w-full"

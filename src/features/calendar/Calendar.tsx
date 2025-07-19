@@ -553,7 +553,13 @@ export const Calendar: React.FC = () => {
 
   const handleDateRangeChange = useCallback((startDate: Date, endDate: Date) => {
     setVisibleDateRange({ startDate, endDate });
-  }, []);
+    
+    // Update currentDate to the start of the visible range for title display
+    // This ensures the page title reflects the currently visible month
+    if (currentView === 'week') {
+      setCurrentDate(startDate);
+    }
+  }, [currentView, currentDate]);
   
   // Handle event resize
   const handleEventResize = useCallback((event: CalendarEvent, direction: 'top' | 'bottom', newTime: Date) => {
