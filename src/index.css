@@ -1196,6 +1196,54 @@ code {
 }
 
 .dark .calendar-page-container .calendar-scrollable,
+
+/* Enhanced trackpad scrolling for calendar */
+.calendar-week-container {
+  /* Optimize for smooth trackpad scrolling */
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: auto; /* Let user control smoothness */
+  overscroll-behavior: auto; /* Allow natural bounce/overscroll */
+  
+  /* Hardware acceleration for smoother scrolling */
+  will-change: scroll-position;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  
+  /* Disable any scroll snapping that might interfere */
+  scroll-snap-type: none;
+  
+  /* Ensure momentum scrolling on all platforms */
+  overflow: auto;
+}
+
+/* Enhanced horizontal scrolling specifically */
+.calendar-week-container .overflow-auto {
+  /* Optimize horizontal scroll sensitivity */
+  overscroll-behavior-x: auto;
+  overscroll-behavior-y: contain; /* Prevent vertical overscroll interference */
+  
+  /* Better trackpad momentum - remove any resistance */
+  scroll-behavior: auto !important;
+  -webkit-overflow-scrolling: touch;
+  
+  /* Eliminate all potential scroll resistance */
+  scroll-padding: 0 !important;
+  scroll-margin: 0 !important;
+  scroll-snap-type: none !important;
+  
+  /* Enhance trackpad sensitivity with hardware acceleration */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: scroll-position;
+  
+  /* Prevent any layout corrections that might cause bounce */
+  contain: layout style paint;
+  isolation: isolate;
+  
+  /* Ensure smooth momentum on all platforms */
+  -webkit-overflow-scrolling: touch;
+  -ms-overflow-style: -ms-autohiding-scrollbar;
+}
 .dark .calendar-page-container .calendar-week-time-column,
 .dark .calendar-page-container .calendar-week-day-column,
 .dark .calendar-page-container .day-column,
