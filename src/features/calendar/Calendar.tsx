@@ -4,7 +4,7 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { CalendarEvent, CalendarView, DragItem, DropResult } from './types';
-import WeekView from './WeekView';
+import ScrollableWeekView, { ScrollableWeekViewRef } from './ScrollableWeekView';
 import DayView from './DayView';
 import MonthView from './MonthView';
 import Icon from '../../components/ui/Icon';
@@ -61,6 +61,13 @@ export const Calendar: React.FC = () => {
     isAllDay?: boolean;
   } | null>(null);
   const [clearDragIndicator, setClearDragIndicator] = useState(false);
+  const [visibleDateRange, setVisibleDateRange] = useState<{
+    startDate: Date;
+    endDate: Date;
+  } | null>(null);
+
+  // Ref for ScrollableWeekView to control navigation
+  const scrollableWeekViewRef = useRef<ScrollableWeekViewRef>(null);
 
   // Undo/Redo state management
   const [undoStack, setUndoStack] = useState<UndoRedoState[]>([]);
@@ -235,6 +242,10 @@ export const Calendar: React.FC = () => {
   const handleNavigate = (direction: 'prev' | 'next' | 'today') => {
     if (direction === 'today') {
       setCurrentDate(new Date());
+      // For week view, also use the smooth scrolling
+      if (currentView === 'week' && scrollableWeekViewRef.current) {
+        scrollableWeekViewRef.current.navigateWeek('today');
+      }
       return;
     }
 
@@ -244,7 +255,13 @@ export const Calendar: React.FC = () => {
         setCurrentDate(addMonths(currentDate, moveDate));
         break;
       case 'week':
-        setCurrentDate(addWeeks(currentDate, moveDate));
+        // Use the ScrollableWeekView's smooth navigation for week view
+        if (scrollableWeekViewRef.current) {
+          scrollableWeekViewRef.current.navigateWeek(direction);
+        } else {
+          // Fallback for when ref isn't available yet
+          setCurrentDate(addWeeks(currentDate, moveDate));
+        }
         break;
       case 'day':
         setCurrentDate(addDays(currentDate, moveDate));
@@ -533,6 +550,10 @@ export const Calendar: React.FC = () => {
     setDragCreateData({ startTime, endTime, status });
     setIsDragCreateTaskOpen(true);
   }, []);
+
+  const handleDateRangeChange = useCallback((startDate: Date, endDate: Date) => {
+    setVisibleDateRange({ startDate, endDate });
+  }, []);
   
   // Handle event resize
   const handleEventResize = useCallback((event: CalendarEvent, direction: 'top' | 'bottom', newTime: Date) => {
@@ -797,20 +818,24 @@ export const Calendar: React.FC = () => {
         </div>
 
         {/* Calendar Content */}
-        <div className="flex-1 overflow-auto custom-scrollbar">
+        <div className="flex-1 overflow-hidden custom-scrollbar">
           {currentView === 'week' && (
-            <WeekView
-              currentDate={currentDate}
-              events={allEvents}
-              onEventClick={handleEventClick}
-              onTimeSlotClick={handleTimeSlotClick}
-              onAllDayClick={handleAllDayClick}
-              onDragCreate={handleDragCreate}
-              onEventDrop={handleEventDrop}
-              onEventResize={handleEventResize}
-              onEventResizeMove={handleEventResizeMove}
-              clearDragIndicator={clearDragIndicator}
-            />
+            <div className="h-full w-full">
+              <ScrollableWeekView
+                ref={scrollableWeekViewRef}
+                currentDate={currentDate}
+                events={allEvents}
+                onEventClick={handleEventClick}
+                onTimeSlotClick={handleTimeSlotClick}
+                onAllDayClick={handleAllDayClick}
+                onDragCreate={handleDragCreate}
+                onEventDrop={handleEventDrop}
+                onEventResize={handleEventResize}
+                onEventResizeMove={handleEventResizeMove}
+                onDateRangeChange={handleDateRangeChange}
+                clearDragIndicator={clearDragIndicator}
+              />
+            </div>
           )}
 
           {currentView === 'day' && (
