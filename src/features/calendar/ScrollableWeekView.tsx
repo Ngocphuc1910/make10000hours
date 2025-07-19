@@ -77,17 +77,15 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
     const currentWeekStart = new Date(mondayOfCurrentWeek);
     currentWeekStart.setHours(0, 0, 0, 0);
     
-    console.log('Manual Monday calculation:', { 
-      currentDate, 
-      currentDayOfWeek, 
-      daysToSubtract, 
-      mondayOfCurrentWeek, 
-      currentWeekStart,
-      expectedDay: currentWeekStart.getDay() // Should be 1 for Monday
+    // Ensure Monday is at position 0 in viewport
+    console.log('Monday calculation:', { 
+      mondayDate: currentWeekStart.toDateString(),
+      dayOfWeek: currentWeekStart.getDay() // Should be 1 for Monday
     });
     
     const daysFromStartToCurrentWeek = Math.floor((currentWeekStart.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    const initialScrollOffset = daysFromStartToCurrentWeek * DAY_WIDTH;
+    // Add one day width to ensure Monday is at scroll position 0 (not Sunday)
+    const initialScrollOffset = (daysFromStartToCurrentWeek + 1) * DAY_WIDTH;
     
     return {
       startDate,
@@ -102,6 +100,13 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
   const allDays = Array.from({ length: totalDays }, (_, i) => 
     addDays(dateRange.startDate, i)
   );
+
+  // Check which day is at scroll position 0
+  const scrollPosition0Day = allDays[Math.floor(dateRange.scrollOffset / DAY_WIDTH)];
+  console.log('Day at scroll position 0:', { 
+    date: scrollPosition0Day?.toDateString(),
+    dayOfWeek: scrollPosition0Day?.getDay() 
+  });
 
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
@@ -149,7 +154,8 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
   // Update date range based on scroll position - truly continuous day-based approach
   const updateDateRangeFromScroll = useCallback((scrollLeft: number) => {
     // Calculate which day is at the left edge of the viewport
-    const dayOffset = Math.floor(scrollLeft / DAY_WIDTH);
+    // Account for the +1 day offset used in scroll positioning
+    const dayOffset = Math.floor(scrollLeft / DAY_WIDTH) - 1;
     const firstVisibleDate = addDays(dateRange.startDate, dayOffset);
     
     // Update center date to be the middle of the visible range (assuming ~7 days visible)
@@ -259,7 +265,8 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
     if (!scrollContainerRef.current) return;
     
     const daysDiff = Math.floor((targetDate.getTime() - dateRange.startDate.getTime()) / (1000 * 60 * 60 * 24));
-    const scrollPosition = daysDiff * DAY_WIDTH;
+    // Apply the same +1 offset used in initialization to ensure Monday alignment
+    const scrollPosition = (daysDiff + 1) * DAY_WIDTH;
     
     isScrollingProgrammatically.current = true;
     
@@ -315,8 +322,24 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
   // Initialize scroll position with precise alignment - one time only
   useEffect(() => {
     if (scrollContainerRef.current && dateRange.scrollOffset > 0 && !isInitialized.current) {
+      console.log('Setting initial scroll position:', {
+        scrollOffset: dateRange.scrollOffset,
+        expectedPosition: dateRange.scrollOffset / DAY_WIDTH + ' days'
+      });
+      
       // Set initial position immediately without any delay or animation
       scrollContainerRef.current.scrollLeft = dateRange.scrollOffset;
+      
+      // Verify the scroll position was set correctly
+      setTimeout(() => {
+        if (scrollContainerRef.current) {
+          console.log('Actual scroll position after setting:', {
+            actualScrollLeft: scrollContainerRef.current.scrollLeft,
+            expectedScrollLeft: dateRange.scrollOffset,
+            difference: scrollContainerRef.current.scrollLeft - dateRange.scrollOffset
+          });
+        }
+      }, 100);
       
       // Mark as initialized immediately to prevent any auto-corrections
       isInitialized.current = true;
