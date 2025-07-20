@@ -77,6 +77,7 @@ function checkForSecrets() {
       .split('\n')
       .filter(Boolean);
 
+    console.log('🔍 Checking staged files:', stagedFiles);
     let foundSecrets = false;
 
     for (const file of stagedFiles) {
@@ -99,7 +100,10 @@ function checkForSecrets() {
           
           if (!isSafe) {
             console.error(`⚠️  Warning: Possible secret found in ${file}: ${matchedText}`);
+            console.error(`🔍 Full match context: ${matches[0]}`);
             foundSecrets = true;
+          } else {
+            console.log(`✅ Safe pattern found in ${file}: ${matchedText}`);
           }
         }
       }
