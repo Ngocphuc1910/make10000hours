@@ -166,6 +166,12 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   
   // Handle saving a new project
   const handleSaveProject = () => {
+    // Check authentication before creating project
+    if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+      triggerAuthenticationFlow();
+      return;
+    }
+    
     if (!projectName.trim()) return;
     
     addProject({
