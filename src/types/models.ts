@@ -35,6 +35,7 @@ export interface Project {
   color?: string;
 }
 
+// Legacy single-account token structure (for migration)
 export interface UserGoogleToken {
   userId: string;
   accessToken: string;
@@ -43,6 +44,22 @@ export interface UserGoogleToken {
   grantedAt: Date;
   lastUsed: Date;
   revokedAt?: Date;
+}
+
+// Simple Per-User Google Calendar Token Storage
+// Each Firebase user gets ONE persistent Google Calendar connection
+export interface UserGoogleCalendarToken {
+  userId: string; // Firebase user ID (primary key)
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt: number;
+  grantedAt: Date;
+  email: string; // Google account email that granted access
+  name?: string; // Google account name
+  picture?: string; // Google account picture
+  syncEnabled: boolean; // Whether sync is enabled for this user
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // separate collection for user data
@@ -148,10 +165,9 @@ export interface DeepFocusSession {
 
 export type Source = 'web' | 'extension';
 
-// Google Calendar sync state tracking
+// Simple per-user Google Calendar sync state
 export interface SyncState {
-  userId: string;
-  calendarId: string;
+  userId: string; // Firebase user ID (primary key)
   nextSyncToken?: string;
   lastFullSync: Date;
   lastIncrementalSync: Date;
@@ -169,7 +185,7 @@ export interface SyncState {
 export interface SyncLog {
   id: string;
   userId: string;
-  operation: 'create' | 'update' | 'delete';
+  operation: 'create' | 'update' | 'delete' | 'import';
   direction: 'to_google' | 'from_google';
   taskId?: string;
   googleEventId?: string;

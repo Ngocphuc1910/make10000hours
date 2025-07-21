@@ -20,6 +20,8 @@ import { mergeEventsAndTasks, calculateNewEventTime, isValidDrop } from './utils
 import TaskForm from '../../components/tasks/TaskForm';
 import { Task } from '../../types/models';
 import { useAuthGuard, triggerAuthenticationFlow } from '../../utils/authGuard';
+import { useSyncStore } from '../../store/syncStore';
+import { useSimpleGoogleCalendarAuth } from '../../hooks/useSimpleGoogleCalendarAuth';
 
 // Old DragState interface - removed since we have new drag-to-create system
 
@@ -80,6 +82,24 @@ export const Calendar: React.FC = () => {
   // Get tasks and projects from task store
   const { tasks, projects, addTask, updateTask, setEditingTaskId: setStoreEditingTaskId, deleteTask, updateTaskLocally } = useTaskStore();
   const { user } = useUserStore();
+  
+  // Google Calendar sync functionality
+  const { 
+    hasCalendarAccess, 
+    requestCalendarAccess, 
+    isCheckingAccess,
+    error: calendarError,
+    token
+  } = useSimpleGoogleCalendarAuth();
+  const { performManualSync, syncInProgress, syncEnabled, syncError, lastSyncTime } = useSyncStore();
+  
+  // Track sync completion state
+  const [syncCompleted, setSyncCompleted] = useState(false);
+  
+  // Simple sync button logic - hide if user has valid access and sync is enabled
+  const shouldHideButton = useMemo(() => {
+    return hasCalendarAccess && token && token.syncEnabled && syncEnabled && !syncError;
+  }, [hasCalendarAccess, token, syncEnabled, syncError]);
 
   // Merge calendar events with task events
   const allEvents = useMemo(() => {
@@ -90,7 +110,61 @@ export const Calendar: React.FC = () => {
   const location = useLocation();
   const { isLeftSidebarOpen, toggleLeftSidebar } = useUIStore();
 
+  // Handle Google Calendar sync
+  const handleGoogleCalendarSync = async () => {
+    if (!user) {
+      // Trigger authentication if user is not logged in
+      const { checkAuthenticationStatus, triggerAuthenticationFlow } = await import('../../utils/authGuard');
+      const authStatus = checkAuthenticationStatus();
+      
+      if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+        triggerAuthenticationFlow();
+        return;
+      }
+    }
+
+    if (!hasCalendarAccess) {
+      // Request Google Calendar access
+      try {
+        await requestCalendarAccess();
+      } catch (error) {
+        console.error('Failed to request calendar access:', error);
+        return;
+      }
+    } else if (token && !token.syncEnabled) {
+      // User has calendar access but sync is disabled - re-enable it
+      try {
+        const { simpleGoogleOAuthService } = await import('../../services/auth/simpleGoogleOAuth');
+        await simpleGoogleOAuthService.toggleSync(true);
+        console.log('✅ Google Calendar sync re-enabled');
+      } catch (error) {
+        console.error('Failed to re-enable sync:', error);
+        return;
+      }
+    }
+
+    // Reset completion state when starting new sync
+    setSyncCompleted(false);
+
+    // Perform manual sync
+    try {
+      await performManualSync();
+      console.log('✅ Manual sync to Google Calendar completed');
+      setSyncCompleted(true);
+    } catch (error) {
+      console.error('❌ Failed to sync to Google Calendar:', error);
+      // Keep syncCompleted as false for failed syncs
+    }
+  };
+
   useExtensionSync(); // Bidirectional extension sync
+
+  // Reset manual sync completion state when sync is disabled or has errors
+  useEffect(() => {
+    if (!syncEnabled || syncError) {
+      setSyncCompleted(false);
+    }
+  }, [syncEnabled, syncError]);
 
   // Handle URL query parameters for view selection
   useEffect(() => {
@@ -732,6 +806,50 @@ export const Calendar: React.FC = () => {
 
           {/* Right Section - View Controls and Navigation Icons */}
           <div className="flex items-center space-x-4">
+            {/* Google Calendar Sync Button */}
+            {!shouldHideButton ? (
+              <button
+                onClick={handleGoogleCalendarSync}
+                disabled={syncInProgress || isCheckingAccess}
+                className="flex items-center gap-2 px-4 py-1.5 text-sm font-medium bg-background-secondary border border-border rounded-button text-text-primary hover:bg-background-container disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                title={
+                  !user 
+                    ? "Sign in to sync tasks to Google Calendar"
+                    : !token
+                      ? "Connect Google Calendar account to sync tasks"
+                      : !hasCalendarAccess 
+                        ? "Grant Google Calendar access to sync tasks"
+                        : token && !token.syncEnabled
+                          ? "Enable sync and sync tasks to Google Calendar"
+                        : syncInProgress 
+                          ? "Syncing..."
+                          : syncError
+                            ? "Sync failed - click to retry"
+                            : "Sync tasks to Google Calendar"
+                }
+              >
+                {syncInProgress ? (
+                  <div className="w-4 h-4 flex items-center justify-center">
+                    <div className="animate-spin w-3 h-3 border border-current border-t-transparent rounded-full"></div>
+                  </div>
+                ) : syncError ? (
+                  <svg className="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 15h2v-2h-2v2zm0-4h2V7h-2v6z"/>
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                  </svg>
+                )}
+                <span className="hidden sm:inline">
+                  {syncInProgress ? 'Syncing...' : syncError ? 'Retry Sync' : 'Sync to Google Calendar'}
+                </span>
+                <span className="sm:hidden">
+                  {syncInProgress ? 'Syncing...' : syncError ? 'Retry' : 'Sync'}
+                </span>
+              </button>
+            ) : null}
+
             <button
               onClick={() => handleNavigate('today')}
               className="px-4 py-1.5 text-sm font-medium bg-background-secondary border border-border rounded-button text-text-primary hover:bg-background-container"

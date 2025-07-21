@@ -11,6 +11,16 @@ export class SyncManager {
   }
 
   /**
+   * Helper to create sync log
+   */
+  private createSyncLog(log: Partial<SyncLog>): Omit<SyncLog, 'id' | 'timestamp'> {
+    return {
+      userId: this.userId,
+      ...log
+    } as Omit<SyncLog, 'id' | 'timestamp'>;
+  }
+
+  /**
    * Safely convert Firebase Timestamp or Date to JavaScript Date
    */
   private toDate(dateValue: any): Date {
@@ -41,7 +51,6 @@ export class SyncManager {
         // Create initial sync state
         const initialState: SyncState = {
           userId: this.userId,
-          calendarId: 'primary',
           lastFullSync: new Date(),
           lastIncrementalSync: new Date(),
           isEnabled: true,
@@ -133,14 +142,13 @@ export class SyncManager {
             lastSyncedAt: new Date(),
           });
 
-          await this.logSyncOperation({
-            userId: this.userId,
+          await this.logSyncOperation(this.createSyncLog({
             operation: 'update',
             direction: 'to_google',
             taskId: task.id,
             googleEventId: task.googleCalendarEventId,
             status: 'success',
-          });
+          }));
         } catch (updateError) {
           // If update fails with "Not Found", create a new event
           const errorMessage = updateError instanceof Error ? updateError.message : String(updateError);
@@ -156,14 +164,13 @@ export class SyncManager {
               lastSyncedAt: new Date(),
             });
 
-            await this.logSyncOperation({
-              userId: this.userId,
+            await this.logSyncOperation(this.createSyncLog({
               operation: 'create',
               direction: 'to_google',
               taskId: task.id,
               googleEventId: eventId,
               status: 'success',
-            });
+            }));
           } else {
             // Re-throw other errors
             throw updateError;
@@ -179,14 +186,13 @@ export class SyncManager {
           lastSyncedAt: new Date(),
         });
 
-        await this.logSyncOperation({
-          userId: this.userId,
+        await this.logSyncOperation(this.createSyncLog({
           operation: 'create',
           direction: 'to_google',
           taskId: task.id,
           googleEventId: eventId,
           status: 'success',
-        });
+        }));
       }
     } catch (error) {
       console.error('Error syncing task to Google:', error);
@@ -196,15 +202,14 @@ export class SyncManager {
         syncError: error.message,
       });
 
-      await this.logSyncOperation({
-        userId: this.userId,
+      await this.logSyncOperation(this.createSyncLog({
         operation: task.googleCalendarEventId ? 'update' : 'create',
         direction: 'to_google',
         taskId: task.id,
         googleEventId: task.googleCalendarEventId,
         status: 'error',
         error: error.message,
-      });
+      }));
 
       throw error;
     }
@@ -221,26 +226,24 @@ export class SyncManager {
     try {
       await googleCalendarService.deleteEvent(task.googleCalendarEventId);
       
-      await this.logSyncOperation({
-        userId: this.userId,
+      await this.logSyncOperation(this.createSyncLog({
         operation: 'delete',
         direction: 'to_google',
         taskId: task.id,
         googleEventId: task.googleCalendarEventId,
         status: 'success',
-      });
+      }));
     } catch (error) {
       console.error('Error deleting task from Google:', error);
       
-      await this.logSyncOperation({
-        userId: this.userId,
+      await this.logSyncOperation(this.createSyncLog({
         operation: 'delete',
         direction: 'to_google',
         taskId: task.id,
         googleEventId: task.googleCalendarEventId,
         status: 'error',
         error: error.message,
-      });
+      }));
 
       throw error;
     }
