@@ -177,8 +177,19 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
     }
   };
 
-  const handleProjectChange = (value: string) => {
+  const handleProjectChange = async (value: string) => {
     if (value === 'create-new') {
+      // Check authentication before allowing project creation
+      const { checkAuthenticationStatus, triggerAuthenticationFlow } = await import('../../utils/authGuard');
+      const authStatus = checkAuthenticationStatus();
+      
+      if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+        triggerAuthenticationFlow();
+        // Reset the select back to the previous value
+        setProjectId(getLastUsedProjectId());
+        return;
+      }
+      
       setIsCreatingNewProject(true);
       setProjectId('');
       setNewProjectName('');

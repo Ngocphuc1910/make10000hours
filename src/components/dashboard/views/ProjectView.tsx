@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTaskStore } from '../../../store/taskStore';
 import ProjectCard from './ProjectCard';
 import { Icon } from '../../ui/Icon';
+import { useAuthGuard, triggerAuthenticationFlow } from '../../../utils/authGuard';
 
 interface ProjectViewProps {
   className?: string;
@@ -11,6 +12,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ className = '' }) => {
   const projects = useTaskStore(state => state.projects);
   const tasks = useTaskStore(state => state.tasks);
   const [isAddingProject, setIsAddingProject] = useState(false);
+  const authStatus = useAuthGuard();
   
   // Sort projects by number of tasks (most to least)
   const sortedProjects = [...projects].sort((a, b) => {
@@ -21,6 +23,11 @@ const ProjectView: React.FC<ProjectViewProps> = ({ className = '' }) => {
   
   // Handler for adding a new project
   const handleAddProject = () => {
+    // Check authentication before creating project
+    if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+      triggerAuthenticationFlow();
+      return;
+    }
     setIsAddingProject(true);
   };
   
