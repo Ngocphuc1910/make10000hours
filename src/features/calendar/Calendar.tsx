@@ -840,9 +840,11 @@ export const Calendar: React.FC = () => {
                     <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 15h2v-2h-2v2zm0-4h2V7h-2v6z"/>
                   </svg>
                 ) : (
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
-                  </svg>
+                  <img 
+                    src="/icons/Google_Calendar_logo.png" 
+                    alt="Google Calendar"
+                    className="w-4 h-4"
+                  />
                 )}
                 <span className="hidden sm:inline">
                   {syncInProgress ? 'Syncing...' : syncError ? 'Retry Sync' : 'Sync to Google Calendar'}
