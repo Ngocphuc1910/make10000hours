@@ -5,6 +5,7 @@ import { Icon } from '../../ui/Icon';
 import TaskItem from '../../../components/dashboard/views/TaskItem';
 import ColorPicker from '../../ui/ColorPicker';
 import { getRandomPresetColor } from '../../../utils/colorUtils';
+import { useAuthGuard, triggerAuthenticationFlow } from '../../../utils/authGuard';
 
 interface ProjectCardProps {
   project?: Project;
@@ -24,6 +25,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const updateTask = useTaskStore(state => state.updateTask);
   const reorderTasks = useTaskStore(state => state.reorderTasks);
   const moveTaskToStatusAndPosition = useTaskStore(state => state.moveTaskToStatusAndPosition);
+  const authStatus = useAuthGuard();
   const [projectName, setProjectName] = useState(project?.name || '');
   
   // Persist activeFilter state in localStorage per project to prevent automatic tab switching
@@ -185,6 +187,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   
   // Handle adding a new task
   const handleAddTask = () => {
+    if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+      triggerAuthenticationFlow();
+      return;
+    }
     setIsAddingTask(true);
   };
   
