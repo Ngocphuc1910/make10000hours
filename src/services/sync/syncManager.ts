@@ -5,6 +5,7 @@ import { googleCalendarService } from './googleCalendarService';
 
 export class SyncManager {
   private userId: string;
+  private syncInProgress: boolean = false;
 
   constructor(userId: string) {
     this.userId = userId;
@@ -105,8 +106,13 @@ export class SyncManager {
    */
   async logSyncOperation(log: Omit<SyncLog, 'id' | 'timestamp'>): Promise<void> {
     try {
+      // Filter out undefined values to prevent Firebase errors
+      const filteredLog = Object.fromEntries(
+        Object.entries(log).filter(([_, value]) => value !== undefined && value !== null)
+      );
+      
       await addDoc(collection(db, 'syncLogs'), {
-        ...log,
+        ...filteredLog,
         timestamp: new Date(),
       });
     } catch (error) {
@@ -258,33 +264,159 @@ export class SyncManager {
       return;
     }
 
+    // Prevent concurrent sync operations
+    if (this.syncInProgress) {
+      console.log('⏸️ Sync already in progress, skipping concurrent incremental sync');
+      return;
+    }
+    
+    this.syncInProgress = true;
+    console.log('🔄 Starting incremental sync with token:', syncState.nextSyncToken ? 'Available' : 'MISSING');
+
     try {
+      // CRITICAL: If no sync token, force full sync immediately
+      if (!syncState.nextSyncToken) {
+        console.log('⚠️ No sync token available, performing full sync instead...');
+        await this.performFullSync();
+        return;
+      }
+
+      console.log('📡 Calling Google Calendar API with sync token...');
+      console.log('🔍 API Call Details:', {
+        syncToken: syncState.nextSyncToken ? syncState.nextSyncToken.substring(0, 30) + '...' : 'NONE',
+        timeWindow: 'Using sync token - no time window',
+        timestamp: new Date().toISOString()
+      });
+      
       const response = await googleCalendarService.listEvents(
         new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
         new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days ahead
         syncState.nextSyncToken
       );
+      
+      console.log('📊 Google Calendar API Response:', {
+        eventsCount: response.items.length,
+        hasNextSyncToken: !!response.nextSyncToken,
+        nextSyncToken: response.nextSyncToken ? response.nextSyncToken.substring(0, 30) + '...' : 'NONE'
+      });
+
+      console.log(`📋 Received ${response.items.length} events from incremental sync`);
 
       // Process changed events
       for (const event of response.items) {
+        console.log(`🔄 Processing event: ${event.summary} (${event.id})`);
         await this.processGoogleCalendarEvent(event);
       }
 
-      // Update sync state
+      // CRITICAL: If we got 0 events but webhook fired, do aggressive recent check
+      if (response.items.length === 0) {
+        console.log('🚨 INCREMENTAL SYNC RETURNED 0 EVENTS BUT WEBHOOK FIRED!');
+        console.log('🔥 Performing AGGRESSIVE recent events check...');
+        
+        try {
+          // Get events from last 5 minutes without sync token
+          const recentStart = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes ago
+          const recentEnd = new Date(Date.now() + 60 * 1000); // 1 minute ahead
+          
+          console.log('📡 Checking recent events:', {
+            timeMin: recentStart.toISOString(),
+            timeMax: recentEnd.toISOString(),
+            reason: 'Webhook fired but incremental sync found nothing'
+          });
+          
+          const recentResponse = await googleCalendarService.listEvents(recentStart, recentEnd);
+          
+          console.log(`🔍 Recent events check found: ${recentResponse.items.length} events`);
+          
+          if (recentResponse.items.length > 0) {
+            console.log('🎯 FOUND RECENT EVENTS - Processing them now!');
+            for (const event of recentResponse.items) {
+              console.log(`🔄 Processing recent event: ${event.summary} (${event.id})`);
+              await this.processGoogleCalendarEvent(event);
+            }
+          } else {
+            console.log('🚨 NUCLEAR OPTION: Even recent events check found nothing!');
+            console.log('🔥 Webhook fired but NO events found anywhere - this suggests sync token issue');
+            console.log('💥 Forcing FULL SYNC to reset sync token...');
+            
+            // Clear the current (possibly broken) sync token and force full sync
+            await this.updateSyncState({
+              nextSyncToken: null,
+              webhookTriggeredSync: false,
+            });
+            
+            console.log('🚀 Triggering emergency full sync...');
+            await this.performFullSync();
+            
+            console.log('✅ Emergency full sync completed - fresh sync token established');
+            return; // Exit early, full sync handles everything
+          }
+        } catch (recentError) {
+          console.error('❌ Recent events check failed:', recentError);
+          // Don't throw - continue with normal sync completion
+        }
+      }
+
+      // Update sync state with new token
       await this.updateSyncState({
         nextSyncToken: response.nextSyncToken,
         lastIncrementalSync: new Date(),
+        webhookTriggeredSync: false, // CRITICAL: Reset webhook flag
       });
 
-      console.log(`🔄 Incremental sync completed: ${response.items.length} events processed`);
+      console.log(`✅ Incremental sync completed: ${response.items.length} events processed`);
+      console.log('🔄 New sync token stored for next incremental sync');
+
     } catch (error) {
-      console.error('Error performing incremental sync:', error);
+      console.error('❌ Incremental sync failed:', error);
       
       // If sync token is invalid, perform full sync
-      if (error.message.includes('410')) {
-        console.log('🔄 Sync token invalid, performing full sync');
-        await this.performFullSync();
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const lowerErrorMessage = errorMessage.toLowerCase();
+      console.log('🔍 Analyzing error for sync token issues:', errorMessage);
+      
+      if (errorMessage.includes('410') || 
+          lowerErrorMessage.includes('sync token is no longer valid') ||
+          lowerErrorMessage.includes('a full sync is required') ||
+          lowerErrorMessage.includes('sync token') ||
+          lowerErrorMessage.includes('invalid sync token') ||
+          lowerErrorMessage.includes('410')) {
+        
+        console.log('🚨 SYNC TOKEN INVALID - Performing aggressive full sync...');
+        
+        try {
+          // CRITICAL: Reset webhook flag BEFORE full sync
+          await this.updateSyncState({
+            webhookTriggeredSync: false,
+            nextSyncToken: null, // Clear invalid token
+          });
+          
+          // Perform full sync to get fresh token
+          await this.performFullSync();
+          console.log('✅ Full sync completed after invalid sync token');
+          
+        } catch (fullSyncError) {
+          console.error('❌ Full sync ALSO failed:', fullSyncError);
+          
+          // CRITICAL: Reset webhook flag even if full sync fails
+          await this.updateSyncState({
+            webhookTriggeredSync: false,
+          });
+          
+          throw fullSyncError;
+        }
+      } else {
+        // For other errors, reset webhook flag and re-throw
+        console.error('❌ Incremental sync failed with non-token error:', errorMessage);
+        await this.updateSyncState({
+          webhookTriggeredSync: false,
+        });
+        throw error;
       }
+    } finally {
+      // Always release sync lock
+      this.syncInProgress = false;
+      console.log('🔓 Incremental sync lock released');
     }
   }
 
@@ -297,32 +429,83 @@ export class SyncManager {
       return;
     }
 
+    // Prevent concurrent sync operations
+    if (this.syncInProgress) {
+      console.log('⏸️ Sync already in progress, skipping concurrent full sync');
+      return;
+    }
+    
+    this.syncInProgress = true;
+    console.log('🔄 Starting FULL SYNC to establish fresh sync token...');
+
     try {
       // Step 1: Sync tasks TO Google Calendar
+      console.log('📤 Step 1: Syncing tasks TO Google Calendar...');
       await this.syncTasksToGoogleCalendar();
 
-      // Step 2: Sync FROM Google Calendar
-      const response = await googleCalendarService.listEvents(
-        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
-        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)  // 30 days ahead
-      );
+      // Step 2: Sync FROM Google Calendar (SPECIAL: request without time bounds to get sync token)
+      console.log('📥 Step 2: Syncing FROM Google Calendar (full sync to establish sync token)...');
+      console.log('🎯 Using special request pattern to ensure sync token generation...');
+      
+      // For full sync, we need to request ALL events (no time bounds) to get a sync token
+      // Then filter to relevant time range during processing
+      const response = await googleCalendarService.listEventsForSyncToken();
 
-      // Process all events
-      for (const event of response.items) {
+      console.log(`📋 Full sync retrieved ${response.items.length} events from Google Calendar`);
+
+      // Filter events to relevant time range (since we got ALL events)
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const thirtyDaysAhead = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      
+      const relevantEvents = response.items.filter(event => {
+        const eventTime = new Date(event.start?.dateTime || event.start?.date || '');
+        return eventTime >= thirtyDaysAgo && eventTime <= thirtyDaysAhead;
+      });
+      
+      console.log(`📊 Filtered to ${relevantEvents.length} relevant events (within 30 days)`);
+
+      // Process relevant events
+      for (const event of relevantEvents) {
+        console.log(`🔄 Processing event: ${event.summary} (${event.id})`);
         await this.processGoogleCalendarEvent(event);
       }
 
-      // Update sync state
+      // CRITICAL: Update sync state with fresh token and reset all flags
       await this.updateSyncState({
         nextSyncToken: response.nextSyncToken,
         lastFullSync: new Date(),
         lastIncrementalSync: new Date(),
+        webhookTriggeredSync: false, // CRITICAL: Always reset webhook flag
       });
 
-      console.log(`🔄 Full sync completed: ${response.items.length} events processed`);
+      console.log('✅ Full sync completed successfully!');
+      console.log(`📊 Events processed: ${relevantEvents.length} (${response.items.length} total retrieved)`);
+      console.log('🎯 Fresh sync token established for incremental syncs');
+      
+      if (response.nextSyncToken) {
+        console.log('🔄 Sync token available:', response.nextSyncToken.substring(0, 20) + '...');
+      } else {
+        console.warn('⚠️ WARNING: No sync token received from full sync!');
+      }
+
     } catch (error) {
-      console.error('Error performing full sync:', error);
+      console.error('❌ Full sync failed:', error);
+      
+      // CRITICAL: Even if full sync fails, reset webhook flag to prevent infinite loops
+      try {
+        await this.updateSyncState({
+          webhookTriggeredSync: false,
+        });
+        console.log('🔄 Webhook flag reset after full sync failure');
+      } catch (resetError) {
+        console.error('❌ Failed to reset webhook flag:', resetError);
+      }
+      
       throw error;
+    } finally {
+      // Always release sync lock
+      this.syncInProgress = false;
+      console.log('🔓 Full sync lock released');
     }
   }
 
@@ -455,15 +638,33 @@ export class SyncManager {
    * Process a single Google Calendar event
    */
   private async processGoogleCalendarEvent(event: GoogleCalendarEvent): Promise<void> {
+    console.log('🔍 PROCESSING GOOGLE CALENDAR EVENT:', {
+      id: event.id,
+      summary: event.summary,
+      status: event.status,
+      created: event.created,
+      updated: event.updated,
+      isOurEvent: googleCalendarService.isOurEvent(event),
+      hasExtendedProperties: !!event.extendedProperties,
+      start: event.start,
+      end: event.end
+    });
+
     // Handle app-created events (existing logic)
     if (googleCalendarService.isOurEvent(event)) {
+      console.log('📱 This is OUR event (created by app) - processing...');
       await this.processAppCreatedEvent(event);
       return;
     }
 
+    console.log('🌍 This is EXTERNAL event (created outside app) - checking import...');
+    
     // NEW: Handle external Google Calendar events
     if (this.shouldImportExternalEvent(event)) {
+      console.log('✅ Event passed import filter - importing as task...');
       await this.processExternalEvent(event);
+    } else {
+      console.log('❌ Event filtered out - not importing');
     }
   }
 
@@ -766,10 +967,10 @@ export class SyncManager {
    */
   async toggleSync(enabled: boolean): Promise<void> {
     await this.updateSyncState({ isEnabled: enabled });
+    console.log(`🔄 Sync ${enabled ? 'enabled' : 'disabled'} for user:`, this.userId);
     
-    if (enabled) {
-      await this.performFullSync();
-    }
+    // Note: Full sync should be called explicitly by the caller when needed
+    // This prevents duplicate syncs and allows proper sequencing with webhook setup
   }
 
   /**
@@ -810,14 +1011,27 @@ export class SyncManager {
    * Determine if an external event should be imported
    */
   private shouldImportExternalEvent(event: GoogleCalendarEvent): boolean {
-    return !!(
-      event.start?.dateTime && 
-      event.end?.dateTime && 
+    console.log('🔍 Checking if external event should be imported:', {
+      summary: event.summary,
+      hasStart: !!event.start,
+      hasDateTime: !!event.start?.dateTime,
+      hasDate: !!event.start?.date,
+      status: event.status,
+      isRecurring: !!event.recurringEventId
+    });
+
+    const shouldImport = !!(
+      // Must have either dateTime (timed event) OR date (all-day event)
+      (event.start?.dateTime || event.start?.date) && 
+      (event.end?.dateTime || event.end?.date) && 
       event.status === 'confirmed' &&
       !event.recurringEventId && // Skip recurring instances for now
       event.summary && // Must have a title
       !this.isWorkHoursOnlyFilter(event) // Optional: filter by work hours
     );
+
+    console.log('🎯 Import decision:', shouldImport ? 'YES - Will import' : 'NO - Will skip');
+    return shouldImport;
   }
 
   /**
@@ -835,8 +1049,40 @@ export class SyncManager {
    */
   private async createTaskFromExternalEvent(event: GoogleCalendarEvent): Promise<void> {
     try {
+      console.log('🔥 CREATING TASK FROM EXTERNAL GOOGLE CALENDAR EVENT!');
+      console.log('📅 Event details:', {
+        summary: event.summary,
+        start: event.start,
+        end: event.end,
+        id: event.id
+      });
+
       // Ensure "Imported" project exists
       await this.ensureImportedProjectExists();
+      
+      // Handle both timed events (dateTime) and all-day events (date)
+      let scheduledDate: string;
+      let scheduledStartTime: string | null;
+      let scheduledEndTime: string | null;
+      let includeTime: boolean;
+
+      if (event.start?.dateTime && event.end?.dateTime) {
+        // Timed event
+        scheduledDate = event.start.dateTime.split('T')[0];
+        scheduledStartTime = event.start.dateTime.split('T')[1].slice(0, 5);
+        scheduledEndTime = event.end.dateTime.split('T')[1].slice(0, 5);
+        includeTime = true;
+        console.log('⏰ Processing as TIMED event');
+      } else if (event.start?.date) {
+        // All-day event
+        scheduledDate = event.start.date;
+        scheduledStartTime = null;
+        scheduledEndTime = null;
+        includeTime = false;
+        console.log('📅 Processing as ALL-DAY event');
+      } else {
+        throw new Error('Event has no valid start time/date');
+      }
       
       const newTask: Task = {
         id: doc(collection(db, 'tasks')).id,
@@ -844,10 +1090,10 @@ export class SyncManager {
         projectId: 'imported',
         title: event.summary || 'Imported Event',
         description: event.description || '',
-        scheduledDate: event.start!.dateTime!.split('T')[0],
-        scheduledStartTime: event.start!.dateTime!.split('T')[1].slice(0, 5),
-        scheduledEndTime: event.end!.dateTime!.split('T')[1].slice(0, 5),
-        includeTime: true,
+        scheduledDate,
+        scheduledStartTime,
+        scheduledEndTime,
+        includeTime,
         googleCalendarEventId: event.id,
         syncStatus: 'synced',
         status: 'todo',
@@ -884,12 +1130,46 @@ export class SyncManager {
    */
   private async updateImportedTaskFromEvent(taskId: string, event: GoogleCalendarEvent): Promise<void> {
     try {
+      console.log('🔄 UPDATING IMPORTED TASK FROM EXTERNAL EVENT CHANGE!');
+      console.log('📅 Event details:', {
+        summary: event.summary,
+        start: event.start,
+        end: event.end,
+        id: event.id,
+        taskId
+      });
+
+      // Handle both timed events (dateTime) and all-day events (date)
+      let scheduledDate: string;
+      let scheduledStartTime: string | null;
+      let scheduledEndTime: string | null;
+      let includeTime: boolean;
+
+      if (event.start?.dateTime && event.end?.dateTime) {
+        // Timed event
+        scheduledDate = event.start.dateTime.split('T')[0];
+        scheduledStartTime = event.start.dateTime.split('T')[1].slice(0, 5);
+        scheduledEndTime = event.end.dateTime.split('T')[1].slice(0, 5);
+        includeTime = true;
+        console.log('⏰ Updating as TIMED event');
+      } else if (event.start?.date) {
+        // All-day event
+        scheduledDate = event.start.date;
+        scheduledStartTime = null;
+        scheduledEndTime = null;
+        includeTime = false;
+        console.log('📅 Updating as ALL-DAY event');
+      } else {
+        throw new Error('Event has no valid start time/date');
+      }
+
       const updateData: Partial<Task> = {
         title: event.summary || 'Imported Event',
         description: event.description || '',
-        scheduledDate: event.start!.dateTime!.split('T')[0],
-        scheduledStartTime: event.start!.dateTime!.split('T')[1].slice(0, 5),
-        scheduledEndTime: event.end!.dateTime!.split('T')[1].slice(0, 5),
+        scheduledDate,
+        scheduledStartTime,
+        scheduledEndTime,
+        includeTime,
         updatedAt: new Date(),
       };
 
@@ -1133,6 +1413,22 @@ export class SyncManager {
     } catch (error) {
       console.error('Error getting webhook status:', error);
       return { isActive: false };
+    }
+  }
+
+  /**
+   * Reset the webhook-triggered sync flag after processing
+   */
+  async resetWebhookFlag(): Promise<void> {
+    try {
+      await updateDoc(doc(db, 'syncStates', this.userId), {
+        webhookTriggeredSync: false,
+        updatedAt: new Date()
+      });
+      console.log('🔄 Webhook flag reset for user:', this.userId);
+    } catch (error) {
+      console.error('Error resetting webhook flag:', error);
+      throw error;
     }
   }
 }

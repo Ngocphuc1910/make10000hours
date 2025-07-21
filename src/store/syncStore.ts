@@ -3,6 +3,8 @@ import { createSyncManager } from '../services/sync/syncManager';
 import { useUserStore } from './userStore';
 import { useTaskStore } from './taskStore';
 import { Task, Project } from '../types/models';
+import { db } from '../api/firebase';
+import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
 
 interface SyncState {
   syncEnabled: boolean;
@@ -12,6 +14,7 @@ interface SyncState {
   pendingTasks: Set<string>;
   errorTasks: Set<string>;
   webhookMonitoringInterval: NodeJS.Timeout | null;
+  syncStateListener: (() => void) | null;
   
   // Actions
   initializeSync: () => Promise<void>;
@@ -27,6 +30,9 @@ interface SyncState {
   checkWebhookStatus: () => Promise<any>;
   startWebhookMonitoring: () => void;
   stopWebhookMonitoring: () => void;
+  // Real-time listener actions
+  startSyncStateListener: () => void;
+  stopSyncStateListener: () => void;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -37,6 +43,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   pendingTasks: new Set(),
   errorTasks: new Set(),
   webhookMonitoringInterval: null,
+  syncStateListener: null,
 
   getSyncManager: () => {
     const { user } = useUserStore.getState();
@@ -294,32 +301,140 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
     console.log('🔔 Starting webhook monitoring');
     
+    // Start real-time Firestore listener for immediate webhook detection
+    store.startSyncStateListener();
+    
+    // Keep polling as backup (reduced frequency since we have real-time listeners)
     const monitoringInterval = setInterval(async () => {
       try {
         const syncManager = store.getSyncManager();
         if (!syncManager) return;
 
-        // Check for webhook-triggered sync
-        await syncManager.checkWebhookTriggeredSync();
-        
-        // Check for webhook renewal
+        // Check for webhook renewal (real-time listener handles sync triggers)
         await syncManager.checkWebhookRenewal();
         
       } catch (error) {
         console.error('Webhook monitoring error:', error);
       }
-    }, 30000); // Check every 30 seconds
+    }, 120000); // Check every 2 minutes (reduced from 30 seconds)
 
     set({ webhookMonitoringInterval: monitoringInterval });
   },
 
   stopWebhookMonitoring: () => {
-    const { webhookMonitoringInterval } = get();
+    const store = get();
+    const { webhookMonitoringInterval } = store;
     
+    // Stop polling interval
     if (webhookMonitoringInterval) {
       clearInterval(webhookMonitoringInterval);
       set({ webhookMonitoringInterval: null });
-      console.log('🔔 Webhook monitoring stopped');
+    }
+    
+    // Stop real-time listener
+    store.stopSyncStateListener();
+    
+    console.log('🔔 Webhook monitoring stopped');
+  },
+
+  // ================ REAL-TIME SYNC STATE LISTENERS ================
+
+  startSyncStateListener: () => {
+    const store = get();
+    const { user } = useUserStore.getState();
+    
+    if (!user?.uid) {
+      console.warn('⚠️ Cannot start sync state listener - no user');
+      return;
+    }
+
+    // Stop existing listener
+    if (store.syncStateListener) {
+      store.syncStateListener();
+    }
+
+    console.log('🔄 Starting real-time sync state listener for user:', user.uid);
+
+    try {
+      // Listen to the user's sync state document for webhook-triggered sync flags
+      const syncStateRef = doc(db, 'syncStates', user.uid);
+      
+      const unsubscribe = onSnapshot(syncStateRef, async (docSnapshot) => {
+        console.log('🔄 Real-time sync state listener triggered:', {
+          exists: docSnapshot.exists(),
+          userId: user.uid,
+          timestamp: new Date().toISOString()
+        });
+        
+        if (!docSnapshot.exists()) {
+          console.warn('⚠️ Sync state document does not exist for user:', user.uid);
+          return;
+        }
+        
+        const syncStateData = docSnapshot.data();
+        console.log('📄 Sync state data received:', {
+          webhookTriggeredSync: syncStateData?.webhookTriggeredSync,
+          lastWebhookNotification: syncStateData?.lastWebhookNotification,
+          isEnabled: syncStateData?.isEnabled
+        });
+        
+        // Check if webhook triggered a sync
+        if (syncStateData?.webhookTriggeredSync === true) {
+          console.log('🚨 WEBHOOK-TRIGGERED SYNC DETECTED!');
+          console.log('📡 Real-time listener is now triggering incremental sync...');
+          
+          try {
+            const syncManager = store.getSyncManager();
+            if (syncManager) {
+              // Perform the sync with aggressive logging
+              console.log('🔄 STARTING INCREMENTAL SYNC FROM WEBHOOK...');
+              console.log('⏰ Sync timestamp:', new Date().toISOString());
+              
+              await syncManager.performIncrementalSync();
+              
+              console.log('🎉 WEBHOOK-TRIGGERED SYNC COMPLETED SUCCESSFULLY!');
+              console.log('✅ Real-time webhook sync finished');
+              
+              // Reset the webhook flag after successful sync
+              await syncManager.resetWebhookFlag();
+              
+              // Update last sync time
+              set({ lastSyncTime: new Date() });
+            } else {
+              console.error('❌ Sync manager not available');
+            }
+          } catch (error) {
+            console.error('❌ Real-time webhook sync failed:', error);
+            
+            // Don't reset webhook flag on failure so it can retry
+            // But do clear any existing sync error since we handled it
+            set({ syncError: null });
+            
+            // Note: performIncrementalSync should handle its own fallback to full sync
+            // If it didn't work, the error will bubble up here
+          }
+        }
+      }, (error) => {
+        console.error('❌ Sync state listener error:', error);
+        set({ syncError: 'Real-time sync monitoring failed' });
+      });
+
+      set({ syncStateListener: unsubscribe });
+      console.log('✅ Real-time sync state listener started');
+      
+    } catch (error) {
+      console.error('❌ Failed to start sync state listener:', error);
+      set({ syncError: 'Failed to start real-time sync monitoring' });
+    }
+  },
+
+  stopSyncStateListener: () => {
+    const { syncStateListener } = get();
+    
+    if (syncStateListener) {
+      syncStateListener();
+      set({ syncStateListener: null });
+      console.log('🔄 Real-time sync state listener stopped');
     }
   },
 }));
