@@ -39,18 +39,96 @@ export class GoogleCalendarService {
   }
 
   /**
-   * Get authorization headers for API requests
+   * Get authorization headers for API requests with automatic token refresh
    */
   private async getAuthHeaders(): Promise<HeadersInit> {
     const token = await simpleGoogleOAuthService.getStoredToken();
     if (!token) {
-      throw new Error('No access token available');
+      throw new Error('No access token available - user needs to re-authorize');
     }
 
     return {
       'Authorization': `Bearer ${token.accessToken}`,
       'Content-Type': 'application/json',
     };
+  }
+
+  /**
+   * Make authenticated API request with automatic retry on token expiration
+   */
+  private async makeAuthenticatedRequest(
+    url: string, 
+    options: RequestInit = {}
+  ): Promise<Response> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          ...headers,
+          ...options.headers,
+        },
+      });
+
+      // If we get 401, the token might be expired - try refreshing once
+      if (response.status === 401) {
+        console.log('🔄 Got 401, attempting token refresh and retry...');
+        
+        // Force a token refresh
+        const token = await simpleGoogleOAuthService.getStoredToken();
+        if (token && token.refreshToken && 
+            token.refreshToken !== 'CLIENT_SIDE_APP' &&
+            token.refreshToken !== 'PENDING_REFRESH_TOKEN' && 
+            token.refreshToken !== 'MISSING_REFRESH_TOKEN') {
+          
+          // Get fresh headers and retry
+          const freshHeaders = await this.getAuthHeaders();
+          const retryResponse = await fetch(url, {
+            ...options,
+            headers: {
+              ...freshHeaders,
+              ...options.headers,
+            },
+          });
+          
+          if (retryResponse.status === 401) {
+            throw new Error('Authentication failed after token refresh - user needs to re-authorize');
+          }
+          
+          return retryResponse;
+        } else {
+          // No refresh token available - user needs to re-authorize
+          throw new Error('Token expired and no refresh token available - user needs to re-authorize Google Calendar access');
+        }
+      }
+
+      // Check for rate limiting
+      if (response.status === 429) {
+        console.log('🚦 Rate limit hit, waiting before retry...');
+        
+        // Wait longer for rate limit (exponential backoff)
+        const retryAfter = response.headers.get('Retry-After');
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 5000; // Default 5 seconds
+        
+        console.log(`⏳ Waiting ${waitTime/1000} seconds due to rate limit...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        
+        // Retry the request once after waiting
+        console.log('🔄 Retrying request after rate limit wait...');
+        const retryResponse = await fetch(url, { ...options, headers: await this.getAuthHeaders() });
+        
+        if (retryResponse.status === 429) {
+          throw new Error('Rate limit exceeded even after retry - please try again later');
+        }
+        
+        return retryResponse;
+      }
+
+      return response;
+    } catch (error) {
+      console.error('Error in authenticated request:', error);
+      throw error;
+    }
   }
 
   /**
@@ -64,9 +142,8 @@ export class GoogleCalendarService {
       // Real Google Calendar API call
       try {
         const event = this.taskToGoogleEvent(task, project);
-        const response = await fetch(`${this.baseUrl}/calendars/${this.calendarId}/events`, {
+        const response = await this.makeAuthenticatedRequest(`${this.baseUrl}/calendars/${this.calendarId}/events`, {
           method: 'POST',
-          headers: await this.getAuthHeaders(),
           body: JSON.stringify(event),
         });
 
@@ -114,9 +191,8 @@ export class GoogleCalendarService {
       // Real Google Calendar API call
       try {
         const event = this.taskToGoogleEvent(task, project);
-        const response = await fetch(`${this.baseUrl}/calendars/${this.calendarId}/events/${eventId}`, {
+        const response = await this.makeAuthenticatedRequest(`${this.baseUrl}/calendars/${this.calendarId}/events/${eventId}`, {
           method: 'PUT',
-          headers: await this.getAuthHeaders(),
           body: JSON.stringify(event),
         });
 
@@ -158,9 +234,8 @@ export class GoogleCalendarService {
     if (token) {
       // Real Google Calendar API call
       try {
-        const response = await fetch(`${this.baseUrl}/calendars/${this.calendarId}/events/${eventId}`, {
+        const response = await this.makeAuthenticatedRequest(`${this.baseUrl}/calendars/${this.calendarId}/events/${eventId}`, {
           method: 'DELETE',
-          headers: await this.getAuthHeaders(),
         });
 
         if (!response.ok) {
@@ -241,19 +316,20 @@ export class GoogleCalendarService {
 
     try {
       const params = new URLSearchParams({
-        timeMin: timeMin.toISOString(),
-        timeMax: timeMax.toISOString(),
         singleEvents: 'true',
-        orderBy: 'startTime',
       });
 
       if (syncToken) {
+        // When using syncToken, don't include timeMin/timeMax or orderBy per Google API requirements
         params.append('syncToken', syncToken);
+      } else {
+        // Only use time range and ordering when not using syncToken
+        params.append('timeMin', timeMin.toISOString());
+        params.append('timeMax', timeMax.toISOString());
+        params.append('orderBy', 'startTime');
       }
 
-      const response = await fetch(`${this.baseUrl}/calendars/${this.calendarId}/events?${params}`, {
-        headers: await this.getAuthHeaders(),
-      });
+      const response = await this.makeAuthenticatedRequest(`${this.baseUrl}/calendars/${this.calendarId}/events?${params}`);
 
       if (!response.ok) {
         const error = await response.json();
@@ -278,6 +354,66 @@ export class GoogleCalendarService {
   }
 
   /**
+   * List events specifically to establish a sync token
+   * This uses no time bounds to ensure Google returns a sync token
+   */
+  async listEventsForSyncToken(): Promise<{
+    items: GoogleCalendarEvent[];
+    nextSyncToken?: string;
+    nextPageToken?: string;
+  }> {
+    await this.initialize();
+
+    if (this.isDemoMode) {
+      console.log('🔄 DEMO MODE: Simulating sync token generation');
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      return {
+        items: [],
+        nextSyncToken: `sync_${Date.now()}`,
+        nextPageToken: undefined,
+      };
+    }
+
+    console.log('🎯 Requesting ALL events to establish sync token (no time bounds)...');
+
+    try {
+      // CRITICAL: Request without timeMin/timeMax to get sync token
+      // Google only returns sync tokens for certain request patterns
+      // According to Google docs, must NOT use maxResults or orderBy for sync tokens
+      const params = new URLSearchParams({
+        singleEvents: 'true'
+        // No maxResults, no orderBy, no timeMin/timeMax for sync token
+      });
+
+      console.log('📡 Making sync token request to Google Calendar API...');
+      const response = await this.makeAuthenticatedRequest(`${this.baseUrl}/calendars/${this.calendarId}/events?${params}`);
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(`API error: ${error.error?.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      console.log('📊 Sync token request response:', {
+        eventsCount: data.items?.length || 0,
+        hasSyncToken: !!data.nextSyncToken,
+        syncToken: data.nextSyncToken ? data.nextSyncToken.substring(0, 30) + '...' : 'NONE',
+        hasPageToken: !!data.nextPageToken
+      });
+
+      return {
+        items: data.items || [],
+        nextSyncToken: data.nextSyncToken,
+        nextPageToken: data.nextPageToken,
+      };
+    } catch (error) {
+      console.error('Error requesting sync token from Google Calendar:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Set up push notifications for calendar changes
    */
   async watchEvents(channelId: string, webhookUrl: string): Promise<{
@@ -293,9 +429,8 @@ export class GoogleCalendarService {
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/calendars/${this.calendarId}/events/watch`, {
+      const response = await this.makeAuthenticatedRequest(`${this.baseUrl}/calendars/${this.calendarId}/events/watch`, {
         method: 'POST',
-        headers: await this.getAuthHeaders(),
         body: JSON.stringify({
           id: channelId,
           type: 'web_hook',
@@ -332,9 +467,8 @@ export class GoogleCalendarService {
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/channels/stop`, {
+      const response = await this.makeAuthenticatedRequest(`${this.baseUrl}/channels/stop`, {
         method: 'POST',
-        headers: await this.getAuthHeaders(),
         body: JSON.stringify({
           id: channelId,
           resourceId: resourceId,
@@ -407,21 +541,23 @@ export class GoogleCalendarService {
   private buildEventDescription(task: Task, project: Project): string {
     let description = '';
     
-    if (task.description) {
+    if (task?.description) {
       description += task.description + '\n\n';
     }
     
-    description += `Project: ${project.name}\n`;
+    description += `Project: ${project?.name || 'Unknown'}\n`;
     
-    if (task.timeEstimated > 0) {
+    if (task?.timeEstimated && task.timeEstimated > 0) {
       description += `Estimated time: ${task.timeEstimated} minutes\n`;
     }
     
-    if (task.timeSpent > 0) {
+    if (task?.timeSpent && task.timeSpent > 0) {
       description += `Time spent: ${task.timeSpent} minutes\n`;
     }
     
-    description += `Status: ${task.status}\n`;
+    if (task?.status) {
+      description += `Status: ${task.status}\n`;
+    }
     description += '\n--- Created by Make10000hours ---';
     
     return description;
@@ -458,24 +594,28 @@ export class GoogleCalendarService {
 
     const taskData: Partial<Task> = {
       title: event.summary || 'Untitled Event',
-      description: this.extractTaskDescription(event.description),
+      description: this.extractTaskDescription(event.description || ''),
       googleCalendarEventId: event.id,
       syncStatus: 'synced',
       lastSyncedAt: new Date(),
       googleCalendarModified: true,
     };
 
-    // Extract date/time
+    // Extract date/time with null safety
     if (event.start) {
       if (event.start.dateTime) {
         // Timed event
-        const startDate = new Date(event.start.dateTime);
-        const endDate = event.end?.dateTime ? new Date(event.end.dateTime) : startDate;
-        
-        taskData.scheduledDate = startDate.toISOString().split('T')[0];
-        taskData.scheduledStartTime = startDate.toTimeString().substring(0, 5);
-        taskData.scheduledEndTime = endDate.toTimeString().substring(0, 5);
-        taskData.includeTime = true;
+        try {
+          const startDate = new Date(event.start.dateTime);
+          const endDate = event.end?.dateTime ? new Date(event.end.dateTime) : startDate;
+          
+          taskData.scheduledDate = startDate.toISOString().split('T')[0];
+          taskData.scheduledStartTime = startDate.toTimeString().substring(0, 5);
+          taskData.scheduledEndTime = endDate.toTimeString().substring(0, 5);
+          taskData.includeTime = true;
+        } catch (dateError) {
+          console.warn('Error parsing event datetime:', event.start.dateTime, dateError);
+        }
       } else if (event.start.date) {
         // All-day event
         taskData.scheduledDate = event.start.date;

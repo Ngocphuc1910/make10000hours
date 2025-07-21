@@ -4,6 +4,7 @@ import { useUserStore } from '../../store/userStore';
 import { createSyncManager } from '../../services/sync/syncManager';
 import { useSimpleGoogleCalendarAuth } from '../../hooks/useSimpleGoogleCalendarAuth';
 import { simpleGoogleOAuthService } from '../../services/auth/simpleGoogleOAuth';
+import { useSyncStore } from '../../store/syncStore';
 import GoogleCalendarDemo from '../sync/GoogleCalendarDemo';
 
 interface SyncStatus {
@@ -23,6 +24,7 @@ interface WebhookStatus {
 const GoogleCalendarSync: React.FC = () => {
   const { user } = useUserStore();
   const { hasCalendarAccess, isCheckingAccess, error: authError, requestCalendarAccess, revokeAccess, token } = useSimpleGoogleCalendarAuth();
+  const { startWebhookMonitoring, stopWebhookMonitoring } = useSyncStore();
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -63,20 +65,36 @@ const GoogleCalendarSync: React.FC = () => {
       }
 
       const syncManager = createSyncManager(user.uid);
-      await syncManager.initializeSync();
-      await syncManager.toggleSync(true);
       
-      // Try to set up webhook for real-time sync
+      // Step 1: Initialize basic sync state
+      await syncManager.initializeSync();
+      console.log('✅ Sync state initialized');
+      
+      // Step 2: Enable sync
+      await syncManager.toggleSync(true);
+      console.log('✅ Sync enabled');
+      
+      // Step 3: CRITICAL - Perform initial full sync to establish sync token
+      console.log('🔄 Performing initial full sync to establish sync token...');
+      await syncManager.performFullSync();
+      console.log('✅ Initial full sync completed - sync token established');
+      
+      // Step 4: Set up webhook for real-time sync (now that we have a valid sync token)
       try {
         await syncManager.setupWebhook();
         console.log('✅ Webhook setup successful');
+        
+        // Start webhook monitoring after successful setup
+        startWebhookMonitoring();
+        console.log('✅ Webhook monitoring started');
       } catch (webhookError) {
         console.warn('⚠️ Webhook setup failed, falling back to polling:', webhookError);
-        // Don't throw error - sync will work with polling
+        // Start monitoring anyway - it will use polling fallback
+        startWebhookMonitoring();
       }
       
       await loadSyncStatus();
-      console.log('✅ Google Calendar sync enabled');
+      console.log('✅ Google Calendar sync fully enabled with persistent tokens');
     } catch (err) {
       console.error('Error enabling sync:', err);
       setError(err instanceof Error ? err.message : 'Failed to enable sync');
@@ -93,6 +111,10 @@ const GoogleCalendarSync: React.FC = () => {
 
     try {
       const syncManager = createSyncManager(user.uid);
+      
+      // Stop webhook monitoring first
+      stopWebhookMonitoring();
+      console.log('✅ Webhook monitoring stopped');
       
       // Stop webhook if active
       try {
@@ -156,6 +178,10 @@ const GoogleCalendarSync: React.FC = () => {
 
     try {
       const syncManager = createSyncManager(user.uid);
+      
+      // Stop webhook monitoring first
+      stopWebhookMonitoring();
+      console.log('✅ Webhook monitoring stopped');
       
       // Stop webhook and disable sync
       try {

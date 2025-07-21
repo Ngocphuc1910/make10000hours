@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { auth } from '../api/firebase';
 import { simpleGoogleOAuthService } from '../services/auth/simpleGoogleOAuth';
 import { useUserStore } from '../store/userStore';
@@ -23,6 +23,9 @@ export const useSimpleGoogleCalendarAuth = (): SimpleGoogleCalendarAuthState => 
   
   // Get current user from store to react to user changes
   const { user } = useUserStore();
+  
+  // Track if monitoring is currently active
+  const isMonitoringActiveRef = useRef(false);
 
   useEffect(() => {
     // Reset state when user changes or when explicitly refreshed
@@ -37,6 +40,87 @@ export const useSimpleGoogleCalendarAuth = (): SimpleGoogleCalendarAuthState => 
       setIsCheckingAccess(false);
     }
   }, [user, refreshTrigger]); // Re-run when user changes or refresh is triggered
+
+  // Manage webhook monitoring based on sync state
+  useEffect(() => {
+    const manageWebhookMonitoring = async () => {
+      if (!user?.uid || !token) {
+        // Stop monitoring if no user or token
+        if (isMonitoringActiveRef.current) {
+          try {
+            const { useSyncStore } = await import('../store/syncStore');
+            const { syncManager } = await import('../services/sync/syncManager');
+            
+            useSyncStore.getState().stopWebhookMonitoring();
+            syncManager.stopPolling();
+            isMonitoringActiveRef.current = false;
+            console.log('🔕 Stopped Google Calendar monitoring - user/token unavailable');
+          } catch (error) {
+            console.warn('⚠️ Error stopping webhook monitoring:', error);
+          }
+        }
+        return;
+      }
+
+      try {
+        const { useSyncStore } = await import('../store/syncStore');
+        const syncStore = useSyncStore.getState();
+        
+        // Check if sync should be active
+        const shouldMonitor = token.syncEnabled && syncStore.syncEnabled && hasCalendarAccess;
+        
+        if (shouldMonitor && !isMonitoringActiveRef.current) {
+          // Start monitoring
+          console.log('🔔 Starting Google Calendar webhook monitoring for user:', user.uid);
+          syncStore.startWebhookMonitoring();
+          
+          // Start polling as fallback
+          const { createSyncManager } = await import('../services/sync/syncManager');
+          const syncManager = createSyncManager(user.uid);
+          syncManager.startPolling();
+          
+          isMonitoringActiveRef.current = true;
+          console.log('✅ Google Calendar monitoring started');
+          
+        } else if (!shouldMonitor && isMonitoringActiveRef.current) {
+          // Stop monitoring
+          console.log('🔕 Stopping Google Calendar webhook monitoring');
+          syncStore.stopWebhookMonitoring();
+          
+          const { createSyncManager } = await import('../services/sync/syncManager');
+          const syncManager = createSyncManager(user.uid);
+          syncManager.stopPolling();
+          
+          isMonitoringActiveRef.current = false;
+          console.log('✅ Google Calendar monitoring stopped');
+        }
+      } catch (error) {
+        console.warn('⚠️ Error managing webhook monitoring:', error);
+      }
+    };
+
+    manageWebhookMonitoring();
+  }, [user?.uid, token?.syncEnabled, hasCalendarAccess]);
+
+  // Cleanup monitoring on unmount
+  useEffect(() => {
+    return () => {
+      if (isMonitoringActiveRef.current) {
+        import('../store/syncStore').then(({ useSyncStore }) => {
+          useSyncStore.getState().stopWebhookMonitoring();
+        }).catch(console.warn);
+        
+        import('../services/sync/syncManager').then(({ createSyncManager }) => {
+          if (user?.uid) {
+            const syncManager = createSyncManager(user.uid);
+            syncManager.stopPolling();
+          }
+        }).catch(console.warn);
+        
+        isMonitoringActiveRef.current = false;
+      }
+    };
+  }, []);
 
   const checkCalendarAccess = async () => {
     setIsCheckingAccess(true);

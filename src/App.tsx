@@ -36,6 +36,7 @@ import { useDeepFocusStore } from './store/deepFocusStore';
 import { DeepFocusProvider, useDeepFocusContext } from './contexts/DeepFocusContext';
 import { testDeepFocusFixes } from './utils/testDeepFocusFix';
 import DeepFocusCleanup from './utils/deepFocusCleanup';
+import { useSimpleGoogleCalendarAuth } from './hooks/useSimpleGoogleCalendarAuth';
 
 // Import test utilities in development mode
 if (process.env.NODE_ENV === 'development') {
@@ -343,6 +344,9 @@ const App: React.FC = () => {
 
   // Global user sync with extension
   useUserSync();
+  
+  // Initialize Google Calendar sync monitoring for authenticated users
+  useSimpleGoogleCalendarAuth();
 
   // Global Deep Focus sync now handled by DeepFocusProvider context
 
@@ -569,6 +573,9 @@ const App: React.FC = () => {
       window.location.reload();
     }
   }, []);
+
+  // NOTE: Google Calendar webhook monitoring is now handled by useSimpleGoogleCalendarAuth hook
+  // This ensures proper timing and avoids race conditions with sync state initialization
 
   // Handle tab/browser closure for deep focus sessions
   useEffect(() => {
