@@ -82,6 +82,8 @@ export const useUserStore = create<UserState>((set, get) => {
               
               console.log('✅ User authentication restored successfully');
               
+              // Note: Google Calendar tokens are now stored per-user and persist automatically
+              
               // Initialize sync for the authenticated user (dynamic import to avoid circular dependency)
               try {
                 const { useSyncStore } = await import('./syncStore');
@@ -198,8 +200,8 @@ export const useUserStore = create<UserState>((set, get) => {
         
         // Clear Google Calendar token on logout
         try {
-          const { googleOAuthService } = await import('../services/auth/googleOAuth');
-          googleOAuthService.clearTokenOnLogout();
+          const { simpleGoogleOAuthService } = await import('../services/auth/simpleGoogleOAuth');
+          simpleGoogleOAuthService.clearTokenOnLogout();
         } catch (error) {
           console.warn('Failed to clear Google Calendar token:', error);
         }

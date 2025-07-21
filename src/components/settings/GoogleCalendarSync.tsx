@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Settings, AlertCircle, CheckCircle, Clock, Loader2 } from 'lucide-react';
+import { Calendar, Settings, AlertCircle, CheckCircle, Clock, Loader2, Trash2 } from 'lucide-react';
 import { useUserStore } from '../../store/userStore';
 import { createSyncManager } from '../../services/sync/syncManager';
-import useGoogleCalendarAuth from '../../hooks/useGoogleCalendarAuth';
+import { useSimpleGoogleCalendarAuth } from '../../hooks/useSimpleGoogleCalendarAuth';
+import { simpleGoogleOAuthService } from '../../services/auth/simpleGoogleOAuth';
 import GoogleCalendarDemo from '../sync/GoogleCalendarDemo';
 
 interface SyncStatus {
@@ -21,7 +22,7 @@ interface WebhookStatus {
 
 const GoogleCalendarSync: React.FC = () => {
   const { user } = useUserStore();
-  const { hasCalendarAccess, isCheckingAccess, error: authError, requestCalendarAccess } = useGoogleCalendarAuth();
+  const { hasCalendarAccess, isCheckingAccess, error: authError, requestCalendarAccess, revokeAccess, token } = useSimpleGoogleCalendarAuth();
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -129,6 +130,54 @@ const GoogleCalendarSync: React.FC = () => {
     } catch (err) {
       console.error('Error performing manual sync:', err);
       setError(err instanceof Error ? err.message : 'Manual sync failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDisableSyncPermanently = async () => {
+    if (!user) return;
+
+    // Confirm with user before terminating
+    const confirmed = window.confirm(
+      'Are you sure you want to disable Google Calendar sync?\n\n' +
+      'This will:\n' +
+      '• Stop all current syncing\n' +
+      '• Disable automatic sync to Google Calendar\n' +
+      '• Keep your Google Calendar access for future use\n' +
+      '• You can re-enable sync anytime without re-authenticating\n\n' +
+      'Your Google Calendar permission will remain active.'
+    );
+
+    if (!confirmed) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const syncManager = createSyncManager(user.uid);
+      
+      // Stop webhook and disable sync
+      try {
+        await syncManager.stopWebhook();
+        await syncManager.toggleSync(false);
+        console.log('✅ Sync disabled and webhook stopped');
+      } catch (disableError) {
+        console.warn('⚠️ Error disabling sync:', disableError);
+      }
+      
+      // Disable sync in the token (but keep the token)
+      if (token) {
+        await simpleGoogleOAuthService.toggleSync(false);
+      }
+      
+      // Refresh sync status to show disabled state
+      await loadSyncStatus();
+      
+      console.log('✅ Google Calendar sync disabled (access preserved)');
+    } catch (err) {
+      console.error('Error disabling sync:', err);
+      setError(err instanceof Error ? err.message : 'Failed to disable sync');
     } finally {
       setIsLoading(false);
     }
@@ -359,6 +408,22 @@ const GoogleCalendarSync: React.FC = () => {
               <Settings className="w-4 h-4" />
             )}
             <span>Enable Sync</span>
+          </button>
+        )}
+        
+        {/* Disable Sync Button - Available when user has calendar access and sync is enabled */}
+        {hasCalendarAccess && token && token.syncEnabled && (
+          <button
+            onClick={handleDisableSyncPermanently}
+            disabled={isLoading}
+            className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Settings className="w-4 h-4" />
+            )}
+            <span>Disable Sync</span>
           </button>
         )}
       </div>
