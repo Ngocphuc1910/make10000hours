@@ -47,11 +47,11 @@ export interface UserGoogleToken {
 }
 
 // Simple Per-User Google Calendar Token Storage
-// Each Firebase user gets ONE persistent Google Calendar connection
+// Each Firebase user gets ONE persistent Google Calendar connection with refresh tokens
 export interface UserGoogleCalendarToken {
   userId: string; // Firebase user ID (primary key)
   accessToken: string;
-  refreshToken?: string;
+  refreshToken: string; // Required for persistent access (may be placeholder if missing)
   expiresAt: number;
   grantedAt: Date;
   email: string; // Google account email that granted access
