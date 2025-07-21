@@ -4,7 +4,8 @@
 
 import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase';
-import { UserGoogleToken } from '../../types/models';
+import { UserGoogleToken, UserGoogleAccount, UserSyncSettings, GoogleCalendar } from '../../types/models';
+import { MultiAccountStorage } from '../storage/multiAccountStorage';
 
 // Google Identity Services types
 declare global {
@@ -389,6 +390,345 @@ export class GoogleOAuthService {
     // Only clear legacy localStorage token
     localStorage.removeItem('google_calendar_token');
     console.log('✅ Legacy Google Calendar token cleared on logout (Firestore tokens persist)');
+  }
+
+  // =================== MULTI-ACCOUNT METHODS ===================
+
+  /**
+   * Get user profile information from Google
+   */
+  private async getUserProfile(accessToken: string): Promise<{
+    id: string;
+    email: string;
+    name: string;
+    picture?: string;
+  }> {
+    try {
+      const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch user profile');
+      }
+
+      const profile = await response.json();
+      return {
+        id: profile.id,
+        email: profile.email,
+        name: profile.name,
+        picture: profile.picture,
+      };
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get available calendars for a Google account
+   */
+  private async getAccountCalendars(accessToken: string): Promise<GoogleCalendar[]> {
+    try {
+      const response = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch calendars');
+      }
+
+      const data = await response.json();
+      return data.items?.map((item: any) => ({
+        id: item.id,
+        name: item.summary,
+        primary: item.primary || false,
+        accessRole: item.accessRole,
+        backgroundColor: item.backgroundColor,
+        syncEnabled: item.primary || false, // Default: sync primary calendar only
+      })) || [];
+    } catch (error) {
+      console.error('Error fetching calendars:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add a new Google account (multi-account support)
+   */
+  async addGoogleAccount(): Promise<UserGoogleAccount> {
+    if (!this.isConfigured()) {
+      throw new Error('Google OAuth2 Client ID not configured. Please set VITE_GOOGLE_OAUTH_CLIENT_ID in your environment variables.');
+    }
+
+    const currentUserId = this.getCurrentUserId();
+    if (!currentUserId) {
+      throw new Error('User not authenticated');
+    }
+
+    return new Promise(async (resolve, reject) => {
+      try {
+        await this.loadGoogleIdentityServices();
+
+        // Create a new token client for this account addition
+        const addAccountTokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: this.clientId,
+          scope: this.scope,
+          callback: async (response: any) => {
+            try {
+              if (response.error) {
+                console.error('❌ OAuth error:', response.error);
+                reject(new Error(`OAuth error: ${response.error}`));
+                return;
+              }
+
+              console.log('✅ OAuth success for new account');
+
+              // Get user profile
+              const profile = await this.getUserProfile(response.access_token);
+              
+              // Get available calendars
+              const calendars = await this.getAccountCalendars(response.access_token);
+
+              // Check if this account already exists
+              const existingAccounts = await MultiAccountStorage.getUserGoogleAccounts(currentUserId);
+              const existingAccount = existingAccounts.find(acc => acc.googleAccountId === profile.id);
+
+              if (existingAccount) {
+                // Update existing account token
+                await MultiAccountStorage.updateAccountToken(
+                  existingAccount.id,
+                  response.access_token,
+                  Date.now() + (response.expires_in * 1000)
+                );
+
+                // Update calendars
+                await MultiAccountStorage.updateAccountCalendars(existingAccount.id, calendars);
+
+                console.log('✅ Updated existing Google account');
+                resolve(existingAccount);
+                return;
+              }
+
+              // Create new account
+              const accountId = `${currentUserId}_${profile.id}`;
+              const newAccount: UserGoogleAccount = {
+                id: accountId,
+                userId: currentUserId,
+                googleAccountId: profile.id,
+                email: profile.email,
+                name: profile.name,
+                picture: profile.picture,
+                accessToken: response.access_token,
+                expiresAt: Date.now() + (response.expires_in * 1000),
+                grantedAt: new Date(),
+                lastUsed: new Date(),
+                isActive: existingAccounts.length === 0, // First account is active
+                calendars,
+                syncEnabled: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              };
+
+              // Save the new account
+              await MultiAccountStorage.saveUserGoogleAccount(newAccount);
+
+              // Initialize sync settings if this is the first account
+              if (existingAccounts.length === 0) {
+                const syncSettings: UserSyncSettings = {
+                  userId: currentUserId,
+                  syncMode: 'single',
+                  defaultAccountId: accountId,
+                  accountCalendarMappings: {
+                    [accountId]: calendars.reduce((acc, cal) => {
+                      acc[cal.id] = cal.syncEnabled;
+                      return acc;
+                    }, {} as { [key: string]: boolean })
+                  },
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                };
+
+                await MultiAccountStorage.saveUserSyncSettings(syncSettings);
+              }
+
+              console.log('✅ New Google account added successfully');
+              resolve(newAccount);
+
+            } catch (error) {
+              console.error('❌ Error processing OAuth callback:', error);
+              reject(error);
+            }
+          }
+        });
+
+        // Request access token with consent prompt to allow account selection
+        addAccountTokenClient.requestAccessToken({
+          prompt: 'select_account' // This allows users to select different accounts
+        });
+
+      } catch (error) {
+        console.error('❌ Error adding Google account:', error);
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * Get all connected Google accounts for current user
+   */
+  async getConnectedAccounts(): Promise<UserGoogleAccount[]> {
+    const currentUserId = this.getCurrentUserId();
+    if (!currentUserId) {
+      return [];
+    }
+
+    try {
+      return await MultiAccountStorage.getUserGoogleAccounts(currentUserId);
+    } catch (error) {
+      console.error('Error fetching connected accounts:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Switch to a different Google account as default
+   */
+  async switchAccount(accountId: string): Promise<void> {
+    const currentUserId = this.getCurrentUserId();
+    if (!currentUserId) {
+      throw new Error('User not authenticated');
+    }
+
+    try {
+      await MultiAccountStorage.setActiveAccount(currentUserId, accountId);
+      console.log('✅ Switched to account:', accountId);
+    } catch (error) {
+      console.error('Error switching account:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Remove a Google account
+   */
+  async removeAccount(accountId: string): Promise<void> {
+    try {
+      // Get account details for token revocation
+      const account = await MultiAccountStorage.getUserGoogleAccount(accountId);
+      
+      if (account) {
+        // Revoke the token with Google
+        try {
+          await fetch(`https://oauth2.googleapis.com/revoke?token=${account.accessToken}`, {
+            method: 'POST',
+          });
+          console.log('✅ Token revoked with Google for account:', accountId);
+        } catch (error) {
+          console.error('Error revoking token with Google:', error);
+        }
+      }
+
+      // Delete from Firestore (including related sync states)
+      await MultiAccountStorage.deleteUserGoogleAccount(accountId);
+      console.log('✅ Google account removed:', accountId);
+    } catch (error) {
+      console.error('Error removing account:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Refresh token for a specific account
+   */
+  async refreshAccountToken(accountId: string): Promise<void> {
+    // Note: Google Identity Services handles token refresh automatically
+    // This method is kept for future implementation if needed
+    console.log('Token refresh is handled automatically by Google Identity Services');
+  }
+
+  /**
+   * Check if user has any Google accounts connected
+   */
+  async hasAnyAccounts(): Promise<boolean> {
+    const currentUserId = this.getCurrentUserId();
+    if (!currentUserId) {
+      return false;
+    }
+
+    return await MultiAccountStorage.hasAnyAccounts(currentUserId);
+  }
+
+  /**
+   * Get active (default) account
+   */
+  async getActiveAccount(): Promise<UserGoogleAccount | null> {
+    const currentUserId = this.getCurrentUserId();
+    if (!currentUserId) {
+      return null;
+    }
+
+    return await MultiAccountStorage.getActiveAccount(currentUserId);
+  }
+
+  /**
+   * Check if user has calendar access (multi-account version)
+   * Returns true if at least one account has valid access
+   */
+  async hasMultiAccountCalendarAccess(): Promise<boolean> {
+    try {
+      const accounts = await this.getConnectedAccounts();
+      
+      if (accounts.length === 0) {
+        return false;
+      }
+
+      // Check if at least one account has valid access
+      for (const account of accounts) {
+        if (account.syncEnabled && Date.now() < account.expiresAt) {
+          // Test the token
+          try {
+            const response = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+              headers: {
+                'Authorization': `Bearer ${account.accessToken}`,
+              },
+            });
+
+            if (response.ok) {
+              return true; // At least one account has valid access
+            }
+          } catch (error) {
+            console.warn(`Token invalid for account ${account.email}:`, error);
+          }
+        }
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error checking multi-account calendar access:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Migrate existing single-account setup to multi-account
+   */
+  async migrateToMultiAccount(): Promise<UserGoogleAccount | null> {
+    const currentUserId = this.getCurrentUserId();
+    if (!currentUserId) {
+      return null;
+    }
+
+    try {
+      return await MultiAccountStorage.migrateLegacyToken(currentUserId);
+    } catch (error) {
+      console.error('Error migrating to multi-account:', error);
+      return null;
+    }
   }
 }
 

@@ -1,6 +1,6 @@
 import { GoogleCalendarEvent, Task, Project } from '../../types/models';
 import { auth } from '../../api/firebase';
-import { googleOAuthService } from '../auth/googleOAuth';
+import { simpleGoogleOAuthService } from '../auth/simpleGoogleOAuth';
 
 export class GoogleCalendarService {
   private calendarId: string = 'primary';
@@ -20,14 +20,14 @@ export class GoogleCalendarService {
     }
 
     // Check if OAuth2 is configured
-    if (!googleOAuthService.isConfigured()) {
+    if (!simpleGoogleOAuthService.isConfigured()) {
       console.warn('📅 Google OAuth2 not configured - running in demo mode');
       console.warn('ℹ️  Set VITE_GOOGLE_OAUTH_CLIENT_ID to enable real Google Calendar sync');
       return;
     }
 
     // Check if we have calendar access token
-    const token = await googleOAuthService.getStoredToken();
+    const token = await simpleGoogleOAuthService.getStoredToken();
     if (!token) {
       console.warn('📅 No calendar access token - running in demo mode');
       console.warn('ℹ️  Grant calendar access in settings to enable real sync');
@@ -42,7 +42,7 @@ export class GoogleCalendarService {
    * Get authorization headers for API requests
    */
   private async getAuthHeaders(): Promise<HeadersInit> {
-    const token = await googleOAuthService.getStoredToken();
+    const token = await simpleGoogleOAuthService.getStoredToken();
     if (!token) {
       throw new Error('No access token available');
     }
@@ -59,7 +59,7 @@ export class GoogleCalendarService {
   async createEvent(task: Task, project: Project): Promise<string> {
     await this.initialize();
 
-    const token = await googleOAuthService.getStoredToken();
+    const token = await simpleGoogleOAuthService.getStoredToken();
     if (token) {
       // Real Google Calendar API call
       try {
@@ -109,7 +109,7 @@ export class GoogleCalendarService {
   async updateEvent(eventId: string, task: Task, project: Project): Promise<void> {
     await this.initialize();
 
-    const token = await googleOAuthService.getStoredToken();
+    const token = await simpleGoogleOAuthService.getStoredToken();
     if (token) {
       // Real Google Calendar API call
       try {
@@ -154,7 +154,7 @@ export class GoogleCalendarService {
   async deleteEvent(eventId: string): Promise<void> {
     await this.initialize();
 
-    const token = await googleOAuthService.getStoredToken();
+    const token = await simpleGoogleOAuthService.getStoredToken();
     if (token) {
       // Real Google Calendar API call
       try {
@@ -190,7 +190,7 @@ export class GoogleCalendarService {
   async getEvent(eventId: string): Promise<GoogleCalendarEvent> {
     await this.initialize();
 
-    const token = await googleOAuthService.getStoredToken();
+    const token = await simpleGoogleOAuthService.getStoredToken();
     if (!token) {
       throw new Error('No access token available');
     }
@@ -222,7 +222,7 @@ export class GoogleCalendarService {
   }> {
     await this.initialize();
 
-    const token = await googleOAuthService.getStoredToken();
+    const token = await simpleGoogleOAuthService.getStoredToken();
     if (!token) {
       console.log('🔄 DEMO MODE: Simulating Google Calendar events list');
       await new Promise(resolve => setTimeout(resolve, 1200));
@@ -287,7 +287,7 @@ export class GoogleCalendarService {
   }> {
     await this.initialize();
 
-    const token = await googleOAuthService.getStoredToken();
+    const token = await simpleGoogleOAuthService.getStoredToken();
     if (!token) {
       throw new Error('No access token available');
     }
@@ -326,7 +326,7 @@ export class GoogleCalendarService {
   async stopChannel(channelId: string, resourceId: string): Promise<void> {
     await this.initialize();
 
-    const token = await googleOAuthService.getStoredToken();
+    const token = await simpleGoogleOAuthService.getStoredToken();
     if (!token) {
       throw new Error('No access token available');
     }
