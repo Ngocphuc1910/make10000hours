@@ -46,6 +46,11 @@ if (process.env.NODE_ENV === 'development') {
 // Import cleanup utility for orphaned sessions
 import('./utils/cleanupSessions');
 
+// Import auth guard test utilities in development mode
+if (process.env.NODE_ENV === 'development') {
+  import('./utils/testAuthGuard');
+}
+
 // Global tab title component - isolated to prevent parent re-renders
 const GlobalTabTitleUpdater: React.FC = () => {
   const isRunning = useTimerStore(state => state.isRunning);
@@ -165,7 +170,16 @@ const GlobalKeyboardShortcuts: React.FC = React.memo(() => {
     navigate(route);
   }, [navigate]);
 
-  const handleNewTask = useCallback(() => {
+  const handleNewTask = useCallback(async () => {
+    // Import auth guard dynamically to avoid circular dependencies
+    const { checkAuthenticationStatus, triggerAuthenticationFlow } = await import('./utils/authGuard');
+    const authStatus = checkAuthenticationStatus();
+    
+    if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+      triggerAuthenticationFlow();
+      return;
+    }
+    
     if (!isRightSidebarOpen) {
       toggleRightSidebar();
     }

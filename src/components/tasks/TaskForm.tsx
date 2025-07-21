@@ -219,6 +219,15 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
   }, [description, adjustTextareaHeight]);
   
   const handleSave = async () => {
+    // Check authentication status before proceeding
+    const { checkAuthenticationStatus, triggerAuthenticationFlow } = await import('../../utils/authGuard');
+    const authStatus = checkAuthenticationStatus();
+    
+    if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+      triggerAuthenticationFlow();
+      return;
+    }
+    
     // Reset errors
     setTitleError(false);
     setProjectError(false);

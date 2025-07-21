@@ -7,6 +7,7 @@ import type { Task, Project } from '../../types/models';
 import { formatMinutesToHoursAndMinutes } from '../../utils/timeUtils';
 import TaskListSorted from './TaskListSorted';
 import TimeSpent from './TimeSpent';
+import { useAuthGuard, triggerAuthenticationFlow } from '../../utils/authGuard';
 
 interface TaskListProps {
   className?: string;
@@ -26,6 +27,7 @@ export const TaskList: React.FC<TaskListProps> = ({
   const setShowDetailsMenu = useTaskStore(state => state.setShowDetailsMenu);
   const handleMoveCompletedDown = useTaskStore(state => state.handleMoveCompletedDown);
   const handleArchiveCompleted = useTaskStore(state => state.handleArchiveCompleted);
+  const authStatus = useAuthGuard();
   
   // For drag and drop
   const taskListRef = useRef<HTMLDivElement>(null);
@@ -73,6 +75,10 @@ export const TaskList: React.FC<TaskListProps> = ({
   }, [isAddingTask]);
   
   const handleAddTask = () => {
+    if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+      triggerAuthenticationFlow();
+      return;
+    }
     setIsAddingTask(true);
     setEditingTaskId(null);
   };

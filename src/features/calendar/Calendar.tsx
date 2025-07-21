@@ -19,6 +19,7 @@ import { useUserStore } from '../../store/userStore';
 import { mergeEventsAndTasks, calculateNewEventTime, isValidDrop } from './utils';
 import TaskForm from '../../components/tasks/TaskForm';
 import { Task } from '../../types/models';
+import { useAuthGuard, triggerAuthenticationFlow } from '../../utils/authGuard';
 
 // Old DragState interface - removed since we have new drag-to-create system
 
@@ -65,6 +66,8 @@ export const Calendar: React.FC = () => {
     startDate: Date;
     endDate: Date;
   } | null>(null);
+  
+  const authStatus = useAuthGuard();
 
   // Ref for ScrollableWeekView to control navigation
   const scrollableWeekViewRef = useRef<ScrollableWeekViewRef>(null);
@@ -292,6 +295,12 @@ export const Calendar: React.FC = () => {
   };
 
   const handleTimeSlotClick = (date: Date) => {
+    // Check authentication before creating task
+    if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+      triggerAuthenticationFlow();
+      return;
+    }
+    
     // Close any open forms first
     setEditingTaskId(null);
     setStoreEditingTaskId(null);
@@ -316,6 +325,12 @@ export const Calendar: React.FC = () => {
   };
 
   const handleAllDayClick = (date: Date) => {
+    // Check authentication before creating task
+    if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+      triggerAuthenticationFlow();
+      return;
+    }
+    
     // Close any open forms first
     setEditingTaskId(null);
     setStoreEditingTaskId(null);
@@ -382,6 +397,12 @@ export const Calendar: React.FC = () => {
       if (task) {
         // Check if this is a duplication (Alt+Drag)
         if (item.isDuplicate) {
+          // Check authentication before duplicating task
+          if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+            triggerAuthenticationFlow();
+            return;
+          }
+          
           console.log('🔄 Duplicating task:', task.title);
 
           // Prepare the new task data for duplication
@@ -537,6 +558,12 @@ export const Calendar: React.FC = () => {
   // Old calculateTime and formatTime - removed since we have new drag-to-create system
 
   const handleDragCreate = useCallback((startTime: Date, endTime: Date) => {
+    // Check authentication before creating task
+    if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+      triggerAuthenticationFlow();
+      return;
+    }
+    
     // Close any open forms first
     setEditingTaskId(null);
     setStoreEditingTaskId(null);
@@ -549,7 +576,7 @@ export const Calendar: React.FC = () => {
 
     setDragCreateData({ startTime, endTime, status });
     setIsDragCreateTaskOpen(true);
-  }, []);
+  }, [authStatus]);
 
   const handleDateRangeChange = useCallback((startDate: Date, endDate: Date) => {
     setVisibleDateRange({ startDate, endDate });
