@@ -10,6 +10,7 @@ interface SimpleGoogleCalendarAuthState {
   error: string | null;
   requestCalendarAccess: () => Promise<void>;
   revokeAccess: () => Promise<void>;
+  refreshToken: () => void;
   token: UserGoogleCalendarToken | null;
 }
 
@@ -18,12 +19,13 @@ export const useSimpleGoogleCalendarAuth = (): SimpleGoogleCalendarAuthState => 
   const [isCheckingAccess, setIsCheckingAccess] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<UserGoogleCalendarToken | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // Get current user from store to react to user changes
   const { user } = useUserStore();
 
   useEffect(() => {
-    // Reset state when user changes
+    // Reset state when user changes or when explicitly refreshed
     setHasCalendarAccess(false);
     setError(null);
     setIsCheckingAccess(true);
@@ -34,7 +36,7 @@ export const useSimpleGoogleCalendarAuth = (): SimpleGoogleCalendarAuthState => 
     } else {
       setIsCheckingAccess(false);
     }
-  }, [user]); // Re-run when user changes
+  }, [user, refreshTrigger]); // Re-run when user changes or refresh is triggered
 
   const checkCalendarAccess = async () => {
     setIsCheckingAccess(true);
@@ -130,12 +132,17 @@ export const useSimpleGoogleCalendarAuth = (): SimpleGoogleCalendarAuthState => 
     }
   };
 
+  const refreshToken = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+
   return {
     hasCalendarAccess,
     isCheckingAccess,
     error,
     requestCalendarAccess,
     revokeAccess,
+    refreshToken,
     token,
   };
 };
