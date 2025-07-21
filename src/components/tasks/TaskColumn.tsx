@@ -4,6 +4,7 @@ import { useTaskStore } from '../../store/taskStore';
 import TaskCard from './TaskCard';
 import TaskForm from './TaskForm';
 import { Icon } from '../ui/Icon';
+import { useAuthGuard, triggerAuthenticationFlow } from '../../utils/authGuard';
 
 interface TaskColumnProps {
   title: string;
@@ -23,6 +24,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
   const [isAddingTask, setIsAddingTask] = useState(false);
   const reorderTasks = useTaskStore(state => state.reorderTasks);
   const moveTaskToStatusAndPosition = useTaskStore(state => state.moveTaskToStatusAndPosition);
+  const authStatus = useAuthGuard();
 
   // Handle task card reordering within the same column
   const handleTaskReorder = (draggedTaskId: string, targetTaskId: string, insertAfter: boolean = false) => {
@@ -71,7 +73,13 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
           </div>
                       <button 
             className="p-1 rounded-full hover:bg-background-container"
-            onClick={() => setIsAddingTask(true)}
+            onClick={() => {
+              if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+                triggerAuthenticationFlow();
+                return;
+              }
+              setIsAddingTask(true);
+            }}
           >
             <div className="w-5 h-5 flex items-center justify-center text-text-secondary">
               <Icon name="add-line" />
