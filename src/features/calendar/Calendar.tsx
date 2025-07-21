@@ -89,7 +89,8 @@ export const Calendar: React.FC = () => {
     requestCalendarAccess, 
     isCheckingAccess,
     error: calendarError,
-    token
+    token,
+    refreshToken
   } = useSimpleGoogleCalendarAuth();
   const { performManualSync, syncInProgress, syncEnabled, syncError, lastSyncTime } = useSyncStore();
   
@@ -137,6 +138,8 @@ export const Calendar: React.FC = () => {
         const { simpleGoogleOAuthService } = await import('../../services/auth/simpleGoogleOAuth');
         await simpleGoogleOAuthService.toggleSync(true);
         console.log('✅ Google Calendar sync re-enabled');
+        // Refresh the hook state to update token.syncEnabled
+        refreshToken();
       } catch (error) {
         console.error('Failed to re-enable sync:', error);
         return;

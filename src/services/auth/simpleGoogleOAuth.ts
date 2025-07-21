@@ -87,11 +87,11 @@ export class SimpleGoogleOAuthService {
   }
 
   /**
-   * Check if user has valid Google Calendar access
+   * Check if user has valid Google Calendar access (regardless of sync enabled status)
    */
   async hasCalendarAccess(): Promise<boolean> {
     const token = await this.getStoredToken();
-    return !!token && token.syncEnabled;
+    return !!token; // Just check if token exists, not if sync is enabled
   }
 
   /**
