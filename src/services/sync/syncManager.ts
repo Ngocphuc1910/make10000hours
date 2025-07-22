@@ -61,6 +61,12 @@ export class SyncManager {
 
         await setDoc(doc(db, 'syncStates', this.userId), initialState);
         console.log('🔄 Sync state initialized for user:', this.userId);
+      } else {
+        // Clear any existing webhook trigger flags to prevent immediate sync
+        console.log('🧹 Clearing any existing webhook flags to prevent immediate sync');
+        await this.updateSyncState({
+          webhookTriggeredSync: false,
+        });
       }
     } catch (error) {
       console.error('Error initializing sync:', error);
@@ -274,11 +280,39 @@ export class SyncManager {
     console.log('🔄 Starting incremental sync with token:', syncState.nextSyncToken ? 'Available' : 'MISSING');
 
     try {
-      // CRITICAL: If no sync token, force full sync immediately
+      // CRITICAL: If no sync token, establish one without syncing all tasks
       if (!syncState.nextSyncToken) {
-        console.log('⚠️ No sync token available, performing full sync instead...');
-        await this.performFullSync();
-        return;
+        console.log('⚠️ No sync token available, establishing one without full sync...');
+        console.log('📡 Getting initial sync token from Google Calendar...');
+        
+        try {
+          // Just get a sync token without processing all events
+          const response = await googleCalendarService.listEventsForSyncToken();
+          
+          console.log('📊 Initial sync token response:', {
+            eventsCount: response.items.length,
+            hasNextSyncToken: !!response.nextSyncToken,
+            nextSyncToken: response.nextSyncToken ? response.nextSyncToken.substring(0, 30) + '...' : 'NONE'
+          });
+
+          // Store the sync token without processing events
+          if (response.nextSyncToken) {
+            await this.updateSyncState({
+              nextSyncToken: response.nextSyncToken,
+              lastIncrementalSync: new Date(),
+            });
+            console.log('✅ Sync token established, now ready for incremental updates');
+          } else {
+            console.warn('⚠️ No sync token returned, will retry later');
+          }
+          
+          this.syncInProgress = false;
+          return;
+        } catch (error) {
+          console.error('❌ Failed to establish sync token:', error);
+          this.syncInProgress = false;
+          return;
+        }
       }
 
       console.log('📡 Calling Google Calendar API with sync token...');
@@ -339,17 +373,27 @@ export class SyncManager {
             console.log('🔥 Webhook fired but NO events found anywhere - this suggests sync token issue');
             console.log('💥 Forcing FULL SYNC to reset sync token...');
             
-            // Clear the current (possibly broken) sync token and force full sync
+            // Clear the current (possibly broken) sync token and establish fresh one
             await this.updateSyncState({
               nextSyncToken: null,
               webhookTriggeredSync: false,
             });
             
-            console.log('🚀 Triggering emergency full sync...');
-            await this.performFullSync();
-            
-            console.log('✅ Emergency full sync completed - fresh sync token established');
-            return; // Exit early, full sync handles everything
+            console.log('🔄 Establishing fresh sync token without emergency full sync...');
+            try {
+              const response = await googleCalendarService.listEventsForSyncToken();
+              
+              if (response.nextSyncToken) {
+                await this.updateSyncState({
+                  nextSyncToken: response.nextSyncToken,
+                  lastIncrementalSync: new Date(),
+                });
+                console.log('✅ Fresh sync token established after webhook with no events');
+              }
+            } catch (tokenError) {
+              console.error('❌ Failed to establish sync token after empty webhook:', tokenError);
+            }
+            return; // Exit early, token established without full sync
           }
         } catch (recentError) {
           console.error('❌ Recent events check failed:', recentError);
@@ -391,9 +435,25 @@ export class SyncManager {
             nextSyncToken: null, // Clear invalid token
           });
           
-          // Perform full sync to get fresh token
-          await this.performFullSync();
-          console.log('✅ Full sync completed after invalid sync token');
+          console.log('🔄 Establishing fresh sync token without full sync...');
+          this.syncInProgress = false; // Release lock
+          
+          // Just get a fresh sync token without syncing all tasks
+          try {
+            const response = await googleCalendarService.listEventsForSyncToken();
+            
+            if (response.nextSyncToken) {
+              await this.updateSyncState({
+                nextSyncToken: response.nextSyncToken,
+                lastIncrementalSync: new Date(),
+              });
+              console.log('✅ Fresh sync token established after invalid token');
+            } else {
+              console.warn('⚠️ No sync token returned after invalid token recovery');
+            }
+          } catch (tokenError) {
+            console.error('❌ Failed to establish fresh sync token:', tokenError);
+          }
           
         } catch (fullSyncError) {
           console.error('❌ Full sync ALSO failed:', fullSyncError);
@@ -840,17 +900,36 @@ export class SyncManager {
    * Update task from Google Calendar event
    */
   private async updateTaskFromGoogleEvent(task: Task, event: GoogleCalendarEvent): Promise<void> {
-    const updates = googleCalendarService.googleEventToTask(event);
+    if (!task || !task.id) {
+      throw new Error('Invalid task object - missing id');
+    }
     
-    // Filter out undefined values
-    const filteredUpdates = Object.fromEntries(
-      Object.entries(updates).filter(([_, value]) => value !== undefined)
-    );
+    if (!event || !event.id) {
+      throw new Error('Invalid event object - missing id');
+    }
+    
+    try {
+      const updates = googleCalendarService.googleEventToTask(event);
+      
+      // Filter out undefined values and validate update data
+      const filteredUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([_, value]) => value !== undefined)
+      );
 
-    await updateDoc(doc(db, 'tasks', task.id), {
-      ...filteredUpdates,
-      updatedAt: new Date(),
-    });
+      // Safety check for essential fields
+      if (Object.keys(filteredUpdates).length === 0) {
+        console.warn('No valid updates extracted from Google event:', event.id);
+        return;
+      }
+
+      await updateDoc(doc(db, 'tasks', task.id), {
+        ...filteredUpdates,
+        updatedAt: new Date(),
+      });
+    } catch (conversionError) {
+      console.error('Error converting Google event to task updates:', conversionError);
+      throw new Error(`Failed to process event ${event.id}: ${conversionError.message}`);
+    }
 
     await this.logSyncOperation({
       userId: this.userId,

@@ -49,10 +49,19 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     const userStore = useUserStore.getState();
     // CRITICAL: Check both user existence and initialization
     if (!userStore.isInitialized || !userStore.user) {
-      console.warn('⚠️ Cannot get sync manager - user not properly authenticated');
+      console.warn('⚠️ Cannot get sync manager - user not properly authenticated', {
+        isInitialized: userStore.isInitialized,
+        hasUser: !!userStore.user,
+        userId: userStore.user?.uid
+      });
       return null;
     }
-    return createSyncManager(userStore.user.uid);
+    try {
+      return createSyncManager(userStore.user.uid);
+    } catch (error) {
+      console.error('❌ Failed to create sync manager:', error);
+      return null;
+    }
   },
 
   initializeSync: async () => {
