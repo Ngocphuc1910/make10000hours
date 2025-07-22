@@ -49,10 +49,8 @@ export const useSimpleGoogleCalendarAuth = (): SimpleGoogleCalendarAuthState => 
         if (isMonitoringActiveRef.current) {
           try {
             const { useSyncStore } = await import('../store/syncStore');
-            const { syncManager } = await import('../services/sync/syncManager');
             
             useSyncStore.getState().stopWebhookMonitoring();
-            syncManager.stopPolling();
             isMonitoringActiveRef.current = false;
             console.log('🔕 Stopped Google Calendar monitoring - user/token unavailable');
           } catch (error) {
@@ -66,30 +64,41 @@ export const useSimpleGoogleCalendarAuth = (): SimpleGoogleCalendarAuthState => 
         const { useSyncStore } = await import('../store/syncStore');
         const syncStore = useSyncStore.getState();
         
+        // CRITICAL FIX: Initialize sync store if not already done
+        if (!syncStore.syncEnabled && token.syncEnabled && hasCalendarAccess) {
+          console.log('🔄 Sync store not initialized, initializing now...');
+          try {
+            await syncStore.initializeSync();
+            console.log('✅ Sync store initialized successfully');
+          } catch (initError) {
+            console.error('❌ Failed to initialize sync store:', initError);
+            return; // Don't proceed if initialization failed
+          }
+        }
+        
+        // Re-get sync store state after potential initialization
+        const updatedSyncStore = useSyncStore.getState();
+        
         // Check if sync should be active
-        const shouldMonitor = token.syncEnabled && syncStore.syncEnabled && hasCalendarAccess;
+        const shouldMonitor = token.syncEnabled && updatedSyncStore.syncEnabled && hasCalendarAccess;
         
         if (shouldMonitor && !isMonitoringActiveRef.current) {
           // Start monitoring
           console.log('🔔 Starting Google Calendar webhook monitoring for user:', user.uid);
           syncStore.startWebhookMonitoring();
           
-          // Start polling as fallback
-          const { createSyncManager } = await import('../services/sync/syncManager');
-          const syncManager = createSyncManager(user.uid);
-          syncManager.startPolling();
+          // Note: Don't start polling immediately - let webhook handle it
+          // Polling will start automatically if webhook fails
           
           isMonitoringActiveRef.current = true;
-          console.log('✅ Google Calendar monitoring started');
+          console.log('✅ Google Calendar monitoring started (webhook mode)');
           
         } else if (!shouldMonitor && isMonitoringActiveRef.current) {
           // Stop monitoring
           console.log('🔕 Stopping Google Calendar webhook monitoring');
           syncStore.stopWebhookMonitoring();
           
-          const { createSyncManager } = await import('../services/sync/syncManager');
-          const syncManager = createSyncManager(user.uid);
-          syncManager.stopPolling();
+          // Note: Polling cleanup is handled by webhook monitoring stop
           
           isMonitoringActiveRef.current = false;
           console.log('✅ Google Calendar monitoring stopped');
@@ -110,12 +119,7 @@ export const useSimpleGoogleCalendarAuth = (): SimpleGoogleCalendarAuthState => 
           useSyncStore.getState().stopWebhookMonitoring();
         }).catch(console.warn);
         
-        import('../services/sync/syncManager').then(({ createSyncManager }) => {
-          if (user?.uid) {
-            const syncManager = createSyncManager(user.uid);
-            syncManager.stopPolling();
-          }
-        }).catch(console.warn);
+        // Note: Polling cleanup is handled by webhook monitoring stop
         
         isMonitoringActiveRef.current = false;
       }

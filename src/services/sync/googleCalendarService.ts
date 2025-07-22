@@ -374,38 +374,78 @@ export class GoogleCalendarService {
       };
     }
 
-    console.log('🎯 Requesting ALL events to establish sync token (no time bounds)...');
+    console.log('🎯 Requesting ALL events to establish sync token (paginating if needed)...');
 
     try {
-      // CRITICAL: Request without timeMin/timeMax to get sync token
-      // Google only returns sync tokens for certain request patterns
-      // According to Google docs, must NOT use maxResults or orderBy for sync tokens
-      const params = new URLSearchParams({
-        singleEvents: 'true'
-        // No maxResults, no orderBy, no timeMin/timeMax for sync token
-      });
+      // CRITICAL: Must paginate through ALL results to get sync token
+      // Google only returns sync token after ALL pages are retrieved
+      const allItems: GoogleCalendarEvent[] = [];
+      let nextPageToken: string | undefined;
+      let syncToken: string | undefined;
+      let pageCount = 0;
 
-      console.log('📡 Making sync token request to Google Calendar API...');
-      const response = await this.makeAuthenticatedRequest(`${this.baseUrl}/calendars/${this.calendarId}/events?${params}`);
+      do {
+        pageCount++;
+        console.log(`📄 Fetching page ${pageCount} for sync token...`);
+        
+        const params = new URLSearchParams({
+          singleEvents: 'true'
+          // No maxResults, no orderBy, no timeMin/timeMax for sync token
+        });
+        
+        if (nextPageToken) {
+          params.append('pageToken', nextPageToken);
+        }
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`API error: ${error.error?.message || response.statusText}`);
-      }
+        const response = await this.makeAuthenticatedRequest(`${this.baseUrl}/calendars/${this.calendarId}/events?${params}`);
 
-      const data = await response.json();
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(`API error: ${error.error?.message || response.statusText}`);
+        }
+
+        const data = await response.json();
+        
+        // Collect items from this page
+        if (data.items) {
+          allItems.push(...data.items);
+        }
+        
+        // Check for sync token (only available on last page)
+        if (data.nextSyncToken) {
+          syncToken = data.nextSyncToken;
+          console.log(`✅ Got sync token on page ${pageCount}!`);
+        }
+        
+        // Set up for next page
+        nextPageToken = data.nextPageToken;
+        
+        console.log(`📊 Page ${pageCount} response:`, {
+          eventsThisPage: data.items?.length || 0,
+          totalEventsSoFar: allItems.length,
+          hasSyncToken: !!data.nextSyncToken,
+          hasNextPage: !!data.nextPageToken
+        });
+        
+        // Safety limit to prevent infinite loops
+        if (pageCount > 50) {
+          console.warn('⚠️ Reached pagination safety limit (50 pages)');
+          break;
+        }
+        
+      } while (nextPageToken && !syncToken);
       
-      console.log('📊 Sync token request response:', {
-        eventsCount: data.items?.length || 0,
-        hasSyncToken: !!data.nextSyncToken,
-        syncToken: data.nextSyncToken ? data.nextSyncToken.substring(0, 30) + '...' : 'NONE',
-        hasPageToken: !!data.nextPageToken
+      console.log('📊 Final sync token request result:', {
+        totalEvents: allItems.length,
+        totalPages: pageCount,
+        hasSyncToken: !!syncToken,
+        syncToken: syncToken ? syncToken.substring(0, 30) + '...' : 'NONE'
       });
 
       return {
-        items: data.items || [],
-        nextSyncToken: data.nextSyncToken,
-        nextPageToken: data.nextPageToken,
+        items: allItems,
+        nextSyncToken: syncToken,
+        nextPageToken: undefined, // Always undefined for complete pagination
       };
     } catch (error) {
       console.error('Error requesting sync token from Google Calendar:', error);
@@ -527,9 +567,14 @@ export class GoogleCalendarService {
       }
     }
 
-    // Add color based on project
-    if (project.color) {
-      event.colorId = this.getGoogleColorId(project.color);
+    // Add color based on project (with safety checks)
+    if (project && project.color && typeof project.color === 'string') {
+      try {
+        event.colorId = this.getGoogleColorId(project.color);
+      } catch (colorError) {
+        console.warn('Error setting event color:', colorError);
+        event.colorId = '1'; // Default to blue
+      }
     }
 
     return event;
@@ -638,6 +683,9 @@ export class GoogleCalendarService {
       const cleanLines = [];
       
       for (const line of lines) {
+        // Safety check for line
+        if (!line || typeof line !== 'string') continue;
+        
         if (line.indexOf('--- Created by Make10000hours ---') !== -1) {
           break;
         }

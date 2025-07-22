@@ -74,12 +74,7 @@ const GoogleCalendarSync: React.FC = () => {
       await syncManager.toggleSync(true);
       console.log('✅ Sync enabled');
       
-      // Step 3: CRITICAL - Perform initial full sync to establish sync token
-      console.log('🔄 Performing initial full sync to establish sync token...');
-      await syncManager.performFullSync();
-      console.log('✅ Initial full sync completed - sync token established');
-      
-      // Step 4: Set up webhook for real-time sync (now that we have a valid sync token)
+      // Step 3: Set up webhook for real-time sync
       try {
         await syncManager.setupWebhook();
         console.log('✅ Webhook setup successful');
@@ -87,10 +82,15 @@ const GoogleCalendarSync: React.FC = () => {
         // Start webhook monitoring after successful setup
         startWebhookMonitoring();
         console.log('✅ Webhook monitoring started');
+        
+        console.log('💡 Webhook ready for Google Calendar → web app sync');
+        console.log('🚀 You can now test by creating a task in Google Calendar');
       } catch (webhookError) {
         console.warn('⚠️ Webhook setup failed, falling back to polling:', webhookError);
         // Start monitoring anyway - it will use polling fallback
         startWebhookMonitoring();
+        
+        console.log('💡 Using polling mode - changes may take up to 2 minutes to sync');
       }
       
       await loadSyncStatus();
