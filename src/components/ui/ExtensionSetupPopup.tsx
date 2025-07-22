@@ -29,17 +29,27 @@ export const ExtensionSetupPopup: React.FC<ExtensionSetupPopupProps> = ({
             <i className="ri-puzzle-line text-lg text-[rgba(187,95,90,1)]"></i>
           </div>
           <div className="flex-1">
-            <h3 className="text-xs font-semibold text-gray-900 mb-0.5">Extension Required</h3>
+            <h3 className="text-xs font-semibold text-gray-900 mb-0.5">Set up extension</h3>
             <p className="text-xs text-gray-500 mb-2.5 leading-relaxed">
-              Please set up the browser extension to enable Deep Focus mode and site blocking.
+              We need extension to help you block distracting sites & track site usage
             </p>
-            <button 
-              onClick={onSetupClick}
-              className="w-full px-3 py-1.5 bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] text-white text-xs font-medium rounded-lg hover:bg-opacity-90 transition-colors rounded-button whitespace-nowrap flex items-center justify-center gap-1.5"
-            >
-              <i className="ri-puzzle-line text-[13px]"></i>
-              <span>Set up Extension</span>
-            </button>
+            <p className="text-xs text-gray-500 mb-2.5 leading-relaxed">
+              In case you already installed the extension, please reload and try again
+            </p>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => window.location.reload()}
+                className="flex-1 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Reload
+              </button>
+              <button 
+                onClick={onSetupClick}
+                className="flex-1 px-3 py-1.5 bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] text-white text-xs font-medium rounded-lg hover:bg-opacity-90 transition-colors rounded-button whitespace-nowrap flex items-center justify-center"
+              >
+                Set up
+              </button>
+            </div>
           </div>
         </div>
       </div>
