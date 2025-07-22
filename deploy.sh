@@ -19,7 +19,7 @@ if [ ! -f ".env.production" ]; then
 REACT_APP_SUPABASE_URL=\${REACT_APP_SUPABASE_URL}
 REACT_APP_SUPABASE_ANON_KEY=\${REACT_APP_SUPABASE_ANON_KEY}8HeQAYjU
 NODE_ENV=production
-PUBLIC_URL=https://make10000hours.com
+PUBLIC_URL=https://app.make10000hours.com
 EOL
 fi
 
@@ -86,7 +86,7 @@ touch docs/.nojekyll
 echo "Created .nojekyll file to prevent Jekyll processing."
 
 # Add a CNAME file if deploying to a custom domain
-echo "make10000hours.com" > docs/CNAME
+echo "app.make10000hours.com" > docs/CNAME
 echo "Created CNAME file for custom domain."
 
 # Add a special redirect file for client-side routing
@@ -124,7 +124,7 @@ echo "Created 404.html for client-side routing support."
 echo "===== Deployment completed ====="
 echo "The build files have been copied to the docs directory."
 echo "You can now commit and push these changes to your GitHub repository."
-echo "Your site should be available at: https://make10000hours.com"
+echo "Your site should be available at: https://app.make10000hours.com"
 
 # Recommend next steps
 echo ""

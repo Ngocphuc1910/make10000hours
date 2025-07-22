@@ -109,8 +109,8 @@ const injectTestData = () => {
       },
       {
         id: 'test-2',
-        name: 'make10000hours.com',
-        url: 'make10000hours.com',
+        name: 'app.make10000hours.com',
+        url: 'app.make10000hours.com',
         icon: 'ri-global-line',
         backgroundColor: 'rgba(87,181,231,1)',
         timeSpent: 90,
