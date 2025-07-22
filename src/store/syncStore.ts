@@ -46,9 +46,13 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   syncStateListener: null,
 
   getSyncManager: () => {
-    const { user } = useUserStore.getState();
-    if (!user) return null;
-    return createSyncManager(user.uid);
+    const userStore = useUserStore.getState();
+    // CRITICAL: Check both user existence and initialization
+    if (!userStore.isInitialized || !userStore.user) {
+      console.warn('⚠️ Cannot get sync manager - user not properly authenticated');
+      return null;
+    }
+    return createSyncManager(userStore.user.uid);
   },
 
   initializeSync: async () => {
@@ -341,10 +345,25 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
   startSyncStateListener: () => {
     const store = get();
-    const { user } = useUserStore.getState();
+    const userStore = useUserStore.getState();
     
+    // CRITICAL: Wait for user authentication to be properly initialized
+    if (!userStore.isInitialized) {
+      console.log('⏳ User store not initialized, waiting for authentication...');
+      // Subscribe to user store changes and start listener when ready
+      const unsubscribe = useUserStore.subscribe((state) => {
+        if (state.isInitialized && state.user) {
+          unsubscribe();
+          console.log('✅ User authenticated, starting sync state listener...');
+          store.startSyncStateListener();
+        }
+      });
+      return;
+    }
+    
+    const { user } = userStore;
     if (!user?.uid) {
-      console.warn('⚠️ Cannot start sync state listener - no user');
+      console.warn('⚠️ Cannot start sync state listener - no user authenticated');
       return;
     }
 
