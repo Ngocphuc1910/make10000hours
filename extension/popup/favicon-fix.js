@@ -136,7 +136,7 @@ function getDomainFallbackIcon(domain) {
     'substack.com': 'ri-newsletter-line',
     
     // My App
-    'make10000hours.com': 'ri-focus-3-line',
+    'app.make10000hours.com': 'ri-focus-3-line',
     
     // Communication
     'zoom.us': 'ri-video-line',

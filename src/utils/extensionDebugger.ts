@@ -281,8 +281,8 @@ export class ExtensionDebugger {
       
       // Check if current origin should be allowed
       const allowedOrigins = [
-        'https://make10000hours.com',
-        'https://www.make10000hours.com',
+        'https://app.make10000hours.com',
+        'https://www.app.make10000hours.com',
         'http://localhost:3001', // Common dev ports
         'http://localhost:3000',
         'http://localhost:3002',

@@ -455,7 +455,7 @@ function getDomainFallbackIcon(domain) {
     'chatgpt.com': 'ri-chat-3-line',
     
     // My App
-    'make10000hours.com': 'ri-focus-3-line',
+    'app.make10000hours.com': 'ri-focus-3-line',
     
     // Cloud Services
     'firebase.google.com': 'ri-fire-line',
@@ -1507,7 +1507,7 @@ class PopupManager {
       'instagram.com': 'ri-instagram-fill',
       'figma.com': 'ri-shape-line',
       'claude.ai': 'ri-robot-line',
-      'make10000hours.com': 'ri-focus-3-line',
+      'app.make10000hours.com': 'ri-focus-3-line',
       'firebase.google.com': 'ri-fire-line',
       'console.firebase.google.com': 'ri-fire-line'
     };
@@ -1529,7 +1529,7 @@ class PopupManager {
   getDomainClass(domain) {
     const domainMap = {
       'linkedin.com': 'linkedin',
-      'make10000hours.com': 'make10000hours',
+      'app.make10000hours.com': 'make10000hours',
       'ycombinator.com': 'ycombinator',
       'copilot.microsoft.com': 'copilot',
       'readdy.ai': 'readdy',
@@ -2107,7 +2107,7 @@ class PopupManager {
    */
   viewAllSites() {
     // Open the main web app
-    chrome.tabs.create({ url: 'https://make10000hours.com' });
+    chrome.tabs.create({ url: 'https://app.make10000hours.com' });
   }
 
   /**
@@ -2183,7 +2183,7 @@ class PopupManager {
       
       <p style="margin-top: 1rem;">
         <strong>Need more help?</strong> Visit 
-        <a href="https://make10000hours.com" style="color: var(--primary-color);">make10000hours.com</a> 
+        <a href="https://app.make10000hours.com" style="color: var(--primary-color);">app.make10000hours.com</a> 
         for detailed analytics and progress tracking.
       </p>
     `);

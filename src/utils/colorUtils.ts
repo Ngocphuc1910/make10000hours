@@ -46,7 +46,7 @@ export function getBrandColor(domain: string): string | null {
     'microsoft.com': '#00A4EF',
     'apple.com': '#000000',
     'amazon.com': '#FF9900',
-    'make10000hours.com': '#FF6B6B',
+    'app.make10000hours.com': '#FF6B6B',
     'ycombinator.com': '#FF6600',
     'copilot.microsoft.com': '#0078D4',
     'readdy.ai': '#7C3AED',
