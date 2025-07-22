@@ -256,12 +256,12 @@ class BlockedPage {
   setupEventListeners() {
     document.getElementById('backBtn').addEventListener('click', () => {
       // Navigate to deep focus page in the same tab
-      window.location.href = 'https://make10000hours.com/#/deep-focus';
+      window.location.href = 'https://app.make10000hours.com/#/deep-focus';
     });
 
     document.getElementById('openPopupBtn').addEventListener('click', () => {
       // Navigate to deep focus page in the same tab
-      window.location.href = 'https://make10000hours.com/#/deep-focus';
+      window.location.href = 'https://app.make10000hours.com/#/deep-focus';
     });
 
     document.getElementById('overrideBtn').addEventListener('click', () => {
@@ -494,7 +494,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const modalContent = document.getElementById('modalContent');
   const modalClose = document.getElementById('modalClose');
 
-  const DASHBOARD_URL = 'https://make10000hours.com/#/deep-focus';
+  const DASHBOARD_URL = 'https://app.make10000hours.com/#/deep-focus';
 
   // Button click handlers for navigation
   function navigateToDashboard(e) {

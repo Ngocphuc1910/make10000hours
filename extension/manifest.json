@@ -3,7 +3,7 @@
   "name": "Focus Time Tracker",
   "version": "1.0.0",
   "description": "Track website usage time and block distracting sites during focus sessions. Needs access to all sites.",
-  "homepage_url": "https://make10000hours.com",
+  "homepage_url": "https://app.make10000hours.com",
   
   "permissions": [
     "storage",
@@ -90,8 +90,8 @@
   
   "externally_connectable": {
     "matches": [
-      "https://make10000hours.com/*",
-      "https://www.make10000hours.com/*",
+      "https://app.make10000hours.com/*",
+      "https://www.app.make10000hours.com/*",
       "http://localhost:*/*",
       "https://localhost:*/*"
     ]

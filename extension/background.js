@@ -3752,8 +3752,8 @@ class FocusTimeTracker {
       
       // Check for production web app URLs
       const productionDomains = [
-        'make10000hours.com',
-        'www.make10000hours.com'
+        'app.make10000hours.com',
+        'www.app.make10000hours.com'
       ];
       
       return productionDomains.includes(hostname);
@@ -4080,10 +4080,10 @@ class FocusTimeTracker {
       
       // Try production domain with both HTTP and HTTPS, with and without www
       const productionUrls = [
-        "https://make10000hours.com/*",
-        "https://www.make10000hours.com/*",
-        "http://make10000hours.com/*",
-        "http://www.make10000hours.com/*"
+        "https://app.make10000hours.com/*",
+        "https://www.app.make10000hours.com/*",
+        "http://app.make10000hours.com/*",
+        "http://www.app.make10000hours.com/*"
       ];
       
       productionUrls.forEach(urlPattern => {
@@ -4119,7 +4119,7 @@ class FocusTimeTracker {
       console.log('🔄 Syncing blocked sites from extension to web app:', blockedSitesArray.length);
       
       // Send message to web app (if it's open) - support both localhost and production
-      chrome.tabs.query({ url: ['*://localhost:*/*', '*://*/make10000hours.com/*'] }, (tabs) => {
+      chrome.tabs.query({ url: ['*://localhost:*/*', '*://*/app.make10000hours.com/*'] }, (tabs) => {
         console.log('🔍 Found tabs for sync:', tabs.length, tabs.map(t => t.url));
         
         if (tabs.length === 0) {

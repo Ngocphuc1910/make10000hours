@@ -130,7 +130,7 @@ const SupportPage = () => (
               For support, feedback, or questions about the Focus Time Tracker extension:
             </p>
             <p className="text-text-primary">
-              <strong>Email:</strong> support@make10000hours.com
+              <strong>Email:</strong> support@app.make10000hours.com
             </p>
           </div>
         </div>

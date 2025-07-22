@@ -60,8 +60,8 @@ async function createDocumentWithAdmin() {
           category: "uncategorized",
           lastVisit: admin.firestore.Timestamp.fromDate(new Date("2025-06-13T05:39:51.205Z"))
         },
-        "make10000hours.com": {
-          domain: "make10000hours.com",
+        "app.make10000hours.com": {
+          domain: "app.make10000hours.com",
           category: "uncategorized",
           visits: 35,
           timeSpent: 562612163,
