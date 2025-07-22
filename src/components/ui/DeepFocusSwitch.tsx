@@ -87,8 +87,25 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
         }, 100);
       }
     } else {
-      // Disabling doesn't need check
+      // Check extension before disabling as well
       try {
+        console.log('🔄 User attempting to disable Deep Focus, checking extension...');
+        const extensionState = await ExtensionDataService.getExtensionSetupState();
+        
+        if (extensionState === 'NOT_INSTALLED') {
+          console.log('❌ Extension not ready, showing setup popup');
+          e.preventDefault(); // Stop the toggle
+          setShowExtensionPopup(true); // Show popup
+          // Reset checkbox to previous state (checked = true since we're disabling)
+          setTimeout(() => {
+            const checkbox = e.target;
+            if (checkbox) checkbox.checked = true;
+          }, 100);
+          return;
+        }
+        
+        // Extension is ready, proceed with disabling
+        console.log('✅ Extension ready, disabling Deep Focus');
         await disableDeepFocus();
         setShowExtensionPopup(false);
       } catch (error) {
