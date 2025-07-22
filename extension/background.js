@@ -4226,6 +4226,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false; // Don't keep channel open for sync response
   }
   
+  // Handle health check messages immediately
+  if (message.type === 'EXTENSION_HEALTH_CHECK') {
+    sendResponse({
+      type: 'EXTENSION_HEALTH_RESPONSE',
+      status: 'ok',
+      timestamp: Date.now(),
+      initialized: isInitialized
+    });
+    return false; // Don't keep channel open for sync response
+  }
+  
   // For other messages, ensure we're initialized
   if (!isInitialized) {
     console.log('⚠️ Extension not initialized, initializing now...');
