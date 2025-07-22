@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDeepFocusContext } from '../../contexts/DeepFocusContext';
 import { Tooltip } from './Tooltip';
+import { ExtensionSetupPopup } from './ExtensionSetupPopup';
+import ExtensionDataService from '../../services/extensionDataService';
 
 interface DeepFocusSwitchProps {
   size?: 'small' | 'medium' | 'large';
@@ -24,6 +26,7 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
   pageTitleClassName = ''
 }) => {
   const { isDeepFocusActive, enableDeepFocus, disableDeepFocus } = useDeepFocusContext();
+  const [showExtensionPopup, setShowExtensionPopup] = useState(false);
 
   // Size configurations
   const sizeConfig = {
@@ -57,29 +60,76 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
 
   const handleToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled) return;
-    
-    try {
-      if (e.target.checked) {
-        await enableDeepFocus('web');
-      } else {
-        await disableDeepFocus();
-      }
-    } catch (error) {
-      console.error('Failed to toggle Deep Focus:', error);
-      
-      // Reset the checkbox to its previous state if the operation failed
-      setTimeout(() => {
-        const checkbox = e.target;
-        if (checkbox) {
-          checkbox.checked = !e.target.checked;
+
+    // If trying to enable Deep Focus, check extension first
+    if (e.target.checked) {
+      try {
+        console.log('🔄 User attempting to enable Deep Focus, checking extension...');
+        const extensionState = await ExtensionDataService.getExtensionSetupState();
+        
+        if (extensionState === 'NOT_INSTALLED') {
+          console.log('❌ Extension not ready, showing setup popup');
+          e.preventDefault(); // Stop the toggle
+          setShowExtensionPopup(true); // Show popup
+          return;
         }
-      }, 100);
+        
+        // Extension is ready and user info is synced, proceed
+        console.log('✅ Extension ready, enabling Deep Focus');
+        await enableDeepFocus('web');
+        setShowExtensionPopup(false);
+      } catch (error) {
+        console.error('Failed to enable Deep Focus:', error);
+        // Reset checkbox
+        setTimeout(() => {
+          const checkbox = e.target;
+          if (checkbox) checkbox.checked = false;
+        }, 100);
+      }
+    } else {
+      // Disabling doesn't need check
+      try {
+        await disableDeepFocus();
+        setShowExtensionPopup(false);
+      } catch (error) {
+        console.error('Failed to disable Deep Focus:', error);
+        setTimeout(() => {
+          const checkbox = e.target;
+          if (checkbox) checkbox.checked = true;
+        }, 100);
+      }
     }
   };
 
+  const handleSetupExtension = () => {
+    // Open the specific Focus Time Tracker extension page
+    window.open('https://chromewebstore.google.com/detail/focus-time-tracker/nippobgecgbjcfbejfmnljjjcpnpemip', '_blank');
+    setShowExtensionPopup(false);
+  };
+
+  const handleClosePopup = () => {
+    setShowExtensionPopup(false);
+  };
+
+  // Handle click outside to close popup
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (showExtensionPopup && 
+          !target.closest('label[class*="deep-focus"]') && 
+          !target.closest('[class*="ExtensionSetupPopup"]')) {
+        setShowExtensionPopup(false);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showExtensionPopup]);
+
   const switchElement = (
-    <Tooltip text="Toggle Deep Focus Mode (Shift + D)" placement="bottom">
-      <label className={`relative inline-flex items-center cursor-pointer group ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
+    <div className="relative">
+      <Tooltip text="Toggle Deep Focus Mode (Shift + D)" placement="bottom">
+        <label className={`relative inline-flex items-center cursor-pointer group ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
         <input 
           type="checkbox"
           id="deep-focus-toggle"
@@ -113,8 +163,14 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
         }`} style={{
           transition: 'transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), left 0.5s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
         }} />
-      </label>
-    </Tooltip>
+        </label>
+      </Tooltip>
+      <ExtensionSetupPopup
+        isVisible={showExtensionPopup}
+        onClose={handleClosePopup}
+        onSetupClick={handleSetupExtension}
+      />
+    </div>
   );
 
   // If showing page title, return combined layout

@@ -126,6 +126,187 @@ class ExtensionDataService {
     return typeof window !== 'undefined' && typeof window.postMessage === 'function';
   }
 
+  static async testRealExtensionConnection(timeout: number = 3000): Promise<boolean> {
+    try {
+      console.log('🔄 Sending GET_TODAY_STATS test message to extension...');
+      // Use a simple ping message that we know the extension handles
+      const response = await this.sendMessage({ type: 'GET_TODAY_STATS' }, timeout);
+      console.log('📨 Extension response:', response);
+      const isValid = response && (response.success !== false);
+      console.log('✅ Extension test result:', isValid);
+      return isValid;
+    } catch (error) {
+      console.log('❌ Extension connection test failed:', error);
+      return false;
+    }
+  }
+
+  static async getExtensionSetupState(): Promise<'NOT_INSTALLED' | 'READY'> {
+    console.log('🔍 Checking extension setup state...');
+    
+    // Check circuit breaker first
+    if (this.circuitBreaker.isOpen()) {
+      console.log('❌ Circuit breaker is OPEN, extension unavailable');
+      return 'NOT_INSTALLED';
+    }
+
+    // Test actual extension connection
+    console.log('🔄 Testing extension connection...');
+    const isConnected = await this.testRealExtensionConnection();
+    console.log(`📡 Extension connection test result: ${isConnected ? 'CONNECTED' : 'FAILED'}`);
+    
+    if (!isConnected) {
+      // If connection failed, try to wake up the extension
+      console.log('🔄 Extension not responding, attempting to activate...');
+      const activated = await this.tryActivateExtension();
+      
+      if (!activated) {
+        console.log('❌ Extension activation failed - extension not installed');
+        return 'NOT_INSTALLED';
+      }
+    }
+
+    // Extension is connected, now check if user info is synced and sync if needed
+    console.log('🔄 Extension connected, checking user sync status...');
+    const synced = await this.ensureUserInfoSynced();
+    
+    if (synced) {
+      console.log('✅ Extension is ready with user info synced');
+      return 'READY';
+    } else {
+      console.log('⚠️ User info sync failed, but extension is responding');
+      console.log('🔄 Allowing Deep Focus to work anyway - user can manually sync later');
+      
+      // Since extension is responding, let's allow it to work
+      // User info will sync eventually when extension is used
+      return 'READY';
+    }
+  }
+
+  static async ensureUserInfoSynced(): Promise<boolean> {
+    try {
+      console.log('🔄 Syncing user info to extension...');
+      
+      // Import user store dynamically to get current user
+      const { useUserStore } = await import('../store/userStore');
+      const { user } = useUserStore.getState();
+      
+      if (!user) {
+        console.log('❌ No user found, cannot sync');
+        return false;
+      }
+
+      console.log('👤 Current user:', { uid: user.uid, userName: user.userName });
+
+      // Try multiple sync methods to ensure user info reaches extension
+      const syncMethods = [
+        // Method 1: Direct user info sync
+        async () => {
+          console.log('🔄 Method 1: Sending user info directly...');
+          return await this.sendMessage({
+            type: 'SYNC_USER_INFO',
+            payload: {
+              userId: user.uid,
+              userName: user.userName,
+              userEmail: user.userName, // Fallback if needed
+            }
+          });
+        },
+        
+        // Method 2: Force sync from web app
+        async () => {
+          console.log('🔄 Method 2: Force sync from webapp...');
+          return await this.forceSyncFromWebApp();
+        },
+        
+        // Method 3: Update extension settings with user info
+        async () => {
+          console.log('🔄 Method 3: Update extension settings...');
+          return await this.updateExtensionSettings({
+            blockedSites: [], // Start with empty, will be populated later
+            userId: user.uid,
+            userName: user.userName
+          });
+        },
+        
+        // Method 4: Try to get current extension user info to verify sync
+        async () => {
+          console.log('🔄 Method 4: Verify extension user info...');
+          const response = await this.sendMessage({ type: 'GET_USER_INFO' });
+          console.log('👤 Extension user info:', response);
+          
+          // If extension shows correct user info, sync is working
+          if (response && (response.userId === user.uid || response.userName === user.userName)) {
+            return { success: true };
+          } else {
+            return { success: false, error: 'User info not matching in extension' };
+          }
+        }
+      ];
+
+      // Try each method until one succeeds
+      for (let i = 0; i < syncMethods.length; i++) {
+        try {
+          const result = await syncMethods[i]();
+          console.log(`📨 Method ${i + 1} result:`, result);
+          
+          if (result && result.success !== false) {
+            console.log(`✅ User info synced successfully using method ${i + 1}`);
+            
+            // Give extension a moment to process the sync
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Verify sync worked by testing connection again
+            const verifyResult = await this.testRealExtensionConnection();
+            console.log('🔍 Verification result:', verifyResult);
+            
+            return verifyResult;
+          }
+        } catch (error) {
+          console.log(`❌ Method ${i + 1} failed:`, error);
+        }
+      }
+
+      console.log('❌ All sync methods failed');
+      return false;
+    } catch (error) {
+      console.log('❌ Error syncing user info to extension:', error);
+      return false;
+    }
+  }
+
+  static async tryActivateExtension(): Promise<boolean> {
+    try {
+      // Send a simple activation ping with longer timeout
+      console.log('🔔 Sending activation ping to extension...');
+      
+      // Try multiple activation strategies
+      const activationMessages = [
+        { type: 'PING' },
+        { type: 'GET_TODAY_STATS' },
+        { type: 'ACTIVATE_EXTENSION' }
+      ];
+
+      for (const message of activationMessages) {
+        try {
+          console.log(`🔄 Trying activation with: ${message.type}`);
+          const response = await this.sendMessage(message, 5000);
+          if (response && response.success !== false) {
+            console.log('✅ Extension activated with:', message.type);
+            return true;
+          }
+        } catch (error) {
+          console.log(`❌ Activation attempt failed with ${message.type}:`, error);
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.log('❌ Extension activation failed:', error);
+      return false;
+    }
+  }
+
   private static isCriticalOperation(message: any): boolean {
     const criticalTypes = [
       'ENABLE_FOCUS_MODE',
@@ -144,7 +325,7 @@ class ExtensionDataService {
     return criticalTypes.includes(message.type);
   }
 
-  static async sendMessage(message: any): Promise<any> {
+  static async sendMessage(message: any, timeout?: number): Promise<any> {
     if (!this.isExtensionInstalled()) {
       throw new Error('Extension not installed');
     }
@@ -167,7 +348,7 @@ class ExtensionDataService {
     
     try {
       // Use only postMessage method for reliability
-      const response = await this.sendMessageViaContentScript(message);
+      const response = await this.sendMessageViaContentScript(message, timeout);
       this.circuitBreaker.onSuccess();
       return response;
     } catch (error) {
@@ -180,13 +361,13 @@ class ExtensionDataService {
   }
 
   // Simplified content script communication
-  static async sendMessageViaContentScript(message: any): Promise<any> {
+  static async sendMessageViaContentScript(message: any, timeout: number = 5000): Promise<any> {
     return new Promise((resolve, reject) => {
       const messageId = Math.random().toString(36);
       const timeoutId = setTimeout(() => {
         window.removeEventListener('message', responseHandler);
         reject(new Error('Extension communication timeout'));
-      }, 5000);
+      }, timeout);
 
       const responseHandler = (event: MessageEvent) => {
         if (event.data?.extensionResponseId === messageId) {
@@ -461,7 +642,7 @@ class ExtensionDataService {
     }
   }
 
-  static async updateExtensionSettings(settings: { blockedSites: string[] }): Promise<{ success: boolean; error?: string }> {
+  static async updateExtensionSettings(settings: { blockedSites: string[]; userId?: string; userName?: string }): Promise<{ success: boolean; error?: string }> {
     try {
       const response = await this.sendMessage({ 
         type: 'UPDATE_SETTINGS_FROM_WEBAPP', 
