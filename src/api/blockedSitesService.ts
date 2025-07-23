@@ -25,6 +25,37 @@ interface UserBlockedSitesDocument {
 class BlockedSitesService {
   private readonly collectionName = 'userBlockedSites';
 
+  /**
+   * Get the default list of 15 most distracting websites for new users
+   */
+  private getDefaultBlockedSites(): Omit<BlockedSite, 'id'>[] {
+    const defaultSites = [
+      'facebook.com',
+      'x.com',
+      'instagram.com',
+      'youtube.com',
+      'tiktok.com',
+      'reddit.com',
+      'pinterest.com',
+      'tumblr.com',
+      'netflix.com',
+      'hulu.com',
+      'amazon.com',
+      'ebay.com',
+      'craigslist.org',
+      'etsy.com',
+      'buzzfeed.com'
+    ];
+
+    return defaultSites.map(url => ({
+      name: url.replace('.com', '').replace('.tv', '').replace('.org', '').charAt(0).toUpperCase() + url.replace('.com', '').replace('.tv', '').replace('.org', '').slice(1), // e.g., "facebook.com" -> "Facebook"
+      url,
+      isActive: true,
+      icon: FaviconService.getDomainIcon(url),
+      backgroundColor: '#6B7280' // Default gray color
+    }));
+  }
+
   async getUserBlockedSites(userId: string): Promise<BlockedSite[]> {
     try {
       const docRef = doc(db, this.collectionName, userId);
@@ -35,7 +66,32 @@ class BlockedSitesService {
         return data.sites || [];
       }
       
-      return [];
+      // New user - initialize with default 15 most distracting sites
+      console.log('🆕 New user detected - initializing with default blocked sites');
+      const defaultSites = this.getDefaultBlockedSites();
+      
+      // Create BlockedSite objects with IDs
+      const sitesWithIds: BlockedSite[] = defaultSites.map((site, index) => ({
+        ...site,
+        id: `default-${index + 1}-${Date.now()}`
+      }));
+      
+      // Save the default sites to Firestore
+      const userDoc: UserBlockedSitesDocument = {
+        userId,
+        sites: sitesWithIds,
+        metadata: {
+          totalSites: sitesWithIds.length,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          version: '1.0.0'
+        }
+      };
+      
+      await setDoc(docRef, userDoc);
+      console.log('💾 Saved default blocked sites to Firestore:', sitesWithIds.length, 'sites');
+      
+      return sitesWithIds;
     } catch (error) {
       console.error('Failed to get blocked sites:', error);
       throw error;
