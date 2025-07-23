@@ -4201,13 +4201,15 @@ class FocusTimeTracker {
    */
   async syncBlockedSitesToWebApp() {
     try {
+      console.log('🚀 syncBlockedSitesToWebApp() called - starting sync process');
+      
       // Get current blocked sites from extension
       const blockedSitesArray = Array.from(this.blockingManager.blockedSites || []);
       
-      console.log('🔄 Syncing blocked sites from extension to web app:', blockedSitesArray.length);
+      console.log('🔄 Syncing blocked sites from extension to web app:', blockedSitesArray.length, 'sites:', blockedSitesArray);
       
       // Send message to web app (if it's open) - support both localhost and production
-      chrome.tabs.query({ url: ['*://localhost:*/*', '*://app.make10000hours.com/*'] }, (tabs) => {
+      chrome.tabs.query({ url: ['*://localhost:*/*', 'https://app.make10000hours.com/*', '*://app.make10000hours.com/*'] }, (tabs) => {
         console.log('🔍 Found tabs for sync:', tabs.length, tabs.map(t => t.url));
         
         if (tabs.length === 0) {
