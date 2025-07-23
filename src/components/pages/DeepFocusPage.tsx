@@ -4,6 +4,7 @@ import Sidebar from '../layout/Sidebar';
 import { useDeepFocusStore } from '../../store/deepFocusStore';
 // Deep focus sync now handled by DeepFocusProvider context
 import { useDeepFocusContext } from '../../contexts/DeepFocusContext';
+import { DeepFocusSync } from '../../services/deepFocusSync';
 import { useDeepFocusDashboardStore } from '../../store/deepFocusDashboardStore';
 import { useUserStore } from '../../store/userStore';
 import { useUIStore } from '../../store/uiStore';
@@ -160,6 +161,64 @@ const DeepFocusPage: React.FC = () => {
         console.error('❌ Manual debug backup failed:', error);
       }
     };
+    
+    // Debug function for smart sync (prioritizes last 10 sessions)
+    (window as any).debugSmartSync = async () => {
+      try {
+        if (!user?.uid) {
+          console.error('❌ No user authenticated');
+          return;
+        }
+        
+        console.log('🔧 Manual smart sync triggered...');
+        const result = await DeepFocusSync.smartSync(user.uid, selectedRange.rangeType);
+        console.log('✅ Smart sync completed:', result);
+        
+        // Reload data after sync
+        console.log('🔄 Reloading data after smart sync...');
+        if (selectedRange.rangeType === 'all time') {
+          loadAllTimeExtensionData();
+        } else {
+          const startDate = selectedRange.startDate || new Date();
+          const endDate = selectedRange.endDate || new Date();
+          if (startDate && endDate) {
+            loadExtensionData(startDate, endDate);
+          }
+        }
+        console.log('✅ Data reloaded after smart sync');
+      } catch (error) {
+        console.error('❌ Manual smart sync failed:', error);
+      }
+    };
+    
+    // Debug function for last 10 sessions sync only
+    (window as any).debugSyncLast10Sessions = async () => {
+      try {
+        if (!user?.uid) {
+          console.error('❌ No user authenticated');
+          return;
+        }
+        
+        console.log('🔧 Manual last 10 sessions sync triggered...');
+        const result = await DeepFocusSync.syncLast10SessionsFromExtension(user.uid);
+        console.log('✅ Last 10 sessions sync completed:', result);
+        
+        // Reload data after sync
+        console.log('🔄 Reloading data after last 10 sync...');
+        if (selectedRange.rangeType === 'all time') {
+          loadAllTimeExtensionData();
+        } else {
+          const startDate = selectedRange.startDate || new Date();
+          const endDate = selectedRange.endDate || new Date();
+          if (startDate && endDate) {
+            loadExtensionData(startDate, endDate);
+          }
+        }
+        console.log('✅ Data reloaded after last 10 sync');
+      } catch (error) {
+        console.error('❌ Manual last 10 sessions sync failed:', error);
+      }
+    };
     (window as any).debugUser = user;
     (window as any).resetBackupState = () => {
       console.log('🔧 Manually resetting backup state...');
@@ -177,6 +236,8 @@ const DeepFocusPage: React.FC = () => {
       console.log('✅ Backup state reset');
     };
     console.log('🔧 Debug functions exposed:', { 
+      debugSmartSync: 'function (PRIORITY - use this first)',
+      debugSyncLast10Sessions: 'function',
       debugBackupTodayData: typeof backupTodayData,
       debugUser: user?.uid || 'No user',
       resetBackupState: 'function'
@@ -201,14 +262,32 @@ const DeepFocusPage: React.FC = () => {
   const handleLoadData = async () => {
     console.log('🔄 handleLoadData called for range:', selectedRange.rangeType);
     
-    // Trigger sync to ensure latest data before loading
+    // Use SMART SYNC that prioritizes last 10 sessions
     if (user?.uid) {
       try {
-        console.log('🚀 Triggering sync before loading data...');
-        await backupTodayData();
-        console.log('✅ Sync completed before data load');
+        console.log('🎯 Using SMART SYNC with priority on last 10 sessions...');
+        const smartSyncResult = await DeepFocusSync.smartSync(user.uid, selectedRange.rangeType);
+        console.log('✅ Smart sync completed:', smartSyncResult);
+        
+        if (!smartSyncResult.success) {
+          throw new Error(smartSyncResult.error || 'Smart sync failed');
+        }
+        
       } catch (error) {
-        console.error('❌ Sync failed before data load:', error);
+        console.error('❌ Smart sync failed, falling back to basic sync:', error);
+        
+        // Fallback to basic sync methods
+        try {
+          console.log('🔄 Falling back to individual sync methods...');
+          if (selectedRange.rangeType === 'today') {
+            await backupTodayData();
+          } else {
+            const result = await DeepFocusSync.syncRecent7DaysFromExtension(user.uid);
+            console.log('✅ Fallback sync result:', result);
+          }
+        } catch (fallbackError) {
+          console.error('❌ Fallback sync also failed:', fallbackError);
+        }
       }
     }
     
@@ -317,7 +396,7 @@ const DeepFocusPage: React.FC = () => {
         console.log('🔍 triggerImmediateSync called (page load/reload)');
         console.log('🔍 user:', user);
         console.log('🔍 user?.uid:', user?.uid);
-        console.log('🔍 backupTodayData type:', typeof backupTodayData);
+        console.log('🔍 selectedRange:', selectedRange.rangeType);
         
         if (user?.uid) {
           console.log('🚀 Deep Focus page loaded/reloaded - triggering immediate sync...');
@@ -327,9 +406,14 @@ const DeepFocusPage: React.FC = () => {
           await forceFreshExtensionData();
           console.log('✅ Fresh extension data loaded');
           
-          console.log('🔍 About to call backupTodayData...');
-          await backupTodayData();
-          console.log('✅ Immediate sync completed on page load');
+          // Use SMART SYNC on page load for optimal performance
+          console.log('🎯 Using SMART SYNC on page load with priority on last 10 sessions...');
+          const smartSyncResult = await DeepFocusSync.smartSync(user.uid, selectedRange.rangeType);
+          console.log('✅ Smart sync completed on page load:', smartSyncResult);
+          
+          if (!smartSyncResult.success) {
+            throw new Error(smartSyncResult.error || 'Smart sync failed on page load');
+          }
           
           // Reload data after sync to show latest information
           console.log('🔄 Reloading data after initial sync...');
@@ -348,6 +432,24 @@ const DeepFocusPage: React.FC = () => {
         }
       } catch (error) {
         console.error('❌ Immediate sync failed:', error);
+        
+        // Fallback to basic sync if smart sync fails
+        try {
+          console.log('🔄 Falling back to basic sync on page load...');
+          const last10Fallback = await DeepFocusSync.syncLast10SessionsFromExtension(user.uid);
+          console.log('✅ Last 10 fallback sync result on page load:', last10Fallback);
+          
+          // Additional fallback for range-specific data
+          if (selectedRange.rangeType === 'today') {
+            await backupTodayData();
+          } else if (selectedRange.rangeType !== 'all time') {
+            const result = await DeepFocusSync.syncRecent7DaysFromExtension(user.uid);
+            console.log('✅ Additional fallback sync result on page load:', result);
+          }
+        } catch (fallbackError) {
+          console.error('❌ Fallback sync also failed on page load:', fallbackError);
+        }
+        
         console.error('🔍 Error details:', {
           name: error.name,
           message: error.message,
