@@ -121,7 +121,7 @@ const DeepFocusPage: React.FC = () => {
   const isUnifiedLoading = (isDashboardLoading || isBackingUp || isLoadingComparison) && !loadingTimeout;
   
   // Initialize extension sync for immediate data loading and backup
-  useExtensionSync();
+  const { forceFreshExtensionData } = useExtensionSync();
   
   // Loading timeout mechanism to prevent indefinite loading
   useEffect(() => {
@@ -321,6 +321,12 @@ const DeepFocusPage: React.FC = () => {
         
         if (user?.uid) {
           console.log('🚀 Deep Focus page loaded/reloaded - triggering immediate sync...');
+          
+          // Force fresh extension data to ensure we have the latest session states
+          console.log('🔄 Forcing fresh extension data before sync...');
+          await forceFreshExtensionData();
+          console.log('✅ Fresh extension data loaded');
+          
           console.log('🔍 About to call backupTodayData...');
           await backupTodayData();
           console.log('✅ Immediate sync completed on page load');
@@ -352,7 +358,7 @@ const DeepFocusPage: React.FC = () => {
     
     // Reduced delay for faster initial sync
     setTimeout(triggerImmediateSync, 500);
-  }, [initializeDailyBackup, backupTodayData, user?.uid]);
+  }, [initializeDailyBackup, backupTodayData, user?.uid, forceFreshExtensionData]);
 
   // Preload favicons for better UX
   useEffect(() => {
