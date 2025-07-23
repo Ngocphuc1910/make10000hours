@@ -990,8 +990,9 @@ class PopupManager {
       if (userInfoElement) userInfoElement.classList.remove('hidden');
       if (noUserInfoElement) noUserInfoElement.classList.add('hidden');
 
-      // Update user name
-      const displayName = this.enhancedState.userInfo.displayName || this.enhancedState.userInfo.userEmail || 'User';
+      // Update user name (truncate to 14 characters to prevent UI overflow)
+      const fullDisplayName = this.enhancedState.userInfo.displayName || this.enhancedState.userInfo.userEmail || 'User';
+      const displayName = fullDisplayName.length > 14 ? fullDisplayName.substring(0, 14) + '...' : fullDisplayName;
       if (userNameElement) userNameElement.textContent = displayName;
 
       console.log('👤 User info displayed:', { displayName });
