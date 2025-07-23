@@ -1704,42 +1704,120 @@ class PopupManager {
   /**
    * Show add site modal
    */
-  showAddSiteModal() {
-    this.showModal('Add Site to Block', `
-      <div class="add-site-form">
-        <input 
-          type="text" 
-          id="site-input" 
-          placeholder="Enter domain (e.g. youtube.com)" 
-          class="input-field"
-        >
-        <button id="add-site-confirm" class="btn primary">Add</button>
-      </div>
-      <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 1rem;">
-        Enter the domain you want to block. The site will be blocked during focus mode.
-      </p>
-    `);
+  async showAddSiteModal() {
+    // Get current tab's domain as default value
+    let currentDomain = '';
+    try {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (activeTab?.url) {
+        const url = new URL(activeTab.url);
+        currentDomain = url.hostname.replace(/^www\./, ''); // Remove www. prefix
+      }
+    } catch (error) {
+      console.warn('Could not get current tab domain:', error);
+    }
+
+    // Show modal with proper structure matching web app design
+    const modalOverlay = document.getElementById('modal-overlay');
+    const modalTitle = document.getElementById('modal-title');
+    const modalContent = document.getElementById('modal-content');
+    const modalConfirm = document.getElementById('modal-confirm');
+    const modalCancel = document.getElementById('modal-cancel');
+
+    if (modalTitle) modalTitle.textContent = 'Add to Blocking Sites';
+    if (modalContent) {
+      modalContent.innerHTML = `
+        <div class="add-site-form">
+          <div class="input-container">
+            <input 
+              type="text" 
+              id="site-input" 
+              placeholder="Enter domain (e.g. youtube.com)" 
+              class="form-input"
+              value="${currentDomain}"
+            >
+            <button type="button" id="input-clear-btn" class="input-clear-btn${currentDomain ? ' visible' : ''}">
+              <i class="ri-close-line"></i>
+            </button>
+          </div>
+          <p style="color: var(--text-secondary); font-size: 14px; margin: 8px 0 0 0;">
+            Enter the domain you want to block. The site will be blocked during focus mode.
+          </p>
+        </div>
+      `;
+    }
+    
+    // Update modal buttons
+    if (modalConfirm) {
+      modalConfirm.textContent = 'Add Site';
+      modalConfirm.className = 'btn primary';
+    }
+    if (modalCancel) {
+      modalCancel.textContent = 'Cancel';
+      modalCancel.className = 'btn secondary';
+    }
+    
+    if (modalOverlay) modalOverlay.classList.remove('hidden');
 
     // Add event listeners
     const siteInput = document.getElementById('site-input');
-    const addSiteConfirm = document.getElementById('add-site-confirm');
+    const clearBtn = document.getElementById('input-clear-btn');
 
-    if (addSiteConfirm) {
-      addSiteConfirm.addEventListener('click', async () => {
-        const domain = siteInput?.value.trim();
-        if (domain) {
-          await this.addBlockedSite(domain);
+    // Select the text in the input for easy editing
+    if (siteInput && currentDomain) {
+      setTimeout(() => {
+        siteInput.focus();
+        siteInput.select();
+      }, 100);
+    }
+
+    // Handle clear button visibility and functionality
+    const updateClearButton = () => {
+      if (clearBtn && siteInput) {
+        if (siteInput.value.trim()) {
+          clearBtn.classList.add('visible');
+        } else {
+          clearBtn.classList.remove('visible');
+        }
+      }
+    };
+
+    // Clear button click handler
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        if (siteInput) {
+          siteInput.value = '';
+          siteInput.focus();
+          updateClearButton();
         }
       });
     }
 
+    // Handle confirm button
+    const handleAddSite = async () => {
+      const domain = siteInput?.value.trim();
+      if (domain) {
+        await this.addBlockedSite(domain);
+      }
+    };
+
+    // Remove existing listeners and add new ones
+    if (modalConfirm) {
+      modalConfirm.replaceWith(modalConfirm.cloneNode(true));
+      const newConfirm = document.getElementById('modal-confirm');
+      newConfirm?.addEventListener('click', handleAddSite);
+    }
+
     if (siteInput) {
+      // Input change listener to show/hide clear button
+      siteInput.addEventListener('input', updateClearButton);
+      
+      // Enter key handler
       siteInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
-          addSiteConfirm?.click();
+          handleAddSite();
         }
       });
-      siteInput.focus();
     }
   }
 
