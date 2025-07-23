@@ -4207,7 +4207,7 @@ class FocusTimeTracker {
       console.log('🔄 Syncing blocked sites from extension to web app:', blockedSitesArray.length);
       
       // Send message to web app (if it's open) - support both localhost and production
-      chrome.tabs.query({ url: ['*://localhost:*/*', '*://*/app.make10000hours.com/*'] }, (tabs) => {
+      chrome.tabs.query({ url: ['*://localhost:*/*', '*://app.make10000hours.com/*'] }, (tabs) => {
         console.log('🔍 Found tabs for sync:', tabs.length, tabs.map(t => t.url));
         
         if (tabs.length === 0) {
