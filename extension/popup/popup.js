@@ -1136,7 +1136,11 @@ class PopupManager {
 
     if (durationEl) durationEl.textContent = this.formatTime(siteData.timeSpent);
     if (percentageEl) percentageEl.textContent = `${percentage}%`;
-    if (progressFill) progressFill.style.width = `${percentage}%`;
+    if (progressFill) {
+      progressFill.style.width = `${percentage}%`;
+      // Update color using the same logic as web app (in case domain changed)
+      progressFill.style.backgroundColor = this.getProgressBarColor(siteData.domain || siteData.url);
+    }
     if (sessionsEl) sessionsEl.textContent = `${siteData.visits} sessions`;
   }
 
@@ -1312,7 +1316,59 @@ class PopupManager {
       'google.com': '#4285F4',
       'microsoft.com': '#00A4EF',
       'apple.com': '#000000',
-      'amazon.com': '#FF9900'
+      'amazon.com': '#FF9900',
+      'app.make10000hours.com': '#FF6B6B',
+      'ycombinator.com': '#FF6600',
+      'copilot.microsoft.com': '#0078D4',
+      'readdy.ai': '#7C3AED',
+      'substack.com': '#FF6719',
+      'cursor.com': '#000000',
+      'news.ycombinator.com': '#FF6600',
+      'console.firebase.google.com': '#FFA000',
+      'firebase.google.com': '#FFA000',
+      'reddit.com': '#FF4500',
+      'netflix.com': '#E50914',
+      'spotify.com': '#1ED760',
+      'twitch.tv': '#9146FF',
+      'pinterest.com': '#E60023',
+      'discord.com': '#5865F2',
+      'slack.com': '#4A154B',
+      'zoom.us': '#2D8CFF',
+      'notion.so': '#000000',
+      'figma.com': '#F24E1E',
+      'dribbble.com': '#EA4C89',
+      'behance.net': '#1769FF',
+      'medium.com': '#00ab6c',
+      'dev.to': '#0A0A0A',
+      'stackoverflow.com': '#F58025',
+      'gitlab.com': '#FC6D26',
+      'bitbucket.org': '#0052CC',
+      'dropbox.com': '#0061FF',
+      'drive.google.com': '#4285F4',
+      'onedrive.live.com': '#0078D4',
+      'icloud.com': '#007AFF',
+      'trello.com': '#0079BF',
+      'asana.com': '#273347',
+      'monday.com': '#FF3D71',
+      'airtable.com': '#18BFFF',
+      'canva.com': '#00C4CC',
+      'adobe.com': '#FF0000',
+      'stripe.com': '#635BFF',
+      'paypal.com': '#00457C',
+      'shopify.com': '#7AB55C',
+      'wordpress.com': '#21759B',
+      'squarespace.com': '#000000',
+      'wix.com': '#0C6EBD',
+      'webflow.com': '#4353FF',
+      'vercel.com': '#000000',
+      'netlify.com': '#00C7B7',
+      'heroku.com': '#430098',
+      'aws.amazon.com': '#FF9900',
+      'azure.microsoft.com': '#0078D4',
+      'cloud.google.com': '#4285F4',
+      'digitalocean.com': '#0080FF',
+      'linode.com': '#00A95C',
+      'vultr.com': '#007BFC'
     };
 
     // Check exact match first
@@ -1328,6 +1384,31 @@ class PopupManager {
     }
 
     return null;
+  }
+
+  /**
+   * Get progress bar color like web app (with fallback system)
+   */
+  getProgressBarColor(domain, fallbackColor) {
+    const brandColor = this.getBrandColor(domain);
+    if (brandColor) {
+      return brandColor;
+    }
+    
+    // Use fallback color if provided
+    if (fallbackColor) {
+      return fallbackColor;
+    }
+    
+    // Default fallback colors (same as web app default system)
+    const defaultColors = [
+      '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
+      '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc', '#2ba8f0'
+    ];
+    
+    // Generate a consistent color based on domain hash
+    const hash = domain.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return defaultColors[hash % defaultColors.length];
   }
 
   /**
@@ -1347,8 +1428,10 @@ class PopupManager {
     const fallbackIcon = siteItem.querySelector('.site-icon-fallback');
     const progressFill = siteItem.querySelector('.progress-fill');
     
-    // Use Chrome extension safe favicon service
-    let progressColor = this.getBrandColor(site.domain);
+    // Use Chrome extension safe favicon service  
+    // Calculate percentage first to determine fallback colors like web app
+    const percentage = this.enhancedState.todayStats?.totalTime ? 
+      Math.round((site.timeSpent / this.enhancedState.todayStats.totalTime) * 100) : 0;
     
     try {
       const faviconUrl = await getSafeFavicon(site.domain, 32);
@@ -1381,25 +1464,20 @@ class PopupManager {
       fallbackIcon.querySelector('i').className = getDomainFallbackIcon(site.domain);
     }
     
-    progressColor = progressColor || '#3B82F6';
+    // Get progress bar color using the same logic as web app (brand color + fallbacks)
+    const progressColor = this.getProgressBarColor(site.domain);
     
-    // Apply progress bar color
+    // Apply progress bar color and width
     progressFill.style.backgroundColor = progressColor;
+    progressFill.style.width = `${percentage}%`;
     
     // Set site info
     siteItem.querySelector('.site-name').textContent = site.domain;
     siteItem.querySelector('.site-sessions').textContent = `${site.visits} sessions`;
     
-    // Calculate percentage
-    const percentage = this.enhancedState.todayStats?.totalTime ? 
-      Math.round((site.timeSpent / this.enhancedState.todayStats.totalTime) * 100) : 0;
-    
     // Set site stats
     siteItem.querySelector('.site-duration').textContent = this.formatTime(site.timeSpent);
     siteItem.querySelector('.site-percentage').textContent = `${percentage}%`;
-    
-    // Set progress bar width
-    progressFill.style.width = `${percentage}%`;
     
     return siteItem;
   }
