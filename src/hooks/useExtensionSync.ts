@@ -28,6 +28,26 @@ export const useExtensionSync = () => {
     }
   }, [loadExtensionData]);
 
+  // Force fresh extension data load (bypasses debouncing and global sync flag)
+  const forceFreshExtensionData = useCallback(async () => {
+    console.log('🔄 Forcing fresh extension data load...');
+    
+    // Reset circuit breaker to ensure clean communication
+    ExtensionDataService.resetCircuitBreaker();
+    
+    // Reset the last load time to bypass debouncing
+    lastLoadTime = 0;
+    
+    // Force fresh data load
+    try {
+      await loadExtensionData();
+      console.log('✅ Fresh extension data loaded successfully');
+    } catch (error) {
+      console.error('❌ Failed to load fresh extension data:', error);
+      throw error;
+    }
+  }, [loadExtensionData]);
+
   // Initialize extension sync only once per session
   useEffect(() => {
     const initializeSync = async () => {
@@ -65,5 +85,8 @@ export const useExtensionSync = () => {
     debouncedLoadExtensionData();
   }, [debouncedLoadExtensionData]);
 
-  return { refreshData };
+  return { 
+    refreshData,
+    forceFreshExtensionData
+  };
 }; 

@@ -24,8 +24,11 @@ export const composeDeepFocusData = (input: {
   // Calculate TimeMetrics
   const onScreenTime = dailySiteUsages.reduce((total, usage) => total + Math.round(usage.totalTime / (1000 * 60)), 0);
   const workingTime = workSessions.reduce((total, session) => total + session.duration, 0);
-  const deepFocusTime = deepFocusSessions.reduce((total, session) => 
-    total + (session.status !== 'active' ? session.duration : calculateDuration(session.startTime)), 0);
+  const deepFocusTime = deepFocusSessions.reduce((total, session) => {
+    // Always use stored duration only - never recalculate to prevent UI increments
+    // This ensures UI consistency and matches sync behavior
+    return total + (session.duration || 0);
+  }, 0);
   const overrideTime = overrideSessions.reduce((total, session) => total + session.duration, 0);
 
   const timeMetrics: TimeMetrics = {
@@ -79,12 +82,8 @@ export const composeDeepFocusData = (input: {
         });
       }
       const dailyUsage = dailyUsageMap.get(sessionDate)!;
-      if (session.status !== 'active') {
-        dailyUsage.deepFocusTime += session.duration;
-      } else {
-        // If session is active, it contributes to deep focus time
-        dailyUsage.deepFocusTime += calculateDuration(session.startTime);
-      }
+      // Always use stored duration only to prevent UI increments
+      dailyUsage.deepFocusTime += (session.duration || 0);
     }
   });
 
