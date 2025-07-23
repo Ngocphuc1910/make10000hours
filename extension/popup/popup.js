@@ -213,147 +213,65 @@ if (document.readyState === 'loading') {
 /**
  * Get favicon URL using Chrome extension safe methods
  */
+/**
+ * Favicon validation and loading (exactly like web app's FaviconImage)
+ */
+async function validateFaviconUrl(url, timeout = 2000) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const timeoutId = setTimeout(() => resolve(false), timeout);
+
+    img.onload = () => {
+      clearTimeout(timeoutId);
+      // Check if it's not a default empty favicon (same as web app)
+      if (img.width > 16 || img.height > 16) {
+        resolve(true);
+      } else {
+        resolve(false);
+      }
+    };
+
+    img.onerror = () => {
+      clearTimeout(timeoutId);
+      resolve(false);
+    };
+
+    img.src = url;
+  });
+}
+
+/**
+ * Get favicon exactly like web app's FaviconImage component
+ */
 async function getSafeFavicon(domain, size = 32) {
   console.log(`🔍 Getting favicon for ${domain} (size: ${size})`);
   
   try {
-    // Use the FaviconService utility if available
-    if (typeof FaviconService !== 'undefined') {
-      console.log(`📚 Using FaviconService for ${domain}`);
-      const result = await FaviconService.getFaviconUrl(domain, { size });
-      if (result && result.url) {
-        console.log(`✅ FaviconService found: ${result.url} (source: ${result.source})`);
-        return result.url;
-      }
-      console.log(`❌ FaviconService failed for ${domain}`);
-    }
-
-    // Chrome Extension Manifest V3 favicon API
-    if (typeof chrome !== 'undefined' && chrome.runtime) {
-      const cleanDomain = domain.replace(/^www\./, '').toLowerCase();
-      const urls = [
-        `https://${cleanDomain}`,
-        `https://www.${cleanDomain}`,
-        `http://${cleanDomain}`,
-        `http://www.${cleanDomain}`
-      ];
-
-      for (const url of urls) {
-        const faviconUrl = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(url)}&size=${size}`;
-        
-        // Test if favicon loads successfully
-        const isValid = await new Promise((resolve) => {
-          const img = new Image();
-          const timeoutId = setTimeout(() => resolve(false), 3000);
-          
-          img.onload = () => {
-            clearTimeout(timeoutId);
-            resolve(img.width > 8 && img.height > 8);
-          };
-          
-          img.onerror = () => {
-            clearTimeout(timeoutId);
-            resolve(false);
-          };
-          
-          img.src = faviconUrl;
-        });
-        
-        if (isValid) {
-          return faviconUrl;
-        }
-      }
-    }
-
-    // Try third-party favicon services (dynamic, no hardcoding)
-    // Updated 2024 with best coverage services + aggressive fallbacks
     const cleanDomain = domain.replace(/^www\./, '').toLowerCase();
     
-    // Get domain variations for popular services
-    const getDomainVariations = (domain) => {
-      const variations = [domain];
-      const domainMap = {
-        'messenger.com': ['facebook.com', 'meta.com'],
-        'facebook.com': ['facebook.com', 'meta.com'],
-        'instagram.com': ['instagram.com', 'facebook.com'],
-        'youtube.com': ['youtube.com', 'google.com'],
-        'gmail.com': ['gmail.com', 'google.com'],
-        'linkedin.com': ['linkedin.com'],
-        'twitter.com': ['twitter.com', 'x.com'],
-        'reddit.com': ['reddit.com'],
-        'github.com': ['github.com'],
-        'stackoverflow.com': ['stackoverflow.com'],
-        'medium.com': ['medium.com'],
-        'notion.so': ['notion.so', 'notion.com'],
-        'figma.com': ['figma.com'],
-        'discord.com': ['discord.com'],
-        'slack.com': ['slack.com']
-      };
-      
-      if (domainMap[domain]) {
-        variations.push(...domainMap[domain]);
-      }
-      
-      return [...new Set(variations)];
-    };
-    
-    const domainVariations = getDomainVariations(cleanDomain);
-    console.log(`🔄 Trying domain variations for ${cleanDomain}:`, domainVariations);
-    
-    // All external favicon services removed for Chrome Web Store compliance
-    const services = [];
-
-    // Try each service with each domain variation
-    for (const service of services) {
-      for (const domainVariation of domainVariations) {
-        try {
-          const faviconUrl = service.url(domainVariation);
-          console.log(`🔍 Testing ${service.name} for ${domainVariation}: ${faviconUrl}`);
-          
-          const isValid = await new Promise((resolve) => {
-            const img = new Image();
-            const timeoutId = setTimeout(() => {
-              console.log(`⏰ Timeout for ${service.name} (${domainVariation})`);
-              resolve(false);
-            }, service.timeout);
-            
-            img.onload = () => {
-              clearTimeout(timeoutId);
-              // More robust validation - check for valid favicon characteristics
-              const isValidFavicon = img.width > 8 && img.height > 8 && 
-                                   img.naturalWidth > 0 && img.naturalHeight > 0 &&
-                                   !img.src.includes('data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP'); // not transparent pixel
-              
-              console.log(`${isValidFavicon ? '✅' : '❌'} ${service.name} validation result for ${domainVariation}: ${img.width}x${img.height}`);
-              resolve(isValidFavicon);
-            };
-            
-            img.onerror = () => {
-              clearTimeout(timeoutId);
-              console.log(`❌ ${service.name} load error for ${domainVariation}`);
-              resolve(false);
-            };
-            
-            img.src = faviconUrl;
-          });
-          
-          if (isValid) {
-            console.log(`✅ Favicon found via ${service.name} for ${domainVariation} (original: ${cleanDomain})`);
-            return faviconUrl;
-          }
-        } catch (error) {
-          console.warn(`❌ ${service.name} failed for ${domainVariation}:`, error);
-          continue;
-        }
-      }
+    // Force custom icon for app.make10000hours.com
+    if (cleanDomain === 'app.make10000hours.com' || cleanDomain === 'make10000hours.com') {
+      const customIconUrl = chrome.runtime.getURL('icon/make10000hour_48x48.png');
+      console.log(`🍅 Using custom Make10000Hours icon: ${customIconUrl}`);
+      return customIconUrl;
     }
-
-    // Direct favicon access removed for Chrome Web Store compliance
-    // Extension will now use fallback icons only
     
-    return null;
+    // Use Google's favicon service with 2x size (exactly like web app)
+    const googleUrl = `https://www.google.com/s2/favicons?domain=${cleanDomain}&sz=${size * 2}`;
+    
+    // Test if the favicon loads successfully (exactly like web app)
+    const isValid = await validateFaviconUrl(googleUrl, 2000);
+    
+    if (isValid) {
+      console.log(`✅ Valid favicon found for ${cleanDomain}: ${googleUrl}`);
+      return googleUrl;
+    } else {
+      console.log(`❌ Invalid favicon for ${cleanDomain}, will use fallback icon`);
+      return null; // Will use fallback icon
+    }
+    
   } catch (error) {
-    console.warn('Safe favicon service error:', error);
+    console.warn(`Favicon loading error for ${domain}:`, error);
     return null;
   }
 }

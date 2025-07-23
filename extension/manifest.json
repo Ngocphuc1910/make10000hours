@@ -20,7 +20,7 @@
   ],
   
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: chrome-extension:; connect-src 'self'; object-src 'none';"
+    "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: chrome-extension: https://www.google.com https://*.gstatic.com; connect-src 'self'; object-src 'none';"
   },
   
   "background": {
@@ -82,7 +82,8 @@
         "assets/fonts/fonts.css",
         "assets/icons/*.woff2",
         "assets/icons/*.woff",
-        "assets/icons/remixicon.css"
+        "assets/icons/remixicon.css",
+        "_favicon/*"
       ],
       "matches": ["<all_urls>"]
     }
