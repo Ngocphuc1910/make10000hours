@@ -703,7 +703,7 @@ body {
 
 .modal-header h3 {
   margin: 0;
-  font-size: 20px; /* Reduced from 24px for better proportion */
+  font-size: 18px; /* Further reduced for more subtle appearance */
   font-weight: 600; /* Reduced from 700 for lighter appearance */
   color: var(--text-primary);
 }
