@@ -1763,11 +1763,14 @@ class PopupManager {
     const siteInput = document.getElementById('site-input');
     const clearBtn = document.getElementById('input-clear-btn');
 
-    // Select the text in the input for easy editing
-    if (siteInput && currentDomain) {
+    // Just focus the input without selecting text
+    if (siteInput) {
       setTimeout(() => {
         siteInput.focus();
-        siteInput.select();
+        // Move cursor to end of text instead of selecting all
+        if (currentDomain) {
+          siteInput.setSelectionRange(siteInput.value.length, siteInput.value.length);
+        }
       }, 100);
     }
 
@@ -1830,7 +1833,7 @@ class PopupManager {
       
       if (response.success) {
         this.hideModal();
-        this.showNotification(`${domain} has been blocked`, 'success');
+        this.showNotification(`${domain} has been added to blocking sites`, 'success');
         // Refresh blocked sites list if on that tab
         if (this.currentTab === 'blocking-sites') {
           this.updateBlockedSitesList();
@@ -1885,8 +1888,8 @@ class PopupManager {
       if (response.success) {
         this.showNotification(
           response.focusMode 
-            ? 'Focus mode activated! Distracting sites are now blocked.' 
-            : 'Focus mode deactivated. All sites are accessible.',
+            ? 'Deep Focus mode is ON!' 
+            : 'Deep Focus mode is OFF!',
           response.focusMode ? 'success' : 'info'
         );
         
@@ -1920,7 +1923,7 @@ class PopupManager {
       
       if (response.success) {
         this.showNotification(
-          `Site ${response.domain} has been blocked`,
+          `${response.domain} has been added to blocking sites`,
           'success'
         );
         
@@ -2454,18 +2457,22 @@ class PopupManager {
     const notification = document.createElement('div');
     notification.style.cssText = `
       position: fixed;
-      top: 20px;
-      right: 20px;
+      top: 65px;
+      left: 50%;
+      transform: translateX(-50%);
       padding: 12px 16px;
-      border-radius: 6px;
+      border-radius: 8px;
       color: white;
-      font-weight: 600;
+      font-weight: 500;
+      font-size: 14px;
       z-index: 10000;
       background: ${type === 'success' ? 'var(--accent-green)' : 
                    type === 'error' ? 'var(--accent-red)' : 
                    'var(--primary-color)'};
       box-shadow: var(--shadow-lg);
-      animation: slideIn 0.3s ease;
+      max-width: calc(100% - 40px);
+      white-space: nowrap;
+      animation: slideDown 0.3s ease;
     `;
     notification.textContent = message;
 
@@ -2474,9 +2481,15 @@ class PopupManager {
       const style = document.createElement('style');
       style.id = 'notification-styles';
       style.textContent = `
-        @keyframes slideIn {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
+        @keyframes slideDown {
+          from { 
+            transform: translateX(-50%) translateY(-20px); 
+            opacity: 0; 
+          }
+          to { 
+            transform: translateX(-50%) translateY(0); 
+            opacity: 1; 
+          }
         }
       `;
       document.head.appendChild(style);
