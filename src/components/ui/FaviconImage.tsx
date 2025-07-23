@@ -36,8 +36,22 @@ const FaviconImage: React.FC<FaviconImageProps> = ({
         setHasError(false);
         setShowFallback(false);
         
-        // Try to get real favicon from Google's service only
         const cleanDomain = FaviconService.cleanDomain(domain);
+        
+        // Force custom icon for app.make10000hours.com
+        if (cleanDomain === 'app.make10000hours.com' || cleanDomain === 'make10000hours.com') {
+          const customIconUrl = '/icons/make10000hourlogo.png';
+          console.log(`🍅 Using custom Make10000Hours icon: ${customIconUrl}`);
+          
+          if (mounted) {
+            setFaviconUrl(customIconUrl);
+            setIsLoading(false);
+            onLoad?.();
+          }
+          return;
+        }
+        
+        // Try to get real favicon from Google's service only
         const googleUrl = `https://www.google.com/s2/favicons?domain=${cleanDomain}&sz=${size * 2}`;
         
         // Test if the favicon loads successfully
