@@ -1461,6 +1461,71 @@ class StorageManager {
   }
 
   /**
+   * Get deep focus sessions for recent 7 days (including today)
+   */
+  async getRecent7DaysDeepFocusSessions() {
+    try {
+      const storage = await this.getDeepFocusStorage();
+      const sessions = [];
+      
+      // Generate last 7 days including today
+      const recent7Days = [];
+      for (let i = 0; i < 7; i++) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        recent7Days.push(DateUtils.getLocalDateStringFromDate(date));
+      }
+      
+      // Collect sessions from recent 7 days
+      recent7Days.forEach(dateStr => {
+        if (storage[dateStr] && Array.isArray(storage[dateStr])) {
+          sessions.push(...storage[dateStr]);
+        }
+      });
+      
+      console.log('📅 Retrieved', sessions.length, 'deep focus sessions from recent 7 days');
+      return sessions;
+    } catch (error) {
+      console.error('❌ Failed to get recent 7 days deep focus sessions:', error);
+      return [];
+    }
+  }
+
+  async getLast10DeepFocusSessions() {
+    try {
+      const storage = await this.getDeepFocusStorage();
+      const allSessions = [];
+      
+      // Collect all sessions from all dates
+      Object.keys(storage).forEach(dateStr => {
+        if (Array.isArray(storage[dateStr])) {
+          storage[dateStr].forEach(session => {
+            allSessions.push({
+              ...session,
+              localDate: dateStr // Add date info for sorting
+            });
+          });
+        }
+      });
+      
+      // Sort by start time (most recent first) and take last 10
+      const sortedSessions = allSessions.sort((a, b) => {
+        const timeA = new Date(a.startTime).getTime();
+        const timeB = new Date(b.startTime).getTime();
+        return timeB - timeA; // Descending order (newest first)
+      });
+      
+      const last10Sessions = sortedSessions.slice(0, 10);
+      
+      console.log('🔟 Retrieved last', last10Sessions.length, 'deep focus sessions');
+      return last10Sessions;
+    } catch (error) {
+      console.error('❌ Failed to get last 10 deep focus sessions:', error);
+      return [];
+    }
+  }
+
+  /**
    * Clean up old deep focus sessions (keep last 30 days)
    */
   async cleanOldDeepFocusSessions() {

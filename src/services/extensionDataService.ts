@@ -320,7 +320,9 @@ class ExtensionDataService {
       'GET_TODAY_DEEP_FOCUS_SESSIONS',
       'GET_DEEP_FOCUS_SESSIONS_DATE_RANGE',
       'GET_ACTIVE_DEEP_FOCUS_SESSION',
-      'GET_ALL_DEEP_FOCUS_SESSIONS'
+      'GET_ALL_DEEP_FOCUS_SESSIONS',
+      'GET_RECENT_7_DAYS_DEEP_FOCUS_SESSIONS',
+      'GET_LAST_10_DEEP_FOCUS_SESSIONS'
     ];
     return criticalTypes.includes(message.type);
   }
@@ -712,6 +714,18 @@ class ExtensionDataService {
   static async getAllDeepFocusSessions(): Promise<ExtensionResponse<any[]>> {
     return await this.sendMessage({
       type: 'GET_ALL_DEEP_FOCUS_SESSIONS'
+    });
+  }
+
+  static async getRecent7DaysDeepFocusSessions(): Promise<ExtensionResponse<any[]>> {
+    return await this.sendMessage({
+      type: 'GET_RECENT_7_DAYS_DEEP_FOCUS_SESSIONS'
+    });
+  }
+
+  static async getLast10DeepFocusSessions(): Promise<ExtensionResponse<any[]>> {
+    return await this.sendMessage({
+      type: 'GET_LAST_10_DEEP_FOCUS_SESSIONS'
     });
   }
 }
