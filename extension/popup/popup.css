@@ -44,6 +44,7 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
   --radius-button: 8px;
+  --radius-full: 9999px;
   
   /* Typography - Web App Consistent */
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -456,9 +457,10 @@ body {
 
 /* Progress Bar */
 .progress-bar {
-  height: 4px;
+  width: 100%;
+  height: 6px;
   background: var(--bg-tertiary);
-  border-radius: var(--radius-full);
+  border-radius: 9999px;
   overflow: hidden;
   margin-top: var(--spacing-xs);
 }
@@ -466,6 +468,7 @@ body {
 .progress-fill {
   height: 100%;
   width: 0;
+  border-radius: 9999px;
   transition: width 0.3s ease;
 }
 
@@ -1018,8 +1021,8 @@ body {
 /* Site Item */
 .site-item {
   display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
+  flex-direction: column;
+  gap: var(--spacing-xs);
   padding: 0;
   background: var(--bg-primary);
   border-radius: 0;
@@ -1028,6 +1031,12 @@ body {
 
 .site-item:hover {
   background: var(--bg-hover);
+}
+
+.site-item-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
 }
 
 .site-info {
