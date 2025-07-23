@@ -1436,6 +1436,74 @@ class StorageManager {
       console.error('❌ Failed to clean old deep focus sessions:', error);
     }
   }
+
+  /**
+   * Get deep focus sessions for recent 7 days (including today)
+   */
+  async getRecent7DaysDeepFocusSessions() {
+    try {
+      const storage = await this.getDeepFocusStorage();
+      const sessions = [];
+      
+      // Generate last 7 days including today
+      const recent7Days = [];
+      for (let i = 0; i < 7; i++) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        recent7Days.push(DateUtils.getLocalDateStringFromDate(date));
+      }
+      
+      // Collect sessions from recent 7 days
+      recent7Days.forEach(dateStr => {
+        if (storage[dateStr] && Array.isArray(storage[dateStr])) {
+          sessions.push(...storage[dateStr]);
+        }
+      });
+      
+      console.log('📅 Retrieved', sessions.length, 'deep focus sessions from recent 7 days');
+      return sessions;
+    } catch (error) {
+      console.error('❌ Failed to get recent 7 days deep focus sessions:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get last 10 deep focus sessions (most recent across all dates)
+   */
+  async getLast10DeepFocusSessions() {
+    try {
+      const storage = await this.getDeepFocusStorage();
+      const allSessions = [];
+      
+      // Collect all sessions from all dates
+      Object.keys(storage).forEach(dateStr => {
+        if (Array.isArray(storage[dateStr])) {
+          storage[dateStr].forEach(session => {
+            allSessions.push({
+              ...session,
+              localDate: dateStr // Add date info for sorting
+            });
+          });
+        }
+      });
+      
+      // Sort by start time (most recent first) and take last 10
+      const sortedSessions = allSessions.sort((a, b) => {
+        const timeA = new Date(a.startTime).getTime();
+        const timeB = new Date(b.startTime).getTime();
+        return timeB - timeA; // Descending order (newest first)
+      });
+      
+      const last10Sessions = sortedSessions.slice(0, 10);
+      
+      console.log('🔟 Retrieved last', last10Sessions.length, 'deep focus sessions');
+      return last10Sessions;
+    } catch (error) {
+      console.error('❌ Failed to get last 10 deep focus sessions:', error);
+      return [];
+    }
+  }
 }
 
 /**
@@ -3385,6 +3453,26 @@ class FocusTimeTracker {
             sendResponse({ success: true, data: allSessions });
           } catch (error) {
             console.error('Error getting all deep focus sessions:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'GET_RECENT_7_DAYS_DEEP_FOCUS_SESSIONS':
+          try {
+            const recent7DaysSessions = await this.storageManager.getRecent7DaysDeepFocusSessions();
+            sendResponse({ success: true, data: recent7DaysSessions });
+          } catch (error) {
+            console.error('Error getting recent 7 days deep focus sessions:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'GET_LAST_10_DEEP_FOCUS_SESSIONS':
+          try {
+            const last10Sessions = await this.storageManager.getLast10DeepFocusSessions();
+            sendResponse({ success: true, data: last10Sessions });
+          } catch (error) {
+            console.error('Error getting last 10 deep focus sessions:', error);
             sendResponse({ success: false, error: error.message });
           }
           break;
