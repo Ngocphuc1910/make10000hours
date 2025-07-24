@@ -1,9 +1,5 @@
 # Activity Detection & Auto-Session Management Testing Guide
 
-## Overview
-
-This guide provides comprehensive testing scenarios for the new deep focus activity detection system to ensure it handles all edge cases correctly.
-
 ## Pre-Testing Setup
 
 ### 1. Enable Developer Console
