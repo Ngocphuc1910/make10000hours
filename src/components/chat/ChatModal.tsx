@@ -3,6 +3,7 @@ import { X, Send, Bot, User, AlertCircle, FileText, ExternalLink, ChevronDown, C
 import ReactMarkdown from 'react-markdown';
 import { useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
+import { useTaskStore } from '../../store/taskStore';
 import type { ChatMessage, ChatSource } from '../../types/chat';
 
 interface ChatModalProps {
@@ -15,10 +16,12 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
+  const [mentionedItems, setMentionedItems] = useState<Array<{id: string, name: string, type: string}>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const { user } = useUserStore();
+  const { projects, tasks } = useTaskStore();
   const {
     conversations,
     currentConversationId,
@@ -78,8 +81,15 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
       return;
     }
 
-    const message = inputValue.trim();
+    // Combine input value with mentioned items
+    let message = inputValue.trim();
+    if (mentionedItems.length > 0) {
+      const mentions = mentionedItems.map(item => `@${item.name}`).join(' ');
+      message = `${mentions} ${message}`.trim();
+    }
+
     setInputValue('');
+    setMentionedItems([]);
     
     // Create conversation if none exists
     if (!currentConversationId) {
@@ -99,6 +109,16 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
     setShowHistory(false);
   };
 
+  const addMentionedItem = (item: {id: string, name: string, type: string}) => {
+    if (!mentionedItems.some(existing => existing.id === item.id && existing.type === item.type)) {
+      setMentionedItems(prev => [...prev, item]);
+    }
+  };
+
+  const removeMentionedItem = (itemId: string, itemType: string) => {
+    setMentionedItems(prev => prev.filter(item => !(item.id === itemId && item.type === itemType)));
+  };
+
   const sampleQuestions = [
     "Show my daily stats",
     "Top distractions?",
@@ -107,6 +127,20 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
     "Weekly summary",
     "Goal progress"
   ];
+
+  // Get 5 most task-intensive projects
+  const getTopProjects = () => {
+    const projectTaskCounts = projects.map(project => {
+      const taskCount = tasks.filter(task => task.projectId === project.id).length;
+      return { ...project, taskCount };
+    });
+    
+    return projectTaskCounts
+      .sort((a, b) => b.taskCount - a.taskCount)
+      .slice(0, 5);
+  };
+
+  const topProjects = getTopProjects();
 
   const formatTimestamp = (timestamp: Date) => {
     return new Intl.DateTimeFormat('en-US', {
@@ -135,7 +169,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
         }}
       >
         {/* Enhanced Header */}
-        <div className="flex items-center justify-between p-4 bg-white border-b border-gray-100">
+        <div className="flex items-center justify-between p-4 bg-white">
           <div className="flex items-center space-x-3">
             <h2 className="text-base font-medium text-gray-900">
               {messages.length > 0 ? 'New Conversation' : ''}
@@ -180,19 +214,6 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
                 </div>
               )}
             </div>
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-              title={isExpanded ? 'Minimize' : 'Expand'}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {isExpanded ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                )}
-              </svg>
-            </button>
             <button
               onClick={onClose}
               className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -282,8 +303,30 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Enhanced Input Area */}
-        <div className="border-t border-gray-100 p-4 bg-white">
+        <div className="p-4 bg-white">
           <div className="bg-gray-50 hover:bg-gray-100/80 rounded-xl px-4 py-3 transition-all duration-300">
+            {/* Mentioned Items */}
+            {mentionedItems.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {mentionedItems.map((item, index) => (
+                  <div
+                    key={`${item.type}-${item.id}-${index}`}
+                    className="flex items-center gap-1.5 bg-white text-gray-700 text-sm px-2 py-1 rounded-md border-2 border-gray-300"
+                  >
+                    <div className="w-4 h-4 flex items-center justify-center">
+                      📁
+                    </div>
+                    <span>{item.name}</span>
+                    <button 
+                      className="w-4 h-4 flex items-center justify-center hover:text-gray-900"
+                      onClick={() => removeMentionedItem(item.id, item.type)}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <textarea
                 ref={inputRef}
@@ -321,10 +364,30 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
                       <div className="max-h-96 overflow-y-auto px-2">
                         <div className="px-2 py-1">
                           <div className="text-xs font-medium text-gray-500 mb-1">Projects</div>
-                          <button className="w-full text-left px-2 py-1 hover:bg-gray-50 rounded-md text-sm text-gray-700 flex items-center gap-2">
-                            <div className="w-4 h-4 flex items-center justify-center text-primary">📁</div>
-                            Learn to code
-                          </button>
+                          {topProjects.length > 0 ? (
+                            topProjects.map((project) => (
+                              <button 
+                                key={project.id}
+                                className="w-full text-left px-2 py-1 hover:bg-gray-50 rounded-md text-sm text-gray-700 flex items-center gap-2"
+                                onClick={() => {
+                                  addMentionedItem({
+                                    id: project.id,
+                                    name: project.name,
+                                    type: 'project'
+                                  });
+                                  setShowMentions(false);
+                                  inputRef.current?.focus();
+                                }}
+                              >
+                                <div className="w-4 h-4 flex items-center justify-center text-primary flex-shrink-0">
+                                  📁
+                                </div>
+                                <span className="truncate">{project.name}</span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="text-xs text-gray-400 px-2 py-2">No projects found</div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -348,11 +411,12 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
 
 const MessageBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
   const isUser = message.role === 'user';
+  const { user } = useUserStore();
 
   return (
     <div className={`flex items-start space-x-3 ${isUser ? 'flex-row-reverse space-x-reverse' : ''}`}>
       <div 
-        className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+        className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden ${
           isUser ? 'bg-gray-100' : ''
         }`}
         style={isUser ? {} : {
@@ -360,7 +424,15 @@ const MessageBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
         }}
       >
         {isUser ? (
-          <User className="w-4 h-4 text-gray-600" />
+          user?.photoURL ? (
+            <img 
+              src={user.photoURL} 
+              alt={user.displayName || 'User'} 
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <User className="w-4 h-4 text-gray-600" />
+          )
         ) : (
           <Sparkles className="w-4 h-4 text-white" />
         )}
