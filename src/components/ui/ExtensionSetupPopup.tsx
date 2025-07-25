@@ -4,12 +4,14 @@ interface ExtensionSetupPopupProps {
   isVisible: boolean;
   onClose: () => void;
   onSetupClick: () => void;
+  onReload?: () => void;
 }
 
 export const ExtensionSetupPopup: React.FC<ExtensionSetupPopupProps> = ({ 
   isVisible, 
   onClose, 
-  onSetupClick 
+  onSetupClick,
+  onReload
 }) => {
   if (!isVisible) return null;
 
@@ -38,7 +40,7 @@ export const ExtensionSetupPopup: React.FC<ExtensionSetupPopupProps> = ({
             </p>
             <div className="flex gap-2">
               <button 
-                onClick={() => window.location.reload()}
+                onClick={onReload || (() => window.location.reload())}
                 className="flex-1 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200 transition-colors"
               >
                 Reload

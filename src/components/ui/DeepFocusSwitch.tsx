@@ -27,6 +27,12 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
 }) => {
   const { isDeepFocusActive, enableDeepFocus, disableDeepFocus } = useDeepFocusContext();
   const [showExtensionPopup, setShowExtensionPopup] = useState(false);
+  const [isProcessingToggle, setIsProcessingToggle] = useState(false);
+
+  // Debug state changes
+  useEffect(() => {
+    console.log('🐛 showExtensionPopup state changed to:', showExtensionPopup);
+  }, [showExtensionPopup]);
 
   // Size configurations
   const sizeConfig = {
@@ -59,66 +65,59 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
   const config = sizeConfig[size];
 
   const handleToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (disabled) return;
+    if (disabled || isProcessingToggle) return;
 
-    // If trying to enable Deep Focus, check extension first
-    if (e.target.checked) {
-      try {
-        console.log('🔄 User attempting to enable Deep Focus, checking extension...');
-        const extensionState = await ExtensionDataService.getExtensionSetupState();
+    // Prevent the toggle first to avoid UI flickering
+    e.preventDefault();
+    setIsProcessingToggle(true);
+
+    try {
+      if (e.target.checked) {
+        console.log('🔄 User attempting to enable Deep Focus');
         
-        if (extensionState === 'NOT_INSTALLED') {
-          console.log('❌ Extension not ready, showing setup popup');
-          e.preventDefault(); // Stop the toggle
-          setShowExtensionPopup(true); // Show popup
-          return;
+        // SMART APPROACH: Quick check first, only show popup if needed
+        console.log('⚡ Quick extension check first...');
+        const extensionAvailable = await ExtensionDataService.quickExtensionCheck();
+        console.log('🐛 Quick extension check result:', extensionAvailable);
+        
+        if (extensionAvailable) {
+          // Extension exists! Proceed directly with Deep Focus (no popup flash)
+          console.log('✅ Extension available! Enabling Deep Focus directly');
+          await enableDeepFocus('web');
+        } else {
+          // Extension not available, show setup popup
+          console.log('❌ Extension not available, showing setup popup');
+          setShowExtensionPopup(true);
         }
+      } else {
+        console.log('🔄 User attempting to disable Deep Focus');
         
-        // Extension is ready and user info is synced, proceed
-        console.log('✅ Extension ready, enabling Deep Focus');
-        await enableDeepFocus('web');
-        setShowExtensionPopup(false);
-      } catch (error) {
-        console.error('Failed to enable Deep Focus:', error);
-        // Reset checkbox
-        setTimeout(() => {
-          const checkbox = e.target;
-          if (checkbox) checkbox.checked = false;
-        }, 100);
-      }
-    } else {
-      // Check extension before disabling as well
-      try {
-        console.log('🔄 User attempting to disable Deep Focus, checking extension...');
-        const extensionState = await ExtensionDataService.getExtensionSetupState();
+        // Quick check for disable too
+        const extensionAvailable = await ExtensionDataService.quickExtensionCheck();
         
-        if (extensionState === 'NOT_INSTALLED') {
-          console.log('❌ Extension not ready, showing setup popup');
-          e.preventDefault(); // Stop the toggle
-          setShowExtensionPopup(true); // Show popup
-          // Reset checkbox to previous state (checked = true since we're disabling)
-          setTimeout(() => {
-            const checkbox = e.target;
-            if (checkbox) checkbox.checked = true;
-          }, 100);
-          return;
+        if (extensionAvailable) {
+          console.log('✅ Extension available, disabling Deep Focus');
+          await disableDeepFocus();
+          setShowExtensionPopup(false);
+        } else {
+          console.log('❌ Extension not available, showing setup popup');
+          setShowExtensionPopup(true);
         }
-        
-        // Extension is ready, proceed with disabling
-        console.log('✅ Extension ready, disabling Deep Focus');
-        await disableDeepFocus();
-        setShowExtensionPopup(false);
-      } catch (error) {
-        console.error('Failed to disable Deep Focus:', error);
-        setTimeout(() => {
-          const checkbox = e.target;
-          if (checkbox) checkbox.checked = true;
-        }, 100);
       }
+    } catch (error) {
+      console.error('Failed to toggle Deep Focus:', error);
+      console.log('🐛 Catch block - showing setup popup due to error');
+      setShowExtensionPopup(true);
+    } finally {
+      setIsProcessingToggle(false);
     }
   };
 
   const handleSetupExtension = () => {
+    // Reset circuit breaker before redirecting to extension setup
+    console.log('🔄 Resetting extension circuit breaker before setup...');
+    ExtensionDataService.resetCircuitBreaker();
+    
     // Open the specific Focus Time Tracker extension page
     window.open('https://chromewebstore.google.com/detail/focus-time-tracker/nippobgecgbjcfbejfmnljjjcpnpemip', '_blank');
     setShowExtensionPopup(false);
@@ -128,12 +127,20 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
     setShowExtensionPopup(false);
   };
 
+  const handleReload = () => {
+    // Reset circuit breaker before reloading
+    console.log('🔄 Resetting extension circuit breaker before reload...');
+    ExtensionDataService.resetCircuitBreaker();
+    window.location.reload();
+  };
+
   // Handle click outside to close popup
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
       if (showExtensionPopup && 
-          !target.closest('label[class*="deep-focus"]') && 
+          !target.closest('#deep-focus-toggle') && 
+          !target.closest('label[for="deep-focus-toggle"]') &&
           !target.closest('[class*="ExtensionSetupPopup"]')) {
         setShowExtensionPopup(false);
       }
@@ -186,6 +193,7 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
         isVisible={showExtensionPopup}
         onClose={handleClosePopup}
         onSetupClick={handleSetupExtension}
+        onReload={handleReload}
       />
     </div>
   );
