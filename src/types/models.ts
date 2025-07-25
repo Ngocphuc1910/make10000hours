@@ -101,6 +101,7 @@ export interface AppSettings {
   timer: TimerSettings;
   darkMode: boolean;
   compactTaskView: boolean;
+  taskListViewMode: 'pomodoro' | 'today';
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -114,6 +115,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   darkMode: false,
   compactTaskView: false,
+  taskListViewMode: 'today',
 };
 
 // Work session tracking for dashboard analytics

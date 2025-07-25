@@ -22,9 +22,11 @@ export const TaskList: React.FC<TaskListProps> = ({
   const isAddingTask = useTaskStore(state => state.isAddingTask);
   const editingTaskId = useTaskStore(state => state.editingTaskId);
   const showDetailsMenu = useTaskStore(state => state.showDetailsMenu);
+  const taskListViewMode = useTaskStore(state => state.taskListViewMode);
   const setIsAddingTask = useTaskStore(state => state.setIsAddingTask);
   const setEditingTaskId = useTaskStore(state => state.setEditingTaskId);
   const setShowDetailsMenu = useTaskStore(state => state.setShowDetailsMenu);
+  const setTaskListViewMode = useTaskStore(state => state.setTaskListViewMode);
   const handleMoveCompletedDown = useTaskStore(state => state.handleMoveCompletedDown);
   const handleArchiveCompleted = useTaskStore(state => state.handleArchiveCompleted);
   const authStatus = useAuthGuard();
@@ -97,7 +99,9 @@ export const TaskList: React.FC<TaskListProps> = ({
     <div className={`h-full flex flex-col ${className}`}>
       <div className="p-4 border-b border-border">
         <div className="flex justify-between items-center">
-          <h2 className="font-semibold text-text-primary text-left">Tasks In Pomodoro</h2>
+          <h2 className="font-semibold text-text-primary text-left">
+            {taskListViewMode === 'pomodoro' ? 'Tasks In Pomodoro' : 'Task list today'}
+          </h2>
           <div className="relative details-menu">
             <button 
               onClick={(e) => {
@@ -111,6 +115,16 @@ export const TaskList: React.FC<TaskListProps> = ({
             {showDetailsMenu && (
               <div className="absolute right-0 mt-2 w-64 bg-background-secondary border border-border rounded-lg shadow-lg z-10">
                 <div className="py-1">
+                  <button 
+                    onClick={async () => {
+                      await setTaskListViewMode(taskListViewMode === 'pomodoro' ? 'today' : 'pomodoro');
+                      setShowDetailsMenu(false);
+                    }}
+                    className="w-full px-4 py-2 text-sm text-text-primary hover:bg-background-primary text-left flex items-center whitespace-nowrap"
+                  >
+                    <i className={`${taskListViewMode === 'pomodoro' ? 'ri-calendar-line' : 'ri-timer-line'} w-5 h-5 mr-2 flex-shrink-0`}></i>
+                    {taskListViewMode === 'pomodoro' ? 'Show tasks list today' : 'Show tasks list In Pomodoro'}
+                  </button>
                   <button 
                     onClick={handleMoveCompletedDown}
                     className="w-full px-4 py-2 text-sm text-text-primary hover:bg-background-primary text-left flex items-center whitespace-nowrap"
