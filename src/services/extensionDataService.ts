@@ -126,7 +126,7 @@ class ExtensionDataService {
     return typeof window !== 'undefined' && typeof window.postMessage === 'function';
   }
 
-  static async testRealExtensionConnection(timeout: number = 3000): Promise<boolean> {
+  static async testRealExtensionConnection(timeout: number = 1500): Promise<boolean> {
     try {
       console.log('🔄 Sending GET_TODAY_STATS test message to extension...');
       // Use a simple ping message that we know the extension handles
@@ -145,14 +145,16 @@ class ExtensionDataService {
     console.log('🔍 Checking extension setup state...');
     
     // Check circuit breaker first
-    if (this.circuitBreaker.isOpen()) {
+    const circuitBreakerOpen = this.circuitBreaker.isOpen();
+    console.log('🐛 Circuit breaker isOpen():', circuitBreakerOpen);
+    if (circuitBreakerOpen) {
       console.log('❌ Circuit breaker is OPEN, extension unavailable');
       return 'NOT_INSTALLED';
     }
 
-    // Test actual extension connection
+    // Test actual extension connection with short timeout for faster feedback
     console.log('🔄 Testing extension connection...');
-    const isConnected = await this.testRealExtensionConnection();
+    const isConnected = await this.testRealExtensionConnection(1000); // Very short timeout for initial test
     console.log(`📡 Extension connection test result: ${isConnected ? 'CONNECTED' : 'FAILED'}`);
     
     if (!isConnected) {
@@ -290,7 +292,7 @@ class ExtensionDataService {
       for (const message of activationMessages) {
         try {
           console.log(`🔄 Trying activation with: ${message.type}`);
-          const response = await this.sendMessage(message, 5000);
+          const response = await this.sendMessage(message, 2000);
           if (response && response.success !== false) {
             console.log('✅ Extension activated with:', message.type);
             return true;
@@ -363,7 +365,7 @@ class ExtensionDataService {
   }
 
   // Simplified content script communication
-  static async sendMessageViaContentScript(message: any, timeout: number = 5000): Promise<any> {
+  static async sendMessageViaContentScript(message: any, timeout: number = 2000): Promise<any> {
     return new Promise((resolve, reject) => {
       const messageId = Math.random().toString(36);
       const timeoutId = setTimeout(() => {
@@ -727,6 +729,41 @@ class ExtensionDataService {
     return await this.sendMessage({
       type: 'GET_LAST_10_DEEP_FOCUS_SESSIONS'
     });
+  }
+
+  static resetCircuitBreaker(): void {
+    console.log('🔄 Manually resetting extension circuit breaker...');
+    this.circuitBreaker.reset();
+  }
+
+  static getCircuitBreakerStatus(): { state: string; failureCount: number; timeUntilRetry: number } {
+    return this.circuitBreaker.getStatus();
+  }
+
+  /**
+   * Ultra-fast extension check for instant UI feedback
+   * Returns true if extension is available, false otherwise
+   */
+  static async quickExtensionCheck(): Promise<boolean> {
+    try {
+      console.log('⚡ Quick extension check - very short timeout');
+      
+      // If circuit breaker is open, extension is definitely not available
+      if (this.circuitBreaker.isOpen()) {
+        console.log('⚡ Circuit breaker open, extension unavailable');
+        return false;
+      }
+      
+      // Single very fast test with minimal timeout
+      const response = await this.sendMessage({ type: 'PING' }, 300); // 300ms only
+      const isAvailable = response && response.success !== false;
+      console.log('⚡ Quick check result:', isAvailable);
+      
+      return isAvailable;
+    } catch (error) {
+      console.log('⚡ Quick check failed (expected for no extension):', error.message);
+      return false;
+    }
   }
 }
 
