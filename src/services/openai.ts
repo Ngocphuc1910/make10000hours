@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { EnvironmentValidator } from '../utils/environmentValidator';
 
 // API key from environment variables only - no hardcoded secrets
 const defaultApiKey = import.meta.env.VITE_OPENAI_API_KEY;
@@ -7,18 +8,61 @@ const defaultApiKey = import.meta.env.VITE_OPENAI_API_KEY;
 let currentApiKey = defaultApiKey;
 let openaiInstance: OpenAI | null = null;
 
-// Create OpenAI instance
+// Security validation for API key
+const validateApiKey = (apiKey: string): boolean => {
+  if (!apiKey) return false;
+  
+  // Basic validation for OpenAI API key format
+  const openaiKeyRegex = /^sk-[a-zA-Z0-9\-_]{40,}$/;
+  
+  if (!openaiKeyRegex.test(apiKey)) {
+    console.warn('🔒 Invalid OpenAI API key format detected');
+    return false;
+  }
+  
+  // Additional security: Don't log the actual key in production
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔑 OpenAI API key validated successfully');
+  }
+  
+  return true;
+};
+
+// Create OpenAI instance with validation
 const createOpenAIInstance = (apiKey: string) => {
+  if (!validateApiKey(apiKey)) {
+    throw new Error('Invalid or missing OpenAI API key');
+  }
+  
   return new OpenAI({
     apiKey,
     dangerouslyAllowBrowser: true, // For client-side usage
+    timeout: 30000, // 30 second timeout
+    maxRetries: 2, // Limit retries for security
   });
 };
 
-// Initialize with default key
-if (currentApiKey) {
-  openaiInstance = createOpenAIInstance(currentApiKey);
-}
+// Initialize with default key and environment validation
+const initializeOpenAI = () => {
+  const envValidation = EnvironmentValidator.getSecurityInfo();
+  
+  if (envValidation.keyStatus.VITE_OPENAI_API_KEY !== 'configured') {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('🔒 OpenAI API key not properly configured');
+    }
+    return false;
+  }
+
+  if (currentApiKey && validateApiKey(currentApiKey)) {
+    openaiInstance = createOpenAIInstance(currentApiKey);
+    return true;
+  }
+  
+  return false;
+};
+
+// Initialize OpenAI
+const isOpenAIInitialized = initializeOpenAI();
 
 // Constants for optimization
 export const EMBEDDING_MODEL = 'text-embedding-3-small';
