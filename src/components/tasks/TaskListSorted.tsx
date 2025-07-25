@@ -10,6 +10,7 @@ export const TaskListSorted: React.FC = () => {
     tasks,
     projects,
     editingTaskId,
+    taskListViewMode,
     setIsAddingTask,
     setEditingTaskId,
     reorderTasks,
@@ -121,18 +122,41 @@ export const TaskListSorted: React.FC = () => {
     }
   };
 
-  // Sort tasks by order and filter to show "IN POMODORO" and completed tasks
+  // Helper function to get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  };
+
+  // Sort tasks by order and filter based on current view mode
   // Keep completed tasks visible until manually archived
   const sortedTasks = [...tasks]
     .filter(task => {
       // Don't show archived tasks
       if (task.hideFromPomodoro) return false;
 
-      // Show tasks with status "pomodoro" (IN POMODORO)
-      if (task.status === 'pomodoro') return true;
+      if (taskListViewMode === 'pomodoro') {
+        // Show tasks with status "pomodoro" (IN POMODORO)
+        if (task.status === 'pomodoro') return true;
 
-      // Show completed tasks (status becomes "completed" when task is marked done)
-      if (task.status === 'completed' && task.completed) return true;
+        // Show completed tasks (status becomes "completed" when task is marked done)
+        if (task.status === 'completed' && task.completed) return true;
+
+        return false;
+      } else if (taskListViewMode === 'today') {
+        const todayDate = getTodayDate();
+        
+        // Show tasks scheduled for today
+        if (task.scheduledDate === todayDate) return true;
+
+        // Show completed tasks that were completed today (we can still show completed ones)
+        if (task.status === 'completed' && task.completed) {
+          // If the task was scheduled for today or has no scheduled date but was completed today
+          if (task.scheduledDate === todayDate || !task.scheduledDate) return true;
+        }
+
+        return false;
+      }
 
       return false;
     })
