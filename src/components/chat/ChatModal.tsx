@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Bot, User, AlertCircle, FileText, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, Send, Bot, User, AlertCircle, FileText, ExternalLink, ChevronDown, ChevronRight, Plus, History, MoreHorizontal, Paperclip, AtSign, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
@@ -13,6 +13,8 @@ interface ChatModalProps {
 export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
   const [inputValue, setInputValue] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showMentions, setShowMentions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -43,6 +45,22 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isOpen]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showHistory || showMentions) {
+        const target = event.target as Element;
+        if (!target.closest('.dropdown-container')) {
+          setShowHistory(false);
+          setShowMentions(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showHistory, showMentions]);
 
   // Handle Enter key in textarea
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -76,6 +94,20 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
     inputRef.current?.focus();
   };
 
+  const handleNewChat = () => {
+    createConversation();
+    setShowHistory(false);
+  };
+
+  const sampleQuestions = [
+    "Show my daily stats",
+    "Top distractions?",
+    "Focus time today", 
+    "My priorities",
+    "Weekly summary",
+    "Goal progress"
+  ];
+
   const formatTimestamp = (timestamp: Date) => {
     return new Intl.DateTimeFormat('en-US', {
       hour: '2-digit',
@@ -87,29 +119,70 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center transition-all duration-300"
+      style={{
+        background: 'rgba(0, 0, 0, 0.4)'
+      }}
+    >
       <div 
-        className={`bg-white rounded-lg shadow-xl transition-all duration-300 ${
-          isExpanded ? 'w-full h-full max-w-6xl max-h-full' : 'w-full max-w-2xl h-[80vh]'
+        className={`bg-white rounded-xl overflow-hidden transition-all duration-300 flex flex-col ${
+          isExpanded ? 'w-full h-full max-w-6xl max-h-full' : 'w-[90%] max-w-3xl h-[85vh]'
         }`}
+        style={{
+          boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.03), 0 8px 32px rgba(0, 0, 0, 0.05)',
+          transform: isOpen ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(20px)'
+        }}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        {/* Enhanced Header */}
+        <div className="flex items-center justify-between p-4 bg-white border-b border-gray-100">
           <div className="flex items-center space-x-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Bot className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">AI Work Assistant</h2>
-              <p className="text-sm text-gray-500">
-                Direct, focused answers about your productivity data
-              </p>
-            </div>
+            <h2 className="text-base font-medium text-gray-900">
+              {messages.length > 0 ? 'New Conversation' : ''}
+            </h2>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleNewChat}
+              className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+              title="New Chat"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            <div className="relative dropdown-container">
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Chat History"
+              >
+                <History className="w-4 h-4" />
+              </button>
+              {showHistory && (
+                <div className="absolute right-0 top-full mt-1 w-80 bg-white rounded-lg shadow-lg border border-gray-100 py-2 z-50">
+                  <div className="px-4 py-2 border-b border-gray-100">
+                    <h3 className="text-sm font-medium text-gray-700">Recent Chats</h3>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    <div className="px-2 py-2">
+                      <div className="text-xs font-medium text-gray-500 mb-1 px-3">Today</div>
+                      <button className="w-full text-left px-3 py-2.5 hover:bg-gray-50 rounded-lg group flex items-center gap-3 transition-colors">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-700 truncate">Productivity Analysis</div>
+                          <div className="text-xs text-gray-400 truncate">How productive was I this week?</div>
+                        </div>
+                        <div className="text-xs text-gray-400">2h ago</div>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
+              className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
               title={isExpanded ? 'Minimize' : 'Expand'}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -122,7 +195,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
+              className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -146,24 +219,30 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
         )}
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ height: 'calc(100% - 200px)' }}>
+        <div className="flex-1 overflow-y-auto bg-white" style={{ minHeight: '400px' }}>
           {messages.length === 0 ? (
-            <div className="text-center py-8">
-              <Bot className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Welcome to your AI Assistant!</h3>
-              <p className="text-gray-500 mb-6">
+            <div className="text-center py-16 px-6">
+              <div 
+                className="w-16 h-16 rounded-full mx-auto mb-6 flex items-center justify-center text-3xl"
+                style={{
+                  background: 'linear-gradient(135deg, #BB5F5A 0%, rgba(236, 72, 153, 0.9) 40%, rgba(251, 146, 60, 0.9) 100%)'
+                }}
+              >
+                <Sparkles className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Welcome to your AI Assistant!</h3>
+              <p className="text-gray-600 mb-8 max-w-md mx-auto">
                 Ask me anything about your productivity data, work patterns, or get insights about your progress.
               </p>
               
-              {/* Suggested Queries */}
-              <div className="max-w-md mx-auto">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Try asking:</h4>
-                <div className="space-y-2">
-                  {suggestedQueries.map((query, index) => (
+              {/* Enhanced Sample Questions */}
+              <div className="max-w-lg mx-auto text-left">
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {sampleQuestions.map((query, index) => (
                     <button
                       key={index}
                       onClick={() => handleSuggestedQuery(query)}
-                      className="w-full text-left p-3 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                      className="bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-full text-sm cursor-pointer transition-all duration-200 hover:bg-gradient-to-r hover:from-primary hover:to-pink-500 hover:text-white hover:border-transparent"
                     >
                       "{query}"
                     </button>
@@ -172,53 +251,94 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
               </div>
             </div>
           ) : (
-            <>
+            <div className="p-6 space-y-4">
               {messages.map((message) => (
                 <MessageBubble key={message.id} message={message} />
               ))}
               {isLoading && (
                 <div className="flex items-start space-x-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Bot className="w-4 h-4 text-blue-600" />
+                  <div 
+                    className="w-8 h-8 rounded-full flex items-center justify-center"
+                    style={{
+                      background: 'linear-gradient(135deg, #BB5F5A 0%, rgba(236, 72, 153, 0.9) 40%)'
+                    }}
+                  >
+                    <Sparkles className="w-4 h-4 text-white" />
                   </div>
                   <div className="flex-1">
-                    <div className="bg-gray-100 rounded-lg p-3">
-                      <div className="flex items-center space-x-2">
-                        <div className="animate-bounce w-2 h-2 bg-gray-400 rounded-full"></div>
-                        <div className="animate-bounce w-2 h-2 bg-gray-400 rounded-full" style={{ animationDelay: '0.1s' }}></div>
-                        <div className="animate-bounce w-2 h-2 bg-gray-400 rounded-full" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="bg-gray-50 rounded-2xl p-3 max-w-[70%]">
+                      <div className="flex items-center space-x-1">
+                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
+                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
                       </div>
                     </div>
                   </div>
                 </div>
               )}
-            </>
+              <div ref={messagesEndRef} />
+            </div>
           )}
-          <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area */}
-        <div className="border-t border-gray-200 p-4">
-          <div className="flex items-end space-x-3">
-            <div className="flex-1">
+        {/* Enhanced Input Area */}
+        <div className="border-t border-gray-100 p-4 bg-white">
+          <div className="bg-gray-50 hover:bg-gray-100/80 rounded-xl px-4 py-3 transition-all duration-300">
+            <div className="flex items-center gap-2">
               <textarea
                 ref={inputRef}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask about your productivity data..."
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 placeholder-gray-500"
+                placeholder="Message AI Assistant..."
+                className="flex-1 bg-transparent border-none text-[15px] placeholder:text-gray-400 resize-none focus:ring-0 py-1.5 px-0 min-h-[32px] max-h-[200px] leading-relaxed focus:outline-none"
                 rows={1}
-                style={{ maxHeight: '120px' }}
               />
+              <div className="flex items-center gap-2">
+                <button
+                  className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-white rounded-lg transition-all duration-200"
+                  title="Attach file"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
+                <div className="relative dropdown-container">
+                  <button
+                    onClick={() => setShowMentions(!showMentions)}
+                    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-white rounded-lg transition-all duration-200"
+                    title="Mention projects or items"
+                  >
+                    <AtSign className="w-4 h-4" />
+                  </button>
+                  {showMentions && (
+                    <div className="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-50">
+                      <div className="px-3 py-1.5 border-b border-gray-100">
+                        <input 
+                          type="text" 
+                          className="w-full px-2 py-1 text-xs bg-gray-50 border-none rounded-md focus:ring-0 focus:bg-white transition-colors" 
+                          placeholder="Select project, item, etc."
+                        />
+                      </div>
+                      <div className="max-h-96 overflow-y-auto px-2">
+                        <div className="px-2 py-1">
+                          <div className="text-xs font-medium text-gray-500 mb-1">Projects</div>
+                          <button className="w-full text-left px-2 py-1 hover:bg-gray-50 rounded-md text-sm text-gray-700 flex items-center gap-2">
+                            <div className="w-4 h-4 flex items-center justify-center text-primary">📁</div>
+                            Learn to code
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!inputValue.trim() || isLoading}
+                  className="w-8 h-8 flex items-center justify-center text-white bg-primary hover:bg-primary/90 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            <button
-              onClick={handleSendMessage}
-              disabled={!inputValue.trim() || isLoading}
-              className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <Send className="w-4 h-4" />
-            </button>
           </div>
         </div>
       </div>
@@ -231,21 +351,31 @@ const MessageBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
 
   return (
     <div className={`flex items-start space-x-3 ${isUser ? 'flex-row-reverse space-x-reverse' : ''}`}>
-      <div className={`p-2 rounded-lg ${isUser ? 'bg-blue-100' : 'bg-gray-100'}`}>
+      <div 
+        className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+          isUser ? 'bg-gray-100' : ''
+        }`}
+        style={isUser ? {} : {
+          background: 'linear-gradient(135deg, #BB5F5A 0%, rgba(236, 72, 153, 0.9) 40%)'
+        }}
+      >
         {isUser ? (
-          <User className="w-4 h-4 text-blue-600" />
+          <User className="w-4 h-4 text-gray-600" />
         ) : (
-          <Bot className="w-4 h-4 text-gray-600" />
+          <Sparkles className="w-4 h-4 text-white" />
         )}
       </div>
       
-      <div className={`flex-1 max-w-xs sm:max-w-md md:max-w-lg lg:max-w-xl ${isUser ? 'text-right' : ''}`}>
+      <div className={`flex-1 max-w-[70%] ${isUser ? 'text-right' : ''}`}>
         <div
-          className={`rounded-lg ${
+          className={`rounded-2xl ${
             isUser 
-              ? 'bg-blue-600 text-white ml-auto p-3' 
-              : 'bg-white border border-gray-200 text-gray-900 p-5 shadow-sm'
+              ? 'text-white ml-auto p-3' 
+              : 'bg-gray-50 text-gray-900 p-3'
           }`}
+          style={isUser ? {
+            background: 'linear-gradient(135deg, #BB5F5A 0%, rgba(236, 72, 153, 0.9) 40%)'
+          } : {}}
         >
           {isUser ? (
             <p className="text-sm whitespace-pre-wrap text-white">{message.content}</p>
