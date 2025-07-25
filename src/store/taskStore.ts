@@ -14,6 +14,7 @@ interface TaskState {
   showDetailsMenu: boolean;
   isLoading: boolean;
   unsubscribe: (() => void) | null;
+  taskListViewMode: 'pomodoro' | 'today';
   
   // Actions
   initializeStore: () => Promise<void>;
@@ -28,6 +29,7 @@ interface TaskState {
   setIsAddingTask: (isAdding: boolean) => void;
   setEditingTaskId: (taskId: string | null) => void;
   setShowDetailsMenu: (show: boolean) => void;
+  setTaskListViewMode: (mode: 'pomodoro' | 'today') => Promise<void>;
   addProject: (project: Omit<Project, 'id' | 'userId'>) => Promise<string>;
   updateProject: (projectId: string, updates: Partial<Omit<Project, 'id' | 'userId'>>) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
@@ -51,9 +53,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   showDetailsMenu: false,
   isLoading: false,
   unsubscribe: null,
+  taskListViewMode: 'today',
 
   initializeStore: async () => {
     const { user, isAuthenticated } = useUserStore.getState();
+    
+    // Set task list view mode from user settings
+    if (user?.settings?.taskListViewMode) {
+      set({ taskListViewMode: user.settings.taskListViewMode });
+    }
     
     if (!isAuthenticated || !user) {
       set({ tasks: [], projects: [], isLoading: false });
@@ -647,6 +655,29 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   setEditingTaskId: (taskId) => set({ editingTaskId: taskId }),
   
   setShowDetailsMenu: (show) => set({ showDetailsMenu: show }),
+  
+  setTaskListViewMode: async (mode) => {
+    set({ taskListViewMode: mode });
+    
+    // Persist to user settings
+    try {
+      const { user, updateUserData } = useUserStore.getState();
+      if (user) {
+        // Only update the serializable user data, not the full Firebase Auth user
+        const userData = {
+          uid: user.uid,
+          userName: user.userName,
+          settings: {
+            ...user.settings,
+            taskListViewMode: mode
+          }
+        };
+        await updateUserData(userData);
+      }
+    } catch (error) {
+      console.error('Failed to persist task list view mode:', error);
+    }
+  },
   
   handleMoveCompletedDown: async () => {
     try {
