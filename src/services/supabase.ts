@@ -9,7 +9,9 @@ if (import.meta.env.DEV) {
   console.log('🔍 Supabase Environment Check:');
   console.log('VITE_SUPABASE_URL:', supabaseUrl ? '✅ Set' : '❌ Missing');
   console.log('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? '✅ Set' : '❌ Missing');
-  console.log('All env vars:', Object.keys(import.meta.env).filter(key => key.startsWith('VITE_')));
+  console.log('🔑 Key Details:');
+  console.log('  URL:', supabaseUrl);
+  console.log('  Anon Key (first 20 chars):', supabaseAnonKey?.substring(0, 20) + '...');
 }
 
 if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('your_supabase_project_url_here') || supabaseAnonKey.includes('your_supabase_anon_key_here')) {
@@ -37,6 +39,45 @@ const supabaseClient = (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes
 // In production, environment variables should be properly configured
 export const supabase = supabaseClient as any;
 
+// Test function to verify Supabase connection
+export async function testSupabaseConnection(): Promise<{ success: boolean; error?: string; details?: any }> {
+  if (!supabase) {
+    return { success: false, error: 'Supabase client not configured' };
+  }
+
+  try {
+    console.log('🔍 Testing Supabase connection...');
+    
+    // Simple test query that should work with any project
+    const { data, error } = await supabase
+      .from('user_productivity_documents')
+      .select('id')
+      .limit(1);
+
+    if (error) {
+      console.error('❌ Supabase test query failed:', error);
+      return { 
+        success: false, 
+        error: error.message,
+        details: {
+          code: error.code,
+          hint: error.hint,
+          details: error.details
+        }
+      };
+    }
+
+    console.log('✅ Supabase connection test successful');
+    return { success: true, details: { recordCount: data?.length || 0 } };
+  } catch (err) {
+    console.error('❌ Supabase connection test error:', err);
+    return { 
+      success: false, 
+      error: err instanceof Error ? err.message : String(err) 
+    };
+  }
+}
+
 // Helper function to ensure supabase is configured
 export function getSupabaseClient() {
   if (!supabase) {
@@ -49,6 +90,7 @@ export function getSupabaseClient() {
 export function isSupabaseConfigured(): boolean {
   return supabase !== null;
 }
+
 
 // Database table definitions (for TypeScript)
 export interface Database {

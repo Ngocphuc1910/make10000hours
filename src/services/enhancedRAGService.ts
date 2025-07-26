@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured, testSupabaseConnection } from './supabase';
 import { OpenAIService } from './openai';
 import { HierarchicalChunker, ProductivityChunk } from './hierarchicalChunker';
 import { LocalChunkStorage } from './localChunkStorage';
@@ -1570,25 +1570,15 @@ export class EnhancedRAGService {
         throw new Error(`Failed to generate embedding for chunk ${chunk.id}`);
       }
       
-      // Try to store in Supabase first if configured
+      // Try Supabase first if configured
       if (isSupabaseConfigured()) {
         try {
           await this.storeInSupabase(chunk, userId, embedding);
           console.log(`✅ Successfully stored chunk in Supabase: ${chunk.id}`);
           return;
         } catch (supabaseError) {
-          const errorMessage = supabaseError instanceof Error ? supabaseError.message : String(supabaseError);
-          
-          // If it's an authentication error, fall back to local storage
-          if (errorMessage.includes('Invalid API key') || errorMessage.includes('service_role') || errorMessage.includes('authentication')) {
-            console.warn(`⚠️ Supabase authentication failed for chunk ${chunk.id}, falling back to local storage`);
-          } else {
-            // For other errors, re-throw
-            throw supabaseError;
-          }
+          console.warn(`⚠️ Supabase write failed for chunk ${chunk.id}, falling back to local storage`);
         }
-      } else {
-        console.warn(`⚠️ Supabase not configured for chunk ${chunk.id}, using local storage`);
       }
       
       // Fallback to local storage
