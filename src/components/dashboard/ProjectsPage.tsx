@@ -73,7 +73,7 @@ export const ProjectsPage: React.FC = () => {
       onDragEnd={handleDragEnd}
     >
       {/* Header */}
-      <div className={`projects-header h-16 border-b border-border flex items-center justify-between px-4 bg-background-secondary transition-all duration-500 relative`}>
+      <div className={`projects-header h-16 flex items-center justify-between px-4 bg-background-secondary transition-all duration-500 relative`}>
         {/* Left Section - Title & Deep Focus Switch */}
         <div className="flex items-center">
           {!isLeftSidebarOpen && (
