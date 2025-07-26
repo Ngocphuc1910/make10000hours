@@ -187,44 +187,12 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             </div>
           </div>
           
-          {/* Resizable Divider - Only render when right sidebar is open */}
-          {isRightSidebarOpen && (
-            <div 
-              id="resizeDivider" 
-              className="w-[8px] bg-transparent cursor-col-resize group flex-shrink-0 relative"
-              style={{ 
-                height: 'calc(100% - 16px)',
-                marginTop: '16px'
-              }}
-              onMouseDown={handleResizeStart}
-            >
-              {/* Thin visual line - positioned at right edge to connect with sidebar */}
-              <div className="w-[1px] h-full bg-border opacity-30 group-hover:opacity-60 transition-opacity duration-200 absolute right-0"></div>
-              {/* Toggle button positioned to the right of the divider, overlapping the sidebar border */}
-              <Tooltip text="Hide task list (Cmd + \)" placement="bottom" offset={32}>
-                <button 
-                  className="absolute w-6 h-12 bg-background-secondary border border-border rounded-l-md flex items-center justify-center shadow-sm hover:bg-background-primary group-hover:border-primary/30 sidebar-edge-toggle transition-colors duration-200 -right-0"
-                  style={{ top: 'calc(50% + 88px)', transform: 'translateY(-50%)' }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    useUIStore.getState().toggleRightSidebar();
-                  }}
-                  aria-label="Hide task list (Cmd + \)"
-                >
-                  <div className="flex items-center justify-center">
-                    <Icon name="arrow-right-s-line" size={14} className="text-gray-500 transition-colors group-hover:text-primary" />
-                  </div>
-                </button>
-              </Tooltip>
-            </div>
-          )}
-          
           {/* Right Sidebar - Task Management - Only render when open */}
           {isRightSidebarOpen && (
             <div 
               ref={rightSidebarRef}
               id="rightSidebar" 
-              className="border-l border-t border-border flex flex-col bg-background-primary min-w-[280px] rounded-t-lg h-full flex-shrink-0"
+              className="border-l border-t border-border flex flex-col bg-background-primary min-w-[280px] rounded-tl-lg h-full flex-shrink-0 relative group"
               style={{ 
                 width: `${currentWidth}px`,
                 minWidth: '280px',
@@ -232,26 +200,32 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 height: '100%'
               }}
             >
+              {/* Resizable left border */}
+              <div 
+                className="absolute -left-1 top-2 w-3 h-[calc(100%-8px)] cursor-col-resize bg-transparent hover:bg-border/30 transition-colors duration-200 z-10 flex items-center justify-center"
+                onMouseDown={handleResizeStart}
+              >
+                <div className="w-px h-full bg-transparent hover:bg-border/30 transition-colors duration-200" />
+              </div>
               <div className="flex-1 h-full overflow-y-auto overflow-x-visible">
                 {actualSidebarContent}
               </div>
             </div>
           )}
           
-          {/* Right sidebar show button - displayed when sidebar is hidden */}
+          {/* Show Sidebar Button - appears when sidebar is hidden */}
           {!isRightSidebarOpen && (
-            <Tooltip text="Show task list (Cmd + \)" placement="left" offset={24}>
+            <Tooltip text="Show task list (Cmd + \)" placement="left">
               <button 
-                className="fixed right-0 top-1/2 transform -translate-y-1/2 z-[100] w-6 h-12 bg-background-secondary border border-border border-r-0 rounded-l-md shadow-md hover:shadow-lg transition-all duration-200 hover:bg-background-primary hover:border-primary/30 group sidebar-edge-toggle sidebar-toggle-show"
                 onClick={() => useUIStore.getState().toggleRightSidebar()}
-                aria-label="Show task list (Cmd + \)"
+                className="fixed right-4 top-1/2 transform -translate-y-1/2 z-50 w-10 h-10 bg-background-secondary border border-border rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:bg-background-primary hover:border-primary/30 group flex items-center justify-center"
+                aria-label="Show task list"
               >
-                <div className="w-4 h-4 flex items-center justify-center text-text-secondary group-hover:text-primary transition-colors">
-                  <Icon name="arrow-left-s-line" size={14} />
-                </div>
+                <Icon name="menu-line" size={18} className="text-text-secondary group-hover:text-primary transition-colors" />
               </button>
             </Tooltip>
           )}
+          
         </div>
       </div>
       

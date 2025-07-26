@@ -8,6 +8,9 @@ import { formatMinutesToHoursAndMinutes } from '../../utils/timeUtils';
 import TaskListSorted from './TaskListSorted';
 import TimeSpent from './TimeSpent';
 import { useAuthGuard, triggerAuthenticationFlow } from '../../utils/authGuard';
+import { useUIStore } from '../../store/uiStore';
+import { Icon } from '../ui/Icon';
+import { Tooltip } from '../ui/Tooltip';
 
 interface TaskListProps {
   className?: string;
@@ -102,17 +105,27 @@ export const TaskList: React.FC<TaskListProps> = ({
           <h2 className="font-semibold text-text-primary text-left">
             {taskListViewMode === 'pomodoro' ? 'Tasks In Pomodoro' : 'Task list today'}
           </h2>
-          <div className="relative details-menu">
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowDetailsMenu(!showDetailsMenu);
-              }}
-              className="p-2 text-text-secondary hover:bg-background-primary rounded-md"
-            >
-              <i className="ri-more-2-fill w-5 h-5"></i>
-            </button>
-            {showDetailsMenu && (
+          <div className="flex items-center gap-1">
+            <Tooltip text="Hide task list (Cmd + \)" placement="bottom">
+              <button 
+                onClick={() => useUIStore.getState().toggleRightSidebar()}
+                className="p-2 text-text-secondary hover:bg-background-primary rounded-md hover:text-text-primary transition-colors"
+                aria-label="Hide task list"
+              >
+                <Icon name="arrow-right-double-line" size={16} />
+              </button>
+            </Tooltip>
+            <div className="relative details-menu">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDetailsMenu(!showDetailsMenu);
+                }}
+                className="p-2 text-text-secondary hover:bg-background-primary rounded-md"
+              >
+                <i className="ri-more-2-fill w-5 h-5"></i>
+              </button>
+              {showDetailsMenu && (
               <div className="absolute right-0 mt-2 w-64 bg-background-secondary border border-border rounded-lg shadow-lg z-10">
                 <div className="py-1">
                   <button 
@@ -148,7 +161,8 @@ export const TaskList: React.FC<TaskListProps> = ({
                   </button>
                 </div>
               </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
         
