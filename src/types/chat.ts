@@ -11,6 +11,14 @@ export interface ChatMessage {
     relevanceScore?: number;
     model?: string;
     retrievedDocuments?: number;
+    hybridMetadata?: any;
+    fallbackReason?: string;
+    totalSources?: number;
+    confidence?: number;
+    chunkLevelsUsed?: number[];
+    searchStrategy?: string;
+    queryEnhancement?: any;
+    advancedPrompting?: any;
   };
   sources?: ChatSource[];
 }

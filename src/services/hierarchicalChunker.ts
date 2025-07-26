@@ -386,6 +386,8 @@ export class HierarchicalChunker {
           created: new Date().toISOString(),
           entities: {
             sessionIds: monthSessions.map(s => s.id),
+            projectId: monthProjects.length > 0 ? monthProjects[0].id : undefined,
+            taskId: monthTasks.length > 0 ? monthTasks[0].id : undefined,
             userId
           },
           analytics: {
@@ -459,6 +461,8 @@ export class HierarchicalChunker {
           created: new Date().toISOString(),
           entities: {
             sessionIds: weekSessions.map(s => s.id),
+            projectId: weekProjects.length > 0 ? weekProjects[0].id : undefined,
+            taskId: weekTasks.length > 0 ? weekTasks[0].id : undefined,
             userId
           },
           analytics: {
@@ -505,6 +509,8 @@ export class HierarchicalChunker {
           created: new Date().toISOString(),
           entities: {
             sessionIds: dateSessions.map(s => s.id),
+            projectId: dateSessions.length > 0 && dateSessions[0].projectId ? dateSessions[0].projectId : undefined,
+            taskId: dateSessions.length > 0 && dateSessions[0].taskId ? dateSessions[0].taskId : undefined,
             userId
           },
           analytics: {
