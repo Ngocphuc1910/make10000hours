@@ -35,7 +35,7 @@ export const TopBar: React.FC<TopBarProps> = ({ className = '' }) => {
   };
 
   return (
-    <div className={`h-16 border-b border-border flex items-center justify-between px-4 bg-background-secondary transition-colors duration-200 relative ${className}`}>
+    <div className={`h-16 flex items-center justify-between px-4 bg-background-secondary transition-colors duration-200 relative ${className}`}>
       <div className="flex items-center">
         {!isLeftSidebarOpen && (
           <button
