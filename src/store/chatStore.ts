@@ -10,6 +10,7 @@ import type {
 } from '../types/chat';
 import { EnhancedRAGService } from '../services/enhancedRAGService';
 import { HierarchicalPriorityService } from '../services/hierarchicalPriorityService';
+import { OptimizedTaskCounter } from '../services/firebase/OptimizedTaskCounter';
 
 interface ChatStoreState extends ChatStore {
   // Internal state
@@ -89,28 +90,51 @@ export const useChatStore = create<ChatStoreState>()(
           )
         }));
 
-        // Try Hierarchical Priority service first, fallback to Enhanced RAG
+        // Try Simple Hybrid service first for task counting, then fallback to existing services
         let ragResponse: RAGResponse;
-        try {
-          console.log('🎯 Attempting Hierarchical Priority search...');
-          ragResponse = await HierarchicalPriorityService.queryWithHierarchicalPriority(
-            content, 
-            _userId,
-            // Pass conversation history for context
-            get().conversations
-              .find(c => c.id === conversationId)?.messages
-              .slice(-5) // Last 5 messages for context
-              .map(m => ({ role: m.role, content: m.content })) || []
-          );
-          
-          // If hierarchical search returns a fallback response, try Enhanced RAG
-          if (ragResponse.metadata.searchStrategy?.includes('no_data')) {
-            console.log('🔄 Hierarchical search returned no data, trying Enhanced RAG...');
+        
+        // First, try the optimized task counter for productivity queries
+        console.log('🚀 Checking Optimized Task Counter...');
+        const optimizedResult = await OptimizedTaskCounter.processQuery(content, _userId);
+        
+        if (optimizedResult.handled) {
+          console.log('✅ Optimized Task Counter handled the query');
+          ragResponse = {
+            response: optimizedResult.response,
+            sources: [],
+            metadata: {
+              tokens: 0,
+              responseTime: 0,
+              relevanceScore: 1.0, // 100% accurate for operational queries
+              model: 'optimized-firebase-architecture',
+              retrievedDocuments: optimizedResult.metadata?.count || 1,
+              searchStrategy: 'firebase-optimized-queries',
+              hybridMetadata: optimizedResult.metadata
+            }
+          };
+        } else {
+          // Fall back to existing services
+          try {
+            console.log('🎯 Attempting Hierarchical Priority search...');
+            ragResponse = await HierarchicalPriorityService.queryWithHierarchicalPriority(
+              content, 
+              _userId,
+              // Pass conversation history for context
+              get().conversations
+                .find(c => c.id === conversationId)?.messages
+                .slice(-5) // Last 5 messages for context
+                .map(m => ({ role: m.role, content: m.content })) || []
+            );
+            
+            // If hierarchical search returns a fallback response, try Enhanced RAG
+            if (ragResponse.metadata.searchStrategy?.includes('no_data')) {
+              console.log('🔄 Hierarchical search returned no data, trying Enhanced RAG...');
+              ragResponse = await EnhancedRAGService.queryWithRAG(content, _userId);
+            }
+          } catch (hierarchicalError) {
+            console.warn('⚠️ Hierarchical Priority service failed, falling back to Enhanced RAG:', hierarchicalError);
             ragResponse = await EnhancedRAGService.queryWithRAG(content, _userId);
           }
-        } catch (hierarchicalError) {
-          console.warn('⚠️ Hierarchical Priority service failed, falling back to Enhanced RAG:', hierarchicalError);
-          ragResponse = await EnhancedRAGService.queryWithRAG(content, _userId);
         }
         
         const assistantMessage: ChatMessage = {

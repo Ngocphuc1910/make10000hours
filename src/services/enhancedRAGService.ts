@@ -1,6 +1,7 @@
-import { supabase } from './supabase';
+import { supabase, isSupabaseConfigured } from './supabase';
 import { OpenAIService } from './openai';
 import { HierarchicalChunker, ProductivityChunk } from './hierarchicalChunker';
+import { LocalChunkStorage } from './localChunkStorage';
 import { SmartSourceSelector, SourceSelectionOptions } from './smartSourceSelector';
 import { AdaptiveRAGConfigService } from './adaptiveRAGConfig';
 import { IntelligentQueryClassifier, QueryClassification, AIContentTypeSelection } from './intelligentQueryClassifier';
@@ -470,6 +471,34 @@ export class EnhancedRAGService {
 
       console.log(`📊 Query embedding generated: ${queryEmbedding.length} dimensions`);
 
+      // If Supabase is configured, try it first
+      if (isSupabaseConfigured()) {
+        const supabaseResults = await this.performSupabaseSemanticSearch(query, userId, filters, queryEmbedding);
+        if (supabaseResults.length > 0) {
+          return supabaseResults;
+        }
+      }
+
+      // Fallback to local storage search
+      console.log(`🔍 Falling back to local storage semantic search`);
+      return await this.performLocalSemanticSearch(query, userId, filters, queryEmbedding);
+      
+    } catch (error) {
+      console.warn('Semantic search failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Perform semantic search using Supabase
+   */
+  private static async performSupabaseSemanticSearch(
+    query: string,
+    userId: string,
+    filters: { chunkLevels: number[] },
+    queryEmbedding: number[]
+  ): Promise<any[]> {
+    try {
       // Try different table names to diagnose the issue
       const tablesToTry = ['user_productivity_documents', 'postgres', 'embeddings'];
       let allDocs: any[] = [];
@@ -630,7 +659,97 @@ export class EnhancedRAGService {
       return relevantDocs;
       
     } catch (error) {
-      console.warn('Semantic search failed:', error);
+      console.warn('Supabase semantic search failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Perform semantic search using local storage
+   */
+  private static async performLocalSemanticSearch(
+    query: string,
+    userId: string,
+    filters: { chunkLevels: number[] },
+    queryEmbedding: number[]
+  ): Promise<any[]> {
+    try {
+      console.log(`🔍 Performing local storage semantic search`);
+      
+      if (!LocalChunkStorage.isAvailable()) {
+        console.warn('⚠️ Local storage not available');
+        return [];
+      }
+
+      // Get all chunks for user from local storage
+      const localChunks = LocalChunkStorage.getUserChunks(userId);
+      
+      if (localChunks.length === 0) {
+        console.log('ℹ️ No chunks found in local storage');
+        return [];
+      }
+
+      console.log(`📊 Found ${localChunks.length} chunks in local storage`);
+
+      // Calculate similarity scores
+      const docsWithSimilarity = localChunks.map((chunk, index) => {
+        // Skip chunks without embeddings
+        if (!chunk.embedding || !Array.isArray(chunk.embedding)) {
+          if (index === 0) console.log('⚠️ Some chunks missing embeddings in local storage');
+          return { ...chunk, similarity_score: 0 };
+        }
+
+        const similarity = this.calculateCosineSimilarity(queryEmbedding, chunk.embedding);
+        
+        // Convert local storage chunk to expected format
+        return {
+          id: chunk.id,
+          content: chunk.content,
+          content_type: chunk.contentType,
+          user_id: chunk.userId,
+          metadata: chunk.metadata,
+          created_at: chunk.createdAt,
+          updated_at: chunk.updatedAt,
+          similarity_score: similarity,
+          embedding: chunk.embedding,
+          source: 'local_storage'
+        };
+      });
+
+      // Apply filters
+      let filteredDocs = docsWithSimilarity;
+      
+      // Apply chunk level filtering if specified
+      if (filters.chunkLevels.length > 0) {
+        filteredDocs = docsWithSimilarity.filter(doc => {
+          const chunkLevel = doc.metadata?.chunkLevel;
+          return chunkLevel && filters.chunkLevels.includes(chunkLevel);
+        });
+      }
+
+      // Sort by similarity and apply threshold
+      const sortedDocs = filteredDocs
+        .sort((a, b) => b.similarity_score - a.similarity_score);
+      
+      // Use adaptive threshold
+      let relevantDocs = sortedDocs.filter(doc => doc.similarity_score > 0.15);
+      
+      if (relevantDocs.length === 0) {
+        console.log(`⚠️ No local docs above 0.15 threshold, taking top 5 docs`);
+        relevantDocs = sortedDocs.slice(0, 5);
+      }
+      
+      relevantDocs = relevantDocs.slice(0, 20); // Top 20 results maximum
+      
+      console.log(`🔍 Local semantic search found ${relevantDocs.length} relevant documents`);
+      if (relevantDocs.length > 0) {
+        console.log(`📊 Top similarities: ${relevantDocs.slice(0, 3).map(d => d.similarity_score?.toFixed(3)).join(', ')}`);
+      }
+      
+      return relevantDocs;
+      
+    } catch (error) {
+      console.warn('⚠️ Local storage semantic search failed:', error);
       return [];
     }
   }
@@ -721,6 +840,34 @@ export class EnhancedRAGService {
     const searchTerms = query.toLowerCase().split(' ').filter(term => term.length > 2);
     
     try {
+      // If Supabase is configured, try it first
+      if (isSupabaseConfigured()) {
+        const supabaseResults = await this.performSupabaseKeywordSearch(query, userId, filters, searchTerms);
+        if (supabaseResults.length > 0) {
+          return supabaseResults;
+        }
+      }
+
+      // Fallback to local storage search
+      console.log(`🔍 Falling back to local storage keyword search`);
+      return await this.performLocalKeywordSearch(query, userId, filters, searchTerms);
+      
+    } catch (error) {
+      console.error('All keyword search strategies failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Perform keyword search using Supabase
+   */
+  private static async performSupabaseKeywordSearch(
+    query: string,
+    userId: string,
+    filters: { chunkLevels: number[] },
+    searchTerms: string[]
+  ): Promise<any[]> {
+    try {
       // Try different tables for keyword search too
       const tablesToTry = ['user_productivity_documents', 'postgres'];
       
@@ -801,7 +948,94 @@ export class EnhancedRAGService {
       return [];
       
     } catch (error) {
-      console.error('All keyword search strategies failed:', error);
+      console.error('Supabase keyword search strategies failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Perform keyword search using local storage
+   */
+  private static async performLocalKeywordSearch(
+    query: string,
+    userId: string,
+    filters: { chunkLevels: number[] },
+    searchTerms: string[]
+  ): Promise<any[]> {
+    try {
+      console.log(`🔍 Performing local storage keyword search`);
+      
+      if (!LocalChunkStorage.isAvailable()) {
+        console.warn('⚠️ Local storage not available');
+        return [];
+      }
+
+      // Get all chunks for user from local storage
+      const localChunks = LocalChunkStorage.getUserChunks(userId);
+      
+      if (localChunks.length === 0) {
+        console.log('ℹ️ No chunks found in local storage');
+        return [];
+      }
+
+      console.log(`📊 Found ${localChunks.length} chunks in local storage for keyword search`);
+
+      // Filter and score chunks based on keyword matches
+      const scoredChunks = localChunks.map(chunk => {
+        const content = (chunk.content || '').toLowerCase();
+        
+        // Calculate keyword relevance score
+        let keywordScore = 0;
+        searchTerms.forEach(term => {
+          const termCount = (content.match(new RegExp(term, 'g')) || []).length;
+          keywordScore += termCount;
+        });
+        
+        // Normalize keyword score
+        const normalizedScore = searchTerms.length > 0 ? keywordScore / searchTerms.length : 0;
+        
+        // Convert to expected format
+        return {
+          id: chunk.id,
+          content: chunk.content,
+          content_type: chunk.contentType,
+          user_id: chunk.userId,
+          metadata: chunk.metadata,
+          created_at: chunk.createdAt,
+          updated_at: chunk.updatedAt,
+          relevanceScore: normalizedScore,
+          keywordScore: keywordScore,
+          source: 'local_storage'
+        };
+      });
+
+      // Apply filters
+      let filteredChunks = scoredChunks;
+      
+      // Apply chunk level filtering if specified
+      if (filters.chunkLevels.length > 0) {
+        filteredChunks = scoredChunks.filter(chunk => {
+          const chunkLevel = chunk.metadata?.chunkLevel;
+          return chunkLevel && filters.chunkLevels.includes(chunkLevel);
+        });
+      }
+
+      // Sort by relevance and filter
+      const sortedChunks = filteredChunks
+        .sort((a, b) => b.relevanceScore - a.relevanceScore)
+        .filter(chunk => chunk.relevanceScore > 0); // Only chunks with keyword matches
+
+      const results = sortedChunks.slice(0, 15); // Top 15 results maximum
+      
+      console.log(`🔍 Local keyword search found ${results.length} relevant documents`);
+      if (results.length > 0) {
+        console.log(`📊 Top relevance scores: ${results.slice(0, 3).map(d => d.relevanceScore.toFixed(2)).join(', ')}`);
+      }
+      
+      return results;
+      
+    } catch (error) {
+      console.warn('⚠️ Local storage keyword search failed:', error);
       return [];
     }
   }
@@ -1302,59 +1536,141 @@ export class EnhancedRAGService {
    */
   static async storeChunkWithEmbedding(chunk: ProductivityChunk, userId: string): Promise<void> {
     try {
+      console.log(`📦 Storing chunk: ${chunk.id} with content type: ${chunk.content_type}`);
+      
+      // Validate chunk structure first
+      if (!chunk || !chunk.content || !chunk.id) {
+        throw new Error(`Invalid chunk structure: missing required fields`);
+      }
+
+      if (!chunk.metadata) {
+        console.warn(`⚠️ Chunk ${chunk.id} has no metadata, creating default metadata object`);
+        chunk.metadata = {
+          chunkType: 'unknown',
+          chunkLevel: 1,
+          sourceIds: [],
+          created: new Date().toISOString(),
+          entities: {
+            userId
+          },
+          analytics: {
+            duration: 0,
+            sessionCount: 0
+          }
+        };
+      }
+
       // Generate embedding for the chunk content
       const embedding = await OpenAIService.generateEmbedding({
         content: chunk.content,
         contentType: chunk.content_type
       });
       
-      // Use the chunk's own content_type instead of mapping from chunkType
-      // This preserves the distinction between weekly_summary and daily_summary
-      const contentType = chunk.content_type;
+      if (!embedding) {
+        throw new Error(`Failed to generate embedding for chunk ${chunk.id}`);
+      }
       
-      // First, try to find existing document
-      const documentId = chunk.metadata.entities?.taskId || chunk.metadata.entities?.projectId || chunk.id;
-      
-      const { data: existingDoc } = await supabase
-        .from('user_productivity_documents')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('content_type', contentType)
-        .eq('metadata->>documentId', documentId)
-        .single();
-
-      const documentData = {
-        user_id: userId,
-        content_type: contentType,
-        content: chunk.content,
-        embedding: embedding,
-        metadata: {
-          ...chunk.metadata,
-          isEnhanced: true,
-          documentId: documentId
-        },
-      };
-
-      let error;
-      if (existingDoc) {
-        // Update existing document
-        const result = await supabase
-          .from('user_productivity_documents')
-          .update(documentData)
-          .eq('id', existingDoc.id);
-        error = result.error;
+      // Try to store in Supabase first if configured
+      if (isSupabaseConfigured()) {
+        try {
+          await this.storeInSupabase(chunk, userId, embedding);
+          console.log(`✅ Successfully stored chunk in Supabase: ${chunk.id}`);
+          return;
+        } catch (supabaseError) {
+          const errorMessage = supabaseError instanceof Error ? supabaseError.message : String(supabaseError);
+          
+          // If it's an authentication error, fall back to local storage
+          if (errorMessage.includes('Invalid API key') || errorMessage.includes('service_role') || errorMessage.includes('authentication')) {
+            console.warn(`⚠️ Supabase authentication failed for chunk ${chunk.id}, falling back to local storage`);
+          } else {
+            // For other errors, re-throw
+            throw supabaseError;
+          }
+        }
       } else {
-        // Insert new document
-        const result = await supabase
-          .from('user_productivity_documents')
-          .insert(documentData);
-        error = result.error;
+        console.warn(`⚠️ Supabase not configured for chunk ${chunk.id}, using local storage`);
+      }
+      
+      // Fallback to local storage
+      if (LocalChunkStorage.isAvailable()) {
+        try {
+          await LocalChunkStorage.storeChunk(chunk, userId, embedding);
+          console.log(`✅ Successfully stored chunk in local storage: ${chunk.id}`);
+        } catch (localError) {
+          console.error(`❌ Local storage also failed for chunk ${chunk.id}:`, localError);
+          throw new Error(`Failed to store chunk ${chunk.id} in both Supabase and local storage`);
+        }
+      } else {
+        console.error(`❌ Local storage not available for chunk ${chunk.id}`);
+        throw new Error(`Cannot store chunk ${chunk.id}: Supabase failed and local storage unavailable`);
       }
 
-      if (error) throw error;
-
     } catch (error) {
-      console.error(`Failed to store chunk ${chunk.id}:`, error);
+      console.error(`❌ Failed to store chunk ${chunk.id}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Store chunk in Supabase (extracted as separate method)
+   */
+  private static async storeInSupabase(chunk: ProductivityChunk, userId: string, embedding: number[]): Promise<void> {
+    // Use the chunk's own content_type instead of mapping from chunkType
+    // This preserves the distinction between weekly_summary and daily_summary
+    const contentType = chunk.content_type;
+    
+    // Safely extract document ID with proper null checking
+    const documentId = (chunk.metadata.entities?.taskId) || 
+                      (chunk.metadata.entities?.projectId) || 
+                      chunk.id;
+    
+    console.log(`🔍 Looking for existing document with documentId: ${documentId}`);
+
+    const { data: existingDoc } = await supabase
+      .from('user_productivity_documents')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('content_type', contentType)
+      .eq('metadata->>documentId', documentId)
+      .single();
+
+    const documentData = {
+      user_id: userId,
+      content_type: contentType,
+      content: chunk.content,
+      embedding: embedding,
+      metadata: {
+        ...chunk.metadata,
+        isEnhanced: true,
+        documentId: documentId
+      },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    let error;
+    if (existingDoc) {
+      console.log(`📝 Updating existing document: ${existingDoc.id}`);
+      // Update existing document
+      const result = await supabase
+        .from('user_productivity_documents')
+        .update({
+          ...documentData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingDoc.id);
+      error = result.error;
+    } else {
+      console.log(`➕ Inserting new document for chunk: ${chunk.id}`);
+      // Insert new document
+      const result = await supabase
+        .from('user_productivity_documents')
+        .insert(documentData);
+      error = result.error;
+    }
+
+    if (error) {
+      console.error(`❌ Supabase operation failed for chunk ${chunk.id}:`, error);
       throw error;
     }
   }
