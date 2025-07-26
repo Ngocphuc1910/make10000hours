@@ -30,14 +30,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const getSidebarContent = () => {
     if (location.pathname === '/pomodoro') {
       return (
-        <div className="p-4 space-y-4">
+        <div className="h-full">
           {/* Task List */}
-          <div className="bg-background-primary rounded-t-lg border border-border overflow-hidden">
-            <div className="p-4">
-              <h3 className="text-lg font-semibold text-text-primary mb-4">Tasks</h3>
-              <TaskList />
-            </div>
-          </div>
+          <TaskList />
         </div>
       );
     }
@@ -58,31 +53,18 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     const containerRect = timerSectionRef.current.parentElement?.getBoundingClientRect();
     if (!containerRect) return;
     
-    const minTimerWidth = 300;
     const minSidebarWidth = 280;
     const maxSidebarWidth = Math.floor(containerRect.width * 0.5); // 50% of screen width
-    const maxTimerWidth = containerRect.width - minSidebarWidth;
+    const dividerWidth = 8;
     
-    let newTimerWidth = e.clientX - containerRect.left;
+    // Calculate new sidebar width based on mouse position from the right edge
+    let newSidebarWidth = containerRect.right - e.clientX;
     
     // Apply constraints
-    if (newTimerWidth < minTimerWidth) newTimerWidth = minTimerWidth;
-    if (newTimerWidth > maxTimerWidth) newTimerWidth = maxTimerWidth;
+    if (newSidebarWidth < minSidebarWidth) newSidebarWidth = minSidebarWidth;
+    if (newSidebarWidth > maxSidebarWidth) newSidebarWidth = maxSidebarWidth;
     
-    // Calculate sidebar width and apply 50% constraint
-    let newSidebarWidth = containerRect.width - newTimerWidth - 1; // -1 for the divider
-    
-    // Ensure sidebar doesn't exceed 50% of screen width
-    if (newSidebarWidth > maxSidebarWidth) {
-      newSidebarWidth = maxSidebarWidth;
-      newTimerWidth = containerRect.width - newSidebarWidth - 1;
-    }
-    
-    // Update widths immediately for smooth visual feedback
-    timerSectionRef.current.style.width = `${newTimerWidth}px`;
-    timerSectionRef.current.style.flex = 'none';
-    
-    // Calculate and update sidebar width
+    // Update sidebar width
     rightSidebarRef.current.style.width = `${newSidebarWidth}px`;
     
     // Update local state for immediate visual feedback
@@ -120,7 +102,6 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
       window.removeEventListener('mousemove', handleResizeMove);
       window.removeEventListener('mouseup', handleResizeEnd);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isResizing, currentWidth]);
   
   // Sync local state with store state when store changes (but not during resize)
@@ -129,36 +110,75 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
       setCurrentWidth(rightSidebarWidth);
     }
   }, [rightSidebarWidth, isResizing]);
+
+  // Handle window resize for responsive behavior
+  React.useEffect(() => {
+    const handleWindowResize = () => {
+      if (typeof window !== 'undefined' && isRightSidebarOpen && rightSidebarRef.current) {
+        const maxSidebarWidth = Math.floor(window.innerWidth * 0.5); // 50% of screen width
+        const minSidebarWidth = 280;
+        const defaultSidebarWidth = 400; // Default preferred width
+        
+        let newWidth = currentWidth;
+        
+        // If window expanded and current width is too small, expand to default or max available
+        if (window.innerWidth > 1200 && currentWidth < defaultSidebarWidth) {
+          newWidth = Math.min(defaultSidebarWidth, maxSidebarWidth);
+        }
+        // If window shrunk and current width is too large, shrink to fit
+        else if (currentWidth > maxSidebarWidth) {
+          newWidth = maxSidebarWidth;
+        }
+        // Ensure minimum width
+        else if (currentWidth < minSidebarWidth) {
+          newWidth = minSidebarWidth;
+        }
+        
+        if (newWidth !== currentWidth) {
+          // Update the actual sidebar width
+          rightSidebarRef.current.style.width = `${newWidth}px`;
+          setCurrentWidth(newWidth);
+          setRightSidebarWidth(newWidth);
+        }
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', handleWindowResize);
+      
+      return () => window.removeEventListener('resize', handleWindowResize);
+    }
+  }, [isRightSidebarOpen, currentWidth, setRightSidebarWidth]);
   
   // Get the right sidebar content
   const actualSidebarContent = rightSidebarContent || getSidebarContent();
   
   return (
-    <div className={`main-layout-container flex h-screen overflow-hidden bg-background-primary ${location.pathname === '/pomodoro' ? 'pomodoro-page-container' : ''} ${className}`}>
+    <div className={`main-layout-container flex h-screen w-screen overflow-hidden bg-background-primary ${location.pathname === '/pomodoro' ? 'pomodoro-page-container' : ''} ${className}`}>
       {/* Left Sidebar - Navigation */}
       <Sidebar className={location.pathname === '/pomodoro' ? 'pomodoro-sidebar' : ''} />
       
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Top Bar */}
         <TopBar />
         
         {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden relative" style={{ zIndex: 1 }}>
+        <div className="flex-1 flex h-full overflow-hidden relative w-full" style={{ zIndex: 1 }}>
           {/* Timer Section */}
           <div 
             ref={timerSectionRef}
-            className="flex-1 flex flex-col items-center justify-center p-6 bg-background-primary relative min-w-[300px] overflow-y-auto scrollbar-thin" 
+            className="flex-1 flex flex-col items-center justify-center p-6 bg-background-primary relative min-w-[300px] h-full overflow-y-auto scrollbar-thin" 
             id="timerSection" 
             style={
-              // When right sidebar is closed, center with max width; when open, flex to fit
+              // Responsive behavior for both sidebar states
               isRightSidebarOpen ? {
-                flex: '1',
-                minWidth: '0'
+                flex: '1 1 auto',
+                minWidth: '300px',
+                height: '100%'
               } : {
-                margin: '0 auto',
                 width: '100%',
-                maxWidth: '800px'
+                height: '100%'
               }
             }
           >
@@ -171,13 +191,20 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           {isRightSidebarOpen && (
             <div 
               id="resizeDivider" 
-              className="w-[1px] bg-transparent cursor-col-resize hover:bg-primary/20 flex items-center justify-center group mt-4"
+              className="w-[8px] bg-transparent cursor-col-resize group flex-shrink-0 relative"
+              style={{ 
+                height: 'calc(100% - 16px)',
+                marginTop: '16px'
+              }}
               onMouseDown={handleResizeStart}
             >
-              <div className="w-4 h-full opacity-0"></div>
+              {/* Thin visual line - positioned at right edge to connect with sidebar */}
+              <div className="w-[1px] h-full bg-border opacity-30 group-hover:opacity-60 transition-opacity duration-200 absolute right-0"></div>
+              {/* Toggle button positioned to the right of the divider, overlapping the sidebar border */}
               <Tooltip text="Hide task list (Cmd + \)" placement="bottom" offset={32}>
                 <button 
-                  className="absolute w-6 h-12 bg-background-secondary border border-border rounded-l-md flex items-center justify-center shadow-sm hover:shadow-md -right-0 top-1/2 transform -translate-y-1/2 transition-all duration-200 hover:bg-background-primary group-hover:border-primary/30 sidebar-edge-toggle"
+                  className="absolute w-6 h-12 bg-background-secondary border border-border rounded-l-md flex items-center justify-center shadow-sm hover:bg-background-primary group-hover:border-primary/30 sidebar-edge-toggle transition-colors duration-200 -right-0"
+                  style={{ top: 'calc(50% + 88px)', transform: 'translateY(-50%)' }}
                   onClick={(e) => {
                     e.stopPropagation();
                     useUIStore.getState().toggleRightSidebar();
@@ -197,13 +224,15 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             <div 
               ref={rightSidebarRef}
               id="rightSidebar" 
-              className="border-l border-t border-border flex flex-col bg-background-primary min-w-[280px] rounded-t-lg"
+              className="border-l border-t border-border flex flex-col bg-background-primary min-w-[280px] rounded-t-lg h-full flex-shrink-0"
               style={{ 
                 width: `${currentWidth}px`,
-                flexShrink: 0
+                minWidth: '280px',
+                maxWidth: '50vw',
+                height: '100%'
               }}
             >
-              <div className="flex-1 overflow-y-auto overflow-x-visible">
+              <div className="flex-1 h-full overflow-y-auto overflow-x-visible">
                 {actualSidebarContent}
               </div>
             </div>
