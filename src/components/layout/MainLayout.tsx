@@ -182,7 +182,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
               }
             }
           >
-            <div className="w-full h-full overflow-y-auto scrollbar-thin flex flex-col items-center justify-center">
+            <div className="w-full h-full overflow-y-auto flex flex-col items-center justify-center timer-scroll-container">
               {children || <Outlet />}
             </div>
           </div>
