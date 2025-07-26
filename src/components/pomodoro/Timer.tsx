@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTimerStore } from '../../store/timerStore';
 import { useTaskStore } from '../../store/taskStore';
 import TimerCircle from '../ui/TimerCircle';
@@ -10,6 +10,9 @@ interface TimerProps {
 }
 
 export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
+  // State for responsive circle size
+  const [circleSize, setCircleSize] = useState(300);
+
   // Use selectors for the values that change frequently and need reactivity
   const currentTime = useTimerStore(state => state.currentTime);
   const totalTime = useTimerStore(state => state.totalTime);
@@ -28,6 +31,19 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
   
   // Get action functions (these don't change, so we can destructure them)
   const { start, pause, reset, skip, setMode } = useTimerStore();
+
+  // Update circle size on window resize
+  useEffect(() => {
+    const updateCircleSize = () => {
+      const newSize = Math.min(300, Math.max(200, window.innerWidth * 0.3));
+      setCircleSize(newSize);
+    };
+
+    updateCircleSize();
+    window.addEventListener('resize', updateCircleSize);
+    
+    return () => window.removeEventListener('resize', updateCircleSize);
+  }, []);
   
   // Button handlers
   const handleStartPause = () => {
@@ -123,7 +139,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
         currentTime={currentTime} 
         totalTime={totalTime} 
         className="mb-6"
-        size={Math.min(300, window.innerWidth - 80)} // Responsive size
+        size={circleSize} // Use state-based responsive size
       >
         <div className="text-4xl sm:text-5xl font-bold text-text-primary">{timeDisplay}</div>
         <div className="text-sm text-text-secondary">remaining</div>
