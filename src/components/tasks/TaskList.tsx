@@ -97,7 +97,7 @@ export const TaskList: React.FC<TaskListProps> = ({
   
   return (
     <div className={`h-full flex flex-col ${className}`}>
-      <div className="p-4 border-b border-border">
+      <div className="px-4 py-3">
         <div className="flex justify-between items-center">
           <h2 className="font-semibold text-text-primary text-left">
             {taskListViewMode === 'pomodoro' ? 'Tasks In Pomodoro' : 'Task list today'}

@@ -32,7 +32,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
       return (
         <div className="p-4 space-y-4">
           {/* Task List */}
-          <div className="bg-background-primary rounded-lg border border-border">
+          <div className="bg-background-primary rounded-t-lg border border-border overflow-hidden">
             <div className="p-4">
               <h3 className="text-lg font-semibold text-text-primary mb-4">Tasks</h3>
               <TaskList />
@@ -151,11 +151,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             className="flex-1 flex flex-col items-center justify-center p-6 bg-background-primary relative min-w-[300px] overflow-y-auto scrollbar-thin" 
             id="timerSection" 
             style={
-              // When both sidebars are hidden, remove width constraints for perfect centering
-              (!isLeftSidebarOpen && !isRightSidebarOpen) ? {} : {
-                margin: '0 auto', 
-                width: isRightSidebarOpen ? '100%' : '800px',
-                maxWidth: isRightSidebarOpen ? '100%' : '800px'
+              // When right sidebar is closed, center with max width; when open, flex to fit
+              isRightSidebarOpen ? {
+                flex: '1',
+                minWidth: '0'
+              } : {
+                margin: '0 auto',
+                width: '100%',
+                maxWidth: '800px'
               }
             }
           >
@@ -168,7 +171,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           {isRightSidebarOpen && (
             <div 
               id="resizeDivider" 
-              className="w-[1px] bg-border/20 cursor-col-resize hover:bg-primary/20 flex items-center justify-center group"
+              className="w-[1px] bg-transparent cursor-col-resize hover:bg-primary/20 flex items-center justify-center group mt-4"
               onMouseDown={handleResizeStart}
             >
               <div className="w-4 h-full opacity-0"></div>
@@ -194,7 +197,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             <div 
               ref={rightSidebarRef}
               id="rightSidebar" 
-              className="border-l border-border flex flex-col bg-background-primary min-w-[280px]"
+              className="border-l border-t border-border flex flex-col bg-background-primary min-w-[280px] rounded-t-lg"
               style={{ 
                 width: `${currentWidth}px`,
                 flexShrink: 0
