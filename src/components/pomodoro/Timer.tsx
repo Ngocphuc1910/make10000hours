@@ -18,7 +18,6 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
   const totalTime = useTimerStore(state => state.totalTime);
   const isRunning = useTimerStore(state => state.isRunning);
   const mode = useTimerStore(state => state.mode);
-  const sessionsCompleted = useTimerStore(state => state.sessionsCompleted);
   const currentTask = useTimerStore(state => state.currentTask);
   const enableStartPauseBtn = useTimerStore(state => state.enableStartPauseBtn);
   
@@ -105,33 +104,44 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
   return (
     <div className={`flex flex-col items-center max-w-full w-full ${className}`}>
       <div className="mb-8 text-center w-full">
-        <div className="inline-flex items-center bg-background-container p-1 rounded-full mb-2 flex-wrap justify-center">
+        <div className="inline-flex rounded-full bg-background-container p-1 mb-2">
           <button 
-            className={`px-4 sm:px-6 py-2 rounded-full font-medium transition-all !rounded-button whitespace-nowrap text-sm sm:text-base
-            ${mode === 'pomodoro' ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'}`}
+            type="button" 
+            className={`px-6 py-2.5 text-base font-medium rounded-full focus:outline-none ${
+              mode === 'pomodoro'
+                ? 'bg-primary text-white shadow-sm' 
+                : 'text-text-secondary hover:text-text-primary'
+            }`}
             onClick={() => setMode('pomodoro')}
             disabled={isLoading || isTaskLoading}
           >
             Pomodoro
           </button>
           <button 
-            className={`px-4 sm:px-6 py-2 rounded-full font-medium transition-all !rounded-button whitespace-nowrap text-sm sm:text-base
-            ${mode === 'shortBreak' ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'}`}
+            type="button" 
+            className={`px-6 py-2.5 text-base font-medium rounded-full focus:outline-none ${
+              mode === 'shortBreak'
+                ? 'bg-primary text-white shadow-sm' 
+                : 'text-text-secondary hover:text-text-primary'
+            }`}
             onClick={() => setMode('shortBreak')}
             disabled={isLoading || isTaskLoading}
           >
             Short Break
           </button>
           <button 
-            className={`px-4 sm:px-6 py-2 rounded-full font-medium transition-all !rounded-button whitespace-nowrap text-sm sm:text-base
-            ${mode === 'longBreak' ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'}`}
+            type="button" 
+            className={`px-6 py-2.5 text-base font-medium rounded-full focus:outline-none ${
+              mode === 'longBreak'
+                ? 'bg-primary text-white shadow-sm' 
+                : 'text-text-secondary hover:text-text-primary'
+            }`}
             onClick={() => setMode('longBreak')}
             disabled={isLoading || isTaskLoading}
           >
             Long Break
           </button>
         </div>
-        <p className="text-sm text-text-secondary">Session {sessionsCompleted + 1} of {useTimerStore.getState().settings.longBreakInterval}</p>
         {renderSyncStatus()}
       </div>
       
@@ -147,7 +157,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
       
       <div className="flex items-center space-x-4 mb-8 flex-wrap justify-center">
         <button 
-          className={`px-5 sm:px-6 py-3 rounded-full font-medium bg-primary text-white hover:bg-opacity-90 !rounded-button whitespace-nowrap m-1 ${(!enableStartPauseBtn || isLoading || isTaskLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`px-5 sm:px-6 py-3 rounded-full font-medium bg-primary text-white hover:bg-opacity-90 !rounded-button whitespace-nowrap m-1 focus:outline-none ${(!enableStartPauseBtn || isLoading || isTaskLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
           onClick={handleStartPause}
           disabled={isLoading || isTaskLoading || !enableStartPauseBtn}
         >
@@ -161,7 +171,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
           </div>
         </button>
         <button 
-          className="p-3 rounded-full border border-border text-text-primary hover:bg-background-secondary !rounded-button whitespace-nowrap m-1 disabled:opacity-50"
+          className="p-3 rounded-full border border-border text-text-primary hover:bg-background-secondary !rounded-button whitespace-nowrap m-1 disabled:opacity-50 focus:outline-none"
           onClick={handleReset}
           disabled={isLoading || isTaskLoading}
         >
@@ -170,7 +180,7 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
           </div>
         </button>
         <button 
-          className="p-3 rounded-full border border-border text-text-primary hover:bg-background-secondary !rounded-button whitespace-nowrap m-1 disabled:opacity-50"
+          className="p-3 rounded-full border border-border text-text-primary hover:bg-background-secondary !rounded-button whitespace-nowrap m-1 disabled:opacity-50 focus:outline-none"
           onClick={handleSkip}
           disabled={isLoading || isTaskLoading}
         >
