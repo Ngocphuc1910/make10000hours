@@ -204,11 +204,6 @@ export const TopProjects: React.FC = React.memo(() => {
     return (
       <Card 
         title="Top Projects"
-        action={
-          <button className="text-sm text-primary hover:text-primary-dark font-medium">
-            View All
-          </button>
-        }
       >
         <div className="flex items-center justify-center h-[360px]">
           <div className="text-center">
@@ -225,11 +220,6 @@ export const TopProjects: React.FC = React.memo(() => {
   return (
     <Card 
       title="Top Projects"
-      action={
-        <button className="text-sm text-primary hover:text-primary-dark font-medium">
-          View All
-        </button>
-      }
     >
       <div className="flex flex-col w-full h-[360px]">
         <div className="flex-1">
@@ -244,18 +234,6 @@ export const TopProjects: React.FC = React.memo(() => {
               }}
               barSize={35}
             >
-              <text
-                x="50%"
-                y={20}
-                textAnchor="middle"
-                dominantBaseline="hanging"
-                className="fill-text-primary text-sm font-medium"
-                style={{
-                  transform: 'translateY(-5px)'
-                }}
-              >
-                Time Spent
-              </text>
               <CartesianGrid
                 strokeDasharray="3 3"
                 vertical={false}
