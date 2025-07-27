@@ -10,6 +10,8 @@ import {
   ExecutionMetadata
 } from './types';
 import { OpenAIService } from '../openai';
+import { ProductivityInsightFormatter } from '../responseFormatting/ProductivityInsightFormatter';
+import { InsightTemplates, MonthlyOverviewData, ProjectAnalysisData, TaskSummaryData } from '../responseFormatting/InsightTemplates';
 
 export class ResponseSynthesizer {
   private static readonly MAX_CONTEXT_LENGTH = 8000; // Characters
@@ -33,12 +35,22 @@ export class ResponseSynthesizer {
       supabaseResult
     );
 
-    // Generate AI response using combined data
-    const aiResponse = await this.generateAIResponse(
+    // Try enhanced formatting first, fall back to AI if not applicable
+    let aiResponse = await this.generateEnhancedResponse(
       originalQuery,
-      context,
-      classification
+      classification,
+      firebaseResult,
+      supabaseResult
     );
+
+    // If enhanced formatting didn't apply, use traditional AI response
+    if (!aiResponse) {
+      aiResponse = await this.generateAIResponse(
+        originalQuery,
+        context,
+        classification
+      );
+    }
 
     // Combine sources from both databases
     const combinedSources = this.combineSources(firebaseResult, supabaseResult);
@@ -326,16 +338,497 @@ export class ResponseSynthesizer {
     }
   }
 
+  /**
+   * Generate enhanced structured response using templates
+   */
+  private static async generateEnhancedResponse(
+    originalQuery: string,
+    classification: QueryClassification,
+    firebaseResult: OperationalResult | null,
+    supabaseResult: SemanticResult | null
+  ): Promise<string | null> {
+    
+    console.log(`🎨 Attempting enhanced formatting for query type: ${classification.type}`);
+    console.log(`📋 Firebase result:`, firebaseResult ? 'Available' : 'None');
+    console.log(`🧠 Supabase result:`, supabaseResult ? 'Available' : 'None');
+    
+    // Try enhanced formatting even with limited data
+    const hasFirebaseData = firebaseResult && firebaseResult.data;
+    const hasSupabaseData = supabaseResult && supabaseResult.insights && supabaseResult.insights.length > 0;
+    
+    if (!hasFirebaseData && !hasSupabaseData) {
+      console.log(`⚠️ No data available for enhanced formatting`);
+      return null;
+    }
+
+    // Monthly/Weekly overview detection
+    if (this.isTimeRangeQuery(originalQuery, classification)) {
+      console.log(`✅ Using time range insights template`);
+      return this.generateTimeRangeInsights(firebaseResult, supabaseResult);
+    }
+
+    // Project analysis detection
+    if (this.isProjectAnalysisQuery(originalQuery, classification)) {
+      console.log(`✅ Using project analysis template`);
+      return this.generateProjectInsights(firebaseResult, supabaseResult, classification);
+    }
+
+    // Task summary detection
+    if (this.isTaskSummaryQuery(originalQuery, classification)) {
+      console.log(`✅ Using task summary template`);
+      return this.generateTaskInsights(firebaseResult, supabaseResult);
+    }
+
+    // If no specific template matches but we have data, try generic enhanced formatting
+    if (hasFirebaseData) {
+      console.log(`✅ Using generic enhanced formatting`);
+      return this.generateGenericEnhancedFormat(firebaseResult, supabaseResult, originalQuery);
+    }
+
+    console.log(`❌ No template matched, falling back to AI response`);
+    return null;
+  }
+
+  /**
+   * Check if query is asking for time range insights (monthly, weekly overview)
+   */
+  private static isTimeRangeQuery(query: string, classification: QueryClassification): boolean {
+    const timeRangeKeywords = ['monthly', 'weekly', 'overview', 'summary', 'performance', 'insights', 'review', 'work', 'july', 'june', 'month'];
+    const queryLower = query.toLowerCase();
+    
+    console.log(`🔍 Checking time range query for: "${query}"`);
+    
+    const hasTimeKeyword = timeRangeKeywords.some(keyword => queryLower.includes(keyword));
+    const hasGeneralTerms = queryLower.includes('what did i do') || 
+                           queryLower.includes('give me') || 
+                           queryLower.includes('show me') ||
+                           queryLower.includes('reviewing');
+    
+    const isTimeRangeQuery = hasTimeKeyword || hasGeneralTerms;
+    console.log(`📊 Time range query result: ${isTimeRangeQuery} (keywords: ${hasTimeKeyword}, general: ${hasGeneralTerms})`);
+    
+    return isTimeRangeQuery;
+  }
+
+  /**
+   * Check if query is asking for project analysis
+   */
+  private static isProjectAnalysisQuery(query: string, classification: QueryClassification): boolean {
+    const projectKeywords = ['project', 'make10000hours', 'progress'];
+    const queryLower = query.toLowerCase();
+    
+    console.log(`🔍 Checking project analysis query for: "${query}"`);
+    
+    const hasProjectKeyword = projectKeywords.some(keyword => queryLower.includes(keyword));
+    const hasProjectEntity = classification.entities.some(entity => entity.type === 'project');
+    
+    // More flexible detection - if it mentions specific project names or general progress
+    const isProjectQuery = hasProjectKeyword || hasProjectEntity || 
+                          queryLower.includes('make10000hours') ||
+                          (queryLower.includes('progress') && queryLower.includes('project'));
+    
+    console.log(`📂 Project analysis query result: ${isProjectQuery} (keywords: ${hasProjectKeyword}, entities: ${hasProjectEntity})`);
+    
+    return isProjectQuery;
+  }
+
+  /**
+   * Check if query is asking for task summary
+   */
+  private static isTaskSummaryQuery(query: string, classification: QueryClassification): boolean {
+    const taskKeywords = ['task', 'completed', 'created', 'todo'];
+    const queryLower = query.toLowerCase();
+    
+    return taskKeywords.some(keyword => queryLower.includes(keyword));
+  }
+
+  /**
+   * Generate time range insights (monthly/weekly overview)
+   */
+  private static generateTimeRangeInsights(
+    firebaseResult: OperationalResult,
+    supabaseResult: SemanticResult | null
+  ): string {
+    try {
+      // Extract data from Firebase result
+      const data = firebaseResult.data;
+      
+      // Convert to monthly overview format
+      const monthlyData: MonthlyOverviewData = {
+        totalTimeMinutes: this.extractTotalTime(data),
+        sessionCount: this.extractSessionCount(data),
+        projectCount: this.extractProjectCount(data),
+        taskCount: this.extractTaskCount(data),
+        tasksCompleted: this.extractTasksCompleted(data),
+        tasksCreated: this.extractTasksCreated(data),
+        topProjects: this.extractTopProjects(data),
+        mostProductiveTime: this.extractMostProductiveTime(data)
+      };
+
+      return InsightTemplates.generateMonthlyOverview(monthlyData);
+    } catch (error) {
+      console.error('Error generating time range insights:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Generate project-specific insights
+   */
+  private static generateProjectInsights(
+    firebaseResult: OperationalResult,
+    supabaseResult: SemanticResult | null,
+    classification: QueryClassification
+  ): string {
+    try {
+      const data = firebaseResult.data;
+      const projectEntity = classification.entities.find(e => e.type === 'project');
+      const projectName = projectEntity?.value || 'Unknown Project';
+
+      const projectData: ProjectAnalysisData = {
+        projectName,
+        totalTimeMinutes: this.extractProjectTime(data, projectName),
+        taskCount: this.extractProjectTaskCount(data, projectName),
+        completionRate: this.extractProjectCompletionRate(data, projectName),
+        keyMilestones: this.extractKeyMilestones(data, projectName)
+      };
+
+      return InsightTemplates.generateProjectAnalysis(projectData);
+    } catch (error) {
+      console.error('Error generating project insights:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Generate task summary insights
+   */
+  private static generateTaskInsights(
+    firebaseResult: OperationalResult,
+    supabaseResult: SemanticResult | null
+  ): string {
+    try {
+      const data = firebaseResult.data;
+
+      const taskData: TaskSummaryData = {
+        totalTasks: this.extractTaskCount(data),
+        completed: this.extractTasksCompleted(data),
+        created: this.extractTasksCreated(data),
+        inProgress: this.extractTasksInProgress(data),
+        byProject: this.extractTasksByProject(data)
+      };
+
+      return InsightTemplates.generateTaskSummary(taskData);
+    } catch (error) {
+      console.error('Error generating task insights:', error);
+      return null;
+    }
+  }
+
+  // Data extraction helper methods
+  private static extractTotalTime(data: any): number {
+    // Try multiple possible field names for total time
+    const timeFields = [
+      'totalTime', 'totalMinutes', 'totalTimeMinutes', 'total_time', 
+      'time', 'timeSpent', 'productiveTime'
+    ];
+    
+    for (const field of timeFields) {
+      if (data[field] && typeof data[field] === 'number') {
+        return data[field];
+      }
+    }
+    
+    // If we have session data, try to calculate from sessions
+    if (data.sessions && Array.isArray(data.sessions)) {
+      return data.sessions.reduce((total: number, session: any) => {
+        return total + (session.duration || session.time || 0);
+      }, 0);
+    }
+    
+    return 0;
+  }
+
+  private static extractSessionCount(data: any): number {
+    // Try direct count first
+    if (data.sessionCount && typeof data.sessionCount === 'number') {
+      return data.sessionCount;
+    }
+    
+    // Try sessions array length
+    if (data.sessions && Array.isArray(data.sessions)) {
+      return data.sessions.length;
+    }
+    
+    // Try other possible field names
+    const countFields = ['totalSessions', 'session_count', 'workSessions'];
+    for (const field of countFields) {
+      if (data[field] && typeof data[field] === 'number') {
+        return data[field];
+      }
+    }
+    
+    return 0;
+  }
+
+  private static extractProjectCount(data: any): number {
+    if (data.projectCount && typeof data.projectCount === 'number') {
+      return data.projectCount;
+    }
+    
+    if (data.projects && Array.isArray(data.projects)) {
+      return data.projects.length;
+    }
+    
+    // Try other possible field names
+    const countFields = ['totalProjects', 'project_count', 'activeProjects'];
+    for (const field of countFields) {
+      if (data[field] && typeof data[field] === 'number') {
+        return data[field];
+      }
+    }
+    
+    return 0;
+  }
+
+  private static extractTaskCount(data: any): number {
+    if (data.taskCount && typeof data.taskCount === 'number') {
+      return data.taskCount;
+    }
+    
+    if (data.tasks && Array.isArray(data.tasks)) {
+      return data.tasks.length;
+    }
+    
+    // Try other possible field names
+    const countFields = ['totalTasks', 'task_count', 'managedTasks'];
+    for (const field of countFields) {
+      if (data[field] && typeof data[field] === 'number') {
+        return data[field];
+      }
+    }
+    
+    return 0;
+  }
+
+  private static extractTasksCompleted(data: any): number {
+    const completedFields = [
+      'tasksCompleted', 'completed', 'completedTasks', 'tasks_completed',
+      'finishedTasks', 'doneTasks'
+    ];
+    
+    for (const field of completedFields) {
+      if (data[field] && typeof data[field] === 'number') {
+        return data[field];
+      }
+    }
+    
+    // Try to count from tasks array
+    if (data.tasks && Array.isArray(data.tasks)) {
+      return data.tasks.filter((task: any) => 
+        task.status === 'completed' || task.completed === true || task.done === true
+      ).length;
+    }
+    
+    return 0;
+  }
+
+  private static extractTasksCreated(data: any): number {
+    const createdFields = [
+      'tasksCreated', 'created', 'createdTasks', 'tasks_created',
+      'newTasks', 'addedTasks'
+    ];
+    
+    for (const field of createdFields) {
+      if (data[field] && typeof data[field] === 'number') {
+        return data[field];
+      }
+    }
+    
+    return 0;
+  }
+
+  private static extractTasksInProgress(data: any): number {
+    return data.inProgress || 0;
+  }
+
+  private static extractTopProjects(data: any): Array<any> {
+    // Try multiple possible project data structures
+    let projects = data.projects || data.topProjects || data.projectBreakdown;
+    
+    if (!projects || !Array.isArray(projects)) {
+      // Try to construct from other data structures
+      if (data.projectData && typeof data.projectData === 'object') {
+        projects = Object.keys(data.projectData).map(name => ({
+          name,
+          ...data.projectData[name]
+        }));
+      }
+    }
+    
+    if (!projects || !Array.isArray(projects)) {
+      return [];
+    }
+    
+    return projects.slice(0, 3).map(project => ({
+      name: project.name || project.projectName || 'Unnamed Project',
+      timeMinutes: project.timeMinutes || project.time || project.duration || 0,
+      percentage: project.percentage || project.percent || 0,
+      keyTasks: project.keyTasks || project.tasks || project.mainTasks || [],
+      tasksCompleted: project.tasksCompleted || project.completed || 0
+    }));
+  }
+
+  private static extractMostProductiveTime(data: any): string | undefined {
+    return data.mostProductiveTime || data.peakTime;
+  }
+
+  private static extractProjectTime(data: any, projectName: string): number {
+    if (data.projects) {
+      const project = data.projects.find(p => p.name === projectName);
+      return project?.timeMinutes || 0;
+    }
+    return 0;
+  }
+
+  private static extractProjectTaskCount(data: any, projectName: string): number {
+    if (data.projects) {
+      const project = data.projects.find(p => p.name === projectName);
+      return project?.taskCount || 0;
+    }
+    return 0;
+  }
+
+  private static extractProjectCompletionRate(data: any, projectName: string): number {
+    if (data.projects) {
+      const project = data.projects.find(p => p.name === projectName);
+      return project?.completionRate || 0;
+    }
+    return 0;
+  }
+
+  private static extractKeyMilestones(data: any, projectName: string): string[] {
+    if (data.projects) {
+      const project = data.projects.find(p => p.name === projectName);
+      return project?.milestones || [];
+    }
+    return [];
+  }
+
+  private static extractTasksByProject(data: any): Array<any> {
+    if (data.tasksByProject) {
+      return data.tasksByProject;
+    }
+    return [];
+  }
+
+  /**
+   * Generate generic enhanced formatting when specific templates don't match
+   */
+  private static generateGenericEnhancedFormat(
+    firebaseResult: OperationalResult | null,
+    supabaseResult: SemanticResult | null,
+    originalQuery: string
+  ): string {
+    console.log(`🎨 Generating generic enhanced format`);
+    
+    const sections: string[] = [];
+    
+    // Hero section with key metrics
+    sections.push('🎯 **Key Insights**\n');
+    
+    if (firebaseResult && firebaseResult.data) {
+      const data = firebaseResult.data;
+      console.log(`📊 Processing Firebase data:`, Object.keys(data));
+      
+      // Extract any available metrics
+      const totalTime = this.extractTotalTime(data);
+      const sessionCount = this.extractSessionCount(data);
+      const taskCount = this.extractTaskCount(data);
+      const projectCount = this.extractProjectCount(data);
+      
+      if (totalTime > 0) {
+        sections.push(`⏱️ **${ProductivityInsightFormatter.formatTimeDisplay(totalTime)}** total productive time`);
+      }
+      
+      if (sessionCount > 0) {
+        sections.push(`📊 **${ProductivityInsightFormatter.formatNumber(sessionCount)} work sessions** completed`);
+      }
+      
+      if (projectCount > 0) {
+        sections.push(`📂 **${projectCount} projects** worked on`);
+      }
+      
+      if (taskCount > 0) {
+        sections.push(`✅ **${taskCount} tasks** managed`);
+      }
+      
+      // Add project details if available
+      const projects = this.extractTopProjects(data);
+      if (projects.length > 0) {
+        sections.push('\n📂 **Project Breakdown**\n');
+        projects.forEach(project => {
+          const timeDisplay = ProductivityInsightFormatter.formatTimeDisplay(project.timeMinutes);
+          const percentageDisplay = project.percentage ? ` *(${project.percentage}% of total)*` : '';
+          sections.push(`• **${project.name}** - ${timeDisplay}${percentageDisplay}`);
+        });
+      }
+      
+      // Add task statistics if available
+      const completed = this.extractTasksCompleted(data);
+      const created = this.extractTasksCreated(data);
+      
+      if (completed > 0 || created > 0) {
+        sections.push('\n📋 **Task Summary**\n');
+        if (completed > 0) sections.push(`• **${completed} tasks** completed ✅`);
+        if (created > 0) sections.push(`• **${created} new tasks** created ➕`);
+        if (completed > 0 && created > 0) {
+          const netChange = created - completed;
+          const changeText = netChange > 0 ? `+${netChange}` : `${netChange}`;
+          const indicator = netChange > 0 ? '📈' : netChange < 0 ? '📉' : '➡️';
+          sections.push(`• Net change: ${indicator} **${changeText} tasks**`);
+        }
+      }
+    }
+    
+    // Add contextual insights from Supabase if available
+    if (supabaseResult && supabaseResult.insights && supabaseResult.insights.length > 0) {
+      sections.push('\n🧠 **Additional Insights**\n');
+      supabaseResult.insights.slice(0, 3).forEach(insight => {
+        sections.push(`• ${insight}`);
+      });
+    }
+    
+    const result = sections.join('\n');
+    console.log(`✅ Generated generic enhanced format: ${result.length} characters`);
+    return result;
+  }
+
   private static buildSystemPrompt(classification: QueryClassification): string {
     const basePrompt = `You are a productivity AI assistant with access to exact operational data and contextual insights.
 
-CRITICAL FORMATTING REQUIREMENTS:
-• Start with emoji header: 🎯 **Key Results**
-• Use **bold** formatting for project names, numbers, and key metrics
-• Use bullet points (•) for lists and key information
-• Keep responses concise and actionable
-• Provide specific data when available
-• End with practical next steps when appropriate`;
+ENHANCED FORMATTING REQUIREMENTS:
+• Use structured visual hierarchy with clear sections
+• Start with 🎯 **Key Insights** header for hero metrics
+• Create distinct sections: 📊 Time Analysis, 📂 Project Performance, 📋 Task Management
+• Emphasize key numbers: **197h 3m**, **1,186 sessions**, **91h 15m**
+• Show percentages with context: *(46% of total month)*
+• Use progress indicators and visual elements
+• Group related data logically with clear separation
+• Provide actionable insights and recommendations
+
+VISUAL STRUCTURE:
+🎯 **Key Insights**
+• [Hero metrics with emphasis]
+
+📊 **Time Analysis**
+• [Time-related metrics and patterns]
+
+📂 **Project Performance**  
+• [Project breakdown with visual emphasis]
+
+📋 **Task Management**
+• [Task statistics and completion data]`;
 
     switch (classification.type) {
       case QueryType.OPERATIONAL_COUNT:
