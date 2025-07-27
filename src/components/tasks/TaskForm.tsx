@@ -321,7 +321,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       timeEstimated: parseInt(timeEstimated) || 0
     };
 
-    // Only add calendar fields if they have values (avoid undefined in Firestore)
+    // Handle calendar fields - add them if they have values, or explicitly clear them if empty
     if (calendarDate && calendarDate.trim()) {
       taskData.scheduledDate = calendarDate.trim();
       taskData.includeTime = includeTime;
@@ -329,6 +329,10 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       if (includeTime && startTime && endTime) {
         taskData.scheduledStartTime = startTime;
         taskData.scheduledEndTime = endTime;
+      } else {
+        // Clear time fields if includeTime is false
+        taskData.scheduledStartTime = null;
+        taskData.scheduledEndTime = null;
       }
 
       // Auto-change status: "To do list" → "In Pomodoro" when scheduled for today
@@ -337,6 +341,12 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       if (isScheduledForToday && task?.status === 'todo') {
         taskData.status = 'pomodoro';
       }
+    } else {
+      // Explicitly clear all calendar fields when date is cleared
+      taskData.scheduledDate = null;
+      taskData.includeTime = false;
+      taskData.scheduledStartTime = null;
+      taskData.scheduledEndTime = null;
     }
     
     // Check if timeSpent was manually changed (only for existing tasks)
