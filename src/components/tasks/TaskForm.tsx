@@ -68,6 +68,10 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
     return '';
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isHoveringDate, setIsHoveringDate] = useState(false);
+  const [isHoveringProject, setIsHoveringProject] = useState(false);
+  const [isHoveringTime, setIsHoveringTime] = useState(false);
+  const [preventDropdown, setPreventDropdown] = useState(false);
   const [includeTime, setIncludeTime] = useState(() => {
     // Always force false for all-day events, regardless of existing task data
     if (isAllDay === true) return false;
@@ -436,6 +440,33 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
     setShowDatePicker(!showDatePicker);
   }, [showDatePicker]);
 
+  const handleClearDate = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering the calendar click
+    setCalendarDate('');
+    setStartTime('09:00');
+    setEndTime('10:00');
+    setIncludeTime(false);
+    setIsHoveringDate(false);
+  }, []);
+
+  const handleClearProject = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering the project dropdown
+    setProjectId('no-project');
+    setIsCreatingNewProject(false);
+    setNewProjectName('');
+    setIsHoveringProject(false);
+    setPreventDropdown(true);
+    // Reset prevent flag after a short delay
+    setTimeout(() => setPreventDropdown(false), 100);
+  }, []);
+
+  const handleClearTime = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent any other interactions
+    setTimeSpent('0');
+    setTimeEstimated('0');
+    setIsHoveringTime(false);
+  }, []);
+
   const handleDateTimeSelect = useCallback((date: Date) => {
     // Use local date formatting to avoid timezone issues
     const year = date.getFullYear();
@@ -644,6 +675,11 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                       value={projectId}
                       onChange={(e) => handleProjectChange(e.target.value)}
                       onKeyDown={handleProjectKeyDown}
+                      onMouseEnter={() => {
+                        console.log('Project hover enter - projectId:', projectId, 'getSelectedProjectName:', getSelectedProjectName());
+                        setIsHoveringProject(true);
+                      }}
+                      onMouseLeave={() => setIsHoveringProject(false)}
                     >
                       <option value="no-project">No Project</option>
                       <option value="create-new">Create new project</option>
@@ -660,8 +696,23 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                       className={`flex items-center gap-1.5 px-2.5 py-1 bg-background-secondary border border-border hover:border-text-secondary rounded text-xs text-text-secondary hover:bg-background-primary min-w-0 ${projectError ? 'ring-2 ring-red-200' : ''}`}
                       onClick={handleProjectFocus}
                     >
-                      <div className="w-3.5 h-3.5 flex items-center justify-center flex-shrink-0">
-                        <Icon name="folder-line" className="w-3.5 h-3.5" />
+                      <div 
+                        className="w-3.5 h-3.5 flex items-center justify-center flex-shrink-0 cursor-pointer relative z-10"
+                        onMouseDown={(e) => {
+                          if (projectId && projectId !== 'no-project' && isHoveringProject) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleClearProject(e);
+                          }
+                        }}
+                        onMouseEnter={() => setIsHoveringProject(true)}
+                        onMouseLeave={() => setIsHoveringProject(false)}
+                      >
+                        {projectId && projectId !== 'no-project' && isHoveringProject ? (
+                          <Icon name="close-line" className="w-3.5 h-3.5" />
+                        ) : (
+                          <Icon name="folder-line" className="w-3.5 h-3.5" />
+                        )}
                       </div>
                       <span className="truncate max-w-[8rem]">{getSelectedProjectName()}</span>
                       <div className="w-3.5 h-3.5 flex items-center justify-center text-text-secondary flex-shrink-0">
@@ -674,9 +725,20 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
 
               {/* Time Estimation */}
               <div className="flex flex-col">
-                <div className={`flex items-center gap-1.5 px-2.5 py-1 bg-background-secondary border border-border hover:border-text-secondary rounded text-xs text-text-secondary flex-shrink-0 ${timeSpentError || timeEstimatedError ? 'border-red-500' : ''}`}>
-                  <div className="w-3.5 h-3.5 flex items-center justify-center">
-                    <Icon name="time-line" className="w-3.5 h-3.5" />
+                <div 
+                  className={`flex items-center gap-1.5 px-2.5 py-1 bg-background-secondary border border-border hover:border-text-secondary rounded text-xs text-text-secondary flex-shrink-0 ${timeSpentError || timeEstimatedError ? 'border-red-500' : ''}`}
+                  onMouseEnter={() => setIsHoveringTime(true)}
+                  onMouseLeave={() => setIsHoveringTime(false)}
+                >
+                  <div 
+                    className="w-3.5 h-3.5 flex items-center justify-center cursor-pointer"
+                    onClick={isHoveringTime ? handleClearTime : undefined}
+                  >
+                    {isHoveringTime ? (
+                      <Icon name="close-line" className="w-3.5 h-3.5" />
+                    ) : (
+                      <Icon name="time-line" className="w-3.5 h-3.5" />
+                    )}
                   </div>
                   {task && (
                     <>
@@ -730,9 +792,23 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                   id="datePickerBtn"
                   className="flex items-center gap-1.5 px-2.5 py-1 bg-background-secondary border border-border hover:border-text-secondary rounded text-xs text-text-secondary hover:bg-background-primary min-w-0 flex-shrink-0"
                   onClick={handleCalendarClick}
+                  onMouseEnter={() => setIsHoveringDate(true)}
+                  onMouseLeave={() => setIsHoveringDate(false)}
                 >
-                  <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                    <i className="ri-calendar-line"></i>
+                  <div 
+                    className="w-4 h-4 flex items-center justify-center flex-shrink-0 cursor-pointer"
+                    onClick={(e) => {
+                      if (calendarDate && isHoveringDate) {
+                        e.stopPropagation();
+                        handleClearDate(e);
+                      }
+                    }}
+                  >
+                    {calendarDate && isHoveringDate ? (
+                      <Icon name="close-line" className="w-4 h-4" />
+                    ) : (
+                      <i className="ri-calendar-line"></i>
+                    )}
                   </div>
                   <span className="whitespace-nowrap">{calendarDate ? format(new Date(calendarDate), 'MMM dd, yyyy') + (includeTime ? `, ${startTime} - ${endTime}` : '') : 'Add to calendar'}</span>
                 </button>
