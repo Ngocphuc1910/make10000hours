@@ -131,6 +131,24 @@ input[type="number"] {
   background-color: rgba(156, 163, 175, 0.5);
 }
 
+/* Hide scrollbars completely while maintaining scroll functionality */
+.scrollbar-none {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* Internet Explorer 10+ */
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none !important; /* WebKit */
+}
+/* Override specific overflow-x-auto scrollbar styles */
+.overflow-x-auto.scrollbar-none {
+  scrollbar-width: none !important;
+  scrollbar-color: transparent transparent !important;
+}
+.overflow-x-auto.scrollbar-none::-webkit-scrollbar {
+  display: none !important;
+  height: 0px !important;
+}
+
 /* Dark mode scrollbars for task lists */
 [data-theme="dark"] .scrollbar-thin {
   scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
