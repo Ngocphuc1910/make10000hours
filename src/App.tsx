@@ -29,6 +29,7 @@ import { LoadingScreen } from './components/ui/LoadingScreen';
 import { ChatButton } from './components/chat/ChatButton';
 import DataSyncPage from './components/pages/DataSyncPage';
 import PrivacyPolicyPage from './components/pages/PrivacyPolicyPage';
+import { PricingModal } from './components/pricing/PricingModal';
 import { ChatIntegrationService } from './services/chatIntegration';
 import { useDeepFocusStore } from './store/deepFocusStore';
 import { DeepFocusProvider, useDeepFocusContext } from './contexts/DeepFocusContext';
@@ -700,6 +701,7 @@ const App: React.FC = () => {
         </AnalyticsWrapper>
         <ToastContainer />
         <ChatButton />
+        <PricingModal />
       </Router>
     </DeepFocusProvider>
   );

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
 import { useUserStore } from '../../store/userStore';
 import { useThemeStore } from '../../store/themeStore';
+import { usePricingStore } from '../../store/pricingStore';
 import { Icon } from '../ui/Icon';
 import { ThemeSwitcher } from '../ui/ThemeSwitcher';
 import { signInWithPopup, signInWithRedirect, GoogleAuthProvider } from 'firebase/auth';
@@ -25,6 +26,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const navigate = useNavigate();
   const { user, signOut, isAuthenticated } = useUserStore();
   const { isDark } = useThemeStore();
+  const { openModal } = usePricingStore();
   
   // Debug logging to verify theme state
   useEffect(() => {
@@ -425,6 +427,7 @@ className={`flex items-center px-2 py-1 rounded text-sm transition-colors focus:
         <div className="mt-auto p-4 space-y-3">
           {/* Upgrade Tab */}
           <button 
+            onClick={openModal}
             className="flex items-center justify-between w-full px-2 py-2 rounded text-sm transition-colors focus:outline-none hover:bg-gray-100 dark:hover:bg-gray-800"
             style={{ 
               background: 'radial-gradient(circle at top right, #F9A8D4, #EC4899, #FB923C, #BB5F5A)',
