@@ -2,13 +2,18 @@ import React, { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { ChatModal } from './ChatModal';
 import { useUserStore } from '../../store/userStore';
+import { useLocation } from 'react-router-dom';
 
 export const ChatButton: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { user } = useUserStore();
+  const location = useLocation();
 
   // Don't show chat button if user is not logged in
   if (!user) return null;
+
+  // Only show on Productivity Insights page (/dashboard)
+  if (location.pathname !== '/dashboard') return null;
 
   return (
     <>
