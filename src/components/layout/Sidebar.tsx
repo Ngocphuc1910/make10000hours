@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
 import { useUserStore } from '../../store/userStore';
+import { useThemeStore } from '../../store/themeStore';
 import { Icon } from '../ui/Icon';
 import { ThemeSwitcher } from '../ui/ThemeSwitcher';
 import { signInWithPopup, signInWithRedirect, GoogleAuthProvider } from 'firebase/auth';
@@ -23,6 +24,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut, isAuthenticated } = useUserStore();
+  const { isDark } = useThemeStore();
+  
+  // Debug logging to verify theme state
+  useEffect(() => {
+    console.log('🎨 Sidebar theme state:', { isDark, expectedColor: isDark ? '#0d1117' : '#F9F9F9' });
+  }, [isDark]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -209,9 +216,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
     <>
       <aside
         id="sidebar"
-        className={`border-r border-border flex flex-col min-h-screen relative group transition-all duration-300
-        ${isLeftSidebarOpen ? 'w-56' : 'w-0'} ${className}`}
-        style={{ zIndex: 40, transition: 'width 0.3s ease, opacity 0.3s ease', backgroundColor: '#F9F9F9' }}
+        className={`border-r-[0.5px] border-border flex flex-col min-h-screen relative group transition-all duration-300
+        ${isLeftSidebarOpen ? 'w-64' : 'w-0'} ${className}`}
+        style={{ 
+          zIndex: 40, 
+          transition: 'width 0.3s ease, opacity 0.3s ease',
+          backgroundColor: isDark ? '#181818' : '#F9F9F9', // Dark mode using #181818
+          backgroundImage: 'none' // Ensure no background images override this
+        }}
       >
         {/* User Profile Section */}
         <div className="px-3 py-4 group relative" ref={dropdownRef}>

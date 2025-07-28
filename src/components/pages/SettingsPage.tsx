@@ -4,6 +4,8 @@ import { DEFAULT_SETTINGS, type AppSettings, type TimerSettings } from '../../ty
 import { OpenAISettings } from '../settings/OpenAISettings';
 import GoogleCalendarSync from '../settings/GoogleCalendarSync';
 import WebhookDebugPanel from '../sync/WebhookDebugPanel';
+import Sidebar from '../layout/Sidebar';
+import { Header } from '../dashboard/layout/Header';
 
 const SettingsPage = () => {
   const { user, updateUserData } = useUserStore();
@@ -64,15 +66,31 @@ const SettingsPage = () => {
 
   if (!user) {
     return (
-      <div className="w-full max-w-7xl mx-auto p-6">
-        <h1 className="text-2xl font-bold mb-4">Settings</h1>
-        <p className="text-gray-600">Please sign in to access your settings.</p>
+      <div className="dashboard-layout flex h-screen overflow-hidden bg-background-primary">
+        <Sidebar />
+        <main className="dashboard-main flex-1 flex flex-col overflow-hidden">
+          <Header />
+          <div className="dashboard-content scrollbar-thin flex-1 overflow-y-auto">
+            <div className="max-w-none mx-auto px-6 py-8">
+              <div className="w-full max-w-4xl mx-auto">
+                <h1 className="text-2xl font-bold mb-4">Settings</h1>
+                <p className="text-gray-600">Please sign in to access your settings.</p>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-6">
+    <div className="dashboard-layout flex h-screen overflow-hidden bg-background-primary">
+      <Sidebar />
+      <main className="dashboard-main flex-1 flex flex-col overflow-hidden">
+        <Header />
+        <div className="dashboard-content scrollbar-thin flex-1 overflow-y-auto">
+          <div className="max-w-none mx-auto px-6 py-8">
+            <div className="w-full max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold mb-8">Settings</h1>
       
       {message && (
@@ -241,6 +259,10 @@ const SettingsPage = () => {
           {isLoading ? 'Saving...' : 'Save Settings'}
         </button>
       </div>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 };

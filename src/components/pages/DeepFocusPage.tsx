@@ -350,41 +350,6 @@ const DeepFocusPage: React.FC = () => {
     return isInRange;
   };
 
-  // Ensure sidebar state is properly synchronized on mount and state changes
-  useEffect(() => {
-    // Add debug logging to track state changes
-    console.log('🔧 Deep Focus: Sidebar state changed', { 
-      isLeftSidebarOpen, 
-      timestamp: new Date().toISOString() 
-    });
-    
-    // Force re-render by triggering a layout recalculation
-    // This ensures CSS classes are properly applied after navigation
-    requestAnimationFrame(() => {
-      const sidebarElement = document.getElementById('sidebar');
-      if (sidebarElement) {
-        console.log('🔧 Deep Focus: Sidebar element found', {
-          currentWidth: sidebarElement.style.width,
-          className: sidebarElement.className,
-          isOpen: isLeftSidebarOpen
-        });
-        
-        // Force layout recalculation by briefly changing a property
-        sidebarElement.style.display = 'flex';
-        
-        // Ensure proper width based on state
-        if (isLeftSidebarOpen) {
-          sidebarElement.style.width = '16rem'; // w-64
-          sidebarElement.classList.remove('w-0');
-          sidebarElement.classList.add('w-64');
-        } else {
-          sidebarElement.style.width = '0px'; // w-0
-          sidebarElement.classList.remove('w-64');
-          sidebarElement.classList.add('w-0');
-        }
-      }
-    });
-  }, [isLeftSidebarOpen]);
 
   // Initialize daily backup system and trigger immediate sync
   useEffect(() => {
