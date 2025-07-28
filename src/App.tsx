@@ -9,11 +9,9 @@ import DashboardPage from './components/pages/DashboardPage';
 import MainLayout from './components/layout/MainLayout';
 import { useTimerStore } from './store/timerStore';
 import TaskList from './components/tasks/TaskList';
-import { DashboardLayout } from './components/dashboard/layout/DashboardLayout';
 import { Sidebar } from './components/layout/Sidebar';
 import TopBar from './components/layout/TopBar';
 import { ProjectsPage } from './components/dashboard/ProjectsPage';
-import ProjectsLayout from './components/dashboard/ProjectsLayout';
 import ToastContainer from './components/ui/ToastContainer';
 import { auth } from './api/firebase';
 import { useUserStore } from './store/userStore';
@@ -658,12 +656,6 @@ const App: React.FC = () => {
     );
   };
 
-  // Projects page with its dedicated layout
-  const ProjectsPageWithLayout = () => (
-    <ProjectsLayout>
-      <ProjectsPage />
-    </ProjectsLayout>
-  );
 
   // Data Sync page with layout
   const DataSyncPageWithLayout = () => (
@@ -696,11 +688,9 @@ const App: React.FC = () => {
           <Routes>
             <Route path="/" element={<PomodoroPageWithLayout />} />
             <Route path="pomodoro" element={<PomodoroPageWithLayout />} />
-            <Route path="projects" element={<ProjectsPageWithLayout />} />
-            <Route path="dashboard/*" element={<DashboardLayout />}>
-              <Route index element={<DashboardPage />} />
-              <Route path="settings" element={<SettingsPage />} />
-            </Route>
+            <Route path="projects" element={<ProjectsPage />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="dashboard/settings" element={<SettingsPage />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="deep-focus" element={<DeepFocusPage />} />
             <Route path="data-sync" element={<DataSyncPageWithLayout />} />

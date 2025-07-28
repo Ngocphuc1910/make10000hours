@@ -10,6 +10,7 @@ import { Tooltip } from '../ui/Tooltip';
 import { useExtensionSync } from '../../hooks/useExtensionSync';
 import { DeepFocusSwitch } from '../ui/DeepFocusSwitch';
 import { useUIStore } from '../../store/uiStore';
+import Sidebar from '../layout/Sidebar';
 
 type ViewType = 'project' | 'status';
 
@@ -66,14 +67,18 @@ export const ProjectsPage: React.FC = () => {
   };
 
   return (
-    <div 
-      className="projects-content-container h-full flex flex-col bg-background-primary" 
-      onClick={handleClickOutside}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      {/* Header */}
-      <div className={`projects-header h-16 flex items-center justify-between px-4 bg-background-secondary transition-all duration-500 relative`}>
+    <div className="projects-page-container flex h-screen overflow-hidden bg-background-primary">
+      <Sidebar />
+      
+      <main className="projects-main-container flex-1 flex flex-col overflow-hidden">
+        <div 
+          className="projects-content-container h-full flex flex-col bg-background-primary" 
+          onClick={handleClickOutside}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          {/* Header */}
+          <div className={`projects-header h-16 flex items-center justify-between px-4 bg-background-secondary transition-all duration-500 relative`}>
         {/* Left Section - Title & Deep Focus Switch */}
         <div className="flex items-center">
           {!isLeftSidebarOpen && (
@@ -227,16 +232,18 @@ export const ProjectsPage: React.FC = () => {
         </div>
       </div>
       
-      {/* Scrollable Content */}
-      <div className="projects-scrollable-content flex-1 overflow-y-auto scrollbar-thin">
-        {viewType === 'status' ? (
-          <TaskStatusBoard />
-        ) : (
-          <div className="py-6">
-            <ProjectView />
+          {/* Scrollable Content */}
+          <div className="projects-scrollable-content flex-1 overflow-y-auto scrollbar-thin">
+            {viewType === 'status' ? (
+              <TaskStatusBoard />
+            ) : (
+              <div className="py-6">
+                <ProjectView />
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      </main>
     </div>
   );
 }; 
