@@ -137,9 +137,9 @@ export const FocusStreak: React.FC = () => {
           <div className="text-sm text-text-secondary">Loading contribution data...</div>
         </div>
       ) : (
-        <div className="h-[200px] flex flex-col overflow-hidden">
+        <div className="h-[200px] flex flex-col overflow-hidden scrollbar-none">
           {/* GitHub-style contribution grid */}
-          <div className="flex-1 flex items-center justify-center mb-4 overflow-hidden">
+          <div className="flex-1 flex items-center justify-center mb-4 overflow-hidden scrollbar-none">
             <ContributionGrid data={contributionData} />
           </div>
           
