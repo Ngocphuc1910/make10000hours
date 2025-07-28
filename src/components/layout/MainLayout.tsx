@@ -154,9 +154,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const actualSidebarContent = rightSidebarContent || getSidebarContent();
   
   return (
-    <div className={`main-layout-container flex h-screen w-screen overflow-hidden bg-background-primary ${location.pathname === '/pomodoro' ? 'pomodoro-page-container' : ''} ${className}`}>
+    <div className={`main-layout-container flex h-screen w-screen overflow-hidden bg-white ${location.pathname === '/pomodoro' ? 'pomodoro-page-container' : ''} ${className}`}>
       {/* Left Sidebar - Navigation */}
-      <Sidebar className={location.pathname === '/pomodoro' ? 'pomodoro-sidebar' : ''} />
+      <Sidebar />
       
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
@@ -168,7 +168,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           {/* Timer Section */}
           <div 
             ref={timerSectionRef}
-            className="flex-1 flex flex-col items-center justify-center p-6 bg-background-primary relative min-w-[300px] h-full overflow-y-auto scrollbar-thin" 
+            className="flex-1 flex flex-col items-center justify-center p-6 bg-white relative min-w-[300px] h-full overflow-y-auto scrollbar-thin" 
             id="timerSection" 
             style={
               // Responsive behavior for both sidebar states
@@ -192,7 +192,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             <div 
               ref={rightSidebarRef}
               id="rightSidebar" 
-              className="border-l border-t border-border flex flex-col bg-background-primary min-w-[280px] rounded-tl-lg h-full flex-shrink-0 relative group"
+              className="border-l border-t border-border flex flex-col bg-white min-w-[280px] rounded-tl-lg h-full flex-shrink-0 relative group"
               style={{ 
                 width: `${currentWidth}px`,
                 minWidth: '280px',

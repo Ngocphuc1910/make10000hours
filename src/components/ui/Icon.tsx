@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsRight,
+  ChevronsLeft,
   Menu,
   PanelRightOpen,
   PanelRightClose,
@@ -61,7 +62,9 @@ import {
   Video,
   Mail,
   Zap,
-  Wrench
+  Wrench,
+  Keyboard,
+  LogOut
 } from 'lucide-react';
 
 interface IconProps {
@@ -80,6 +83,7 @@ const iconMap = {
   'arrow-left-s-line': ChevronLeft,
   'arrow-right-s-line': ChevronRight,
   'arrow-right-double-line': ChevronsRight,
+  'arrow-left-double-line': ChevronsLeft,
   'menu-line': Menu,
   'layout-right-line': PanelRightOpen,
   'layout-right-2-line': PanelRightClose,
@@ -145,7 +149,17 @@ const iconMap = {
   // Debug icons
   'flask-line': Beaker,
   'links-line': Link,
-  'bug-line': Bug
+  'bug-line': Bug,
+  // Keyboard shortcuts
+  'keyboard-line': Keyboard,
+  'command-line': Keyboard,
+  // Logout icon
+  'logout-box-line': LogOut,
+  'logout-circle-line': LogOut,
+  // Thunder/Lightning icon
+  'flashlight-line': Zap,
+  'lightning-line': Zap,
+  'thunder-line': Zap
 };
 
 export const Icon: React.FC<IconProps> = ({ 
