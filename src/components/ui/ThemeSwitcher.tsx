@@ -12,23 +12,21 @@ export const ThemeSwitcher: React.FC = () => {
   ];
 
   return (
-    <div className="p-4 border-t border-border">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-text-primary">Theme</span>
-      </div>
-      <div className="flex items-center bg-background-primary rounded-md p-1">
+    <div className="flex items-center justify-between">
+      <span className="text-sm text-gray-600 dark:text-gray-300">Theme</span>
+      <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-gray-100 dark:bg-gray-800">
         {themes.map((theme) => (
           <button
             key={theme.mode}
             onClick={() => setMode(theme.mode)}
-            className={`flex-1 flex items-center justify-center p-2 rounded text-xs font-medium transition-all ${
+            className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors focus:outline-none ${
               mode === theme.mode
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-text-secondary hover:text-text-primary hover:bg-background-secondary'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                : 'hover:bg-white/50 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-400'
             }`}
             title={theme.label}
           >
-            <Icon name={theme.icon} size={16} />
+            <Icon name={theme.icon} size={14} />
           </button>
         ))}
       </div>

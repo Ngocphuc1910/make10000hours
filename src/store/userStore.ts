@@ -2,11 +2,13 @@ import { create } from 'zustand';
 import { 
   User as UserProfile,
   signOut as firebaseSignOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  getRedirectResult
 } from 'firebase/auth';
 import { auth, db } from '../api/firebase';
 import { DEFAULT_SETTINGS, type UserData } from '../types/models';
 import { collection, doc, getDoc, setDoc } from 'firebase/firestore';
+import { AuthDebugger } from '../utils/authDebug';
 
 export type User = UserProfile & UserData;
 
@@ -62,15 +64,39 @@ export const useUserStore = create<UserState>((set, get) => {
         auth,
         async (userProfile) => {
           console.log('🔐 Auth state changed from userStore:', userProfile ? 'User found' : 'No user');
+          AuthDebugger.logFirebaseUser(userProfile, 'UserStore - Auth State Changed');
           
           if (userProfile) {
             try {
               set({ isLoading: true });
+              AuthDebugger.log('UserStore - Before createUserData', 'About to create/fetch user data');
+              
               const userData = await get().createUserDataIfNotExists(userProfile.uid, userProfile);
+              AuthDebugger.log('UserStore - UserData Retrieved', userData);
+              
               const user: User = {
-                ...userProfile,
-                ...userData
+                ...userData,
+                ...userProfile
               };
+
+              AuthDebugger.log('UserStore - User Data Merge', {
+                userData: userData,
+                userProfile: {
+                  uid: userProfile.uid,
+                  displayName: userProfile.displayName,
+                  email: userProfile.email,
+                  photoURL: userProfile.photoURL,
+                  emailVerified: userProfile.emailVerified
+                },
+                finalUser: {
+                  uid: user.uid,
+                  displayName: user.displayName,
+                  email: user.email,
+                  photoURL: user.photoURL,
+                  userName: user.userName,
+                  emailVerified: user.emailVerified
+                }
+              });
 
               set({ 
                 user, 
@@ -80,6 +106,7 @@ export const useUserStore = create<UserState>((set, get) => {
                 error: null
               });
               
+              AuthDebugger.logUserStoreState('UserStore - After State Update');
               console.log('✅ User authentication restored successfully');
               
               // Note: Google Calendar tokens are now stored per-user and persist automatically
