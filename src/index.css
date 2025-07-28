@@ -1054,12 +1054,12 @@ code {
 /* Pomodoro Page Left Sidebar Override */
 [data-theme="dark"] .pomodoro-page-container #sidebar,
 [data-theme="dark"] .pomodoro-sidebar {
-  background-color: #141414 !important;
+  background-color: #181818 !important;
 }
 
 .dark .pomodoro-page-container #sidebar,
 .dark .pomodoro-sidebar {
-  background-color: #141414 !important;
+  background-color: #181818 !important;
 }
 
 /* Task Management Page Specific Overrides */
@@ -1081,11 +1081,11 @@ code {
 
 /* Task Management Page Left Sidebar Override */
 [data-theme="dark"] .projects-page-container #sidebar {
-  background-color: #141414 !important;
+  background-color: #181818 !important;
 }
 
 .dark .projects-page-container #sidebar {
-  background-color: #141414 !important;
+  background-color: #181818 !important;
 }
 
 /* Productivity Insights Page Specific Overrides */
@@ -1121,11 +1121,11 @@ code {
 
 /* Productivity Insights Page Left Sidebar Override */
 [data-theme="dark"] .dashboard-layout #sidebar {
-  background-color: #141414 !important;
+  background-color: #181818 !important;
 }
 
 .dark .dashboard-layout #sidebar {
-  background-color: #141414 !important;
+  background-color: #181818 !important;
 }
 
 /* Dashboard Cards and Widgets Override */
@@ -1182,11 +1182,11 @@ code {
 
 /* Calendar Page Left Sidebar Override */
 [data-theme="dark"] .calendar-page-container #sidebar {
-  background-color: #141414 !important;
+  background-color: #181818 !important;
 }
 
 .dark .calendar-page-container #sidebar {
-  background-color: #141414 !important;
+  background-color: #181818 !important;
 }
 
 /* Week View Scrollable Grid Elements */
@@ -1272,8 +1272,21 @@ code {
 }
 
 /* Theme Switcher in Sidebar */
+/* Light theme sidebar rules - subtle background difference */
+[data-theme="light"] #sidebar .bg-background-primary,
+:root #sidebar .bg-background-primary,
+#sidebar .bg-background-primary {
+  background-color: #F9F9F9 !important;
+}
+
+[data-theme="light"] #sidebar button:not(.bg-primary):not([class*="text-white"]):hover,
+:root #sidebar button:not(.bg-primary):not([class*="text-white"]):hover {
+  background-color: #e9ecef !important;
+}
+
+/* Dark theme sidebar rules - subtle background difference */
 [data-theme="dark"] #sidebar .bg-background-primary {
-  background-color: #141414 !important;
+  background-color: #161616 !important;
 }
 
 [data-theme="dark"] #sidebar button:not(.bg-primary):not([class*="text-white"]):hover {
@@ -1281,7 +1294,7 @@ code {
 }
 
 .dark #sidebar .bg-background-primary {
-  background-color: #141414 !important;
+  background-color: #161616 !important;
 }
 
 .dark #sidebar button:not(.bg-primary):not([class*="text-white"]):hover {
@@ -1364,11 +1377,11 @@ code {
 
 /* Deep Focus Page Left Sidebar Override */
 [data-theme="dark"] .deep-focus-page-container #sidebar {
-  background-color: #141414 !important;
+  background-color: #181818 !important;
 }
 
 .dark .deep-focus-page-container #sidebar {
-  background-color: #141414 !important;
+  background-color: #181818 !important;
 }
 
 /* Navigation Icons Selected State Override - High Priority */

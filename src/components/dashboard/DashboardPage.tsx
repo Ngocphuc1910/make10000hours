@@ -6,6 +6,8 @@ import { TopTasks } from './widgets/TopTasks';
 import { FocusTimeTrend } from './widgets/FocusTimeTrend';
 import { useDashboardStore } from '../../store/useDashboardStore';
 import { useUserStore } from '../../store/userStore';
+import Sidebar from '../layout/Sidebar';
+import { Header } from './layout/Header';
 
 export const DashboardContent: React.FC = () => {
   const { loadWorkSessionsForRange, selectedRange, useEventDrivenLoading } = useDashboardStore();
@@ -18,28 +20,41 @@ export const DashboardContent: React.FC = () => {
       loadWorkSessionsForRange(user.uid, selectedRange);
     }
   }, [isAuthenticated, user?.uid, loadWorkSessionsForRange, selectedRange, useEventDrivenLoading]);
+  
   return (
-    <div className="space-y-8 w-full max-w-none">
-      {/* Focus Time Statistics Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
-        <div className="lg:col-span-3">
-          <AverageFocusTime />
-        </div>
-        <div className="lg:col-span-7">
-          <FocusStreak />
-        </div>
-      </div>
+    <div className="dashboard-layout flex h-screen overflow-hidden bg-background-primary">
+      <Sidebar />
       
-      {/* Projects and Tasks Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <TopProjects />
-        <TopTasks />
-      </div>
-      
-      {/* Focus Time Chart Section */}
-      <div className="w-full">
-        <FocusTimeTrend />
-      </div>
+      <main className="dashboard-main flex-1 flex flex-col overflow-hidden">
+        <Header />
+        
+        <div className="dashboard-content scrollbar-thin flex-1 overflow-y-auto">
+          <div className="max-w-none mx-auto px-6 py-8">
+            <div className="space-y-8 w-full max-w-none">
+              {/* Focus Time Statistics Section */}
+              <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
+                <div className="lg:col-span-3">
+                  <AverageFocusTime />
+                </div>
+                <div className="lg:col-span-7">
+                  <FocusStreak />
+                </div>
+              </div>
+              
+              {/* Projects and Tasks Section */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <TopProjects />
+                <TopTasks />
+              </div>
+              
+              {/* Focus Time Chart Section */}
+              <div className="w-full">
+                <FocusTimeTrend />
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }; 
