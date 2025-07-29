@@ -13,7 +13,8 @@ import {
   logWebhookEvent,
   isEventAlreadyProcessed,
   RateLimiter,
-  Timer
+  Timer,
+  shouldRetryWebhook
 } from './utils';
 import { routeWebhookEvent } from './events';
 import { LemonSqueezyWebhookHeaders, WebhookEventType } from './types';
@@ -84,9 +85,12 @@ export async function handleLemonSqueezyWebhook(
     }
 
     // Get raw body for signature verification
-    const rawBody = JSON.stringify(request.body);
+    const rawBody = request.rawBody.toString('utf8');
     const signature = headers['x-signature']!;
-    const webhookSecret = process.env.LEMON_SQUEEZY_WEBHOOK_SECRET!;
+    const isTestMode = process.env.NODE_ENV !== 'production';
+    const webhookSecret = isTestMode 
+      ? process.env.LEMON_SQUEEZY_TEST_WEBHOOK_SECRET || process.env.LEMON_SQUEEZY_WEBHOOK_SECRET
+      : process.env.LEMON_SQUEEZY_WEBHOOK_SECRET;
 
     // Verify signature
     if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
@@ -127,13 +131,23 @@ export async function handleLemonSqueezyWebhook(
     }
 
     // Check for duplicate processing (idempotency)
-    const alreadyProcessed = await isEventAlreadyProcessed(eventId);
-    if (alreadyProcessed) {
-      logger.info('Event already processed:', { eventId, eventType });
+    const duplicationCheck = await isEventAlreadyProcessed(
+      eventId,
+      eventType,
+      event.data.id
+    );
+    
+    if (duplicationCheck.processed) {
+      logger.info('Event already processed:', { 
+        eventId, 
+        eventType, 
+        reason: duplicationCheck.reason 
+      });
       response.status(200).json({ 
         message: 'Event already processed',
         eventId,
-        eventType 
+        eventType,
+        reason: duplicationCheck.reason
       });
       return;
     }
@@ -186,14 +200,41 @@ export async function handleLemonSqueezyWebhook(
         totalTime: timer.elapsed()
       });
 
-      // Return 200 for business logic errors to prevent Lemon Squeezy retries
-      // Only return 5xx for actual server errors
-      response.status(200).json({
-        message: 'Webhook acknowledged but processing failed',
-        eventId,
-        eventType,
-        error: processingResult.error
-      });
+      // Intelligent retry logic based on error type
+      const errorMessage = processingResult.error || 'Unknown error';
+      const shouldRetry = shouldRetryWebhook(errorMessage);
+      
+      if (shouldRetry) {
+        // Return 500 for retryable errors (temporary issues)
+        logger.warn('Webhook failed with retryable error - Lemon Squeezy will retry:', {
+          eventId,
+          eventType,
+          error: errorMessage
+        });
+        
+        response.status(500).json({
+          message: 'Temporary processing failure - will retry',
+          eventId,
+          eventType,
+          error: errorMessage,
+          retryable: true
+        });
+      } else {
+        // Return 200 for non-retryable errors (bad data, logic errors)
+        logger.error('Webhook failed with non-retryable error:', {
+          eventId,
+          eventType,
+          error: errorMessage
+        });
+        
+        response.status(200).json({
+          message: 'Webhook acknowledged but processing failed permanently',
+          eventId,
+          eventType,
+          error: errorMessage,
+          retryable: false
+        });
+      }
     }
 
   } catch (error) {

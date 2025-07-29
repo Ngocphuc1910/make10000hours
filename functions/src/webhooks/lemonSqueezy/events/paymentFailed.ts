@@ -29,7 +29,8 @@ export async function handlePaymentFailed(
     let userId: string | null = null;
     
     // Try by Firebase Auth UID first (if passed in custom data)
-    if (userIdentifier.length === 28) { // Firebase UID format
+    // Firebase UIDs don't contain @ symbol, so check for that instead of length
+    if (!userIdentifier.includes('@')) {
       userId = await getUserByAuthId(userIdentifier);
     }
     
@@ -60,7 +61,7 @@ export async function handlePaymentFailed(
     subscriptionData.plan = 'pro';
     
     // Update user subscription
-    await updateUserSubscription(userId, subscriptionData);
+    await updateUserSubscription(userId, subscriptionData, 'subscription_payment_failed');
 
     logger.warn('Payment failed - subscription marked as past due:', {
       eventId,

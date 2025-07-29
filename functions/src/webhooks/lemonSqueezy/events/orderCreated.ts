@@ -4,7 +4,14 @@ import { getUserByEmail, getUserByAuthId } from '../utils';
 import { extractUserIdentifier } from '../validation';
 import { getFirestore } from 'firebase-admin/firestore';
 
-const db = getFirestore();
+// Lazy initialize db to avoid initialization issues
+let db: any = null;
+const getDb = () => {
+  if (!db) {
+    db = getFirestore();
+  }
+  return db;
+};
 
 /**
  * Handle order_created event
@@ -33,7 +40,8 @@ export async function handleOrderCreated(
     let userId: string | null = null;
     
     // Try by Firebase Auth UID first (if passed in custom data)
-    if (userIdentifier.length === 28) { // Firebase UID format
+    // Firebase UIDs don't contain @ symbol, so check for that instead of length
+    if (!userIdentifier.includes('@')) {
       userId = await getUserByAuthId(userIdentifier);
     }
     
@@ -71,7 +79,7 @@ export async function handleOrderCreated(
     };
 
     // Store transaction record
-    await db.collection('transactions').doc(event.data.id).set(transactionData);
+    await getDb().collection('transactions').doc(event.data.id).set(transactionData);
 
     logger.info('Order created and transaction logged:', {
       eventId,

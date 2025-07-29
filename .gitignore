@@ -61,3 +61,8 @@ dist/
 # Functions build artifacts
 /functions/lib/
 /functions/package-lock.json
+
+# Test files that may contain secrets
+test-webhook*.js
+test-accessibility*.js
+*-test.js
