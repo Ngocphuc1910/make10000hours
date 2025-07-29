@@ -31,6 +31,7 @@ import DataSyncPage from './components/pages/DataSyncPage';
 import PrivacyPolicyPage from './components/pages/PrivacyPolicyPage';
 import { PricingModal } from './components/pricing/PricingModal';
 import { ChatIntegrationService } from './services/chatIntegration';
+import CheckoutDebugPanel from './components/debug/CheckoutDebugPanel';
 // LemonSqueezyClient removed - checkout now handled securely server-side
 import { usePricingStore } from './store/pricingStore';
 import { useDeepFocusStore } from './store/deepFocusStore';
@@ -710,6 +711,14 @@ const App: React.FC = () => {
   // Make test utility available globally for console debugging
   if (typeof window !== 'undefined') {
     (window as any).testDeepFocusFixes = testDeepFocusFixes;
+    
+    // Import debug functions and make them available globally
+    import('./utils/checkoutDebugger').then(({ debugCheckoutIssues, quickAuthCheck, manualCheckoutTest }) => {
+      (window as any).debugCheckout = debugCheckoutIssues;
+      (window as any).quickAuthCheck = quickAuthCheck;
+      (window as any).manualCheckoutTest = manualCheckoutTest;
+      console.log('🔍 Debug functions loaded! Try: debugCheckout(), quickAuthCheck(), or manualCheckoutTest()');
+    });
   }
 
   return (
@@ -734,6 +743,7 @@ const App: React.FC = () => {
         <ToastContainer />
         <ChatButton />
         <PricingModal />
+        <CheckoutDebugPanel />
       </Router>
     </DeepFocusProvider>
   );

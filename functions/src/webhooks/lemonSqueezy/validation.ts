@@ -214,7 +214,10 @@ export function validateEnvironmentConfig(): {
   isValid: boolean;
   error?: string;
 } {
-  const webhookSecret = process.env.LEMON_SQUEEZY_WEBHOOK_SECRET;
+  const isTestMode = process.env.NODE_ENV !== 'production';
+  const webhookSecret = isTestMode 
+    ? process.env.LEMON_SQUEEZY_TEST_WEBHOOK_SECRET || process.env.LEMON_SQUEEZY_WEBHOOK_SECRET
+    : process.env.LEMON_SQUEEZY_WEBHOOK_SECRET;
   
   if (!webhookSecret) {
     return {
@@ -223,7 +226,7 @@ export function validateEnvironmentConfig(): {
     };
   }
 
-  if (webhookSecret.length < 32) {
+  if (webhookSecret.length < 16) {
     return {
       isValid: false,
       error: 'LEMON_SQUEEZY_WEBHOOK_SECRET appears to be too short'

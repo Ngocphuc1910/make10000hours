@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Icon } from '../ui/Icon';
 import { secureCheckoutService } from '../../services/secureCheckout';
 import { usePricingStore, BillingPeriod } from '../../store/pricingStore';
+import { withAuthGuard, useAuthGuard } from '../../utils/authGuard';
 
 interface PricingCardProps {
   plan: 'standard' | 'pro' | 'premium';
@@ -26,8 +27,10 @@ export const PricingCard: React.FC<PricingCardProps> = ({
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const { billingPeriod } = usePricingStore();
+  const authStatus = useAuthGuard();
 
-  const handleCheckout = async () => {
+  // The actual checkout logic (only called when authenticated)
+  const performCheckout = async () => {
     if (plan !== 'pro') {
       // Only Pro plan is available per user request (Standard and Premium removed)
       console.warn(`${plan} plan not available - only Pro plan supported`);
@@ -48,6 +51,9 @@ export const PricingCard: React.FC<PricingCardProps> = ({
     }
   };
 
+  // Wrap checkout with authentication guard
+  const handleCheckout = withAuthGuard(performCheckout);
+
   const getButtonStyle = () => {
     if (isStandardPlan) {
       return 'text-white cursor-not-allowed';
@@ -59,6 +65,16 @@ export const PricingCard: React.FC<PricingCardProps> = ({
   };
 
   const getButtonText = () => {
+    // Show sign in prompt if user is not authenticated
+    if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+      switch (plan) {
+        case 'pro': return 'Sign in to Upgrade to Pro';
+        case 'premium': return 'Sign in to Upgrade to Premium';
+        default: return 'Sign in to Get Started';
+      }
+    }
+    
+    // Normal button text for authenticated users
     switch (plan) {
       case 'standard': return 'Current Plan';
       case 'pro': return 'Upgrade to Pro';
