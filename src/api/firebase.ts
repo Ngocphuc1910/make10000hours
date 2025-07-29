@@ -1,6 +1,7 @@
 import { FirebaseOptions, initializeApp } from "firebase/app";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 import { getAnalytics, Analytics } from "firebase/analytics";
 
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -35,6 +36,9 @@ setPersistence(auth, browserLocalPersistence)
   });
 
 export const db = getFirestore(app);
+
+// Initialize Firebase Functions
+export const functions = getFunctions(app);
 
 // Initialize Analytics
 let analytics: Analytics | undefined;

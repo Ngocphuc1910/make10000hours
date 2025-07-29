@@ -6,7 +6,7 @@ import {
   getRedirectResult
 } from 'firebase/auth';
 import { auth, db } from '../api/firebase';
-import { DEFAULT_SETTINGS, type UserData } from '../types/models';
+import { DEFAULT_SETTINGS, DEFAULT_SUBSCRIPTION, type UserData, type UserSubscription } from '../types/models';
 import { collection, doc, getDoc, setDoc } from 'firebase/firestore';
 import { AuthDebugger } from '../utils/authDebug';
 
@@ -28,10 +28,15 @@ export interface UserState {
   initialize: () => void;
   createUserDataIfNotExists: (uid: string, userProfile?: any) => Promise<UserData>;
   updateUserData: (userData: UserData) => Promise<void>;
+  updateSubscription: (subscription: Partial<UserSubscription>) => Promise<void>;
   signOut: () => Promise<void>;
   setUser: (user: User | null) => void;
   setError: (error: Error | null) => void;
   setLoading: (isLoading: boolean) => void;
+  
+  // Subscription helpers
+  hasActivePaidPlan: () => boolean;
+  canAccessFeature: (feature: 'standard' | 'pro') => boolean;
 }
 
 // Global flag to prevent double initialization in React.StrictMode
@@ -174,7 +179,8 @@ export const useUserStore = create<UserState>((set, get) => {
         const userData: UserData = {
           uid,
           userName: generateUserName(),
-          settings: DEFAULT_SETTINGS
+          settings: DEFAULT_SETTINGS,
+          subscription: DEFAULT_SUBSCRIPTION
         };
         
         // Check if user data already exists
@@ -186,11 +192,14 @@ export const useUserStore = create<UserState>((set, get) => {
         } else {
           const existingData = userDoc.data() as UserData;
           
-          // Handle existing users who might not have userName yet (migration)
-          if (!existingData.userName) {
-            const updatedData = {
+          // Handle existing users who might not have userName or subscription yet (migration)
+          const needsUpdate = !existingData.userName || !existingData.subscription;
+          
+          if (needsUpdate) {
+            const updatedData: UserData = {
               ...existingData,
-              userName: generateUserName()
+              userName: existingData.userName || generateUserName(),
+              subscription: existingData.subscription || DEFAULT_SUBSCRIPTION
             };
             await setDoc(userDocRef, updatedData, { merge: true });
             return updatedData;
@@ -260,5 +269,57 @@ export const useUserStore = create<UserState>((set, get) => {
     setError: (error) => set({ error }),
     
     setLoading: (isLoading) => set({ isLoading }),
+
+    updateSubscription: async (subscriptionUpdate: Partial<UserSubscription>) => {
+      const { user } = get();
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      try {
+        const updatedSubscription = {
+          ...user.subscription,
+          ...subscriptionUpdate,
+          updatedAt: new Date()
+        };
+
+        const updatedUserData: UserData = {
+          ...user,
+          subscription: updatedSubscription
+        };
+
+        await get().updateUserData(updatedUserData);
+        console.log('✅ Subscription updated:', updatedSubscription);
+      } catch (error) {
+        console.error('❌ Failed to update subscription:', error);
+        throw error;
+      }
+    },
+
+    hasActivePaidPlan: () => {
+      const { user } = get();
+      if (!user?.subscription) return false;
+      
+      const { plan, status } = user.subscription;
+      return (plan === 'standard' || plan === 'pro') && status === 'active';
+    },
+
+    canAccessFeature: (feature: 'standard' | 'pro') => {
+      const { user } = get();
+      if (!user?.subscription) return false;
+      
+      const { plan, status } = user.subscription;
+      if (status !== 'active') return false;
+      
+      if (feature === 'standard') {
+        return plan === 'standard' || plan === 'pro';
+      }
+      
+      if (feature === 'pro') {
+        return plan === 'pro';
+      }
+      
+      return false;
+    },
   };
 });

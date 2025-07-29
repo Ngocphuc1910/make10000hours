@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Icon } from '../ui/Icon';
+import { secureCheckoutService } from '../../services/secureCheckout';
+import { usePricingStore, BillingPeriod } from '../../store/pricingStore';
 
 interface PricingCardProps {
   plan: 'standard' | 'pro' | 'premium';
@@ -22,7 +24,34 @@ export const PricingCard: React.FC<PricingCardProps> = ({
   badge,
   betaBadge = false
 }) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const { billingPeriod } = usePricingStore();
+
+  const handleCheckout = async () => {
+    if (plan !== 'pro') {
+      // Only Pro plan is available per user request (Standard and Premium removed)
+      console.warn(`${plan} plan not available - only Pro plan supported`);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const checkoutUrl = await secureCheckoutService.getCheckoutUrl(billingPeriod);
+      
+      // Redirect to full page checkout instead of overlay
+      window.open(checkoutUrl, '_blank');
+    } catch (error) {
+      console.error('Failed to create checkout:', error);
+      alert(error instanceof Error ? error.message : 'Failed to create checkout');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const getButtonStyle = () => {
+    if (isStandardPlan) {
+      return 'text-white cursor-not-allowed';
+    }
     if (isPopular) {
       return 'text-white hover:opacity-90';
     }
@@ -31,12 +60,15 @@ export const PricingCard: React.FC<PricingCardProps> = ({
 
   const getButtonText = () => {
     switch (plan) {
-      case 'standard': return 'Get Started';
+      case 'standard': return 'Current Plan';
       case 'pro': return 'Upgrade to Pro';
       case 'premium': return 'Upgrade to Premium';
       default: return 'Get Started';
     }
   };
+
+  const isStandardPlan = plan === 'standard';
+  const isButtonDisabled = isStandardPlan || isLoading;
 
   if (isPopular) {
     return (
@@ -66,17 +98,33 @@ export const PricingCard: React.FC<PricingCardProps> = ({
             </div>
             
             <div className="flex items-baseline justify-center mb-4">
-              <span className="text-4xl font-bold text-text-primary">${price}</span>
-              <span className="text-sm text-text-secondary ml-1">{periodText}</span>
+              {isStandardPlan ? (
+                <span className="text-4xl font-bold text-text-primary">FREE</span>
+              ) : (
+                <>
+                  <span className="text-4xl font-bold text-text-primary">${price}</span>
+                  <span className="text-sm text-text-secondary ml-1">{periodText}</span>
+                </>
+              )}
             </div>
 
             <button 
               className={`
-                w-full py-3 px-4 rounded-button text-sm font-medium transition-colors duration-200 focus:outline-none
+                w-full py-3 px-4 rounded-button text-sm font-medium transition-colors duration-200 focus:outline-none flex items-center justify-center gap-2
                 ${getButtonStyle()}
+                ${isButtonDisabled && !isStandardPlan ? 'opacity-50 cursor-not-allowed' : ''}
               `}
-              style={isPopular ? { background: 'radial-gradient(circle at top right, #F9A8D4, #EC4899, #FB923C, #BB5F5A)' } : {}}
+              style={
+                isStandardPlan ? { backgroundColor: '#101827' } :
+                isPopular ? { background: 'radial-gradient(circle at top right, #F9A8D4, #EC4899, #FB923C, #BB5F5A)' } : 
+                {}
+              }
+              onClick={isStandardPlan ? undefined : handleCheckout}
+              disabled={isButtonDisabled}
             >
+              {isLoading && (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              )}
               {getButtonText()}
             </button>
           </div>
@@ -111,16 +159,29 @@ export const PricingCard: React.FC<PricingCardProps> = ({
         </div>
         
         <div className="flex items-baseline justify-center mb-4">
-          <span className="text-4xl font-bold text-text-primary">${price}</span>
-          <span className="text-sm text-text-secondary ml-1">{periodText}</span>
+          {isStandardPlan ? (
+            <span className="text-4xl font-bold text-text-primary">FREE</span>
+          ) : (
+            <>
+              <span className="text-4xl font-bold text-text-primary">${price}</span>
+              <span className="text-sm text-text-secondary ml-1">{periodText}</span>
+            </>
+          )}
         </div>
 
         <button 
           className={`
-            w-full py-3 px-4 rounded-button text-sm font-medium transition-colors duration-200 focus:outline-none
+            w-full py-3 px-4 rounded-button text-sm font-medium transition-colors duration-200 focus:outline-none flex items-center justify-center gap-2
             ${getButtonStyle()}
+            ${isButtonDisabled && !isStandardPlan ? 'opacity-50 cursor-not-allowed' : ''}
           `}
+          style={isStandardPlan ? { backgroundColor: '#101827' } : {}}
+          onClick={isStandardPlan ? undefined : handleCheckout}
+          disabled={isButtonDisabled}
         >
+          {isLoading && (
+            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+          )}
           {getButtonText()}
         </button>
       </div>
