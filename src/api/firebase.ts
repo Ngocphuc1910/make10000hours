@@ -19,10 +19,15 @@ const firebaseConfig: FirebaseOptions = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const db = getFirestore(app);
 
-// Expose auth globally for OAuth service
+// Initialize Firebase Functions with correct region
+export const functions = getFunctions(app, 'us-central1');
+
+// Expose auth and functions globally for OAuth service and debugging
 if (typeof window !== 'undefined') {
   (window as any).firebaseAuth = auth;
+  (window as any).firebaseFunctions = functions;
 }
 
 // CRITICAL: Explicitly set auth persistence to LOCAL to ensure 
@@ -34,11 +39,6 @@ setPersistence(auth, browserLocalPersistence)
   .catch((error) => {
     console.error('❌ Failed to set Firebase Auth persistence:', error);
   });
-
-export const db = getFirestore(app);
-
-// Initialize Firebase Functions
-export const functions = getFunctions(app);
 
 // Initialize Analytics
 let analytics: Analytics | undefined;

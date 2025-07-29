@@ -29,7 +29,8 @@ export async function handlePaymentSuccess(
     let userId: string | null = null;
     
     // Try by Firebase Auth UID first (if passed in custom data)
-    if (userIdentifier.length === 28) { // Firebase UID format
+    // Firebase UIDs don't contain @ symbol, so check for that instead of length
+    if (!userIdentifier.includes('@')) {
       userId = await getUserByAuthId(userIdentifier);
     }
     
@@ -63,7 +64,7 @@ export async function handlePaymentSuccess(
     }
     
     // Update user subscription
-    await updateUserSubscription(userId, subscriptionData);
+    await updateUserSubscription(userId, subscriptionData, 'subscription_payment_success');
 
     logger.info('Payment success processed - subscription confirmed active:', {
       eventId,
