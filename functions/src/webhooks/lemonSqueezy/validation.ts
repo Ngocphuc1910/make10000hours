@@ -226,7 +226,7 @@ export function validateEnvironmentConfig(): {
     };
   }
 
-  if (webhookSecret.length < 16) {
+  if (webhookSecret.length < 10) {
     return {
       isValid: false,
       error: 'LEMON_SQUEEZY_WEBHOOK_SECRET appears to be too short'

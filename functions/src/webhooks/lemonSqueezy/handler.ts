@@ -92,6 +92,15 @@ export async function handleLemonSqueezyWebhook(
       ? process.env.LEMON_SQUEEZY_TEST_WEBHOOK_SECRET || process.env.LEMON_SQUEEZY_WEBHOOK_SECRET
       : process.env.LEMON_SQUEEZY_WEBHOOK_SECRET;
 
+    if (!webhookSecret) {
+      logger.error('Webhook secret not found');
+      response.status(500).json({ 
+        error: 'Server configuration error',
+        message: 'Webhook secret not configured' 
+      });
+      return;
+    }
+
     // Verify signature
     if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
       logger.error('Webhook signature verification failed', {
