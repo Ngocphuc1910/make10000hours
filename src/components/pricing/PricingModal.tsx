@@ -5,8 +5,8 @@ import { PricingCard } from './PricingCard';
 import { Icon } from '../ui/Icon';
 
 const pricingData = {
-  monthly: { standard: 29, pro: 89, premium: 199 },
-  annual: { standard: 23, pro: 71, premium: 159 } // 20% discount
+  monthly: { standard: 0, pro: 5 },
+  annual: { standard: 0, pro: 45 }
 };
 
 const plans = {
@@ -31,35 +31,18 @@ const plans = {
     badge: undefined,
     betaBadge: false,
     features: [
-      '15,000 credits per month',
-      'Run up to 8 tasks concurrently',
+      'Unlimited tasks and projects',
+      'Advanced Pomodoro timer settings',
+      'Deep Focus mode with website blocking',
+      'Google Calendar integration',
       'Advanced analytics and insights',
-      'Priority support',
+      'AI-powered productivity chat',
+      'Priority customer support',
+      'Chrome extension for usage tracking',
+      'Custom themes and personalization',
+      'Export data and reports',
       'Team collaboration features',
-      'Custom integrations',
-      'Advanced task templates',
-      'Custom notifications',
-      'Advanced time tracking',
-      '5 workspaces',
-      'Priority forum access'
-    ]
-  },
-  premium: {
-    name: 'Premium',
-    betaBadge: true,
-    features: [
-      '50,000 credits per month',
-      'Unlimited concurrent tasks',
-      'Enterprise-grade analytics',
-      '24/7 dedicated support',
-      'Advanced team management',
-      'Custom branding options',
-      'API access and webhooks',
-      'Enterprise task templates',
-      'Custom workflow automation',
-      'Advanced security features',
-      'Unlimited workspaces',
-      'Dedicated success manager'
+      'Advanced notification settings'
     ]
   }
 };
