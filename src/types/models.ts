@@ -67,6 +67,22 @@ export interface UserData {
   uid: string;
   userName: string;
   settings: AppSettings;
+  subscription?: UserSubscription;
+}
+
+// Subscription types
+export interface UserSubscription {
+  plan: 'free' | 'standard' | 'pro';
+  billing?: 'monthly' | 'annual';
+  status: 'active' | 'cancelled' | 'past_due' | 'on_trial' | 'expired';
+  lemonSqueezyId?: string;
+  customerId?: string;
+  currentPeriodStart?: Date;
+  currentPeriodEnd?: Date;
+  cancelAtPeriodEnd?: boolean;
+  trialEnd?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export type TimerMode = 'pomodoro' | 'shortBreak' | 'longBreak';
@@ -116,6 +132,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   darkMode: false,
   compactTaskView: false,
   taskListViewMode: 'today',
+};
+
+export const DEFAULT_SUBSCRIPTION: UserSubscription = {
+  plan: 'free',
+  status: 'active',
+  createdAt: new Date(),
+  updatedAt: new Date()
 };
 
 // Work session tracking for dashboard analytics

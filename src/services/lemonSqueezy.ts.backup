@@ -1,0 +1,278 @@
+import { auth } from '../api/firebase';
+
+// Lemon Squeezy API configuration
+const LEMON_SQUEEZY_API_BASE = 'https://api.lemonsqueezy.com/v1';
+
+// Types
+export interface LemonSqueezyCheckout {
+  id: string;
+  type: 'checkouts';
+  attributes: {
+    store_id: number;
+    variant_id: number;
+    custom_price?: number;
+    product_options?: {
+      name?: string;
+      description?: string;
+      media?: string[];
+      redirect_url?: string;
+    };
+    checkout_options?: {
+      embed?: boolean;
+      media?: boolean;
+      logo?: boolean;
+      desc?: boolean;
+      discount?: boolean;
+      dark?: boolean;
+      subscription_preview?: boolean;
+      button_color?: string;
+    };
+    checkout_data?: {
+      email?: string;
+      name?: string;
+      billing_address?: Record<string, string>;
+      tax_number?: string;
+      discount_code?: string;
+      custom?: Record<string, any>;
+    };
+    expires_at?: string;
+    created_at: string;
+    updated_at: string;
+    test_mode: boolean;
+    url: string;
+  };
+}
+
+export interface SubscriptionPlan {
+  tier: 'pro';
+  billing: 'monthly' | 'annual';
+  variantId: string;
+  price: number;
+}
+
+// Plan configuration with environment variables
+export const SUBSCRIPTION_PLANS: Record<string, SubscriptionPlan> = {
+  'pro-monthly': {
+    tier: 'pro',
+    billing: 'monthly',
+    variantId: import.meta.env.VITE_LEMON_SQUEEZY_PRO_MONTHLY_VARIANT_ID || '903137',
+    price: 89
+  },
+  'pro-annual': {
+    tier: 'pro',
+    billing: 'annual',
+    variantId: import.meta.env.VITE_LEMON_SQUEEZY_PRO_ANNUAL_VARIANT_ID || '922210',
+    price: 71
+  }
+};
+
+class LemonSqueezyService {
+  private apiKey: string;
+  private storeId: string;
+
+  constructor() {
+    // Using environment variables for security
+    this.apiKey = import.meta.env.VITE_LEMON_SQUEEZY_API_KEY || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI5NGQ1OWNlZi1kYmI4LTRlYTUtYjE3OC1kMjU0MGZjZDY5MTkiLCJqdGkiOiI2OWJkNzFmY2E2ODVlNjVkMGZmOWRiNzJkZGU4ZWU5ZjE3OWNlZDcxOWUyNTk3ZjgzNzc3N2IxNzFmYjM5NzhjMTg0MTNhZDdkNjhkOWE4OSIsImlhdCI6MTc1MzcwNjQzNC42ODUxOTQsIm5iZiI6MTc1MzcwNjQzNC42ODUxOTcsImV4cCI6MjA2OTIzOTIzNC42NTE3NzMsInN1YiI6IjUyMTgyMzkiLCJzY29wZXMiOltdfQ.gkl4ALjzuwJioTR_uBkO9ZlWatwR8fv5j_oSV4GIttN915doVYtCyU3CsC14SHTu_ZyviIKjM8jcDGP9LmFD1sYjOBc-6P4l1aJ9SrLuLDquzXiDoDIHVBUtKormUMytjFq8Zh3cTaose_ZIBdupTLrxPbCI6iejPO-QwthDeuY_bhl94KC3Au0UY9CgiHS5yylFuR4x3sOLb-tN3tSLh869Yn6yUOzYySwxjypY7Zp0VAaERbWwF3IsVzAOAkmBDR0QK8eom7NsM4_V9he1JzghSFYzNfpTrFvkpZeLSeviVtX1kY4fm7bXzcV6hAkadSF4m9KJXTO2gq91sz82Vv2cFNUQ8nPXVXjbwQ9tgsZMbcNWJ918a-yEMJP5gVVViL3uQEUaNm12yai0vkGYkrZkm0F9UX0AwCrVN5u0VcXyxyzvTM-nU4a9DQY6ahIOz4L6FFCHTaG7Bj_CKsLRiKgPLQyFqhLibtjwIfsOwXx-aVUsjlrq4d5YDvMHIYdr';
+    this.storeId = import.meta.env.VITE_LEMON_SQUEEZY_STORE_ID || '202193';
+  }
+
+  private getHeaders() {
+    return {
+      'Accept': 'application/vnd.api+json',
+      'Content-Type': 'application/vnd.api+json',
+      'Authorization': `Bearer ${this.apiKey}`
+    };
+  }
+
+  /**
+   * Create a checkout session for a subscription plan
+   */
+  async createCheckout(
+    planKey: string,
+    userEmail?: string,
+    userId?: string
+  ): Promise<LemonSqueezyCheckout> {
+    const plan = SUBSCRIPTION_PLANS[planKey];
+    if (!plan) {
+      throw new Error(`Invalid plan key: ${planKey}`);
+    }
+
+    const currentUser = auth.currentUser;
+    const email = userEmail || currentUser?.email || '';
+
+    const checkoutData = {
+      data: {
+        type: 'checkouts',
+        attributes: {
+          checkout_options: {
+            embed: false,
+            media: false,
+            logo: true,
+            desc: true,
+            discount: true,
+            dark: false, // You can make this dynamic based on theme
+            subscription_preview: false
+          },
+          checkout_data: {
+            email: email,
+            custom: {
+              user_id: userId || currentUser?.uid,
+              plan_tier: plan.tier,
+              plan_billing: plan.billing
+            }
+          }
+        },
+        relationships: {
+          store: {
+            data: {
+              type: 'stores',
+              id: this.storeId
+            }
+          },
+          variant: {
+            data: {
+              type: 'variants',
+              id: plan.variantId
+            }
+          }
+        }
+      }
+    };
+
+    try {
+      const response = await fetch(`${LEMON_SQUEEZY_API_BASE}/checkouts`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(checkoutData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Lemon Squeezy API error: ${errorData.errors?.[0]?.detail || response.statusText}`);
+      }
+
+      const result = await response.json();
+      return result.data;
+    } catch (error) {
+      console.error('Error creating checkout:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get checkout URL for Pro plan (Standard plan removed per user request)
+   */
+  async getCheckoutUrl(billing: 'monthly' | 'annual'): Promise<string> {
+    const planKey = `pro-${billing}`;
+    const checkout = await this.createCheckout(planKey);
+    return checkout.attributes.url;
+  }
+
+  /**
+   * Get all subscription plans
+   */
+  getAvailablePlans(): SubscriptionPlan[] {
+    return Object.values(SUBSCRIPTION_PLANS);
+  }
+
+  /**
+   * Get Pro plan by billing period (Standard plan removed per user request)
+   */
+  getPlan(billing: 'monthly' | 'annual'): SubscriptionPlan | undefined {
+    const planKey = `pro-${billing}`;
+    return SUBSCRIPTION_PLANS[planKey];
+  }
+}
+
+// Export singleton instance
+export const lemonSqueezyService = new LemonSqueezyService();
+
+// Lemon.js integration utilities
+export class LemonSqueezyClient {
+  private static initialized = false;
+
+  /**
+   * Initialize Lemon.js with event handlers
+   */
+  static initialize() {
+    if (this.initialized || typeof window === 'undefined') return;
+
+    // Wait for Lemon.js to load
+    const checkLemonSqueezy = () => {
+      if (window.LemonSqueezy) {
+        window.LemonSqueezy.Setup({
+          eventHandler: this.handleEvent
+        });
+        this.initialized = true;
+        console.log('✅ Lemon Squeezy initialized');
+      } else {
+        setTimeout(checkLemonSqueezy, 100);
+      }
+    };
+
+    checkLemonSqueezy();
+  }
+
+  /**
+   * Handle Lemon Squeezy events
+   */
+  private static handleEvent = (data: any) => {
+    console.log('🍋 Lemon Squeezy Event:', data);
+
+    switch (data.event) {
+      case 'Checkout.Success':
+        // Handle successful checkout
+        this.handleCheckoutSuccess(data);
+        break;
+      case 'PaymentMethodUpdate.Updated':
+        // Handle payment method updates
+        this.handlePaymentMethodUpdate(data);
+        break;
+      default:
+        console.log('Unknown Lemon Squeezy event:', data.event);
+    }
+  };
+
+  /**
+   * Handle successful checkout
+   */
+  private static handleCheckoutSuccess(data: any) {
+    // Close pricing modal if open
+    window.dispatchEvent(new CustomEvent('lemon-checkout-success', { detail: data }));
+    
+    // You can also directly call your pricing store here
+    // But using custom events is cleaner for decoupling
+  }
+
+  /**
+   * Handle payment method updates
+   */
+  private static handlePaymentMethodUpdate(data: any) {
+    window.dispatchEvent(new CustomEvent('lemon-payment-updated', { detail: data }));
+  }
+
+  /**
+   * Open checkout programmatically
+   */
+  static openCheckout(url: string) {
+    if (window.LemonSqueezy) {
+      window.LemonSqueezy.Url.Open(url);
+    } else {
+      console.error('Lemon Squeezy not loaded');
+      // Fallback to opening in new tab
+      window.open(url, '_blank');
+    }
+  }
+}
+
+// Window interface extension for TypeScript
+declare global {
+  interface Window {
+    LemonSqueezy: {
+      Setup: (config: { eventHandler: (data: any) => void }) => void;
+      Url: {
+        Open: (url: string) => void;
+      };
+    };
+  }
+}

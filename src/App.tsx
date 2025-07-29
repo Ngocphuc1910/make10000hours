@@ -31,6 +31,8 @@ import DataSyncPage from './components/pages/DataSyncPage';
 import PrivacyPolicyPage from './components/pages/PrivacyPolicyPage';
 import { PricingModal } from './components/pricing/PricingModal';
 import { ChatIntegrationService } from './services/chatIntegration';
+// LemonSqueezyClient removed - checkout now handled securely server-side
+import { usePricingStore } from './store/pricingStore';
 import { useDeepFocusStore } from './store/deepFocusStore';
 import { DeepFocusProvider, useDeepFocusContext } from './contexts/DeepFocusContext';
 import { testDeepFocusFixes } from './utils/testDeepFocusFix';
@@ -45,6 +47,12 @@ if (process.env.NODE_ENV === 'development') {
 
 // Import cleanup utility for orphaned sessions
 import('./utils/cleanupSessions');
+
+// Import debug utilities in development
+if (process.env.NODE_ENV === 'development') {
+  import('./utils/debugCheckout');
+  import('./utils/testFirebaseFunction');
+}
 
 // Import auth guard test utilities in development mode
 if (process.env.NODE_ENV === 'development') {
@@ -401,6 +409,24 @@ const App: React.FC = () => {
     
     // Initialize chat integration
     ChatIntegrationService.initialize();
+    
+    // Initialize Lemon Squeezy client
+    // LemonSqueezyClient.initialize() - removed, checkout now server-side
+    
+    // Set up Lemon Squeezy event listeners
+    const handleLemonCheckoutSuccess = (event: CustomEvent) => {
+      console.log('🍋 Checkout success:', event.detail);
+      // Close pricing modal
+      usePricingStore.getState().closeModal();
+      // The webhook will handle the actual subscription update
+    };
+    
+    const handleLemonPaymentUpdated = (event: CustomEvent) => {
+      console.log('🍋 Payment method updated:', event.detail);
+    };
+    
+    window.addEventListener('lemon-checkout-success', handleLemonCheckoutSuccess as EventListener);
+    window.addEventListener('lemon-payment-updated', handleLemonPaymentUpdated as EventListener);
 
     // Setup extension debugger for console access
     (window as any).debugExtension = async () => {
@@ -571,6 +597,12 @@ const App: React.FC = () => {
       // Force page reload to start with fresh data
       window.location.reload();
     }
+    
+    // Cleanup event listeners
+    return () => {
+      window.removeEventListener('lemon-checkout-success', handleLemonCheckoutSuccess as EventListener);
+      window.removeEventListener('lemon-payment-updated', handleLemonPaymentUpdated as EventListener);
+    };
   }, []);
 
   // NOTE: Google Calendar webhook monitoring is now handled by useSimpleGoogleCalendarAuth hook

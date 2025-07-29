@@ -1,186 +1,29 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
 // Initialize Firebase Admin
 initializeApp();
-const db = getFirestore();
-
-interface WebhookHeaders {
-  'x-goog-channel-id'?: string;
-  'x-goog-channel-token'?: string;
-  'x-goog-resource-id'?: string;
-  'x-goog-resource-state'?: string;
-  'x-goog-resource-uri'?: string;
-  'x-goog-channel-expiration'?: string;
-  'x-goog-message-number'?: string;
-}
 
 /**
- * Verify incoming webhook request from Google Calendar
+ * Secure checkout creation (Callable Function)
  */
-function verifyWebhook(headers: WebhookHeaders): boolean {
-  // Verify required headers are present
-  const requiredHeaders: (keyof WebhookHeaders)[] = ['x-goog-channel-id', 'x-goog-resource-id', 'x-goog-resource-state'];
-  for (const header of requiredHeaders) {
-    if (!headers[header]) {
-      logger.error(`Missing required header: ${header}`);
-      return false;
-    }
-  }
-
-  // Verify channel ID format (should start with make10000hours_)
-  const channelId = headers['x-goog-channel-id'];
-  if (!channelId || !channelId.startsWith('make10000hours_')) {
-    logger.error('Invalid channel ID format:', channelId);
-    return false;
-  }
-
-  return true;
-}
+export { createCheckout } from './checkout/createCheckout';
 
 /**
- * Extract user ID from channel ID
- */
-function getUserIdFromChannelId(channelId: string): string | null {
-  try {
-    // Channel ID format: make10000hours_{userId}_{timestamp}
-    const parts = channelId.split('_');
-    if (parts.length >= 3 && parts[0] === 'make10000hours') {
-      return parts[1];
-    }
-    return null;
-  } catch (error) {
-    logger.error('Error parsing channel ID:', error);
-    return null;
-  }
-}
-
-/**
- * Trigger incremental sync for a specific user
- */
-async function triggerIncrementalSyncForUser(userId: string): Promise<void> {
-  try {
-    logger.info(`Triggering incremental sync for user: ${userId}`);
-    
-    // Update the sync state to indicate a webhook-triggered sync is needed
-    const syncStateRef = db.collection('syncStates').doc(userId);
-    const syncStateDoc = await syncStateRef.get();
-    
-    if (!syncStateDoc.exists) {
-      logger.warn(`No sync state found for user: ${userId}`);
-      return;
-    }
-
-    // Set a flag that the client can monitor to trigger sync
-    await syncStateRef.update({
-      webhookTriggeredSync: true,
-      lastWebhookNotification: new Date(),
-      updatedAt: new Date()
-    });
-
-    logger.info(`Successfully triggered sync for user: ${userId}`);
-  } catch (error) {
-    logger.error('Error triggering incremental sync:', error);
-    throw error;
-  }
-}
-
-/**
- * Process incoming webhook notification
- */
-async function processWebhookNotification(headers: WebhookHeaders): Promise<void> {
-  const channelId = headers['x-goog-channel-id']!;
-  const resourceState = headers['x-goog-resource-state']!;
-  const messageNumber = headers['x-goog-message-number'];
-  
-  logger.info('Processing webhook notification:', {
-    channelId,
-    resourceState,
-    messageNumber
-  });
-
-  // Skip sync notifications (initial setup)
-  if (resourceState === 'sync') {
-    logger.info('Received sync notification for channel:', channelId);
-    return;
-  }
-
-  // Find user by channel ID
-  const userId = getUserIdFromChannelId(channelId);
-  if (!userId) {
-    logger.error('No user found for channel ID:', channelId);
-    return;
-  }
-
-  // Log the webhook notification for debugging
-  await db.collection('webhookLogs').add({
-    userId,
-    channelId,
-    resourceState,
-    messageNumber: messageNumber || null,
-    timestamp: new Date(),
-    processed: true
-  });
-
-  // Only process 'exists' state changes (actual calendar changes)
-  if (resourceState === 'exists') {
-    await triggerIncrementalSyncForUser(userId);
-  }
-}
-
-/**
- * Google Calendar Webhook Handler
+ * Placeholder for Calendar Webhook (temporarily disabled)
  */
 export const calendarWebhook = onRequest(
   {
-    cors: false, // Disable CORS for webhooks
+    cors: false,
     timeoutSeconds: 60,
     memory: '256MiB',
     region: 'us-central1',
-    invoker: 'public' // Allow unauthenticated access for webhooks
+    invoker: 'public'
   },
   async (request, response) => {
-    try {
-      // Only accept POST requests
-      if (request.method !== 'POST') {
-        logger.warn('Invalid request method:', request.method);
-        response.status(405).send('Method Not Allowed');
-        return;
-      }
-
-      const headers = request.headers as WebhookHeaders;
-      
-      // Log incoming webhook for debugging
-      logger.info('Incoming webhook request:', {
-        method: request.method,
-        headers: {
-          'x-goog-channel-id': headers['x-goog-channel-id'],
-          'x-goog-resource-state': headers['x-goog-resource-state'],
-          'x-goog-resource-id': headers['x-goog-resource-id']
-        }
-      });
-
-      // Verify webhook authenticity
-      if (!verifyWebhook(headers)) {
-        logger.error('Webhook verification failed');
-        response.status(400).send('Bad Request');
-        return;
-      }
-
-      // Process the webhook notification
-      await processWebhookNotification(headers);
-
-      // Return success response
-      response.status(200).send('OK');
-      
-      logger.info('Webhook processed successfully');
-      
-    } catch (error) {
-      logger.error('Error processing webhook:', error);
-      response.status(500).send('Internal Server Error');
-    }
+    logger.info('Calendar webhook temporarily disabled');
+    response.status(200).send('Calendar webhook temporarily disabled');
   }
 );
 
@@ -193,15 +36,14 @@ export const webhookHealth = onRequest(
     timeoutSeconds: 10,
     memory: '128MiB',
     region: 'us-central1',
-    invoker: 'public' // Allow unauthenticated access for testing
+    invoker: 'public'
   },
   async (request, response) => {
     try {
-      // Simple health check
       response.status(200).json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        service: 'calendar-webhook'
+        services: ['secure-checkout']
       });
     } catch (error) {
       logger.error('Health check error:', error);
