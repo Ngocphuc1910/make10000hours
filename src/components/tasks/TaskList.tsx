@@ -175,7 +175,7 @@ export const TaskList: React.FC<TaskListProps> = ({
         ref={scrollContainerRef}
       >
         <div className="p-4">
-          <div className="space-y-3" id="taskList" ref={taskListRef}>
+          <div className="space-y-2.5" id="taskList" ref={taskListRef}>
             <TaskListSorted />
             
             {/* Task Creation Form */}

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
+import VerticalNavigation from './VerticalNavigation';
 import { useUIStore } from '../../store/uiStore';
 import FocusMode from '../pomodoro/FocusMode';
 import { Outlet, useLocation } from 'react-router-dom';
@@ -192,12 +193,13 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             <div 
               ref={rightSidebarRef}
               id="rightSidebar" 
-              className="border-l border-t border-border flex flex-col bg-white min-w-[280px] rounded-tl-lg h-full flex-shrink-0 relative group"
+              className="border-l border-t border-b border-border flex flex-col bg-white min-w-[280px] rounded-tl-lg rounded-bl-lg flex-shrink-0 relative group"
               style={{ 
                 width: `${currentWidth}px`,
                 minWidth: '280px',
                 maxWidth: '50vw',
-                height: '100%'
+                height: 'calc(100% - 64px)',
+                marginBottom: '64px'
               }}
             >
               {/* Resizable left border */}
@@ -228,6 +230,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           
         </div>
       </div>
+      
+      {/* Vertical Navigation - shows when left sidebar is closed */}
+      <VerticalNavigation />
       
       {/* Focus Mode */}
       <FocusMode />
