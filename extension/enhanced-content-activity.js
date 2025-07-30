@@ -7,7 +7,7 @@ class EnhancedContentActivityDetector {
   constructor() {
     this.isActive = true;
     this.lastActivity = Date.now();
-    this.activityThreshold = 30000; // 30 seconds (increased from 5 seconds)
+    this.activityThreshold = 120000; // 2 minutes (conservative increase from 30s to allow passive reading)
     this.reportInterval = null;
     this.visibilityCheckInterval = null;
     this.focusMode = false;

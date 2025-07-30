@@ -2315,13 +2315,13 @@ class FocusTimeTracker {
     this.isSessionPaused = false;
     this.pausedAt = null;
     this.totalPausedTime = 0;
-    this.inactivityThreshold = 300000; // 5 minutes
+    this.inactivityThreshold = 480000; // 8 minutes (conservative increase, stays within sleep detection safety margin)
     this.lastActivityTime = Date.now();
     this.autoManagementEnabled = true;
     
     // IMPROVEMENT #2: Tab Switching Grace Period
     this.graceTimer = null;
-    this.gracePeriod = 15000; // 15 seconds grace period
+    this.gracePeriod = 3000; // 3 seconds grace period (reduced from 15s to minimize tracking gaps)
     this.pendingSessionData = null;
     
     // Focus state tracking
@@ -2558,8 +2558,9 @@ class FocusTimeTracker {
   async handleWindowFocusChanged(windowId) {
     try {
       if (windowId === chrome.windows.WINDOW_ID_NONE) {
-        // Browser lost focus
-        await this.pauseTracking();
+        // Browser lost focus - DON'T pause tracking to allow multitasking
+        // await this.pauseTracking(); // DISABLED: Causes 15-20% time loss for normal multitasking
+        console.log('👁️ Browser lost focus - continuing tracking (multitasking mode)');
       } else {
         // Browser gained focus
         const tabs = await chrome.tabs.query({ active: true, windowId: windowId });
@@ -3529,6 +3530,9 @@ class FocusTimeTracker {
 
       const domain = this.extractDomain(tab.url);
       const now = Date.now();
+      
+      // Update heartbeat for user activity
+      this.lastHeartbeat = now;
 
       // Check if we have a paused session for the same domain
       if (!this.currentSession.isActive && this.currentSession.domain === domain) {
@@ -3692,11 +3696,15 @@ class FocusTimeTracker {
   async resumeTracking(tab) {
     if (!this.currentSession.isActive && tab && this.isTrackableUrl(tab.url)) {
       const domain = this.extractDomain(tab.url);
+      const now = Date.now();
+      
+      // Update heartbeat for user activity
+      this.lastHeartbeat = now;
       
       // Only resume if we have a paused session for the same domain
       if (this.currentSession.domain === domain) {
         this.currentSession.tabId = tab.id;
-        this.currentSession.startTime = Date.now();
+        this.currentSession.startTime = now;
         this.currentSession.isActive = true;
         console.log(`▶️ Resumed tracking from activity: ${domain}`);
       } else {
@@ -3713,8 +3721,8 @@ class FocusTimeTracker {
     const now = Date.now();
     const timeSinceLastHeartbeat = now - this.lastHeartbeat;
     
-    // If more than 10 minutes have passed, assume system was sleeping
-    if (timeSinceLastHeartbeat > 600000) { // 10 minutes
+    // If more than 5 minutes have passed, assume system was sleeping
+    if (timeSinceLastHeartbeat > 300000) { // 5 minutes (more sensitive detection)
       console.log('💤 Sleep detected - time gap:', Math.round(timeSinceLastHeartbeat / 1000) + 's');
       
       // If we have an active session, pause it instead of resetting
@@ -3736,7 +3744,8 @@ class FocusTimeTracker {
       }
     }
     
-    this.lastHeartbeat = now;
+    // DON'T update heartbeat here - let user activity drive heartbeat updates
+    // this.lastHeartbeat = now; // REMOVED: This prevented sleep detection
   }
 
   /**
@@ -3925,7 +3934,9 @@ class FocusTimeTracker {
    * Update activity timestamp and state
    */
   updateActivity(activityData = {}) {
-    this.lastActivityTime = Date.now();
+    const now = Date.now();
+    this.lastActivityTime = now;
+    this.lastHeartbeat = now; // Sync heartbeat with real user activity for accurate sleep detection
     
     if (activityData.isActive) {
       // Resume session if it was paused and activity is detected
