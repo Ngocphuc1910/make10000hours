@@ -252,9 +252,18 @@ class EnhancedContentActivityDetector {
       this.reportActivity();
     }, this.reportFrequency);
 
-    // Heartbeat for long-term monitoring
+    // Heartbeat for long-term monitoring (only when page is active and visible)
     setInterval(() => {
-      this.sendHeartbeat();
+      // IMPROVED: Service worker compatible with proper context detection
+      const canCheckDocument = typeof document !== 'undefined';
+      const isDocumentHidden = canCheckDocument ? document.hidden : false;
+      
+      // Only send heartbeat when page is visible and user is active
+      if (!isDocumentHidden && this.isActive) {
+        this.sendHeartbeat();
+      } else {
+        console.log('🚫 Heartbeat skipped - page hidden or user inactive');
+      }
     }, this.heartbeatFrequency);
   }
 
