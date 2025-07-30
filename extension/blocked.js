@@ -255,13 +255,13 @@ class BlockedPage {
 
   setupEventListeners() {
     document.getElementById('backBtn').addEventListener('click', () => {
-      // Navigate to deep focus page in the same tab
-      window.location.href = 'https://app.make10000hours.com/#/deep-focus';
+      // Open deep focus page in new tab
+      window.open('https://app.make10000hours.com/#/deep-focus', '_blank');
     });
 
     document.getElementById('openPopupBtn').addEventListener('click', () => {
-      // Navigate to deep focus page in the same tab
-      window.location.href = 'https://app.make10000hours.com/#/deep-focus';
+      // Open deep focus page in new tab
+      window.open('https://app.make10000hours.com/#/deep-focus', '_blank');
     });
 
     document.getElementById('overrideBtn').addEventListener('click', () => {
@@ -371,7 +371,7 @@ class BlockedPage {
       }
 
       const confirmed = confirm(
-        'This will temporarily allow access to this site for 5 minutes. Are you sure?'
+        'Are you sure you want to override for 5 minutes?'
       );
       
       if (confirmed) {
@@ -484,58 +484,7 @@ class BlockedPage {
 // Initialize the blocked page
 new BlockedPage();
 
-document.addEventListener('DOMContentLoaded', function() {
-  // Get DOM elements
-  const backBtn = document.getElementById('backBtn');
-  const openPopupBtn = document.getElementById('openPopupBtn');
-  const overrideBtn = document.getElementById('overrideBtn');
-  const modal = document.getElementById('actionModal');
-  const modalTitle = document.getElementById('modalTitle');
-  const modalContent = document.getElementById('modalContent');
-  const modalClose = document.getElementById('modalClose');
-
-  const DASHBOARD_URL = 'https://app.make10000hours.com/#/deep-focus';
-
-  // Button click handlers for navigation
-  function navigateToDashboard(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    window.location.replace(DASHBOARD_URL);
-  }
-
-  // Attach navigation handlers
-  backBtn.addEventListener('click', navigateToDashboard);
-  openPopupBtn.addEventListener('click', navigateToDashboard);
-
-  // Override button handler
-  overrideBtn.addEventListener('click', function() {
-    showModal('Override Session', 'Are you sure you want to override for 5 minutes?');
-  });
-
-  // Modal functions
-  function showModal(title, content) {
-    modalTitle.textContent = title;
-    modalContent.textContent = content;
-    modal.classList.add('visible');
-  }
-
-  function hideModal() {
-    modal.classList.remove('visible');
-  }
-
-  // Close modal when clicking close button
-  modalClose.addEventListener('click', hideModal);
-
-  // Close modal when clicking outside
-  modal.addEventListener('click', function(e) {
-    if (e.target === modal) {
-      hideModal();
-    }
-  });
-
-  // Initialize debug panel if needed
-  initializeDebugPanel();
-});
+// DOMContentLoaded removed - all functionality handled by BlockedPage class to prevent conflicts
 
 function initializeDebugPanel() {
   const debugPanel = document.getElementById('debugInfo');
