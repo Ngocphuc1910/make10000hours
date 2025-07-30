@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useUserStore } from '../store/userStore';
+import { useDeepFocusStore } from '../store/deepFocusStore';
 
 // Helper function to clear storage when user changes
 const clearPreviousUserStorage = () => {
@@ -29,6 +30,7 @@ let lastUserId: string | null = null;
  */
 export const useUserSync = () => {
   const { user } = useUserStore();
+  const { loadBlockedSites } = useDeepFocusStore();
 
   useEffect(() => {
     const syncUserWithExtension = async () => {
@@ -60,6 +62,15 @@ export const useUserSync = () => {
         }, '*');
         console.log('📤 DEBUG: Sent SET_USER_ID via window.postMessage for user:', user.uid);
 
+        // Load and sync blocking sites to extension (same as Deep Focus page)
+        try {
+          console.log('🔒 Loading and syncing blocked sites to extension...');
+          await loadBlockedSites(user.uid);
+          console.log('✅ Blocked sites loaded and synced to extension');
+        } catch (error) {
+          console.warn('⚠️ Failed to sync blocked sites to extension:', error);
+        }
+
         // Also try Chrome extension API if available
         if (typeof (window as any).chrome !== 'undefined' && 
             (window as any).chrome?.runtime?.sendMessage) {
@@ -89,7 +100,7 @@ export const useUserSync = () => {
     syncUserWithExtension();
 
     // Also sync periodically to ensure extension stays updated
-    const syncInterval = setInterval(syncUserWithExtension, 30000); // Every 30 seconds
+    const syncInterval = setInterval(syncUserWithExtension, 60000); // Every 60 seconds (less frequent since we're also syncing blocking sites)
 
     return () => {
       clearInterval(syncInterval);
