@@ -2319,6 +2319,10 @@ class FocusTimeTracker {
     this.lastActivityTime = Date.now();
     this.autoManagementEnabled = true;
     
+    // SAFEGUARD: Prevent concurrent saves and sleep processing
+    this.isSaving = false;
+    this.isProcessingSleep = false;
+    
     // IMPROVEMENT #2: Tab Switching Grace Period
     this.graceTimer = null;
     this.gracePeriod = 3000; // 3 seconds grace period (reduced from 15s to minimize tracking gaps)
@@ -3749,6 +3753,31 @@ class FocusTimeTracker {
   }
 
   /**
+   * Handle sleep detected condition (extracted to prevent recursion)
+   */
+  async handleSleepDetected() {
+    const now = Date.now();
+    
+    // If we have an active session, pause it instead of resetting
+    if (this.currentSession.isActive && this.currentSession.startTime) {
+      // Calculate time before sleep
+      const timeBeforeSleep = Math.max(0, this.lastHeartbeat - this.currentSession.startTime);
+      
+      // Save accumulated time before sleep
+      if (timeBeforeSleep > 1000) {
+        await this.storageManager.saveTimeEntry(this.currentSession.domain, timeBeforeSleep, 0);
+        console.log(`💾 Saved time before sleep: ${this.storageManager.formatTime(timeBeforeSleep)}`);
+      }
+      
+      // PAUSE session instead of reset - preserve domain and accumulated time
+      this.currentSession.isActive = false;
+      this.currentSession.startTime = null;
+      // Keep domain and savedTime intact for resume
+      console.log(`⏸️ Session paused for ${this.currentSession.domain} due to sleep detection`);
+    }
+  }
+
+  /**
    * Get the currently active tab
    */
   async getActiveTab() {
@@ -3782,9 +3811,41 @@ class FocusTimeTracker {
    */
   async saveCurrentSession() {
     try {
-      if (this.currentSession.isActive && this.currentSession.startTime) {
-        const now = Date.now();
-        const sessionDuration = now - this.currentSession.startTime;
+      // SAFEGUARD 1: Validate session state
+      if (!this.currentSession || !this.currentSession.isActive || !this.currentSession.startTime) {
+        return;
+      }
+
+      // SAFEGUARD 2: Prevent concurrent execution and sleep processing
+      if (this.isSaving || this.isProcessingSleep) {
+        console.debug('⏭️ Save already in progress or processing sleep, skipping');
+        return;
+      }
+      this.isSaving = true;
+
+      const now = Date.now();
+      const sessionDuration = now - this.currentSession.startTime;
+      
+      // SAFEGUARD 3: Validate timestamps and handle undefined lastHeartbeat
+      if (!this.lastHeartbeat) {
+        console.warn('⚠️ lastHeartbeat undefined, initializing to current time');
+        this.lastHeartbeat = now;
+        return;
+      }
+      
+      const timeSinceLastHeartbeat = now - this.lastHeartbeat;
+      
+      // DEFENSIVE CHECK: Check for sleep BEFORE saving time
+      if (timeSinceLastHeartbeat > 300000) { // 5 minutes gap indicates sleep
+        console.log('💤 Sleep detected during save - handling sleep condition');
+        this.isProcessingSleep = true;
+        try {
+          await this.handleSleepDetected();
+        } finally {
+          this.isProcessingSleep = false;
+        }
+        return; // Don't save if sleep detected
+      }
         
         // Prevent saving if session duration is unreasonably long (indicates sleep)
         if (sessionDuration > 3600000) { // 1 hour max per save cycle
@@ -3808,6 +3869,9 @@ class FocusTimeTracker {
       }
     } catch (error) {
       console.error('Error saving session:', error);
+    } finally {
+      // SAFEGUARD: Always reset the saving flag
+      this.isSaving = false;
     }
   }
 
