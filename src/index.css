@@ -1053,9 +1053,9 @@ code {
 [data-theme="dark"] .pomodoro-page-container .main-layout-container,
 [data-theme="dark"] .pomodoro-page-container #timerSection,
 [data-theme="dark"] .pomodoro-page-container #rightSidebar,
-[data-theme="dark"] .pomodoro-page-container .bg-background-primary,
+[data-theme="dark"] .pomodoro-page-container .bg-background-primary:not(.bg-gradient-to-r):not([class*="from-"]),
 [data-theme="dark"] .pomodoro-page-container .top-bar-header,
-[data-theme="dark"] .pomodoro-page-container .bg-background-secondary {
+[data-theme="dark"] .pomodoro-page-container .bg-background-secondary:not(.bg-gradient-to-r):not([class*="from-"]) {
   background-color: #141414 !important;
 }
 
@@ -1063,9 +1063,9 @@ code {
 .dark .pomodoro-page-container .main-layout-container,
 .dark .pomodoro-page-container #timerSection,
 .dark .pomodoro-page-container #rightSidebar,
-.dark .pomodoro-page-container .bg-background-primary,
+.dark .pomodoro-page-container .bg-background-primary:not(.bg-gradient-to-r):not([class*="from-"]),
 .dark .pomodoro-page-container .top-bar-header,
-.dark .pomodoro-page-container .bg-background-secondary {
+.dark .pomodoro-page-container .bg-background-secondary:not(.bg-gradient-to-r):not([class*="from-"]) {
   background-color: #141414 !important;
 }
 
@@ -1624,6 +1624,24 @@ code {
   100% {
     text-shadow: 0 0 16px rgba(255,255,255,0.6), 0 0 8px rgba(236,72,153,0.3);
   }
+}
+
+/* CRITICAL FIX: Exclude Deep Focus Switch from aggressive background overrides */
+[data-theme="dark"] .pomodoro-page-container .bg-gradient-to-r,
+.dark .pomodoro-page-container .bg-gradient-to-r,
+[data-theme="dark"] .pomodoro-page-container [class*="from-"][class*="via-"][class*="to-"],
+.dark .pomodoro-page-container [class*="from-"][class*="via-"][class*="to-"] {
+  background-color: transparent !important;
+  background-image: linear-gradient(to right, var(--tw-gradient-stops)) !important;
+}
+
+/* Force Deep Focus Switch gradient colors specifically */
+.pomodoro-page-container .from-\\[rgba\\(187\\,95\\,90\\,0\\.9\\)\\].via-\\[rgba\\(236\\,72\\,153\\,0\\.9\\)\\].to-\\[rgba\\(251\\,146\\,60\\,0\\.9\\)\\] {
+  background: linear-gradient(to right, rgba(187,95,90,0.9), rgba(236,72,153,0.9), rgba(251,146,60,0.9)) !important;
+}
+
+.pomodoro-page-container .from-\\[rgb\\(187\\,95\\,90\\)\\].via-\\[rgb\\(236\\,72\\,153\\)\\].to-\\[rgb\\(251\\,146\\,60\\)\\] {
+  background: linear-gradient(to right, rgb(187,95,90), rgb(236,72,153), rgb(251,146,60)) !important;
 }
 
 
