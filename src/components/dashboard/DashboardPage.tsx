@@ -8,10 +8,13 @@ import { useDashboardStore } from '../../store/useDashboardStore';
 import { useUserStore } from '../../store/userStore';
 import Sidebar from '../layout/Sidebar';
 import { Header } from './layout/Header';
+import VerticalNavigation from '../layout/VerticalNavigation';
+import { useUIStore } from '../../store/uiStore';
 
 export const DashboardContent: React.FC = () => {
   const { loadWorkSessionsForRange, selectedRange, useEventDrivenLoading } = useDashboardStore();
   const { user, isAuthenticated } = useUserStore();
+  const { isLeftSidebarOpen } = useUIStore();
 
   // Load data when component mounts or when user changes
   useEffect(() => {
@@ -28,8 +31,8 @@ export const DashboardContent: React.FC = () => {
       <main className="dashboard-main flex-1 flex flex-col overflow-hidden">
         <Header />
         
-        <div className="dashboard-content scrollbar-thin flex-1 overflow-y-auto">
-          <div className="max-w-none mx-auto px-6 py-8">
+        <div className="dashboard-content scrollbar-thin flex-1 overflow-y-auto !py-0">
+          <div className="max-w-none mx-auto px-12">
             <div className="space-y-8 w-full max-w-none">
               {/* Focus Time Statistics Section */}
               <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
@@ -55,6 +58,9 @@ export const DashboardContent: React.FC = () => {
           </div>
         </div>
       </main>
+      
+      {/* Vertical Navigation - shows when left sidebar is closed */}
+      <VerticalNavigation />
     </div>
   );
 }; 
