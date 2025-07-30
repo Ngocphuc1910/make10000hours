@@ -336,7 +336,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
   return (
     <div className="w-full bg-background-primary h-full flex flex-col">
       {/* Week day headers - Sticky */}
-      <div className="grid grid-cols-7 border-b border-border bg-background-primary sticky top-0 z-10">
+      <div className="grid grid-cols-7 border-t border-b border-border bg-background-primary sticky top-0 z-10">
         {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map(day => (
           <div
             key={day}
@@ -351,7 +351,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
       <div className="flex-1 overflow-hidden">
         <div 
           ref={gridRef}
-          className="grid grid-cols-7 border-l border-t border-border h-full"
+          className="grid grid-cols-7 border-t border-border h-full"
           style={{ 
             gridTemplateRows: `repeat(${numberOfRows}, minmax(140px, 1fr))`
           }}
@@ -370,7 +370,8 @@ export const MonthView: React.FC<MonthViewProps> = ({
               isAllDay={true}
               onDrop={onEventDrop!}
               className={`
-                month-cell border-b border-r border-border p-1 cursor-pointer transition-colors relative z-0
+                month-cell border-r border-b border-border p-1 cursor-pointer transition-colors relative z-0
+                ${idx % 7 === 0 ? 'border-l' : ''}
                 ${!isCurrentMonth 
                   ? 'bg-background-secondary/30 text-text-secondary' 
                   : isCurrentDay 
