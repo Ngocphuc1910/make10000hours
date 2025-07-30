@@ -1651,14 +1651,6 @@ class PopupManager {
     const controls = document.createElement('div');
     controls.className = 'blocked-site-controls';
     
-    // Edit button
-    const editBtn = document.createElement('button');
-    editBtn.className = 'btn-icon';
-    editBtn.title = 'Edit';
-    const editIcon = document.createElement('i');
-    editIcon.className = 'ri-edit-line';
-    editBtn.appendChild(editIcon);
-    
     // Delete button
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn-icon';
@@ -1681,7 +1673,6 @@ class PopupManager {
     switchLabel.appendChild(switchInput);
     switchLabel.appendChild(switchSlider);
     
-    controls.appendChild(editBtn);
     controls.appendChild(deleteBtn);
     controls.appendChild(switchLabel);
     
