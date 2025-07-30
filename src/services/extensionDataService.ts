@@ -748,10 +748,33 @@ class ExtensionDataService {
     try {
       console.log('⚡ Quick extension check - very short timeout');
       
-      // If circuit breaker is open, extension is definitely not available
+      // If circuit breaker is open, try to bypass for quick checks only
       if (this.circuitBreaker.isOpen()) {
-        console.log('⚡ Circuit breaker open, extension unavailable');
-        return false;
+        console.log('⚡ Circuit breaker open, attempting bypass for quick check');
+        // For rapid toggles, bypass circuit breaker and try direct connection
+        try {
+          const response = await this.sendMessageViaContentScript({ type: 'PING' }, 300);
+          const isAvailable = response && response.success !== false;
+          if (isAvailable) {
+            // If successful, reset circuit breaker since extension is actually working
+            this.circuitBreaker.onSuccess();
+            console.log('⚡ Quick check succeeded, circuit breaker reset');
+          }
+          return isAvailable;
+        } catch (bypassError) {
+          console.log('⚡ Bypass attempt failed, extension truly unavailable');
+          return false;
+        }
+      }
+      
+      // Check for recent debounce errors for PING messages specifically
+      const lastPingTime = this.lastCallTimes.get('PING') || 0;
+      const now = Date.now();
+      
+      // If we just sent a PING recently, assume extension is available to avoid debounce errors
+      if (now - lastPingTime < this.CRITICAL_DEBOUNCE_MS) {
+        console.log('⚡ Recent PING detected, assuming extension available to avoid debounce');
+        return true;
       }
       
       // Single very fast test with minimal timeout
@@ -761,6 +784,11 @@ class ExtensionDataService {
       
       return isAvailable;
     } catch (error) {
+      // Don't fail on debounce errors for quick checks
+      if (error.message.includes('debounced')) {
+        console.log('⚡ Quick check hit debounce, assuming extension available');
+        return true;
+      }
       console.log('⚡ Quick check failed (expected for no extension):', error.message);
       return false;
     }
