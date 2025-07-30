@@ -132,7 +132,7 @@ const UsageLineChart: React.FC<UsageLineChartProps> = ({ data }) => {
         data: dates,
         axisLine: {
           lineStyle: {
-            color: isDarkMode ? '#404040' : '#eee'
+            color: borderColor
           }
         },
         axisLabel: {

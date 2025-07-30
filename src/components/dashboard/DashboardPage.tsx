@@ -32,7 +32,7 @@ export const DashboardContent: React.FC = () => {
         <Header />
         
         <div className="dashboard-content scrollbar-thin flex-1 overflow-y-auto !py-0">
-          <div className="max-w-none mx-auto px-12">
+          <div className="max-w-none mx-auto px-12 pt-6">
             <div className="space-y-8 w-full max-w-none">
               {/* Focus Time Statistics Section */}
               <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
