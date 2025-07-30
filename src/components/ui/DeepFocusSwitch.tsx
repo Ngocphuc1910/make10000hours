@@ -166,29 +166,36 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
           onChange={handleToggle}
           disabled={disabled}
         />
-        <div className={`${config.width} ${config.height} flex items-center rounded-full relative transform transition-all duration-500 ease-in-out ${
+        <div className={`${config.width} ${config.height} flex items-center rounded-full relative transform transition-all duration-700 ease-in-out ${
           isDeepFocusActive 
-            ? `bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start ${config.padding}`
-            : 'bg-gray-100/80 border-0 justify-end pr-3'
+            ? `bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] border border-white/30 justify-start ${config.padding}`
+            : 'bg-gradient-to-r from-gray-50/90 to-gray-100/90 border border-gray-200/60 justify-end pr-3 shadow-[0_0_8px_rgba(0,0,0,0.05)]'
         }`} style={{
-          transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
+          transition: 'all 0.8s cubic-bezier(0.25, 0.1, 0.25, 1.0)',
+          backgroundSize: isDeepFocusActive ? '200% 100%' : '100% 100%',
+          backgroundPosition: isDeepFocusActive ? '0% 50%' : '100% 50%',
+          animation: isDeepFocusActive ? 'gradientShift 3s ease-in-out infinite alternate, pulseGlow 2.5s ease-in-out infinite alternate' : 'none'
         }}>
-          <span className={`${config.textSize} font-medium relative z-10 whitespace-nowrap transform transition-all duration-500 ease-in-out ${
+          <span className={`${config.textSize} font-medium relative z-10 whitespace-nowrap transform transition-all duration-700 ease-in-out ${
             isDeepFocusActive 
-              ? 'text-white font-semibold [text-shadow:0_0_12px_rgba(255,255,255,0.5)]' 
+              ? 'text-white font-semibold' 
               : 'text-gray-600 font-semibold'
           }`} style={{
-            transition: 'color 0.5s cubic-bezier(0.4, 0, 0.2, 1), font-weight 0.5s cubic-bezier(0.4, 0, 0.2, 1), text-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
+            transition: 'color 0.8s cubic-bezier(0.25, 0.1, 0.25, 1.0), font-weight 0.8s cubic-bezier(0.25, 0.1, 0.25, 1.0), text-shadow 0.8s cubic-bezier(0.25, 0.1, 0.25, 1.0)',
+            animation: isDeepFocusActive ? 'textShimmer 2s ease-in-out infinite alternate' : 'none'
           }}>
             {isDeepFocusActive ? 'Deep Focus' : 'Deep Focus'}
           </span>
         </div>
-        <div className={`absolute ${config.toggle} bg-white rounded-full shadow-lg transform transition-all duration-500 ease-in-out ${
+        <div className={`absolute ${config.toggle} bg-white rounded-full shadow-lg transform transition-all duration-700 ease-in-out ${
           isDeepFocusActive 
-            ? config.togglePos + ' shadow-[0_6px_20px_rgba(187,95,90,0.2)]'
-            : config.toggleInactive + ' shadow-[0_2px_8px_rgba(0,0,0,0.1)]'
+            ? config.togglePos + ' shadow-[0_8px_25px_rgba(187,95,90,0.3),0_4px_15px_rgba(236,72,153,0.2)] scale-110'
+            : config.toggleInactive + ' shadow-[0_2px_8px_rgba(0,0,0,0.1)] scale-100'
         }`} style={{
-          transition: 'transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), left 0.5s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
+          transition: 'transform 0.8s cubic-bezier(0.25, 0.1, 0.25, 1.0), left 0.8s cubic-bezier(0.25, 0.1, 0.25, 1.0), box-shadow 0.8s cubic-bezier(0.25, 0.1, 0.25, 1.0), scale 0.8s cubic-bezier(0.25, 0.1, 0.25, 1.0)',
+          background: isDeepFocusActive 
+            ? 'radial-gradient(circle at center, rgba(255,255,255,1) 0%, rgba(255,255,255,0.95) 100%)'
+            : 'radial-gradient(circle at center, rgba(255,255,255,1) 0%, rgba(248,250,252,0.95) 100%)'
         }} />
         </label>
       </Tooltip>
@@ -205,12 +212,15 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
   if (showPageTitle && pageTitle) {
     return (
       <div className={`flex items-center ${className}`}>
-        <div className={`text-lg font-semibold transform transition-all duration-500 ease-in-out ${
+        <div className={`text-lg font-semibold transform transition-all duration-800 ease-in-out ${
           isDeepFocusActive 
-            ? 'bg-gradient-to-r from-[rgb(187,95,90)] via-[rgb(236,72,153)] to-[rgb(251,146,60)] bg-clip-text text-transparent font-bold' 
+            ? 'bg-gradient-to-r from-[rgb(187,95,90)] via-[rgb(236,72,153)] to-[rgb(251,146,60)] bg-clip-text text-transparent font-bold [filter:drop-shadow(0_0_8px_rgba(236,72,153,0.3))]' 
             : 'text-text-primary'
         } ${pageTitleClassName}`} style={{
-          transition: 'background 0.5s cubic-bezier(0.4, 0, 0.2, 1), color 0.5s cubic-bezier(0.4, 0, 0.2, 1), font-weight 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
+          transition: 'background 0.8s cubic-bezier(0.25, 0.1, 0.25, 1.0), color 0.8s cubic-bezier(0.25, 0.1, 0.25, 1.0), font-weight 0.8s cubic-bezier(0.25, 0.1, 0.25, 1.0), filter 0.8s cubic-bezier(0.25, 0.1, 0.25, 1.0)',
+          backgroundSize: isDeepFocusActive ? '200% 100%' : '100% 100%',
+          backgroundPosition: isDeepFocusActive ? '0% 50%' : '100% 50%',
+          animation: isDeepFocusActive ? 'gradientShift 4s ease-in-out infinite alternate' : 'none'
         }}>
           {pageTitle}
         </div>
