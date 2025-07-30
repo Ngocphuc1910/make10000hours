@@ -24,7 +24,7 @@ export const Switch = forwardRef<HTMLInputElement, SwitchProps>(
           <span
             className={`absolute cursor-pointer top-0 left-0 right-0 bottom-0 bg-gray-200 
             transition-all duration-300 rounded-full 
-            before:absolute before:content-[''] before:h-4 before:w-4 before:left-0.5 before:bottom-0.5 
+            before:absolute before:content-[''] before:h-4 before:w-4 before:left-[3px] before:bottom-0.5 
             before:bg-white before:rounded-full before:transition-all before:duration-300 
             ${checked ? 'bg-primary before:translate-x-5' : ''} ${className}`}
           />

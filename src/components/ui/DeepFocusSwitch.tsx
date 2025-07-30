@@ -42,15 +42,17 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
       textSize: 'text-xs',
       padding: 'px-2',
       toggle: 'w-4 h-4',
-      togglePos: 'left-[calc(100%-18px)]'
+      togglePos: 'left-[calc(100%-22px)]',
+      toggleInactive: 'left-[4px]'
     },
     medium: {
       width: 'w-[120px]',
       height: 'h-[33px]',
-      textSize: 'text-sm',
+      textSize: 'text-[13px]',
       padding: 'pl-[10.5px]',
       toggle: 'w-6 h-6',
-      togglePos: 'left-[calc(100%-27px)]'
+      togglePos: 'left-[calc(100%-33px)]',
+      toggleInactive: 'left-[4.5px]'
     },
     large: {
       width: 'w-[140px]',
@@ -58,7 +60,8 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
       textSize: 'text-base',
       padding: 'pl-3',
       toggle: 'w-7 h-7',
-      togglePos: 'left-[calc(100%-30px)]'
+      togglePos: 'left-[calc(100%-35px)]',
+      toggleInactive: 'left-[6px]'
     }
   };
 
@@ -166,7 +169,7 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
         <div className={`${config.width} ${config.height} flex items-center rounded-full relative transform transition-all duration-500 ease-in-out ${
           isDeepFocusActive 
             ? `bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start ${config.padding}`
-            : 'bg-gray-100/80 border-0 justify-end pr-[10.5px]'
+            : 'bg-gray-100/80 border-0 justify-end pr-3'
         }`} style={{
           transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
         }}>
@@ -177,13 +180,13 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
           }`} style={{
             transition: 'color 0.5s cubic-bezier(0.4, 0, 0.2, 1), font-weight 0.5s cubic-bezier(0.4, 0, 0.2, 1), text-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
           }}>
-            {isDeepFocusActive ? 'Deep Focus' : 'Focus Off'}
+            {isDeepFocusActive ? 'Deep Focus' : 'Deep Focus'}
           </span>
         </div>
         <div className={`absolute ${config.toggle} bg-white rounded-full shadow-lg transform transition-all duration-500 ease-in-out ${
           isDeepFocusActive 
             ? config.togglePos + ' shadow-[0_6px_20px_rgba(187,95,90,0.2)]'
-            : 'left-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.1)]'
+            : config.toggleInactive + ' shadow-[0_2px_8px_rgba(0,0,0,0.1)]'
         }`} style={{
           transition: 'transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), left 0.5s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
         }} />
