@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../layout/Sidebar';
+import VerticalNavigation from '../layout/VerticalNavigation';
 import { useDeepFocusStore } from '../../store/deepFocusStore';
 // Deep focus sync now handled by DeepFocusProvider context
 import { useDeepFocusContext } from '../../contexts/DeepFocusContext';
@@ -244,8 +244,6 @@ const DeepFocusPage: React.FC = () => {
     });
   }, [backupTodayData, user]);
   
-  const navigate = useNavigate();
-  const location = useLocation();
   const dateFilterRef = useRef<HTMLDivElement>(null);
   const dateRangeInputRef = useRef<HTMLInputElement>(null);
   const datePickerRef = useRef<FlatpickrInstance | null>(null);
@@ -743,7 +741,7 @@ const DeepFocusPage: React.FC = () => {
       
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header - Productivity Insights Style */}
-        <div className={`h-16 flex items-center justify-between px-4 bg-background-secondary transition-colors duration-200 relative`}>
+        <div className={`h-16 flex items-center justify-between pl-4 pr-12 bg-background-secondary transition-colors duration-200 relative`}>
           <div className="flex items-center">
             {!isLeftSidebarOpen && (
               <button
@@ -830,7 +828,7 @@ const DeepFocusPage: React.FC = () => {
             {/* Date Range Filter */}
             <div className="relative" ref={dateFilterRef}>
               <button
-                className="px-4 py-1.5 text-sm font-medium bg-background-secondary border border-border rounded-button text-text-primary hover:bg-background-container flex items-center space-x-2"
+                className="px-4 py-1.5 text-sm font-medium bg-background-container dark:bg-gray-800 border border-border rounded-button text-text-primary hover:bg-background-primary dark:hover:bg-gray-700 flex items-center space-x-2"
                 onClick={() => {
                   setShowDateFilter(!showDateFilter);
                   if (showDatePicker) {
@@ -956,107 +954,11 @@ const DeepFocusPage: React.FC = () => {
                 </div>
               )}
             </div>
-            
-            {/* Navigation Icons */}
-            <Tooltip text="Pomodoro Timer">
-              <button 
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                  location.pathname === '/pomodoro' 
-                    ? 'bg-background-container text-text-primary' 
-                    : 'hover:bg-background-container hover:text-text-primary'
-                }`}
-                onClick={location.pathname === '/pomodoro' ? undefined : () => navigate('/pomodoro')}
-                aria-label={location.pathname === '/pomodoro' ? 'Current page: Pomodoro Timer' : 'Go to Pomodoro Timer'}
-              >
-                <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon 
-                    name="timer-line" 
-                    size={20}
-                  />
-                </span>
-              </button>
-            </Tooltip>
-            
-            <Tooltip text="Task management">
-              <button 
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                  location.pathname === '/projects' 
-                    ? 'bg-background-container text-text-primary' 
-                    : 'hover:bg-background-container hover:text-text-primary'
-                }`}
-                onClick={location.pathname === '/projects' ? undefined : () => navigate('/projects')}
-                aria-label={location.pathname === '/projects' ? 'Current page: Task Management' : 'Go to Task Management'}
-              >
-                <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon 
-                    name="task-line" 
-                    size={20}
-                  />
-                </span>
-              </button>
-            </Tooltip>
-            
-            <Tooltip text="Productivity Insights">
-              <button 
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                  location.pathname === '/dashboard' 
-                    ? 'bg-background-container text-text-primary' 
-                    : 'hover:bg-background-container hover:text-text-primary'
-                }`}
-                onClick={location.pathname === '/dashboard' ? undefined : () => navigate('/dashboard')}
-                aria-label={location.pathname === '/dashboard' ? 'Current page: Productivity Insights' : 'Go to Productivity Insights'}
-              >
-                <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon 
-                    name="dashboard-line" 
-                    size={20}
-                  />
-                </span>
-              </button>
-            </Tooltip>
-            
-            <Tooltip text="Calendar">
-              <button 
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                  location.pathname === '/calendar' 
-                    ? 'bg-background-container text-text-primary' 
-                    : 'hover:bg-background-container hover:text-text-primary'
-                }`}
-                onClick={location.pathname === '/calendar' ? undefined : () => navigate('/calendar')}
-                aria-label={location.pathname === '/calendar' ? 'Current page: Calendar' : 'Go to Calendar'}
-              >
-                <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon 
-                    name="calendar-line" 
-                    size={20}
-                  />
-                </span>
-              </button>
-            </Tooltip>
-            
-            <Tooltip text="Deep Focus">
-              <button 
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                  location.pathname === '/deep-focus' 
-                    ? 'bg-background-container text-text-primary' 
-                    : 'hover:bg-background-container hover:text-text-primary'
-                }`}
-                onClick={location.pathname === '/deep-focus' ? undefined : () => navigate('/deep-focus')}
-                aria-label={location.pathname === '/deep-focus' ? 'Current page: Deep Focus' : 'Go to Deep Focus'}
-              >
-                <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon 
-                    name="brain-line" 
-                    size={20}
-                  />
-                </span>
-              </button>
-            </Tooltip>
           </div>
         </div>
 
         {/* Main Content */}
-        <main className="flex-1 p-6 flex gap-6 overflow-y-auto scrollbar-thin relative">
+        <main className={`flex-1 pl-6 py-6 flex gap-6 overflow-y-auto scrollbar-thin relative ${!isLeftSidebarOpen ? 'ml-12 pr-6' : 'pr-18'}`}>
           {/* Unified loading indicator */}
           {isUnifiedLoading && (
             <div className="absolute inset-0 bg-background-primary/50 flex items-center justify-center z-10">
@@ -1355,6 +1257,9 @@ const DeepFocusPage: React.FC = () => {
           </div>
         </main>
       </div>
+      
+      {/* Vertical Navigation - shows when left sidebar is closed */}
+      <VerticalNavigation />
 
       {/* Add Site Modal */}
       <AddSiteModal

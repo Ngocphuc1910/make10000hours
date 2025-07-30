@@ -244,7 +244,7 @@ export const Header: React.FC = () => {
         {/* Date Range Filter */}
         <div className="relative" ref={dateFilterRef}>
           <button
-            className="px-4 py-1.5 text-sm font-medium bg-background-secondary border border-border rounded-button text-text-primary hover:bg-background-container flex items-center space-x-2"
+            className="px-4 py-1.5 text-sm font-medium bg-background-container dark:bg-gray-800 border border-border rounded-button text-text-primary hover:bg-background-primary dark:hover:bg-gray-700 flex items-center space-x-2"
             onClick={() => {
               setShowDateFilter(!showDateFilter);
               if (showDatePicker) {
