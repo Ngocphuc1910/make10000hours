@@ -804,12 +804,12 @@ const DeepFocusPage: React.FC = () => {
                       ? 'bg-gradient-to-r from-[rgba(187,95,90,0.9)] via-[rgba(236,72,153,0.9)] to-[rgba(251,146,60,0.9)] shadow-[0_0_15px_rgba(236,72,153,0.3)] border border-white/20 justify-start pl-[10.5px]' 
                       : 'bg-gray-100/80 border-0 justify-end pr-[10.5px]'
                   }`}>
-                    <span className={`text-sm font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${
+                    <span className={`text-[13px] font-medium transition-colors duration-500 relative z-10 whitespace-nowrap ${
                       isDeepFocusActive 
                         ? 'text-white font-semibold [text-shadow:0_0_12px_rgba(255,255,255,0.5)]' 
                         : 'text-gray-600 font-semibold'
                     }`}>
-                      {isDeepFocusActive ? 'Deep Focus' : 'Focus Off'}
+                      {isDeepFocusActive ? 'Deep Focus' : 'Deep Focus'}
                     </span>
                   </div>
                   <div className={`absolute w-6 h-6 bg-white rounded-full shadow-lg transition-all duration-500 ${
