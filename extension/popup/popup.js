@@ -71,33 +71,9 @@ function fixRemixIconFontUrl() {
 }
 
 function waitForFonts() {
-  if (!document.fonts) {
-    console.warn('⚠️ [POPUP] CSS Font Loading API not supported, using timeout');
-    return new Promise(resolve => setTimeout(resolve, 1000));
-  }
-
-  console.log('🔍 [POPUP] Checking for RemixIcon font...');
-  
-  return Promise.race([
-    document.fonts.load('1em remixicon').then(() => {
-      console.log('🎉 [POPUP] RemixIcon font loaded successfully!');
-      debugFontLoading();
-      return true;
-    }),
-    new Promise(resolve => {
-      setTimeout(() => {
-        console.warn('⏰ [POPUP] Font loading timeout, checking manually...');
-        const isLoaded = document.fonts.check('1em remixicon');
-        console.log('[POPUP] Manual font check result:', isLoaded);
-        if (!isLoaded) {
-          console.error('❌ [POPUP] RemixIcon font not available after timeout');
-          // Don't add fallback class immediately, try debugging first
-          checkFontStatus();
-        }
-        resolve(isLoaded);
-      }, 3000);
-    })
-  ]);
+  // Remove ALL blocking font validation - just return immediately
+  console.log('🎉 [POPUP] Font loading non-blocking - continuing with UI display');
+  return Promise.resolve();
 }
 
 function debugFontLoading() {
@@ -188,14 +164,15 @@ function forceReloadRemixIcon() {
   }, 100);
 }
 
-// Enhanced initialization
+// Enhanced initialization - non-blocking
 function initializeCSS() {
   console.log('🚀 [POPUP] Initializing CSS loading...');
   
   loadCSS().then(() => {
     console.log('🎉 [POPUP] CSS initialization complete!');
   }).catch(error => {
-    console.error('💥 [POPUP] CSS initialization failed:', error);
+    // If CSS fails, continue anyway - don't block UI
+    console.warn('CSS loading failed, using fallbacks - continuing with UI display');
   });
 }
 
@@ -447,8 +424,8 @@ class PopupManager {
       const stateResult = await this.sendMessageWithRetry(
         'GET_CURRENT_STATE',
         {},
-        3, // Reduced retries for faster core load
-        { timeout: 5000 }
+        1, // Reduced retries for faster core load
+        { timeout: 1500 } // Reduced from 5000ms to 1500ms for faster popup
       );
 
       if (stateResult?.success) {
@@ -476,30 +453,34 @@ class PopupManager {
   }
 
   /**
-   * Initialize enhanced features progressively
+   * Initialize enhanced features progressively - moved to background for faster popup
    */
   async initializeEnhanced() {
-    if (!this.coreState) return;
+    // Load data in background with small delay to let UI render first
+    setTimeout(() => {
+      if (!this.coreState) return;
 
-    try {
-      // Load enhanced features in parallel but handle independently
-      const enhancedLoads = [
-        this.loadStats(),
-        this.loadUserInfo(),
-        this.loadFocusState()
-      ];
+      try {
+        // Load enhanced features in parallel but handle independently
+        const enhancedLoads = [
+          this.loadStats(),
+          this.loadUserInfo(),
+          this.loadFocusState()
+        ];
 
-      // Update UI as each feature becomes available
-      for (const loader of enhancedLoads) {
-        loader.then(result => {
-          if (result?.success) {
-            this.updateEnhancedUI(result.type);
-          }
+        // Update UI as each feature becomes available
+        Promise.all(enhancedLoads).then(results => {
+          results.forEach(result => {
+            if (result?.success) {
+              this.updateEnhancedUI(result.type);
+            }
+          });
         }).catch(console.warn);
+        
+      } catch (error) {
+        console.warn('Enhanced initialization partial failure:', error);
       }
-    } catch (error) {
-      console.warn('Enhanced initialization partial failure:', error);
-    }
+    }, 50); // Small delay to let UI render first
   }
 
   /**
@@ -625,89 +606,99 @@ class PopupManager {
   }
 
   /**
-   * Main initialization method
+   * Main initialization method - Show UI immediately, load content progressively
    */
   async initialize() {
     try {
-      this.showLoading();
-
-      // Core initialization
-      const coreSuccess = await this.initializeCore();
+      // SHOW UI IMMEDIATELY - No loading screen blocking
+      document.body.style.visibility = 'visible';
       
-      // Hide loading after core is ready
-      this.hideLoading();
+      // Initialize core WITHOUT blocking the UI
+      this.initializeCore().then(coreSuccess => {
+        if (coreSuccess) {
+          this.updateCoreUI();
+          this.setupEventListeners();
+        }
+      }).catch(console.warn);
       
-      // Start enhanced loading regardless of core success
+      // Load enhanced features in background
       this.initializeEnhanced().catch(console.warn);
 
-      // Setup event listeners only after core is ready
-      if (coreSuccess) {
-        this.setupEventListeners();
-        
-        // Feature flag for hybrid updates (set to false to revert to original behavior)
-        const USE_HYBRID_UPDATES = true;
-        
-        if (USE_HYBRID_UPDATES) {
-          // Hybrid approach: Event-driven for critical updates + periodic for stats
-          console.log('🔄 Initializing hybrid update system');
-          
-          // Critical state fallback - very infrequent backup for event failures
-          this.criticalInterval = setInterval(() => {
-            if (document.visibilityState === 'visible') {
-              this.refreshCriticalState();
-            }
-          }, 60000); // 1 minute fallback for critical state
-          
-          // Statistics updates - periodic for time-sensitive but not critical data
-          this.statsInterval = setInterval(() => {
-            if (document.visibilityState === 'visible' && this.currentTab === 'site-usage') {
-              this.refreshStatistics();
-            }
-          }, 30000); // 30 seconds for statistics
-          
-          // Enhanced visibility handler - rely more on events
-          document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-              setTimeout(() => {
-                // Only refresh statistics when popup becomes visible
-                // Critical state updates come via events
-                this.refreshStatistics();
-                // User info is handled by events, but refresh as backup
-                this.loadUserInfo().then(response => {
-                  if (response?.success) {
-                    this.updateEnhancedUI('user');
-                  }
-                });
-              }, 100);
-            }
-          });
-        } else {
-          // Original approach - fallback for troubleshooting
-          console.log('🔄 Using original update system');
-          this.updateInterval = setInterval(() => {
-            if (document.visibilityState === 'visible' && this.currentTab === 'site-usage') {
-              this.refreshState_backup();
-            }
-          }, 5000);
-
-          document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-              setTimeout(() => {
-                this.refreshState_backup();
-                this.loadUserInfo().then(response => {
-                  if (response?.success) {
-                    this.updateEnhancedUI('user');
-                  }
-                });
-              }, 100);
-            }
-          });
-        }
-      }
+      // Set up update system in background (non-blocking)
+      setTimeout(() => {
+        this.setupUpdateSystem();
+      }, 100);
+      
     } catch (error) {
       console.error('Initialization error:', error);
-      this.hideLoading();
+      // Show basic UI even if initialization fails
+      document.body.style.visibility = 'visible';
       this.showError('Failed to initialize');
+    }
+  }
+
+  /**
+   * Setup update system - moved to separate method for cleaner initialization
+   */
+  setupUpdateSystem() {
+    // Feature flag for hybrid updates (set to false to revert to original behavior)
+    const USE_HYBRID_UPDATES = true;
+    
+    if (USE_HYBRID_UPDATES) {
+      // Hybrid approach: Event-driven for critical updates + periodic for stats
+      console.log('🔄 Initializing hybrid update system');
+      
+      // Critical state fallback - very infrequent backup for event failures
+      this.criticalInterval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          this.refreshCriticalState();
+        }
+      }, 60000); // 1 minute fallback for critical state
+      
+      // Statistics updates - periodic for time-sensitive but not critical data
+      this.statsInterval = setInterval(() => {
+        if (document.visibilityState === 'visible' && this.currentTab === 'site-usage') {
+          this.refreshStatistics();
+        }
+      }, 30000); // 30 seconds for statistics
+      
+      // Enhanced visibility handler - rely more on events
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          setTimeout(() => {
+            // Only refresh statistics when popup becomes visible
+            // Critical state updates come via events
+            this.refreshStatistics();
+            // User info is handled by events, but refresh as backup
+            this.loadUserInfo().then(response => {
+              if (response?.success) {
+                this.updateEnhancedUI('user');
+              }
+            });
+          }, 100);
+        }
+      });
+    } else {
+      // Original approach - fallback for troubleshooting
+      console.log('🔄 Using original update system');
+      this.updateInterval = setInterval(() => {
+        if (document.visibilityState === 'visible' && this.currentTab === 'site-usage') {
+          this.refreshState_backup();
+        }
+      }, 5000);
+
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          setTimeout(() => {
+            this.refreshState_backup();
+            this.loadUserInfo().then(response => {
+              if (response?.success) {
+                this.updateEnhancedUI('user');
+              }
+            });
+          }, 100);
+        }
+      });
     }
   }
 
