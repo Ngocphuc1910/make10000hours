@@ -91,12 +91,15 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   
   return (
     <div 
-      className={`task-card flex items-start p-3 bg-task-todo-bg border 
+      className={`task-card flex items-start bg-task-todo-bg border 
       ${isSelected ? 'border-primary' : 'border-task-todo-border'} 
       ${task.completed ? 'opacity-70 text-text-secondary' : ''}
       rounded-md hover:shadow-sm cursor-pointer ${className}`}
       onClick={handleTaskClick}
-      style={{ borderWidth: isSelected ? '2px' : '1px' }}
+      style={{ 
+        borderWidth: isSelected ? '2px' : '1px',
+        padding: '10px'
+      }}
       data-task-id={task.id}
       data-status={task.status}
     >

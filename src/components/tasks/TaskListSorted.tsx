@@ -164,7 +164,7 @@ export const TaskListSorted: React.FC = () => {
 
 
   return (
-    <div className="space-y-3" id="taskListSorted" ref={taskListRef}>
+    <div className="space-y-2.5" id="taskListSorted" ref={taskListRef}>
       {sortedTasks.map((task: Task) => {
         const project = projects.find(p => p.id === task.projectId);
 
