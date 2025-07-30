@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "10000Hours - Website usage tracking & Distraction blocking",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Track website usage time and block distracting sites during focus sessions. Needs access to all sites.",
   "homepage_url": "https://app.make10000hours.com",
   
