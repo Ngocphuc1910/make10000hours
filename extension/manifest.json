@@ -42,18 +42,18 @@
     "default_popup": "popup/popup.html",
     "default_title": "Focus Time Tracker",
     "default_icon": {
-      "16": "icon/make10000hour_16x16.png",
-      "32": "icon/make10000hour_32x32.png",
-      "48": "icon/make10000hour_48x48.png",
-      "128": "icon/make10000hour_128x128.png"
+      "16": "icon/logo1616.png",
+      "32": "icon/logo3232.png",
+      "48": "icon/logo4848.png",
+      "128": "icon/logo128128.png"
     }
   },
   
   "icons": {
-    "16": "icon/make10000hour_16x16.png",
-    "32": "icon/make10000hour_32x32.png", 
-    "48": "icon/make10000hour_48x48.png",
-    "128": "icon/make10000hour_128x128.png"
+    "16": "icon/logo1616.png",
+    "32": "icon/logo3232.png", 
+    "48": "icon/logo4848.png",
+    "128": "icon/logo128128.png"
   },
   
   "options_page": "options/options.html",
