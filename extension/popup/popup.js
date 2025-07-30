@@ -251,7 +251,7 @@ async function getSafeFavicon(domain, size = 32) {
     
     // Force custom icon for app.make10000hours.com
     if (cleanDomain === 'app.make10000hours.com' || cleanDomain === 'make10000hours.com') {
-      const customIconUrl = chrome.runtime.getURL('icon/make10000hour_48x48.png');
+      const customIconUrl = chrome.runtime.getURL('icon/logo4848.png');
       console.log(`🍅 Using custom Make10000Hours icon: ${customIconUrl}`);
       return customIconUrl;
     }

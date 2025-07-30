@@ -400,7 +400,7 @@ class ActivityDetector {
     this.isWindowFocused = document.hasFocus();
     this.activityCheckInterval = null;
     this.reportingInterval = null;
-    this.inactivityThreshold = 30000; // 30 seconds
+    this.inactivityThreshold = 120000; // 2 minutes (conservative increase to allow passive reading)
     this.reportingFrequency = 10000; // 10 seconds
     this.wasSleeping = false;
     this.sleepStartTime = null;

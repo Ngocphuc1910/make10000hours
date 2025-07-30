@@ -11,7 +11,7 @@ class EnhancedActivityManager {
     this.isUserActive = true;
     this.isTabVisible = true;
     this.lastActivityTime = Date.now();
-    this.inactivityThreshold = 300000; // 5 minutes in milliseconds
+    this.inactivityThreshold = 480000; // 8 minutes (conservative increase from 5min, stays within sleep detection safety margin)
     this.heartbeatInterval = 30000; // 30 seconds
     this.activityCheckInterval = null;
     this.heartbeatTimer = null;
@@ -70,7 +70,7 @@ class EnhancedActivityManager {
       const result = await chrome.storage.local.get(['activitySettings']);
       const settings = result.activitySettings || {};
       
-      this.inactivityThreshold = settings.inactivityThreshold || 300000; // 5 minutes
+      this.inactivityThreshold = settings.inactivityThreshold || 480000; // 8 minutes (conservative increase)
       this.autoManagementEnabled = settings.autoManagementEnabled !== false; // default true
       this.heartbeatInterval = settings.heartbeatInterval || 30000; // 30 seconds
       
@@ -221,6 +221,7 @@ class EnhancedActivityManager {
   updateActivity(activityData = {}) {
     const now = Date.now();
     this.lastActivityTime = now;
+    this.lastHeartbeat = now; // Sync heartbeat with real user activity for accurate sleep detection
     
     // Update tab visibility if provided
     if (activityData.isVisible !== undefined) {

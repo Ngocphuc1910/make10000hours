@@ -40,7 +40,7 @@ const FaviconImage: React.FC<FaviconImageProps> = ({
         
         // Force custom icon for app.make10000hours.com
         if (cleanDomain === 'app.make10000hours.com' || cleanDomain === 'make10000hours.com') {
-          const customIconUrl = '/icons/make10000hourlogo.png';
+          const customIconUrl = '/icons/logo.png';
           console.log(`🍅 Using custom Make10000Hours icon: ${customIconUrl}`);
           
           if (mounted) {
