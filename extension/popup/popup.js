@@ -6,19 +6,24 @@
 
 // Enhanced CSS loading with font detection and debugging
 function loadCSS() {
-  console.log('🎨 [POPUP] Starting CSS loading...');
+  console.log('🎨 [POPUP] Starting CSS loading (non-blocking)...');
   
-  return Promise.all([
+  // Load CSS files without blocking - fire and forget
+  Promise.all([
     loadSingleCSS('assets/fonts/fonts.css'),
     loadSingleCSS('assets/icons/remixicon.css')
   ]).then(() => {
-    console.log('✅ [POPUP] CSS files loaded, waiting for fonts...');
-    return waitForFonts();
+    console.log('✅ [POPUP] CSS files loaded in background');
+    // Don't wait for fonts - let them load in background
+    waitForFonts().catch(() => {});
   }).catch(error => {
     console.error('❌ [POPUP] CSS loading failed:', error);
     // Fallback to inline styles
     injectFallbackStyles();
   });
+  
+  // Return immediately resolved promise
+  return Promise.resolve();
 }
 
 function loadSingleCSS(path) {
@@ -71,8 +76,18 @@ function fixRemixIconFontUrl() {
 }
 
 function waitForFonts() {
-  // Remove ALL blocking font validation - just return immediately
-  console.log('🎉 [POPUP] Font loading non-blocking - continuing with UI display');
+  // Completely non-blocking font loading - just log and continue
+  console.log('🎉 [POPUP] Font loading in background (non-blocking)');
+  
+  // Load fonts in background without blocking UI
+  if (document.fonts) {
+    document.fonts.ready.then(() => {
+      console.log('✅ [POPUP] Fonts loaded in background');
+    }).catch(() => {
+      console.log('🚨 [POPUP] Font loading failed, using system fallbacks');
+    });
+  }
+  
   return Promise.resolve();
 }
 
@@ -100,9 +115,37 @@ function debugFontLoading() {
 }
 
 function injectFallbackStyles() {
-  console.log('🆘 [POPUP] Font loading failed, checking CSS and font files...');
+  console.log('🆘 [POPUP] Injecting fallback styles for instant display...');
   
-  // Don't inject fallback styles immediately, let's debug first
+  const style = document.createElement('style');
+  style.textContent = `
+    /* Fallback styles for instant display */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
+    
+    /* Fallback icon styles if RemixIcon fails */
+    .ri-computer-line::before { content: '💻'; }
+    .ri-focus-3-line::before { content: '🎯'; }
+    .ri-time-line::before { content: '⏰'; }
+    .ri-bar-chart-2-line::before { content: '📊'; }
+    .ri-shield-line::before { content: '🛡️'; }
+    .ri-add-line::before { content: '+'; }
+    .ri-arrow-right-s-line::before { content: '→'; }
+    
+    /* Force immediate visibility for all elements */
+    .popup-container, .popup-header, .stats-overview, .tab-navigation, .tab-content {
+      visibility: visible !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+  `;
+  document.head.appendChild(style);
+  console.log('✅ [POPUP] Fallback styles injected for instant display');
+  
+  // Still check font status in background
   setTimeout(() => {
     checkFontStatus();
   }, 1000);
@@ -166,14 +209,18 @@ function forceReloadRemixIcon() {
 
 // Enhanced initialization - non-blocking
 function initializeCSS() {
-  console.log('🚀 [POPUP] Initializing CSS loading...');
+  console.log('🚀 [POPUP] Initializing CSS loading (non-blocking)...');
   
+  // Load CSS in background - don't wait for it
   loadCSS().then(() => {
-    console.log('🎉 [POPUP] CSS initialization complete!');
+    console.log('🎉 [POPUP] CSS loaded in background');
   }).catch(error => {
-    // If CSS fails, continue anyway - don't block UI
-    console.warn('CSS loading failed, using fallbacks - continuing with UI display');
+    console.warn('CSS loading failed, using fallbacks');
+    injectFallbackStyles();
   });
+  
+  // Return immediately - don't block UI
+  console.log('✅ [POPUP] CSS initialization started (non-blocking)');
 }
 
 // Load CSS when DOM is ready with enhanced error handling
@@ -610,29 +657,35 @@ class PopupManager {
    */
   async initialize() {
     try {
-      // SHOW UI IMMEDIATELY - No loading screen blocking
+      // FORCE IMMEDIATE UI DISPLAY - Remove any delays
       document.body.style.visibility = 'visible';
+      document.body.style.opacity = '1';
       
-      // Initialize core WITHOUT blocking the UI
+      // Show static UI elements immediately without waiting for data
+      this.updateCoreUI();
+      this.setupEventListeners();
+      
+      // Initialize core data loading WITHOUT blocking the UI (fire and forget)
       this.initializeCore().then(coreSuccess => {
         if (coreSuccess) {
+          // Update UI with real data when available
           this.updateCoreUI();
-          this.setupEventListeners();
         }
       }).catch(console.warn);
       
-      // Load enhanced features in background
+      // Load enhanced features in background (fire and forget)
       this.initializeEnhanced().catch(console.warn);
 
       // Set up update system in background (non-blocking)
       setTimeout(() => {
         this.setupUpdateSystem();
-      }, 100);
+      }, 50); // Reduced from 100ms to 50ms
       
     } catch (error) {
       console.error('Initialization error:', error);
       // Show basic UI even if initialization fails
       document.body.style.visibility = 'visible';
+      document.body.style.opacity = '1';
       this.showError('Failed to initialize');
     }
   }

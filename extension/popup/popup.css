@@ -88,6 +88,16 @@ body {
   padding: 0;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   border-radius: var(--radius-md);
+  /* FORCE IMMEDIATE VISIBILITY - No gradual appearance */
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* INSTANT VISIBILITY - No gradual appearance animations */
+.popup-container, .popup-header, .stats-overview, .tab-navigation, .tab-content {
+  visibility: visible !important;
+  opacity: 1 !important;
+  transform: none !important;
 }
 
 /* Utility Classes */
