@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import Calendar from './Calendar';
 import Sidebar from '../../components/layout/Sidebar';
+import VerticalNavigation from '../../components/layout/VerticalNavigation';
 import { useUIStore } from '../../store/uiStore';
 
 const CalendarPage: React.FC = () => {
@@ -16,6 +17,9 @@ const CalendarPage: React.FC = () => {
       <div className="flex-1 overflow-hidden">
         <Calendar />
       </div>
+      
+      {/* Vertical Navigation - shows when left sidebar is closed */}
+      <VerticalNavigation />
     </div>
   );
 };

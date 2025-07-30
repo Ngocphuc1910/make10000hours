@@ -41,7 +41,7 @@ interface DragState {
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const TIME_SLOT_HEIGHT = 60;
-const TIME_COLUMN_WIDTH = 64;
+const TIME_COLUMN_WIDTH = 72;
 const DAY_WIDTH = 200; // Fixed width per day column
 const TOTAL_DAYS = 49; // 7 weeks buffer (7 * 7 days)
 const SCROLL_THRESHOLD = DAY_WIDTH * 7; // 1 week threshold to prevent premature expansion
@@ -619,13 +619,13 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
             {/* Headers Row - Sticky */}
             <div className="flex bg-background-primary dark:bg-[#141414] border-b border-border sticky top-0 z-30" style={{ height: '80px', transform: 'translateZ(0)' }}>
               {/* GMT Time header - Sticky */}
-              <div className="sticky left-0 z-40 border-r border-border flex items-center justify-center text-xs text-text-secondary bg-background-primary dark:bg-[#141414]" style={{ width: `${TIME_COLUMN_WIDTH}px`, transform: 'translateZ(0)' }}>
+              <div className="sticky left-0 z-40 border-t border-r border-border flex items-center justify-center text-xs text-text-secondary bg-background-primary dark:bg-[#141414]" style={{ width: `${TIME_COLUMN_WIDTH}px`, transform: 'translateZ(0)' }}>
                 GMT+07
               </div>
               
               {/* Day headers */}
               {allDays.map((day, dayIndex) => (
-                <div key={dayIndex} className={`calendar-week-day-header flex flex-col items-center justify-center py-3 bg-background-primary dark:bg-[#141414] border-r border-border ${isToday(day) ? 'bg-primary bg-opacity-5' : ''}`} style={{ minWidth: `${DAY_WIDTH}px`, width: `${DAY_WIDTH}px`, flexShrink: 0 }}>
+                <div key={dayIndex} className={`calendar-week-day-header flex flex-col items-center justify-center py-3 bg-background-primary dark:bg-[#141414] border-t border-r border-border ${isToday(day) ? 'bg-primary bg-opacity-5' : ''}`} style={{ minWidth: `${DAY_WIDTH}px`, width: `${DAY_WIDTH}px`, flexShrink: 0 }}>
                   <div className="text-xs text-text-secondary font-medium mb-1">{format(day, 'EEE').toUpperCase()}</div>
                   <div className={`text-lg font-medium ${isToday(day) ? 'text-primary bg-primary text-white rounded-full w-8 h-8 flex items-center justify-center' : 'text-text-primary'}`}>
                     {format(day, 'd')}
@@ -711,7 +711,7 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
               {/* Day Columns */}
               <div className="flex" ref={weekGridRef}>
                 {allDays.map((day, dayIndex) => (
-                  <div key={dayIndex} className="calendar-week-day-column relative day-column flex flex-col border-r border-border" style={{ minWidth: `${DAY_WIDTH}px`, width: `${DAY_WIDTH}px`, flexShrink: 0 }}>
+                  <div key={dayIndex} className={`calendar-week-day-column relative day-column flex flex-col border-r border-border ${dayIndex === 0 ? 'border-l' : ''}`} style={{ minWidth: `${DAY_WIDTH}px`, width: `${DAY_WIDTH}px`, flexShrink: 0 }}>
                   {/* Time slots grid */}
                   {HOURS.map(hour => (
                     <DroppableTimeSlot
