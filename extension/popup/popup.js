@@ -960,7 +960,7 @@ class PopupManager {
 
       // Update text content and classes
       if (switchText) {
-        switchText.textContent = isFocusModeActive ? 'Deep Focus' : 'Focus Off';
+        switchText.textContent = isFocusModeActive ? 'Deep Focus' : 'Deep Focus';
         switchText.className = `switch-text ${isFocusModeActive ? 'active' : 'inactive'}`;
       }
       
