@@ -11,7 +11,7 @@
       this.queue = new Map();
       this.processing = false;
       this.retryDelay = 2000; // Increased from 1000
-      this.maxRetries = 5;    // Increased from 3
+      this.maxRetries = 2;    // Reduced from 5 to 2 for faster popup
       this.chunkSize = 32 * 1024 * 1024; // 32MB chunk size
       this.validationCache = {
         isValid: true,
@@ -175,7 +175,7 @@
                 console.warn('PING validation timeout');
                 resolve(false);
               }
-            }, 3000); // Increased from 1000ms to 3000ms
+            }, 800); // Reduced from 3000ms to 800ms for faster popup
           } catch (e) {
             if (!resolved) {
               resolved = true;
@@ -209,7 +209,7 @@
 
       return new Promise((resolve, reject) => {
         let resolved = false;
-        const timeoutDuration = options.timeout || 15000; // Increased from 10000ms to 15000ms
+        const timeoutDuration = options.timeout || 3000; // Reduced from 15000ms to 3000ms for faster popup
         
         const timeout = setTimeout(() => {
           if (!resolved) {
