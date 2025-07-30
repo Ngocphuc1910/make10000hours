@@ -767,7 +767,7 @@ export const Calendar: React.FC = () => {
     <DndProvider backend={HTML5Backend}>
       <div className="calendar-main-container flex flex-col h-full bg-background-primary dark:bg-[#141414]">
         {/* Calendar Controls */}
-        <div className="calendar-header h-16 border-b border-border px-4 flex items-center justify-between bg-background-secondary">
+        <div className="calendar-header h-16 pl-4 pr-12 flex items-center justify-between bg-background-secondary">
           {/* Left Section - Month/Year and Navigation */}
           <div className="flex items-center space-x-4">
             {!isLeftSidebarOpen && (
@@ -857,7 +857,7 @@ export const Calendar: React.FC = () => {
 
             <button
               onClick={() => handleNavigate('today')}
-              className="px-4 py-1.5 text-sm font-medium bg-background-secondary border border-border rounded-button text-text-primary hover:bg-background-container"
+              className="px-4 py-1.5 text-sm font-medium bg-background-secondary border border-border rounded-button text-text-primary hover:bg-background-container focus:outline-none"
             >
               Today
             </button>
@@ -866,7 +866,7 @@ export const Calendar: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCurrentView('day')}
-                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${currentView === 'day'
+                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full focus:outline-none ${currentView === 'day'
                     ? 'bg-background-primary text-text-primary shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
                   }`}
@@ -876,7 +876,7 @@ export const Calendar: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCurrentView('week')}
-                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${currentView === 'week'
+                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full focus:outline-none ${currentView === 'week'
                     ? 'bg-background-primary text-text-primary shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
                   }`}
@@ -886,7 +886,7 @@ export const Calendar: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCurrentView('month')}
-                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full ${currentView === 'month'
+                className={`inline-flex items-center px-4 py-1.5 text-sm font-medium rounded-full focus:outline-none ${currentView === 'month'
                     ? 'bg-background-primary text-text-primary shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
                   }`}
@@ -895,86 +895,11 @@ export const Calendar: React.FC = () => {
               </button>
             </div>
 
-            {/* Navigation Icons */}
-            <Tooltip text="Pomodoro Timer">
-              <button
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${location.pathname === '/pomodoro'
-                    ? 'bg-background-container text-text-primary'
-                    : 'hover:bg-background-container hover:text-text-primary'
-                  }`}
-                onClick={location.pathname === '/pomodoro' ? undefined : () => navigate('/pomodoro')}
-                aria-label={location.pathname === '/pomodoro' ? 'Current page: Pomodoro Timer' : 'Go to Pomodoro Timer'}
-              >
-                <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon name="timer-line" size={20} />
-                </span>
-              </button>
-            </Tooltip>
-
-            <Tooltip text="Task management">
-              <button
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${location.pathname === '/projects'
-                    ? 'bg-background-container text-text-primary'
-                    : 'hover:bg-background-container hover:text-text-primary'
-                  }`}
-                onClick={location.pathname === '/projects' ? undefined : () => navigate('/projects')}
-                aria-label={location.pathname === '/projects' ? 'Current page: Task Management' : 'Go to Task Management'}
-              >
-                <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon name="task-line" size={20} />
-                </span>
-              </button>
-            </Tooltip>
-
-            <Tooltip text="Productivity Insights">
-              <button
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${location.pathname === '/dashboard'
-                    ? 'bg-background-container text-text-primary'
-                    : 'hover:bg-background-container hover:text-text-primary'
-                  }`}
-                onClick={location.pathname === '/dashboard' ? undefined : () => navigate('/dashboard')}
-                aria-label={location.pathname === '/dashboard' ? 'Current page: Productivity Insights' : 'Go to Productivity Insights'}
-              >
-                <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon name="dashboard-line" size={20} />
-                </span>
-              </button>
-            </Tooltip>
-
-            <Tooltip text="Calendar">
-              <button
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${location.pathname === '/calendar'
-                    ? 'bg-background-container text-text-primary'
-                    : 'hover:bg-background-container hover:text-text-primary'
-                  }`}
-                onClick={location.pathname === '/calendar' ? undefined : () => navigate('/calendar')}
-                aria-label={location.pathname === '/calendar' ? 'Current page: Calendar' : 'Go to Calendar'}
-              >
-                <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon name="calendar-line" size={20} />
-                </span>
-              </button>
-            </Tooltip>
-
-            <Tooltip text="Deep Focus">
-              <button
-                className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${location.pathname === '/deep-focus'
-                    ? 'bg-background-container text-text-primary'
-                    : 'hover:bg-background-container hover:text-text-primary'
-                  }`}
-                onClick={location.pathname === '/deep-focus' ? undefined : () => navigate('/deep-focus')}
-                aria-label={location.pathname === '/deep-focus' ? 'Current page: Deep Focus' : 'Go to Deep Focus'}
-              >
-                <span className="w-5 h-5 flex items-center justify-center">
-                  <Icon name="brain-line" size={20} />
-                </span>
-              </button>
-            </Tooltip>
           </div>
         </div>
 
         {/* Calendar Content */}
-        <div className="flex-1 overflow-hidden custom-scrollbar">
+        <div className={`flex-1 overflow-hidden custom-scrollbar border-l border-border ${!isLeftSidebarOpen ? 'ml-16' : ''}`}>
           {currentView === 'week' && (
             <div className="h-full w-full">
               <ScrollableWeekView

@@ -264,8 +264,8 @@ export const DayView: React.FC<DayViewProps> = ({
       <div className="flex flex-col h-full w-full">
         
         {/* Header */}
-        <div className="bg-background-primary dark:bg-[#141414] sticky top-0 z-20 border-b border-border">
-          <div className="grid w-full" style={{ gridTemplateColumns: '64px 1fr' }}>
+        <div className="bg-background-primary dark:bg-[#141414] sticky top-0 z-20 border-t border-b border-border">
+          <div className="grid w-full" style={{ gridTemplateColumns: '72px 1fr' }}>
             {/* Time column header */}
             <div className="flex items-center justify-center text-xs text-text-secondary py-3 border-r border-border">
               GMT+07
@@ -283,7 +283,7 @@ export const DayView: React.FC<DayViewProps> = ({
 
         {/* All Day Row */}
         <div className="bg-background-primary dark:bg-[#141414] border-b border-border">
-          <div className="grid w-full" style={{ gridTemplateColumns: '64px 1fr' }}>
+          <div className="grid w-full" style={{ gridTemplateColumns: '72px 1fr' }}>
             <div 
               className="flex items-center justify-center text-xs text-text-secondary border-r border-border"
               style={{ height: `${getAllDayRowHeight()}px` }}
@@ -341,7 +341,7 @@ export const DayView: React.FC<DayViewProps> = ({
 
         {/* Calendar Grid */}
         <div className="flex-1 overflow-auto scrollbar-thin relative bg-background-primary dark:bg-[#141414]">
-          <div className="grid h-full w-full" style={{ gridTemplateColumns: '64px 1fr', gridTemplateRows: '1fr' }}>
+          <div className="grid h-full w-full" style={{ gridTemplateColumns: '72px 1fr', gridTemplateRows: '1fr' }}>
             {/* Time column */}
             <div className="bg-background-primary dark:bg-[#141414] border-r border-border flex flex-col">
               {HOURS.map(hour => (
