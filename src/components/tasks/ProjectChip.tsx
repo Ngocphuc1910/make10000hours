@@ -50,7 +50,7 @@ const ProjectChip: React.FC<ProjectChipProps> = ({
         isExpanded ? 'rotate-90' : 'rotate-0'
       }`}>
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className={`${
-          isExpanded ? 'text-gray-500' : 'text-gray-500 group-hover:text-gray-700 transition-colors'
+          isExpanded ? 'text-text-secondary' : 'text-text-secondary group-hover:text-text-primary transition-colors'
         }`}>
           <path 
             d="M4.5 3L7.5 6L4.5 9" 
@@ -72,7 +72,7 @@ const ProjectChip: React.FC<ProjectChipProps> = ({
         
         {/* Project Name */}
         <span className={`text-sm font-medium truncate ${
-          isExpanded ? 'text-gray-700' : 'text-gray-700 group-hover:text-gray-900 transition-colors'
+          isExpanded ? 'text-text-primary' : 'text-text-primary group-hover:text-text-primary transition-colors'
         }`}>
           {projectName}
         </span>
@@ -81,8 +81,8 @@ const ProjectChip: React.FC<ProjectChipProps> = ({
         <div className="flex-shrink-0">
           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
             isExpanded 
-              ? 'bg-gray-100 text-gray-600'
-              : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200 transition-colors'
+              ? 'bg-background-container text-text-secondary'
+              : 'bg-background-container text-text-secondary group-hover:bg-background-hover transition-colors'
           }`}>
             {taskCount}
           </span>
