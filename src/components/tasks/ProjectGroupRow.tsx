@@ -21,6 +21,7 @@ interface ProjectGroupRowProps {
   onCrossColumnMove: (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter?: boolean) => void;
   authStatus: any;
   allTasks: Task[];
+  columnOrder: Task['status'][];
 }
 
 const ProjectGroupRow: React.FC<ProjectGroupRowProps> = ({
@@ -34,6 +35,7 @@ const ProjectGroupRow: React.FC<ProjectGroupRowProps> = ({
   onCrossColumnMove,
   authStatus,
   allTasks,
+  columnOrder,
 }) => {
   const [isAddingTask, setIsAddingTask] = React.useState<{ [key: string]: boolean }>({});
   const projectId = project?.id || 'no-project';
@@ -45,170 +47,70 @@ const ProjectGroupRow: React.FC<ProjectGroupRowProps> = ({
   return (
     <div className="project-group-row mb-6">
       <div className="grid grid-cols-3 gap-6">
-        {/* Column 1: Project Chip + In Pomodoro Tasks */}
-        <div className="flex flex-col">
-          {/* Sticky Project Chip */}
-          <div className="sticky top-[56px] z-20 bg-background-primary backdrop-blur-sm mb-4">
-            <ProjectChip
-              project={project}
-              taskCount={projectTasks.pomodoro.length + projectTasks.todo.length + projectTasks.completed.length}
-              isExpanded={isExpanded}
-              onToggle={onToggleProject}
-            />
-          </div>
-          
-          {/* Tasks for this column when expanded */}
-          {isExpanded && (
-            <>
-              <div className="space-y-3">
-                {projectTasks.pomodoro.map(task => (
-                  <TaskCard 
-                    key={task.id} 
-                    task={task}
-                    onStatusChange={onStatusChange}
-                    onReorder={onTaskReorder}
-                    onCrossColumnMove={onCrossColumnMove}
-                    columnStatus="pomodoro"
-                  />
-                ))}
-              </div>
-              <div className="mt-2">
-                {!isAddingTask['pomodoro'] ? (
-                  <button
-                    className="flex items-center text-text-secondary hover:text-text-primary hover:bg-background-container transition-colors duration-200 py-2 px-2 rounded focus:outline-none w-full"
-                    onClick={() => {
-                      if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
-                        triggerAuthenticationFlow();
-                        return;
-                      }
-                      handleAddTaskToggle('pomodoro', true);
-                    }}
-                  >
-                    <div className="w-4 h-4 flex items-center justify-center mr-2">
-                      <Icon name="add-line" />
-                    </div>
-                    <span className="text-sm">New Task</span>
-                  </button>
-                ) : (
-                  <TaskForm 
-                    status="pomodoro" 
-                    onCancel={() => handleAddTaskToggle('pomodoro', false)} 
-                  />
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Column 2: Invisible Spacer + To Do Tasks */}
-        <div className="flex flex-col">
-          {/* Invisible Spacer for alignment */}
-          <div className="sticky top-[56px] z-20 bg-background-primary backdrop-blur-sm mb-4">
-            <div className="w-full flex items-center gap-2 px-3 py-2 text-left rounded-lg opacity-0 pointer-events-none">
-              <div className="w-4 h-4"></div>
-              <div className="w-2.5 h-2.5"></div>
-              <span className="text-sm font-medium">.</span>
-              <div className="px-2 py-0.5 rounded-full text-xs">0</div>
+        {columnOrder.map((status, index) => (
+          <div key={status} className="flex flex-col">
+            {/* Sticky Project Chip or Invisible Spacer */}
+            <div className="sticky top-[56px] z-20 bg-background-primary backdrop-blur-sm mb-4">
+              {index === 0 ? (
+                <ProjectChip
+                  project={project}
+                  taskCount={projectTasks.pomodoro.length + projectTasks.todo.length + projectTasks.completed.length}
+                  isExpanded={isExpanded}
+                  onToggle={onToggleProject}
+                />
+              ) : (
+                <div className="w-full flex items-center gap-2 px-3 py-2 text-left rounded-lg opacity-0 pointer-events-none">
+                  <div className="w-4 h-4"></div>
+                  <div className="w-2.5 h-2.5"></div>
+                  <span className="text-sm font-medium">.</span>
+                  <div className="px-2 py-0.5 rounded-full text-xs">0</div>
+                </div>
+              )}
             </div>
+            
+            {/* Tasks for this column when expanded */}
+            {isExpanded && (
+              <>
+                <div className="space-y-3">
+                  {projectTasks[status].map(task => (
+                    <TaskCard 
+                      key={task.id} 
+                      task={task}
+                      onStatusChange={onStatusChange}
+                      onReorder={onTaskReorder}
+                      onCrossColumnMove={onCrossColumnMove}
+                      columnStatus={status}
+                    />
+                  ))}
+                </div>
+                <div className="mt-2">
+                  {!isAddingTask[status] ? (
+                    <button
+                      className="flex items-center text-text-secondary hover:text-text-primary bg-background-primary hover:bg-background-container transition-colors duration-200 py-2 px-2 rounded focus:outline-none w-full"
+                      onClick={() => {
+                        if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+                          triggerAuthenticationFlow();
+                          return;
+                        }
+                        handleAddTaskToggle(status, true);
+                      }}
+                    >
+                      <div className="w-4 h-4 flex items-center justify-center mr-2">
+                        <Icon name="add-line" />
+                      </div>
+                      <span className="text-sm">New Task</span>
+                    </button>
+                  ) : (
+                    <TaskForm 
+                      status={status} 
+                      onCancel={() => handleAddTaskToggle(status, false)} 
+                    />
+                  )}
+                </div>
+              </>
+            )}
           </div>
-          
-          {/* Tasks for this column when expanded */}
-          {isExpanded && (
-            <>
-              <div className="space-y-3">
-                {projectTasks.todo.map(task => (
-                  <TaskCard 
-                    key={task.id} 
-                    task={task}
-                    onStatusChange={onStatusChange}
-                    onReorder={onTaskReorder}
-                    onCrossColumnMove={onCrossColumnMove}
-                    columnStatus="todo"
-                  />
-                ))}
-              </div>
-              <div className="mt-2">
-                {!isAddingTask['todo'] ? (
-                  <button
-                    className="flex items-center text-text-secondary hover:text-text-primary hover:bg-background-container transition-colors duration-200 py-2 px-2 rounded focus:outline-none w-full"
-                    onClick={() => {
-                      if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
-                        triggerAuthenticationFlow();
-                        return;
-                      }
-                      handleAddTaskToggle('todo', true);
-                    }}
-                  >
-                    <div className="w-4 h-4 flex items-center justify-center mr-2">
-                      <Icon name="add-line" />
-                    </div>
-                    <span className="text-sm">New Task</span>
-                  </button>
-                ) : (
-                  <TaskForm 
-                    status="todo" 
-                    onCancel={() => handleAddTaskToggle('todo', false)} 
-                  />
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Column 3: Invisible Spacer + Completed Tasks */}
-        <div className="flex flex-col">
-          {/* Invisible Spacer for alignment */}
-          <div className="sticky top-[56px] z-20 bg-background-primary backdrop-blur-sm mb-4">
-            <div className="w-full flex items-center gap-2 px-3 py-2 text-left rounded-lg opacity-0 pointer-events-none">
-              <div className="w-4 h-4"></div>
-              <div className="w-2.5 h-2.5"></div>
-              <span className="text-sm font-medium">.</span>
-              <div className="px-2 py-0.5 rounded-full text-xs">0</div>
-            </div>
-          </div>
-          
-          {/* Tasks for this column when expanded */}
-          {isExpanded && (
-            <>
-              <div className="space-y-3">
-                {projectTasks.completed.map(task => (
-                  <TaskCard 
-                    key={task.id} 
-                    task={task}
-                    onStatusChange={onStatusChange}
-                    onReorder={onTaskReorder}
-                    onCrossColumnMove={onCrossColumnMove}
-                    columnStatus="completed"
-                  />
-                ))}
-              </div>
-              <div className="mt-2">
-                {!isAddingTask['completed'] ? (
-                  <button
-                    className="flex items-center text-text-secondary hover:text-text-primary hover:bg-background-container transition-colors duration-200 py-2 px-2 rounded focus:outline-none w-full"
-                    onClick={() => {
-                      if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
-                        triggerAuthenticationFlow();
-                        return;
-                      }
-                      handleAddTaskToggle('completed', true);
-                    }}
-                  >
-                    <div className="w-4 h-4 flex items-center justify-center mr-2">
-                      <Icon name="add-line" />
-                    </div>
-                    <span className="text-sm">New Task</span>
-                  </button>
-                ) : (
-                  <TaskForm 
-                    status="completed" 
-                    onCancel={() => handleAddTaskToggle('completed', false)} 
-                  />
-                )}
-              </div>
-            </>
-          )}
-        </div>
+        ))}
       </div>
     </div>
   );
