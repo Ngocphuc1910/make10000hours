@@ -59,7 +59,7 @@ const ProjectGroupRow: React.FC<ProjectGroupRowProps> = ({
                   onToggle={onToggleProject}
                 />
               ) : (
-                <div className="w-full flex items-center gap-2 px-3 py-2 text-left rounded-lg opacity-0 pointer-events-none">
+                <div className="w-full flex items-center gap-2 pr-3 py-2 text-left rounded-lg opacity-0 pointer-events-none">
                   <div className="w-4 h-4"></div>
                   <div className="w-2.5 h-2.5"></div>
                   <span className="text-sm font-medium">.</span>
