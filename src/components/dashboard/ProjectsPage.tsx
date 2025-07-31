@@ -3,6 +3,7 @@ import { useDashboardStore } from '../../store/useDashboardStore';
 import { formatMinutes } from '../../utils/timeUtils';
 import { useTaskStore } from '../../store/taskStore';
 import { TaskStatusBoard } from '../tasks';
+import ProjectStatusBoard from '../tasks/ProjectStatusBoard';
 import { Icon } from '../ui/Icon';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import ProjectView from './views/ProjectView';
@@ -172,9 +173,7 @@ export const ProjectsPage: React.FC = () => {
             {viewType === 'status' ? (
               <TaskStatusBoard groupByProject={groupByProject} />
             ) : (
-              <div className="py-6">
-                <ProjectView />
-              </div>
+              <ProjectStatusBoard groupByStatus={groupByProject} />
             )}
           </div>
         </div>
