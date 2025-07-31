@@ -39,7 +39,7 @@ const DraggableColumnHeader: React.FC<DraggableColumnHeaderProps> = ({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex-1 pr-4 py-3 pl-4 bg-background-primary cursor-move select-none ${
+      className={`flex-1 pl-2 py-3 bg-background-primary cursor-move select-none ${
         isDragging 
           ? 'opacity-50 shadow-lg scale-105 ring-2 ring-gray-400/50' 
           : 'hover:bg-background-container transition-all duration-150'

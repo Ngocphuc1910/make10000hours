@@ -257,7 +257,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                   <div key={status} className="mb-6">
                     {/* Status Chip spanning all columns */}
                     <div className={`sticky bg-background-primary backdrop-blur-sm mb-4 ${expandedStatuses.has(status) ? 'top-[56px] z-10' : 'top-[56px] z-10'}`}>
-                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer" onClick={() => toggleStatusExpansion(status)}>
+                      <div className="flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer" onClick={() => toggleStatusExpansion(status)}>
                         <div className={`flex items-center justify-center w-4 h-4 transition-transform duration-200 ${
                           expandedStatuses.has(status) ? 'rotate-90' : 'rotate-0'
                         }`}>
