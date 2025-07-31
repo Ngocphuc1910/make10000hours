@@ -601,7 +601,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
             ref={titleInputRef}
             id="task-title"
             name="title"
-            className={`w-full text-lg font-medium text-text-primary px-0 py-0.5 bg-transparent focus:outline-none border-none resize-none overflow-hidden ${titleError ? 'ring-2 ring-red-200' : ''}`}
+            className={`w-full text-base font-medium text-text-primary px-0 py-0.5 bg-transparent focus:outline-none border-none resize-none overflow-hidden ${titleError ? 'ring-2 ring-red-200' : ''}`}
             placeholder="Task name"
             value={title}
             onChange={(e) => {

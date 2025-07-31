@@ -14,13 +14,16 @@ interface TaskCardProps {
 }
 
 const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, onCrossColumnMove, columnStatus }) => {
-  const [isEditing, setIsEditing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragPosition, setDragPosition] = useState<'top' | 'bottom' | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const toggleTaskCompletion = useTaskStore(state => state.toggleTaskCompletion);
   const projects = useTaskStore(state => state.projects);
+  const editingTaskId = useTaskStore(state => state.editingTaskId);
+  const setEditingTaskId = useTaskStore(state => state.setEditingTaskId);
+  
+  const isEditing = editingTaskId === task.id;
 
   const project = projects.find(p => p.id === task.projectId);
 
@@ -116,7 +119,9 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
 
   const handleEditClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsEditing(true);
+    // If another task is being edited, set this task as the new editing task
+    // The TaskForm component will handle auto-saving the previous task
+    setEditingTaskId(task.id);
   };
 
   const handleExpandClick = (e: React.MouseEvent) => {
@@ -143,7 +148,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
   };
 
   if (isEditing) {
-    return <TaskForm task={task} onCancel={() => setIsEditing(false)} />;
+    return <TaskForm task={task} onCancel={() => setEditingTaskId(null)} />;
   }
 
   return (
