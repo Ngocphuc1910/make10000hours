@@ -107,6 +107,7 @@ const iconMap = {
   'brain-line': Brain,
   'list-check': ListChecks,
   'layout-grid-line': Grid3X3,
+  'group-line': Grid3X3,
   'checkbox-multiple-line': CheckCheck,
   'more-2-fill': MoreVertical,
   'folder-line': Folder,

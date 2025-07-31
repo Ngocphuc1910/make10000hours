@@ -118,7 +118,7 @@ export const ProjectsPage: React.FC = () => {
           {viewType === 'status' && (
             <button
               type="button"
-              className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors focus:outline-none ${
                 groupByProject
                   ? 'bg-background-container text-text-primary'
                   : 'text-text-secondary hover:text-text-primary hover:bg-background-container'
