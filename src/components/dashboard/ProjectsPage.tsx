@@ -11,6 +11,7 @@ import { useExtensionSync } from '../../hooks/useExtensionSync';
 import { DeepFocusSwitch } from '../ui/DeepFocusSwitch';
 import { useUIStore } from '../../store/uiStore';
 import Sidebar from '../layout/Sidebar';
+import { VerticalNavigation } from '../layout/VerticalNavigation';
 
 type ViewType = 'project' | 'status';
 
@@ -23,6 +24,12 @@ export const ProjectsPage: React.FC = () => {
     const saved = localStorage.getItem('taskManagementViewType');
     return (saved as ViewType) || 'status';
   });
+  
+  // Get initial group by project state from localStorage or default to false
+  const [groupByProject, setGroupByProject] = useState<boolean>(() => {
+    const saved = localStorage.getItem('taskManagementGroupByProject');
+    return saved === 'true';
+  });
   const [isDragInProgress, setIsDragInProgress] = useState(false);
   
   const projects = useTaskStore(state => state.projects);
@@ -34,6 +41,11 @@ export const ProjectsPage: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('taskManagementViewType', viewType);
   }, [viewType]);
+  
+  // Save group by project state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('taskManagementGroupByProject', groupByProject.toString());
+  }, [groupByProject]);
 
   // Debug logging to track component lifecycle and viewType changes
   useEffect(() => {
@@ -78,7 +90,7 @@ export const ProjectsPage: React.FC = () => {
           onDragEnd={handleDragEnd}
         >
           {/* Header */}
-          <div className={`projects-header h-16 flex items-center justify-between px-4 bg-background-secondary transition-all duration-500 relative`}>
+          <div className={`projects-header h-16 flex items-center justify-between pl-4 pr-12 bg-background-secondary transition-all duration-500 relative`}>
         {/* Left Section - Title & Deep Focus Switch */}
         <div className="flex items-center">
           {!isLeftSidebarOpen && (
@@ -102,6 +114,24 @@ export const ProjectsPage: React.FC = () => {
           
         {/* Right Section - View Controls & Navigation Icons */}
         <div className="flex items-center space-x-4">
+          {/* Group Toggle - only show in status view */}
+          {viewType === 'status' && (
+            <button
+              type="button"
+              className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                groupByProject
+                  ? 'bg-background-container text-text-primary'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-background-container'
+              }`}
+              onClick={() => setGroupByProject(!groupByProject)}
+            >
+              <div className="w-4 h-4 flex items-center justify-center mr-1.5">
+                <Icon name="group-line" />
+              </div>
+              Group
+            </button>
+          )}
+          
           {/* View Type Switch */}
           <div className="inline-flex rounded-full bg-background-container p-1">
             <button 
@@ -134,108 +164,13 @@ export const ProjectsPage: React.FC = () => {
             </button>
           </div>
 
-                    {/* Navigation Icons */}
-          <Tooltip text="Pomodoro Timer">
-            <button 
-              className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                location.pathname === '/pomodoro' 
-                  ? 'bg-background-container text-text-primary' 
-                  : 'hover:bg-background-container hover:text-text-primary'
-              }`}
-              onClick={location.pathname === '/pomodoro' ? undefined : () => navigate('/pomodoro')}
-              aria-label={location.pathname === '/pomodoro' ? 'Current page: Pomodoro Timer' : 'Go to Pomodoro Timer'}
-            >
-              <span className="w-5 h-5 flex items-center justify-center">
-                <Icon 
-                  name="timer-line" 
-                  size={20}
-                />
-              </span>
-            </button>
-          </Tooltip>
-          
-          <Tooltip text="Task management">
-            <button 
-              className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                location.pathname === '/projects' 
-                  ? 'bg-background-container text-text-primary' 
-                  : 'hover:bg-background-container hover:text-text-primary'
-              }`}
-              onClick={location.pathname === '/projects' ? undefined : () => navigate('/projects')}
-              aria-label={location.pathname === '/projects' ? 'Current page: Task Management' : 'Go to Task Management'}
-            >
-              <span className="w-5 h-5 flex items-center justify-center">
-                <Icon 
-                  name="task-line" 
-                  size={20}
-                />
-              </span>
-            </button>
-          </Tooltip>
-          
-          <Tooltip text="Productivity Insights">
-            <button 
-              className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                location.pathname === '/dashboard' 
-                  ? 'bg-background-container text-text-primary' 
-                  : 'hover:bg-background-container hover:text-text-primary'
-              }`}
-              onClick={location.pathname === '/dashboard' ? undefined : () => navigate('/dashboard')}
-              aria-label={location.pathname === '/dashboard' ? 'Current page: Productivity Insights' : 'Go to Productivity Insights'}
-            >
-              <span className="w-5 h-5 flex items-center justify-center">
-                <Icon 
-                  name="dashboard-line" 
-                  size={20}
-                />
-              </span>
-            </button>
-          </Tooltip>
-          
-          <Tooltip text="Calendar">
-            <button 
-              className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                location.pathname === '/calendar' 
-                  ? 'bg-background-container text-text-primary' 
-                  : 'hover:bg-background-container hover:text-text-primary'
-              }`}
-              onClick={location.pathname === '/calendar' ? undefined : () => navigate('/calendar')}
-              aria-label={location.pathname === '/calendar' ? 'Current page: Calendar' : 'Go to Calendar'}
-            >
-              <span className="w-5 h-5 flex items-center justify-center">
-                <Icon 
-                  name="calendar-line" 
-                  size={20}
-                />
-              </span>
-            </button>
-          </Tooltip>
-          
-          <Tooltip text="Deep Focus">
-            <button 
-              className={`p-2 rounded-full !rounded-button whitespace-nowrap text-text-secondary ${
-                location.pathname === '/deep-focus' 
-                  ? 'bg-background-container text-text-primary' 
-                  : 'hover:bg-background-container hover:text-text-primary'
-              }`}
-              onClick={location.pathname === '/deep-focus' ? undefined : () => navigate('/deep-focus')}
-              aria-label={location.pathname === '/deep-focus' ? 'Current page: Deep Focus' : 'Go to Deep Focus'}
-            >
-              <span className="w-5 h-5 flex items-center justify-center">
-                <Icon 
-                  name="brain-line" 
-                  size={20}
-                />
-              </span>
-            </button>
-          </Tooltip>
-        </div>
+                  </div>
       </div>
       
           {/* Scrollable Content */}
-          <div className="projects-scrollable-content flex-1 overflow-y-auto scrollbar-thin">
+          <div className={`projects-scrollable-content flex-1 overflow-y-auto scrollbar-thin pr-4 ${!isLeftSidebarOpen ? 'ml-16' : ''}`}>
             {viewType === 'status' ? (
-              <TaskStatusBoard />
+              <TaskStatusBoard groupByProject={groupByProject} />
             ) : (
               <div className="py-6">
                 <ProjectView />
@@ -244,6 +179,9 @@ export const ProjectsPage: React.FC = () => {
           </div>
         </div>
       </main>
+
+      {/* Vertical Navigation */}
+      <VerticalNavigation />
     </div>
   );
 }; 

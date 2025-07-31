@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webpage Code Analyzer - Settings</title>
+    <link rel="stylesheet" href="options.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Webpage Code Analyzer Settings</h1>
+            <p>Configure your extension preferences and manage your data</p>
+        </header>
+
+        <main>
+            <section class="settings-section">
+                <h2>API Configuration</h2>
+                <div class="setting-item">
+                    <label for="apiKey">OpenAI API Key:</label>
+                    <div class="input-group">
+                        <input type="password" id="apiKey" placeholder="sk-...">
+                        <button id="testApiKey" class="secondary">Test</button>
+                        <button id="saveApiKey" class="primary">Save</button>
+                    </div>
+                    <p class="help-text">Your API key is stored locally and encrypted. <a href="https://platform.openai.com/api-keys" target="_blank">Get your API key</a></p>
+                </div>
+
+                <div class="setting-item">
+                    <label for="modelSelect">AI Model:</label>
+                    <select id="modelSelect">
+                        <option value="gpt-4o-mini">GPT-4o Mini (Recommended)</option>
+                        <option value="gpt-4o">GPT-4o</option>
+                        <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
+                        <option value="gpt-4">GPT-4</option>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        <option value="gpt-3.5-turbo-16k">GPT-3.5 Turbo 16K</option>
+                    </select>
+                    <p class="help-text">GPT-4o Mini offers great performance at lower cost</p>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Analysis Settings</h2>
+                <div class="setting-item">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="autoAnalyze" checked>
+                        <span class="checkmark"></span>
+                        Auto-analyze pages on load
+                    </label>
+                    <p class="help-text">Automatically analyze webpage structure when you visit a page</p>
+                </div>
+
+                <div class="setting-item">
+                    <label for="analysisDepth">Analysis Depth:</label>
+                    <select id="analysisDepth">
+                        <option value="basic">Basic - Main components only</option>
+                        <option value="medium" selected>Medium - Detailed structure</option>
+                        <option value="deep">Deep - Complete DOM analysis</option>
+                    </select>
+                    <p class="help-text">Deeper analysis provides more detail but uses more resources</p>
+                </div>
+
+                <div class="setting-item">
+                    <label for="maxComponents">Max Components to Detect:</label>
+                    <input type="number" id="maxComponents" min="10" max="100" value="50">
+                    <p class="help-text">Limit the number of components to analyze for better performance</p>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Cache & Storage</h2>
+                <div class="setting-item">
+                    <label for="cacheDuration">Cache Duration (hours):</label>
+                    <input type="number" id="cacheDuration" min="1" max="168" value="24">
+                    <p class="help-text">How long to keep page analysis data cached</p>
+                </div>
+
+                <div class="setting-item storage-info">
+                    <h3>Storage Usage</h3>
+                    <div class="storage-stats">
+                        <div class="stat">
+                            <span class="label">Total Entries:</span>
+                            <span class="value" id="totalEntries">-</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Page Analyses:</span>
+                            <span class="value" id="analysisCount">-</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Query Cache:</span>
+                            <span class="value" id="queryCount">-</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Estimated Size:</span>
+                            <span class="value" id="storageSize">-</span>
+                        </div>
+                    </div>
+                    <div class="storage-actions">
+                        <button id="refreshStats" class="secondary">Refresh Stats</button>
+                        <button id="clearCache" class="secondary">Clear Cache</button>
+                        <button id="clearAll" class="danger">Clear All Data</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Query History</h2>
+                <div class="setting-item">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="saveHistory" checked>
+                        <span class="checkmark"></span>
+                        Save query history
+                    </label>
+                    <p class="help-text">Keep a history of your questions and responses</p>
+                </div>
+
+                <div class="setting-item">
+                    <label for="maxHistory">Max History Entries:</label>
+                    <input type="number" id="maxHistory" min="10" max="500" value="100">
+                    <p class="help-text">Maximum number of queries to keep in history</p>
+                </div>
+
+                <div class="history-actions">
+                    <button id="viewHistory" class="secondary">View History</button>
+                    <button id="clearHistory" class="secondary">Clear History</button>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Data Management</h2>
+                <div class="setting-item">
+                    <div class="data-actions">
+                        <button id="exportData" class="secondary">Export Data</button>
+                        <button id="importData" class="secondary">Import Data</button>
+                        <input type="file" id="importFile" accept=".json" style="display: none;">
+                    </div>
+                    <p class="help-text">Backup and restore your settings and history</p>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Advanced</h2>
+                <div class="setting-item">
+                    <label for="maxTokens">Max Tokens per Request:</label>
+                    <input type="number" id="maxTokens" min="500" max="4000" value="2000">
+                    <p class="help-text">Maximum tokens for AI responses (higher = longer responses but more cost)</p>
+                </div>
+
+                <div class="setting-item">
+                    <label for="temperature">AI Temperature:</label>
+                    <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.1">
+                    <span class="range-value" id="temperatureValue">0.1</span>
+                    <p class="help-text">Lower values = more focused responses, higher = more creative</p>
+                </div>
+
+                <div class="setting-item">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="debugMode">
+                        <span class="checkmark"></span>
+                        Enable debug mode
+                    </label>
+                    <p class="help-text">Show detailed logs in browser console</p>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <div class="action-buttons">
+                <button id="resetDefaults" class="secondary">Reset to Defaults</button>
+                <button id="saveSettings" class="primary">Save All Settings</button>
+            </div>
+            <div class="version-info">
+                <p>Version 1.0 | <a href="#" id="viewLogs">View Logs</a> | <a href="https://github.com/yourusername/webpage-analyzer" target="_blank">Help & Support</a></p>
+            </div>
+        </footer>
+    </div>
+
+    <div id="historyModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Query History</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="historyList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="logsModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Debug Logs</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="logsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="options.js"></script>
+</body>
+</html>
