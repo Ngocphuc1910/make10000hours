@@ -20,7 +20,7 @@ const ProjectChip: React.FC<ProjectChipProps> = ({
 
   return (
     <button
-      className={`w-full flex items-center gap-2 px-3 py-2 text-left rounded-lg ${
+      className={`w-full flex items-center gap-2 pr-3 py-2 text-left rounded-lg ${
         isExpanded 
           ? 'hover:shadow-none hover:ring-0 hover:border-none hover:outline-none focus:shadow-none focus:ring-0 focus:border-none focus:outline-none' 
           : 'group transition-all duration-200 ease-out hover:shadow-sm hover:ring-1 hover:ring-black/5'

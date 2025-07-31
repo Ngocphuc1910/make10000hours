@@ -180,7 +180,7 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
         <div className={`flex flex-col bg-background-primary ${className}`}>
           {/* Fixed Headers Row */}
           <SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
-            <div className="flex flex-row bg-background-primary sticky top-0 z-30">
+            <div className="grid gap-6 bg-background-primary sticky top-0 z-30 pl-2" style={{ gridTemplateColumns: `repeat(${columnOrder.length}, minmax(320px, 1fr))` }}>
               {columnOrder.map((status) => {
                 const config = columnConfigs[status];
                 return (
@@ -211,7 +211,7 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
       <div className="flex flex-col flex-1">
         {groupByProject && projectGroups ? (
           /* Project Group Rows - Notion-inspired approach */
-          <div className={`flex-1 pr-6 pb-6 pt-4 ${isLeftSidebarOpen ? 'pl-6' : ''}`}>
+          <div className={`flex-1 pr-6 pb-6 pt-4 ${isLeftSidebarOpen ? 'pl-6' : 'pl-2'}`}>
             {projectGroups.map(({ project, projectTasks }) => (
               <ProjectGroupRow
                 key={project?.id || 'no-project'}
@@ -231,7 +231,7 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
           </div>
         ) : (
           /* Traditional Column Layout */
-          <div className="flex flex-row flex-1">
+          <div className="grid gap-6 flex-1 pl-2" style={{ gridTemplateColumns: `repeat(${columnOrder.length}, minmax(320px, 1fr))` }}>
             {columnOrder.map((status, index) => {
               const config = columnConfigs[status];
               return (
