@@ -53,7 +53,7 @@ const DraggableColumnHeader: React.FC<DraggableColumnHeaderProps> = ({
             className="w-3 h-3 rounded-full" 
             style={{ backgroundColor: color }}
           ></span>
-          <h3 className="text-base font-semibold text-text-primary">
+          <h3 className="text-sm font-semibold text-text-primary">
             {title}
           </h3>
           <span className="text-sm font-medium text-text-secondary bg-background-container px-3 py-1 rounded-full">

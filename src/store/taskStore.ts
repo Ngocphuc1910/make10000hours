@@ -16,6 +16,7 @@ interface TaskState {
   unsubscribe: (() => void) | null;
   taskListViewMode: 'pomodoro' | 'today';
   columnOrder: Task['status'][];
+  projectColumnOrder: string[];
   
   // Actions
   initializeStore: () => Promise<void>;
@@ -42,6 +43,7 @@ interface TaskState {
   getNextPomodoroTask: (currentTaskId: string) => Task | null;
   hasSchedulingChanges: (currentTask: Task | undefined, updates: Partial<Task>) => boolean;
   reorderColumns: (newOrder: Task['status'][]) => void;
+  reorderProjectColumns: (newOrder: string[]) => void;
 }
 
 const tasksCollection = collection(db, 'tasks');
@@ -51,6 +53,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
   projects: [],
   columnOrder: ['pomodoro', 'todo', 'completed'],
+  projectColumnOrder: [],
   isAddingTask: false,
   editingTaskId: null,
   showDetailsMenu: false,
@@ -74,6 +77,17 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         set({ columnOrder });
       } catch (error) {
         console.warn('Failed to parse saved column order:', error);
+      }
+    }
+
+    // Load persisted project column order
+    const savedProjectColumnOrder = localStorage.getItem('projectColumnOrder');
+    if (savedProjectColumnOrder) {
+      try {
+        const projectColumnOrder = JSON.parse(savedProjectColumnOrder);
+        set({ projectColumnOrder });
+      } catch (error) {
+        console.warn('Failed to parse saved project column order:', error);
       }
     }
     
@@ -827,6 +841,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     set({ columnOrder: newOrder });
     // Persist to localStorage for user preference
     localStorage.setItem('taskColumnOrder', JSON.stringify(newOrder));
+  },
+
+  reorderProjectColumns: (newOrder: string[]) => {
+    set({ projectColumnOrder: newOrder });
+    // Persist to localStorage for user preference
+    localStorage.setItem('projectColumnOrder', JSON.stringify(newOrder));
   },
 }));
 
