@@ -167,7 +167,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
       
       {/* Task List Container */}
       <div 
-        className={`task-list-container pr-6 pb-6 ${hideHeader ? 'pt-4' : 'pt-4'} flex-1 ${isLeftSidebarOpen ? 'pl-6' : ''}`}
+        className={`task-list-container pb-6 ${hideHeader ? 'pt-4' : 'pt-4'} flex-1 ${isLeftSidebarOpen ? 'pl-6' : ''}`}
       >
         {/* Project-based layout with uniform height blocks */}
         {groupByProject && projects.length > 0 && (

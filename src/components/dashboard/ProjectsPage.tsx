@@ -115,23 +115,21 @@ export const ProjectsPage: React.FC = () => {
           
         {/* Right Section - View Controls & Navigation Icons */}
         <div className="flex items-center space-x-4">
-          {/* Group Toggle - only show in status view */}
-          {viewType === 'status' && (
-            <button
-              type="button"
-              className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors focus:outline-none ${
-                groupByProject
-                  ? 'bg-background-container text-text-primary'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-background-container'
-              }`}
-              onClick={() => setGroupByProject(!groupByProject)}
-            >
-              <div className="w-4 h-4 flex items-center justify-center mr-1.5">
-                <Icon name="group-line" />
-              </div>
-              Group
-            </button>
-          )}
+          {/* Group Toggle - show in both status and project views */}
+          <button
+            type="button"
+            className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors focus:outline-none ${
+              groupByProject
+                ? 'bg-background-container text-text-primary'
+                : 'text-text-secondary hover:text-text-primary hover:bg-background-container'
+            }`}
+            onClick={() => setGroupByProject(!groupByProject)}
+          >
+            <div className="w-4 h-4 flex items-center justify-center mr-1.5">
+              <Icon name="group-line" />
+            </div>
+            Group
+          </button>
           
           {/* View Type Switch */}
           <div className="inline-flex rounded-full bg-background-container p-1">
