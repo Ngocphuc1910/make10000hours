@@ -15,6 +15,7 @@ interface TaskState {
   isLoading: boolean;
   unsubscribe: (() => void) | null;
   taskListViewMode: 'pomodoro' | 'today';
+  columnOrder: Task['status'][];
   
   // Actions
   initializeStore: () => Promise<void>;
@@ -40,6 +41,7 @@ interface TaskState {
   cleanupOrphanedWorkSessions: () => Promise<{ deletedCount: number; orphanedSessions: { id: string; taskId: string; duration: number; date: string; }[]; }>;
   getNextPomodoroTask: (currentTaskId: string) => Task | null;
   hasSchedulingChanges: (currentTask: Task | undefined, updates: Partial<Task>) => boolean;
+  reorderColumns: (newOrder: Task['status'][]) => void;
 }
 
 const tasksCollection = collection(db, 'tasks');
@@ -48,6 +50,7 @@ const projectsCollection = collection(db, 'projects');
 export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
   projects: [],
+  columnOrder: ['pomodoro', 'todo', 'completed'],
   isAddingTask: false,
   editingTaskId: null,
   showDetailsMenu: false,
@@ -61,6 +64,17 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     // Set task list view mode from user settings
     if (user?.settings?.taskListViewMode) {
       set({ taskListViewMode: user.settings.taskListViewMode });
+    }
+
+    // Load persisted column order
+    const savedColumnOrder = localStorage.getItem('taskColumnOrder');
+    if (savedColumnOrder) {
+      try {
+        const columnOrder = JSON.parse(savedColumnOrder);
+        set({ columnOrder });
+      } catch (error) {
+        console.warn('Failed to parse saved column order:', error);
+      }
     }
     
     if (!isAuthenticated || !user) {
@@ -807,6 +821,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     
     // Return next task in pomodoro list, or null if none available
     return nextTask;
+  },
+
+  reorderColumns: (newOrder: Task['status'][]) => {
+    set({ columnOrder: newOrder });
+    // Persist to localStorage for user preference
+    localStorage.setItem('taskColumnOrder', JSON.stringify(newOrder));
   },
 }));
 

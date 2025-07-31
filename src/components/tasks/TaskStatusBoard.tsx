@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
+import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useTaskStore } from '../../store/taskStore';
 import type { Task, Project } from '../../types/models';
 import { TaskColumn } from './';
 import { ToastNotification } from './';
 import { ProjectLayoutProvider } from '../../contexts/ProjectLayoutContext';
 import ProjectGroupRow from './ProjectGroupRow';
+import DraggableColumnHeader from './DraggableColumnHeader';
 
 interface TaskStatusBoardProps {
   className?: string;
@@ -22,15 +25,23 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
   const tasks = useTaskStore(state => state.tasks);
   const projects = useTaskStore(state => state.projects);
   const updateTaskStatus = useTaskStore(state => state.updateTaskStatus);
+  const columnOrder = useTaskStore(state => state.columnOrder);
+  const reorderColumns = useTaskStore(state => state.reorderColumns);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
-  const [activeTaskCreation, setActiveTaskCreation] = useState<Task['status'] | null>(null);
 
 
   // Filter tasks by status
   const pomodoroTasks = tasks.filter(task => task.status === 'pomodoro');
   const todoTasks = tasks.filter(task => task.status === 'todo');
   const completedTasks = tasks.filter(task => task.status === 'completed');
+
+  // Column configurations
+  const columnConfigs = {
+    pomodoro: { title: 'In Pomodoro', color: '#EF4444', tasks: pomodoroTasks },
+    todo: { title: 'To Do List', color: '#3B82F6', tasks: todoTasks },
+    completed: { title: 'Completed', color: '#10B981', tasks: completedTasks },
+  };
 
   // Handle task status change
   const handleTaskStatusChange = (taskId: string, newStatus: Task['status']) => {
@@ -84,6 +95,22 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
       }
       return newSet;
     });
+  };
+
+  // Handle column drag end
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = columnOrder.indexOf(active.id as Task['status']);
+      const newIndex = columnOrder.indexOf(over.id as Task['status']);
+      
+      const newOrder = [...columnOrder];
+      const [movedItem] = newOrder.splice(oldIndex, 1);
+      newOrder.splice(newIndex, 0, movedItem);
+      
+      reorderColumns(newOrder);
+    }
   };
 
   // Get all projects with tasks (for chips) - memoized to prevent multiple calls
@@ -147,75 +174,36 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
 
   return (
     <ProjectLayoutProvider>
-      <div className={`flex flex-col bg-background-primary ${className}`}>
-      {/* Fixed Headers Row */}
-      <div className="flex flex-row bg-background-primary sticky top-0 z-30">
-        {/* In Pomodoro Header */}
-        <div className="flex-1 pr-4 py-3 pl-4 bg-background-primary">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <span className="w-3 h-3 rounded-full bg-red-500"></span>
-              <h3 className="text-base font-semibold text-text-primary">In Pomodoro</h3>
-              <span className="text-sm font-medium text-text-secondary bg-background-container px-3 py-1 rounded-full">
-                {pomodoroTasks.length}
-              </span>
+      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <div className={`flex flex-col bg-background-primary ${className}`}>
+          {/* Fixed Headers Row */}
+          <SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
+            <div className="flex flex-row bg-background-primary sticky top-0 z-30">
+              {columnOrder.map((status) => {
+                const config = columnConfigs[status];
+                return (
+                  <DraggableColumnHeader
+                    key={status}
+                    id={status}
+                    status={status}
+                    title={config.title}
+                    taskCount={config.tasks.length}
+                    color={config.color}
+                  >
+                    <button className="p-2 rounded-full hover:bg-background-container group">
+                      <div className="w-4 h-4 flex items-center justify-center text-text-secondary group-hover:text-text-primary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <circle cx="12" cy="5" r="2"/>
+                          <circle cx="12" cy="12" r="2"/>
+                          <circle cx="12" cy="19" r="2"/>
+                        </svg>
+                      </div>
+                    </button>
+                  </DraggableColumnHeader>
+                );
+              })}
             </div>
-            <button className="p-2 rounded-full hover:bg-background-container group">
-              <div className="w-4 h-4 flex items-center justify-center text-text-secondary group-hover:text-text-primary">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="12" cy="5" r="2"/>
-                  <circle cx="12" cy="12" r="2"/>
-                  <circle cx="12" cy="19" r="2"/>
-                </svg>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        {/* To Do List Header */}
-        <div className="flex-1 pr-4 py-3 pl-4 bg-background-primary">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <span className="w-3 h-3 rounded-full bg-blue-500"></span>
-              <h3 className="text-base font-semibold text-text-primary">To Do List</h3>
-              <span className="text-sm font-medium text-text-secondary bg-background-container px-3 py-1 rounded-full">
-                {todoTasks.length}
-              </span>
-            </div>
-            <button className="p-2 rounded-full hover:bg-background-container group">
-              <div className="w-4 h-4 flex items-center justify-center text-text-secondary group-hover:text-text-primary">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="12" cy="5" r="2"/>
-                  <circle cx="12" cy="12" r="2"/>
-                  <circle cx="12" cy="19" r="2"/>
-                </svg>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        {/* Completed Header */}
-        <div className="flex-1 pr-4 py-3 pl-4 bg-background-primary">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <span className="w-3 h-3 rounded-full bg-green-500"></span>
-              <h3 className="text-base font-semibold text-text-primary">Completed</h3>
-              <span className="text-sm font-medium text-text-secondary bg-background-container px-3 py-1 rounded-full">
-                {completedTasks.length}
-              </span>
-            </div>
-            <button className="p-2 rounded-full hover:bg-background-container group">
-              <div className="w-4 h-4 flex items-center justify-center text-text-secondary group-hover:text-text-primary">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="12" cy="5" r="2"/>
-                  <circle cx="12" cy="12" r="2"/>
-                  <circle cx="12" cy="19" r="2"/>
-                </svg>
-              </div>
-            </button>
-          </div>
-        </div>
-      </div>
+          </SortableContext>
 
       {/* Scrollable Content Row */}
       <div className="flex flex-col flex-1">
@@ -235,59 +223,33 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
                 onCrossColumnMove={() => {}} // TODO: Implement cross-column moves
                 authStatus={{ isAuthenticated: true, shouldShowAuth: false }} // TODO: Get actual auth status
                 allTasks={tasks}
+                columnOrder={columnOrder}
               />
             ))}
           </div>
         ) : (
           /* Traditional Column Layout */
           <div className="flex flex-row flex-1">
-            {/* In Pomodoro Column Content */}
-            <TaskColumn
-              title="In Pomodoro"
-              tasks={pomodoroTasks}
-              status="pomodoro"
-              badgeColor="bg-red-500"
-              onStatusChange={handleTaskStatusChange}
-              groupByProject={groupByProject}
-              expandedProjects={expandedProjects}
-              isFirstColumn={true}
-              projects={getProjectsWithTasks}
-              onToggleProject={toggleProjectExpansion}
-              allTasks={tasks}
-              hideHeader={true}
-            />
-
-            {/* To Do List Column Content */}
-            <TaskColumn
-              title="To Do List"
-              tasks={todoTasks}
-              status="todo"
-              badgeColor="bg-blue-500"
-              onStatusChange={handleTaskStatusChange}
-              groupByProject={groupByProject}
-              expandedProjects={expandedProjects}
-              isFirstColumn={false}
-              projects={getProjectsWithTasks}
-              onToggleProject={toggleProjectExpansion}
-              allTasks={tasks}
-              hideHeader={true}
-            />
-
-            {/* Completed Column Content */}
-            <TaskColumn
-              title="Completed"
-              tasks={completedTasks}
-              status="completed"
-              badgeColor="bg-green-500"
-              onStatusChange={handleTaskStatusChange}
-              groupByProject={groupByProject}
-              expandedProjects={expandedProjects}
-              isFirstColumn={false}
-              projects={getProjectsWithTasks}
-              onToggleProject={toggleProjectExpansion}
-              allTasks={tasks}
-              hideHeader={true}
-            />
+            {columnOrder.map((status, index) => {
+              const config = columnConfigs[status];
+              return (
+                <TaskColumn
+                  key={status}
+                  title={config.title}
+                  tasks={config.tasks}
+                  status={status}
+                  badgeColor={status === 'pomodoro' ? 'bg-red-500' : status === 'todo' ? 'bg-blue-500' : 'bg-green-500'}
+                  onStatusChange={handleTaskStatusChange}
+                  groupByProject={groupByProject}
+                  expandedProjects={expandedProjects}
+                  isFirstColumn={index === 0}
+                  projects={getProjectsWithTasks}
+                  onToggleProject={toggleProjectExpansion}
+                  allTasks={tasks}
+                  hideHeader={true}
+                />
+              );
+            })}
           </div>
         )}
       </div>
@@ -304,7 +266,8 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
           />
         ))}
       </div>
-    </div>
+        </div>
+      </DndContext>
     </ProjectLayoutProvider>
   );
 };
