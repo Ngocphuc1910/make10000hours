@@ -487,15 +487,7 @@ code {
   position: relative;
 }
 
-.status-section:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--border-color);
-}
+/* Removed column dividers for seamless layout */
 
 .status-section-header {
   position: sticky;
@@ -541,25 +533,16 @@ code {
   background-color: rgba(156, 163, 175, 0.6);
 }
 
-/* Status Badge Colors */
-.status-badge {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-  margin-right: 6px;
+/* Status Badge Colors - Replaced with Tailwind classes in TaskColumn.tsx */
+
+/* Hide scrollbars for seamless column layout */
+.scrollbar-hide {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
 }
 
-.pomodoro-badge {
-  background-color: #ef4444;
-}
-
-.todo-badge {
-  background-color: #3b82f6;
-}
-
-.completed-badge {
-  background-color: #10b981;
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .red-badge {
