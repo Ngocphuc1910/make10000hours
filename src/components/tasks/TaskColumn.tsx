@@ -254,7 +254,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
                           <div className="mt-2">
                             {!isAddingTask ? (
                               <button
-                                className="flex items-center text-text-secondary hover:text-text-primary hover:bg-background-container transition-colors duration-200 py-2 px-2 rounded focus:outline-none w-full"
+                                className="flex items-center text-text-secondary hover:text-text-primary bg-background-primary hover:bg-background-container transition-colors duration-200 py-2 px-2 rounded focus:outline-none w-full"
                                 onClick={() => {
                                   if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
                                     triggerAuthenticationFlow();
@@ -344,9 +344,9 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
         {!groupByProject && (
           <div className="mt-2">
             {!isAddingTask ? (
-              <div className="sticky top-16 bg-white/95 backdrop-blur-sm pt-1 -mx-4 px-4">
+              <div className="sticky top-16 bg-background-primary/95 backdrop-blur-sm pt-1 -mx-4 px-4">
                 <button
-                  className="flex items-center text-text-secondary hover:text-text-primary hover:bg-background-container transition-colors duration-200 py-2 px-2 rounded focus:outline-none w-full"
+                  className="flex items-center text-text-secondary hover:text-text-primary bg-background-primary hover:bg-background-container transition-colors duration-200 py-2 px-2 rounded focus:outline-none w-full"
                   onClick={() => {
                     if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
                       triggerAuthenticationFlow();

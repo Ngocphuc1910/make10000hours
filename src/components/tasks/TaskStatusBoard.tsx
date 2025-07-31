@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useTaskStore } from '../../store/taskStore';
+import { useUIStore } from '../../store/uiStore';
 import type { Task, Project } from '../../types/models';
 import { TaskColumn } from './';
 import { ToastNotification } from './';
@@ -27,6 +28,7 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
   const updateTaskStatus = useTaskStore(state => state.updateTaskStatus);
   const columnOrder = useTaskStore(state => state.columnOrder);
   const reorderColumns = useTaskStore(state => state.reorderColumns);
+  const { isLeftSidebarOpen } = useUIStore();
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
 
@@ -209,7 +211,7 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
       <div className="flex flex-col flex-1">
         {groupByProject && projectGroups ? (
           /* Project Group Rows - Notion-inspired approach */
-          <div className="flex-1 pr-4 py-4">
+          <div className={`flex-1 pr-6 pb-6 pt-4 ${isLeftSidebarOpen ? 'pl-6' : ''}`}>
             {projectGroups.map(({ project, projectTasks }) => (
               <ProjectGroupRow
                 key={project?.id || 'no-project'}
