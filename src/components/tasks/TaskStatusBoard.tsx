@@ -151,7 +151,7 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
       {/* Fixed Headers Row */}
       <div className="flex flex-row bg-background-primary sticky top-0 z-30">
         {/* In Pomodoro Header */}
-        <div className="flex-1 pr-4 py-3 pl-4" style={{ backgroundColor: '#ffffff' }}>
+        <div className="flex-1 pr-4 py-3 pl-4 bg-background-primary">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <span className="w-3 h-3 rounded-full bg-red-500"></span>
@@ -173,7 +173,7 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
         </div>
 
         {/* To Do List Header */}
-        <div className="flex-1 pr-4 py-3 pl-4" style={{ backgroundColor: '#ffffff' }}>
+        <div className="flex-1 pr-4 py-3 pl-4 bg-background-primary">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <span className="w-3 h-3 rounded-full bg-blue-500"></span>
@@ -195,7 +195,7 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
         </div>
 
         {/* Completed Header */}
-        <div className="flex-1 pr-4 py-3 pl-4" style={{ backgroundColor: '#ffffff' }}>
+        <div className="flex-1 pr-4 py-3 pl-4 bg-background-primary">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <span className="w-3 h-3 rounded-full bg-green-500"></span>
