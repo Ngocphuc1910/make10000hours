@@ -237,6 +237,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
                                 onReorder={handleTaskReorder}
                                 onCrossColumnMove={handleCrossColumnMove}
                                 columnStatus={status}
+                                context="task-management"
                               />
                             ))}
                           </div>
@@ -307,6 +308,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
                   onReorder={handleTaskReorder}
                   onCrossColumnMove={handleCrossColumnMove}
                   columnStatus={status}
+                  context="task-management"
                 />
               ))
             }
@@ -331,6 +333,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
                         onReorder={handleTaskReorder}
                         onCrossColumnMove={handleCrossColumnMove}
                         columnStatus={status}
+                        context="task-management"
                       />
                     ))}
                   </div>
