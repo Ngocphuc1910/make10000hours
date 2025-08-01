@@ -1069,7 +1069,7 @@ class ActivityDetector {
       const response = await this.sendMessageSafely({
         type: 'GET_CURRENT_STATE'
       }, {
-        timeout: 8000,
+        timeout: 3000,
         maxRetries: 1,
         fallback: { success: false, error: 'Extension not available' }
       });

@@ -144,13 +144,13 @@ class FaviconService {
       {
         name: 'icon.horse',
         url: (domain) => `https://icon.horse/icon/${domain}`,
-        timeout: 8000
+        timeout: 3000
       },
       // DuckDuckGo favicon service
       {
         name: 'duckduckgo',
         url: (domain) => `https://external-content.duckduckgo.com/ip3/${domain}.ico`,
-        timeout: 8000
+        timeout: 3000
       }
     ];
 
