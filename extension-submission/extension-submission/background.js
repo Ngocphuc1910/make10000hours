@@ -3846,25 +3846,26 @@ class FocusTimeTracker {
         }
         return; // Don't save if sleep detected
       }
-      
-      // Prevent saving if session duration is unreasonably long (indicates sleep)
-      if (sessionDuration > 3600000) { // 1 hour max per save cycle
-        console.log('⚠️ Session duration too long, likely due to sleep. Resetting...');
-        this.currentSession.startTime = now;
-        return;
-      }
-      
-      // IMPROVEMENT #1: Reduce periodic save threshold from 5 seconds to 2 seconds
-      if (sessionDuration >= 2000) {
-        await this.storageManager.saveTimeEntry(this.currentSession.domain, sessionDuration, 0);
         
-        // Reset tracking for next interval
-        this.currentSession.startTime = now;
+        // Prevent saving if session duration is unreasonably long (indicates sleep)
+        if (sessionDuration > 3600000) { // 1 hour max per save cycle
+          console.log('⚠️ Session duration too long, likely due to sleep. Resetting...');
+          this.currentSession.startTime = now;
+          return;
+        }
         
-        console.log('💾 Session saved:', {
-          domain: this.currentSession.domain,
-          duration: this.storageManager.formatTime(sessionDuration)
-        });
+        // IMPROVEMENT #1: Reduce periodic save threshold from 5 seconds to 2 seconds
+        if (sessionDuration >= 2000) {
+          await this.storageManager.saveTimeEntry(this.currentSession.domain, sessionDuration, 0);
+          
+          // Reset tracking for next interval
+          this.currentSession.startTime = now;
+          
+          console.log('💾 Session saved:', {
+            domain: this.currentSession.domain,
+            duration: this.storageManager.formatTime(sessionDuration)
+          });
+        }
       }
     } catch (error) {
       console.error('Error saving session:', error);
