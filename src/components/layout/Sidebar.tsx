@@ -4,6 +4,7 @@ import { useUIStore } from '../../store/uiStore';
 import { useUserStore } from '../../store/userStore';
 import { useThemeStore } from '../../store/themeStore';
 import { usePricingStore } from '../../store/pricingStore';
+import { useSettings } from '../../contexts/SettingsContext';
 import { Icon } from '../ui/Icon';
 import { ThemeSwitcher } from '../ui/ThemeSwitcher';
 import { signInWithPopup, signInWithRedirect, GoogleAuthProvider } from 'firebase/auth';
@@ -27,6 +28,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const { user, signOut, isAuthenticated } = useUserStore();
   const { isDark } = useThemeStore();
   const { openModal } = usePricingStore();
+  const { openSettings } = useSettings();
   
   // Debug logging to verify theme state
   useEffect(() => {
@@ -68,11 +70,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
       icon: 'database-2-line',
       label: 'Data Sync',
       path: '/data-sync'
-    },
-    {
-      icon: 'settings-line',
-      label: 'Settings',
-      path: '/dashboard/settings'
     }
   ];
 
@@ -401,6 +398,18 @@ className={`flex items-center px-2 py-1 rounded text-sm transition-colors focus:
                 </Link>
               );
             })}
+            
+            {/* Settings Button */}
+            <button 
+              onClick={openSettings}
+              className="flex items-center px-2 py-1 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 w-full text-left focus:outline-none"
+            >
+              <div className="w-5 h-5 flex items-center justify-center">
+                <Icon name="settings-line" size={18} />
+              </div>
+              <span className="ml-3 text-sm">Settings</span>
+            </button>
+            
             <button className="flex items-center px-2 py-1 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 w-full text-left focus:outline-none">
               <div className="w-5 h-5 flex items-center justify-center">
 <Icon name="keyboard-line" size={18} />
