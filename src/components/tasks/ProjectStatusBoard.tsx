@@ -296,6 +296,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                                   onReorder={() => {}}
                                   onCrossColumnMove={() => {}}
                                   columnStatus={status}
+                                  context="task-management"
                                 />
                               ))}
                             </div>

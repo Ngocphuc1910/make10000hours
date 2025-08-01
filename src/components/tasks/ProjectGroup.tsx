@@ -70,6 +70,7 @@ const ProjectGroup: React.FC<ProjectGroupProps> = ({
               onReorder={onReorder}
               onCrossColumnMove={onCrossColumnMove}
               columnStatus={columnStatus}
+              context="task-management"
             />
           ))}
         </div>

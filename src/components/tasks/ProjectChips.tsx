@@ -135,6 +135,7 @@ const ProjectChips: React.FC<ProjectChipsProps> = ({
                     task={task}
                     onStatusChange={onStatusChange}
                     columnStatus={task.status}
+                    context="task-management"
                   />
                 ))}
                 {projectTasks.length === 0 && (
