@@ -96,17 +96,25 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
     <Dialog.Root open={isOpen} onOpenChange={onClose}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[900px] h-[600px] -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[900px] h-[600px] -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col"
+        style={{
+          backgroundColor: 'var(--bg-primary)',
+          borderColor: 'var(--border-color)'
+        }}>
           {/* Content */}
           <div className="flex flex-1 relative">
             {/* Close Button */}
             <Dialog.Close asChild>
-              <button className="absolute top-4 right-4 z-10 p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
+              <button className="absolute top-4 right-4 z-10 p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none">
                 <X size={18} />
               </button>
             </Dialog.Close>
             {/* Sidebar */}
-            <div className="w-64 border-r border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
+            <div className="w-64 border-r bg-gray-50/50"
+            style={{
+              backgroundColor: 'var(--bg-secondary)',
+              borderColor: 'var(--border-color)'
+            }}>
               <nav className="p-6 space-y-2">
                 {sections.map((section) => {
                   const IconComponent = section.icon;
@@ -114,13 +122,17 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                     <button
                       key={section.id}
                       onClick={() => setActiveSection(section.id)}
-                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-all duration-200 text-sm ${
+                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-all duration-200 text-sm focus:outline-none ${
                         activeSection === section.id
-                          ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 shadow-sm'
-                          : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                          ? 'shadow-sm'
+                          : 'hover:bg-gray-100'
                       }`}
+                      style={{
+                        backgroundColor: activeSection === section.id ? 'var(--bg-container)' : 'transparent',
+                        color: 'var(--text-primary)'
+                      }}
                     >
-                      <IconComponent size={18} className={activeSection === section.id ? 'text-white dark:text-gray-900' : 'text-gray-500 dark:text-gray-400'} />
+                      <IconComponent size={18} style={{ color: 'var(--text-secondary)' }} />
                       <span className="font-medium">{section.label}</span>
                     </button>
                   );
@@ -132,7 +144,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
             <div className="flex-1 overflow-y-auto flex flex-col">
               <div className="p-6 flex-1">
                 {/* Section Title */}
-                <Dialog.Title className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+                <Dialog.Title className="text-xl font-semibold mb-6" style={{ color: 'var(--text-primary)' }}>
                   {sections.find(s => s.id === activeSection)?.label || 'Settings'}
                 </Dialog.Title>
 
@@ -156,11 +168,12 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">Theme</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Theme</div>
                             </div>
                             <div className="relative">
                               <select 
-                                className="appearance-none bg-transparent border-0 text-right pr-6 text-sm text-gray-500 dark:text-gray-400 focus:outline-none cursor-pointer min-w-[100px]"
+                                className="appearance-none bg-transparent border-0 text-right pr-6 text-sm focus:outline-none cursor-pointer min-w-[100px]"
+                                style={{ color: 'var(--text-secondary)' }}
                                 value={settings.darkMode ? 'dark' : 'light'}
                                 onChange={(e) => handleAppSettingChange('darkMode', e.target.value === 'dark')}
                               >
@@ -171,17 +184,18 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               <ChevronDown size={16} className="absolute right-0 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
                             </div>
                           </div>
-                          <div className="border-b border-gray-200 dark:border-gray-700"></div>
+                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
 
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">Language</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Language</div>
                             </div>
                             <div className="relative">
                               <select 
-                                className="appearance-none bg-transparent border-0 text-right pr-6 text-sm text-gray-500 dark:text-gray-400 focus:outline-none cursor-pointer min-w-[100px]"
+                                className="appearance-none bg-transparent border-0 text-right pr-6 text-sm focus:outline-none cursor-pointer min-w-[100px]"
+                                style={{ color: 'var(--text-secondary)' }}
                                 defaultValue="auto-detect"
                               >
                                 <option value="auto-detect">Auto-detect</option>
@@ -192,7 +206,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               <ChevronDown size={16} className="absolute right-0 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
                             </div>
                           </div>
-                          <div className="border-b border-gray-200 dark:border-gray-700"></div>
+                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
                       </div>
                     </div>
@@ -208,8 +222,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">Work Duration</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Focus session length in minutes</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Work Duration</div>
+                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Focus session length in minutes</div>
                             </div>
                             <input
                               type="number"
@@ -217,17 +231,21 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               max="60"
                               value={settings.timer.pomodoro}
                               onChange={(e) => handleTimerSettingChange('pomodoro', parseInt(e.target.value))}
-                              className="w-16 px-2 py-1 text-right bg-transparent border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-16 px-2 py-1 text-right bg-transparent border rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-gray-500"
+                              style={{
+                                borderColor: 'var(--border-color)',
+                                color: 'var(--text-primary)'
+                              }}
                             />
                           </div>
-                          <div className="border-b border-gray-200 dark:border-gray-700"></div>
+                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
 
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">Short Break</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Short break duration in minutes</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Short Break</div>
+                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Short break duration in minutes</div>
                             </div>
                             <input
                               type="number"
@@ -235,17 +253,21 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               max="30"
                               value={settings.timer.shortBreak}
                               onChange={(e) => handleTimerSettingChange('shortBreak', parseInt(e.target.value))}
-                              className="w-16 px-2 py-1 text-right bg-transparent border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-16 px-2 py-1 text-right bg-transparent border rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-gray-500"
+                              style={{
+                                borderColor: 'var(--border-color)',
+                                color: 'var(--text-primary)'
+                              }}
                             />
                           </div>
-                          <div className="border-b border-gray-200 dark:border-gray-700"></div>
+                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
 
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">Long Break</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Extended break duration in minutes</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Long Break</div>
+                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Extended break duration in minutes</div>
                             </div>
                             <input
                               type="number"
@@ -253,17 +275,21 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               max="60"
                               value={settings.timer.longBreak}
                               onChange={(e) => handleTimerSettingChange('longBreak', parseInt(e.target.value))}
-                              className="w-16 px-2 py-1 text-right bg-transparent border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-16 px-2 py-1 text-right bg-transparent border rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-gray-500"
+                              style={{
+                                borderColor: 'var(--border-color)',
+                                color: 'var(--text-primary)'
+                              }}
                             />
                           </div>
-                          <div className="border-b border-gray-200 dark:border-gray-700"></div>
+                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
 
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">Long Break Interval</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Pomodoros before long break</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Long Break Interval</div>
+                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Pomodoros before long break</div>
                             </div>
                             <input
                               type="number"
@@ -271,48 +297,52 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               max="10"
                               value={settings.timer.longBreakInterval}
                               onChange={(e) => handleTimerSettingChange('longBreakInterval', parseInt(e.target.value))}
-                              className="w-16 px-2 py-1 text-right bg-transparent border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-16 px-2 py-1 text-right bg-transparent border rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-gray-500"
+                              style={{
+                                borderColor: 'var(--border-color)',
+                                color: 'var(--text-primary)'
+                              }}
                             />
                           </div>
-                          <div className="border-b border-gray-200 dark:border-gray-700"></div>
+                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
 
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">Auto-start breaks</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Automatically start break timers</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Auto-start breaks</div>
+                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Automatically start break timers</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                               <input
                                 type="checkbox"
                                 checked={settings.timer.autoStartBreaks}
                                 onChange={(e) => handleTimerSettingChange('autoStartBreaks', e.target.checked)}
-                                className="sr-only peer"
+                                className="sr-only peer focus:outline-none"
                               />
-                              <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                              <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                             </label>
                           </div>
-                          <div className="border-b border-gray-200 dark:border-gray-700"></div>
+                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
 
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">Auto-start pomodoros</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Automatically start work sessions</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Auto-start pomodoros</div>
+                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Automatically start work sessions</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                               <input
                                 type="checkbox"
                                 checked={settings.timer.autoStartPomodoros}
                                 onChange={(e) => handleTimerSettingChange('autoStartPomodoros', e.target.checked)}
-                                className="sr-only peer"
+                                className="sr-only peer focus:outline-none"
                               />
-                              <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                              <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                             </label>
                           </div>
-                          <div className="border-b border-gray-200 dark:border-gray-700"></div>
+                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
                       </div>
                     </div>
@@ -328,29 +358,29 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">Timer completion</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Get notified when timers complete</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Timer completion</div>
+                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Get notified when timers complete</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
-                              <input type="checkbox" defaultChecked className="sr-only peer" />
-                              <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                              <input type="checkbox" defaultChecked className="sr-only peer focus:outline-none" />
+                              <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                             </label>
                           </div>
-                          <div className="border-b border-gray-200 dark:border-gray-700"></div>
+                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
                         
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">Task reminders</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Remind me about scheduled tasks</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Task reminders</div>
+                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Remind me about scheduled tasks</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
-                              <input type="checkbox" className="sr-only peer" />
-                              <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                              <input type="checkbox" className="sr-only peer focus:outline-none" />
+                              <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                             </label>
                           </div>
-                          <div className="border-b border-gray-200 dark:border-gray-700"></div>
+                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
                       </div>
                     </div>
@@ -366,30 +396,31 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">Compact task view</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Show more tasks in less space</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Compact task view</div>
+                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Show more tasks in less space</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                               <input
                                 type="checkbox"
                                 checked={settings.compactTaskView}
                                 onChange={(e) => handleAppSettingChange('compactTaskView', e.target.checked)}
-                                className="sr-only peer"
+                                className="sr-only peer focus:outline-none"
                               />
-                              <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                              <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                             </label>
                           </div>
-                          <div className="border-b border-gray-200 dark:border-gray-700"></div>
+                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
                         
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">Animation speed</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Control interface animation speed</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Animation speed</div>
+                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Control interface animation speed</div>
                             </div>
                             <div className="relative">
-                              <select className="appearance-none bg-transparent border-0 text-right pr-6 text-base text-gray-500 dark:text-gray-400 focus:outline-none cursor-pointer min-w-[100px]">
+                              <select className="appearance-none bg-transparent border-0 text-right pr-6 text-sm focus:outline-none cursor-pointer min-w-[100px] focus:ring-2 focus:ring-gray-400 dark:focus:ring-gray-500 rounded"
+                                style={{ color: 'var(--text-secondary)' }}>
                                 <option value="fast">Fast</option>
                                 <option value="normal">Normal</option>
                                 <option value="slow">Slow</option>
@@ -397,7 +428,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               <ChevronDown size={16} className="absolute right-0 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
                             </div>
                           </div>
-                          <div className="border-b border-gray-200 dark:border-gray-700"></div>
+                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
                       </div>
                     </div>
@@ -411,14 +442,23 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                   <button 
                     onClick={handleCancel} 
                     disabled={isLoading}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 text-sm font-medium border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      color: 'var(--text-primary)',
+                      backgroundColor: 'var(--bg-secondary)',
+                      borderColor: 'var(--border-color)'
+                    }}
                   >
                     Cancel
                   </button>
                   <button 
                     onClick={handleSave} 
                     disabled={isLoading}
-                    className="px-4 py-2 text-sm font-medium text-white bg-gray-900 dark:bg-gray-100 dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 focus:bg-gray-800 dark:focus:bg-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    className="px-4 py-2 text-sm font-medium text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    style={{
+                      backgroundColor: 'var(--bg-container)',
+                      color: 'var(--text-primary)'
+                    }}
                   >
                     {isLoading ? 'Saving...' : 'Save'}
                   </button>
