@@ -58,15 +58,6 @@
   
   "options_page": "options/options.html",
   
-  "declarative_net_request": {
-    "rule_resources": [
-      {
-        "id": "focus_blocking_rules",
-        "enabled": true,
-        "path": "rules.json"
-      }
-    ]
-  },
   
   "web_accessible_resources": [
     {
