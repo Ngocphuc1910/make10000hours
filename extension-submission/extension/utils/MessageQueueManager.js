@@ -209,7 +209,7 @@
 
       return new Promise((resolve, reject) => {
         let resolved = false;
-        const timeoutDuration = options.timeout || 3000; // Reduced from 15000ms to 3000ms for faster popup
+        const timeoutDuration = options.timeout || 10000; // Increased to 10000ms for better reliability
         
         const timeout = setTimeout(() => {
           if (!resolved) {
