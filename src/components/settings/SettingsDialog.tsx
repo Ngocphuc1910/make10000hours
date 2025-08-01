@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, Settings, Timer, Bell, Palette, ChevronDown } from 'lucide-react';
+import { X, Settings, Timer, Bell, Palette, ChevronDown, Keyboard } from 'lucide-react';
 import { useUserStore } from '../../store/userStore';
 import { DEFAULT_SETTINGS, type AppSettings, type TimerSettings } from '../../types/models';
 import { Button } from '../ui/Button';
@@ -87,6 +87,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
     { id: 'general', label: 'General', icon: Settings },
     { id: 'timer', label: 'Timer', icon: Timer },
     { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
     { id: 'appearance', label: 'Personalization', icon: Palette },
   ];
 
@@ -141,23 +142,24 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 overflow-y-auto flex flex-col">
-              <div className="p-6 flex-1">
-                {/* Section Title */}
-                <Dialog.Title className="text-xl font-semibold mb-6" style={{ color: 'var(--text-primary)' }}>
-                  {sections.find(s => s.id === activeSection)?.label || 'Settings'}
-                </Dialog.Title>
+            <div className="flex-1 flex flex-col h-full">
+              <div className="flex-1 overflow-y-auto" style={{ maxHeight: '520px' }}>
+                <div className="p-6">
+                  {/* Section Title */}
+                  <Dialog.Title className="text-xl font-semibold mb-6" style={{ color: 'var(--text-primary)' }}>
+                    {sections.find(s => s.id === activeSection)?.label || 'Settings'}
+                  </Dialog.Title>
 
-                {/* Success/Error Message */}
-                {message && (
-                  <div className={`mb-6 p-3 rounded-lg text-sm ${
-                    message.type === 'success' 
-                      ? 'bg-green-50 text-green-700 border border-green-200' 
-                      : 'bg-red-50 text-red-700 border border-red-200'
-                  }`}>
-                    {message.text}
-                  </div>
-                )}
+                  {/* Success/Error Message */}
+                  {message && (
+                    <div className={`mb-6 p-3 rounded-lg text-sm ${
+                      message.type === 'success' 
+                        ? 'bg-green-50 text-green-700 border border-green-200' 
+                        : 'bg-red-50 text-red-700 border border-red-200'
+                    }`}>
+                      {message.text}
+                    </div>
+                  )}
 
                 {/* General Section */}
                 {activeSection === 'general' && (
@@ -387,6 +389,132 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                   </div>
                 )}
 
+                {/* Shortcuts Section */}
+                {activeSection === 'shortcuts' && (
+                  <div className="space-y-6">
+                    {/* Keyboard Shortcuts Toggle */}
+                    <div>
+                      <div className="flex items-center justify-between py-2">
+                        <div>
+                          <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Keyboard Shortcuts</div>
+                          <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Enable keyboard shortcuts for faster navigation</div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            defaultChecked
+                            className="sr-only peer focus:outline-none"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Page Navigation */}
+                    <div>
+                      <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Page Navigation</h3>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Open Pomodoro Timer</span>
+                          <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>P</div>
+                        </div>
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Open Calendar</span>
+                          <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>C</div>
+                        </div>
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Open Task Management</span>
+                          <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>T</div>
+                        </div>
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Open Productivity Insights</span>
+                          <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>I</div>
+                        </div>
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Open Deep Focus</span>
+                          <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>F</div>
+                        </div>
+                          </div>
+                        </div>
+
+                    {/* Calendar Views */}
+                    <div>
+                      <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Calendar Views</h3>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Open Day View</span>
+                          <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>D</div>
+                        </div>
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Open Week View</span>
+                          <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>W</div>
+                        </div>
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Open Month View</span>
+                          <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>M</div>
+                        </div>
+                          </div>
+                        </div>
+
+                    {/* Timer Controls */}
+                    <div>
+                      <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Timer Controls</h3>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Start/Pause Timer</span>
+                          <div className="px-3 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>Space</div>
+                        </div>
+                          </div>
+                        </div>
+
+                    {/* Focus & Productivity */}
+                    <div>
+                      <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Focus & Productivity</h3>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Toggle Deep Focus Mode</span>
+                          <div className="flex gap-1">
+                            <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>Shift</div>
+                            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>+</span>
+                            <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>D</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Create New Task</span>
+                          <div className="flex gap-1">
+                            <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>Shift</div>
+                            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>+</span>
+                            <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>N</div>
+                          </div>
+                        </div>
+                          </div>
+                        </div>
+
+                    {/* Interface Controls */}
+                    <div>
+                      <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Interface Controls</h3>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Toggle Left Sidebar</span>
+                          <div className="flex gap-1">
+                            <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>Alt</div>
+                            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>+</span>
+                            <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>\</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Toggle Right Sidebar</span>
+                          <div className="flex gap-1">
+                            <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>Cmd</div>
+                            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>+</span>
+                            <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>\</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Personalization Section */}
                 {activeSection === 'appearance' && (
                   <div className="space-y-0">
@@ -434,11 +562,15 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                     </div>
                   </div>
                 )}
+                </div>
               </div>
 
-              {/* Save/Cancel buttons inside content - Only show when there are changes */}
+              {/* Save/Cancel buttons - Fixed at bottom */}
               {hasChanges && (
-                <div className="flex justify-end items-center gap-2 px-6 py-4">
+                <div className="flex justify-end items-center gap-2 px-6 py-4 border-t flex-shrink-0" style={{
+                  backgroundColor: 'var(--bg-primary)',
+                  borderColor: 'var(--border-color)'
+                }}>
                   <button 
                     onClick={handleCancel} 
                     disabled={isLoading}
