@@ -35,6 +35,8 @@ import { ChatIntegrationService } from './services/chatIntegration';
 import { usePricingStore } from './store/pricingStore';
 import { useDeepFocusStore } from './store/deepFocusStore';
 import { DeepFocusProvider, useDeepFocusContext } from './contexts/DeepFocusContext';
+import { SettingsProvider } from './contexts/SettingsContext';
+import SettingsDialogWrapper from './components/settings/SettingsDialogWrapper';
 import { testDeepFocusFixes } from './utils/testDeepFocusFix';
 import DeepFocusCleanup from './utils/deepFocusCleanup';
 import { useSimpleGoogleCalendarAuth } from './hooks/useSimpleGoogleCalendarAuth';
@@ -721,29 +723,32 @@ const App: React.FC = () => {
   }
 
   return (
-    <DeepFocusProvider>
-      <Router>
-        <GlobalTabTitleUpdater />
-        <GlobalKeyboardShortcuts key="global-shortcuts" />
-        <AnalyticsWrapper>
-          <Routes>
-            <Route path="/" element={<PomodoroPageWithLayout />} />
-            <Route path="pomodoro" element={<PomodoroPageWithLayout />} />
-            <Route path="projects" element={<ProjectsPage />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="dashboard/settings" element={<SettingsPage />} />
-            <Route path="calendar" element={<CalendarPage />} />
-            <Route path="deep-focus" element={<DeepFocusPage />} />
-            <Route path="data-sync" element={<DataSyncPageWithLayout />} />
-            <Route path="support" element={<SupportPageWithLayout />} />
-            <Route path="privacy-policy" element={<PrivacyPolicyPageWithLayout />} />
-          </Routes>
-        </AnalyticsWrapper>
-        <ToastContainer />
-        <ChatButton />
-        <PricingModal />
-      </Router>
-    </DeepFocusProvider>
+    <SettingsProvider>
+      <DeepFocusProvider>
+        <Router>
+          <GlobalTabTitleUpdater />
+          <GlobalKeyboardShortcuts key="global-shortcuts" />
+          <AnalyticsWrapper>
+            <Routes>
+              <Route path="/" element={<PomodoroPageWithLayout />} />
+              <Route path="pomodoro" element={<PomodoroPageWithLayout />} />
+              <Route path="projects" element={<ProjectsPage />} />
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="dashboard/settings" element={<SettingsPage />} />
+              <Route path="calendar" element={<CalendarPage />} />
+              <Route path="deep-focus" element={<DeepFocusPage />} />
+              <Route path="data-sync" element={<DataSyncPageWithLayout />} />
+              <Route path="support" element={<SupportPageWithLayout />} />
+              <Route path="privacy-policy" element={<PrivacyPolicyPageWithLayout />} />
+            </Routes>
+          </AnalyticsWrapper>
+          <ToastContainer />
+          <ChatButton />
+          <PricingModal />
+          <SettingsDialogWrapper />
+        </Router>
+      </DeepFocusProvider>
+    </SettingsProvider>
   );
 }
 
