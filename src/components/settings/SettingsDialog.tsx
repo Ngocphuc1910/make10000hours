@@ -143,12 +143,19 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col h-full">
-              <div className="flex-1 overflow-y-auto" style={{ maxHeight: '520px' }}>
-                <div className="p-6">
-                  {/* Section Title */}
-                  <Dialog.Title className="text-xl font-semibold mb-6" style={{ color: 'var(--text-primary)' }}>
-                    {sections.find(s => s.id === activeSection)?.label || 'Settings'}
-                  </Dialog.Title>
+              {/* Fixed Header */}
+              <div className="px-6 pt-6 pb-4 border-b" style={{ 
+                backgroundColor: 'var(--bg-primary)',
+                borderColor: 'var(--border-color)'
+              }}>
+                <Dialog.Title className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  {sections.find(s => s.id === activeSection)?.label || 'Settings'}
+                </Dialog.Title>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto scrollbar-thin" style={{ maxHeight: '460px' }}>
+                <div className="p-6 pt-4">
 
                   {/* Success/Error Message */}
                   {message && (
