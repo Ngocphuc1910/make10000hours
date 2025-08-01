@@ -121,6 +121,7 @@ const ProjectTaskBlock: React.FC<ProjectTaskBlockProps> = ({
               onReorder={onTaskReorder}
               onCrossColumnMove={onCrossColumnMove}
               columnStatus={status}
+              context="task-management"
             />
           ))}
         </div>

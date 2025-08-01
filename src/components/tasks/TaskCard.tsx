@@ -11,9 +11,10 @@ interface TaskCardProps {
   onReorder?: (draggedTaskId: string, targetTaskId: string, insertAfter?: boolean) => void;
   onCrossColumnMove?: (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter?: boolean) => void;
   columnStatus?: Task['status'];
+  context?: 'task-management' | 'pomodoro' | 'default';
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, onCrossColumnMove, columnStatus }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, onCrossColumnMove, columnStatus, context = 'default' }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragPosition, setDragPosition] = useState<'top' | 'bottom' | null>(null);
@@ -129,6 +130,20 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
     setIsExpanded(!isExpanded);
   };
 
+  const handleTaskClick = (e: React.MouseEvent) => {
+    // Only enable direct click editing in task management context
+    if (context === 'task-management') {
+      // Don't trigger if clicking on interactive elements
+      const target = e.target as HTMLElement;
+      if (target.closest('button') || target.closest('input') || target.closest('[role="checkbox"]')) {
+        return;
+      }
+      
+      e.stopPropagation();
+      setEditingTaskId(task.id);
+    }
+  };
+
   // Get task card colors based on status
   const getTaskCardClasses = () => {
     if (task.completed) {
@@ -174,6 +189,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        onClick={handleTaskClick}
         data-task-id={task.id}
         data-status={task.status}
       >
@@ -226,16 +242,18 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
         </div>
       </div>
 
-      <div className="task-menu ml-4 flex items-start">
-        <button 
-          className="edit-task-btn p-1 rounded-full hover:bg-background-primary flex-shrink-0"
-          onClick={handleEditClick}
-        >
-          <div className="w-5 h-5 flex items-center justify-center text-text-secondary">
-            <i className="ri-edit-line"></i>
-          </div>
-        </button>
-      </div>
+      {context !== 'task-management' && (
+        <div className="task-menu ml-4 flex items-start">
+          <button 
+            className="edit-task-btn p-1 rounded-full hover:bg-background-primary flex-shrink-0"
+            onClick={handleEditClick}
+          >
+            <div className="w-5 h-5 flex items-center justify-center text-text-secondary">
+              <i className="ri-edit-line"></i>
+            </div>
+          </button>
+        </div>
+      )}
       </div>
     </div>
   );

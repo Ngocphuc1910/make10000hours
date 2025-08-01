@@ -85,6 +85,7 @@ const StatusGroupRow: React.FC<StatusGroupRowProps> = ({
                             onReorder={onTaskReorder}
                             onCrossColumnMove={onCrossColumnMove}
                             columnStatus={status}
+                            context="task-management"
                           />
                         ))}
                       </div>
