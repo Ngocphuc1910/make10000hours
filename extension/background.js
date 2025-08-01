@@ -1611,7 +1611,10 @@ class StateManager {
 class BlockingManager {
   constructor() {
     this.focusMode = false;
+    
+    // Start with empty blocked sites - will be populated by web app sync
     this.blockedSites = new Set();
+    
     this.temporaryOverrides = new Map(); // domain -> expiry timestamp
     this.urlCache = new Map(); // tabId -> original URL
     this.focusStartTime = null;
@@ -1639,7 +1642,10 @@ class BlockingManager {
       console.log('🔍 Loaded storage settings:', settings);
       
       this.focusMode = settings.focusMode || false;
+      
+      // Load blocked sites from storage (populated by web app sync)
       this.blockedSites = new Set(settings.blockedSites || []);
+      
       this.focusStartTime = settings.focusStartTime || null;
       this.blockedAttempts = settings.blockedAttempts || 0;
       
@@ -1882,7 +1888,7 @@ class BlockingManager {
         console.log(`🧹 Removed ${existingRules.length} existing blocking rules`);
       }
 
-      // If focus mode is off or no sites to block, we're done
+      // If focus mode is off or no sites to block, we're done (rules already cleared above)
       if (!this.focusMode || this.blockedSites.size === 0) {
         console.log('🔓 Focus mode disabled or no sites to block');
         return;
@@ -1955,7 +1961,7 @@ class BlockingManager {
    */
   async clearBlockingRules() {
     try {
-      // Get existing rules using our helper
+      // Get all existing dynamic rules
       const existingRules = await this.getCurrentRules();
       
       if (existingRules.length > 0) {
@@ -1963,9 +1969,12 @@ class BlockingManager {
           removeRuleIds: existingRules.map(rule => rule.id)
         });
         
+        console.log(`🧹 Cleared ${existingRules.length} blocking rules`);
+        
         // Add safety delay to ensure rules are cleared
         await new Promise(resolve => setTimeout(resolve, 100));
-        console.log(`🧹 Cleared ${existingRules.length} blocking rules`);
+      } else {
+        console.log('📝 No blocking rules to clear');
       }
     } catch (error) {
       console.error('❌ Error clearing blocking rules:', error);
