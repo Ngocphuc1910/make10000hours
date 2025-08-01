@@ -3727,24 +3727,25 @@ class FocusTimeTracker {
     
     // If more than 5 minutes have passed, assume system was sleeping
     if (timeSinceLastHeartbeat > 300000) { // 5 minutes (more sensitive detection)
-      console.log('💤 Sleep detected - time gap:', Math.round(timeSinceLastHeartbeat / 1000) + 's');
+      console.log('💤 Sleep detected in periodic check - time gap:', Math.round(timeSinceLastHeartbeat / 1000) + 's');
       
-      // If we have an active session, pause it instead of resetting
+      // If we have an active session, save time before sleep and pause
       if (this.currentSession.isActive && this.currentSession.startTime) {
-        // Calculate time before sleep
+        // Calculate session duration up to last heartbeat (excludes sleep time)
         const timeBeforeSleep = Math.max(0, this.lastHeartbeat - this.currentSession.startTime);
         
         // Save accumulated time before sleep
-        if (timeBeforeSleep > 1000) {
+        if (timeBeforeSleep >= 1000) { // At least 1 second of activity
           await this.storageManager.saveTimeEntry(this.currentSession.domain, timeBeforeSleep, 0);
-          console.log(`💾 Saved time before sleep: ${this.storageManager.formatTime(timeBeforeSleep)}`);
+          console.log('💾 Saved time before sleep (periodic check):', {
+            domain: this.currentSession.domain,
+            duration: this.storageManager.formatTime(timeBeforeSleep),
+            sleepGap: Math.round(timeSinceLastHeartbeat / 1000) + 's'
+          });
         }
         
-        // PAUSE session instead of reset - preserve domain and accumulated time
-        this.currentSession.isActive = false;
-        this.currentSession.startTime = null;
-        // Keep domain and savedTime intact for resume
-        console.log(`⏸️ Session paused for ${this.currentSession.domain} due to extended inactivity`)
+        // Handle sleep detection (pause session)
+        await this.handleSleepDetected();
       }
     }
     
@@ -3756,19 +3757,8 @@ class FocusTimeTracker {
    * Handle sleep detected condition (extracted to prevent recursion)
    */
   async handleSleepDetected() {
-    const now = Date.now();
-    
-    // If we have an active session, pause it instead of resetting
+    // If we have an active session, pause it (saving is handled by caller)
     if (this.currentSession.isActive && this.currentSession.startTime) {
-      // Calculate time before sleep
-      const timeBeforeSleep = Math.max(0, this.lastHeartbeat - this.currentSession.startTime);
-      
-      // Save accumulated time before sleep
-      if (timeBeforeSleep > 1000) {
-        await this.storageManager.saveTimeEntry(this.currentSession.domain, timeBeforeSleep, 0);
-        console.log(`💾 Saved time before sleep: ${this.storageManager.formatTime(timeBeforeSleep)}`);
-      }
-      
       // PAUSE session instead of reset - preserve domain and accumulated time
       this.currentSession.isActive = false;
       this.currentSession.startTime = null;
@@ -3824,7 +3814,6 @@ class FocusTimeTracker {
       this.isSaving = true;
 
       const now = Date.now();
-      const sessionDuration = now - this.currentSession.startTime;
       
       // SAFEGUARD 3: Validate timestamps and handle undefined lastHeartbeat
       if (!this.lastHeartbeat) {
@@ -3834,38 +3823,54 @@ class FocusTimeTracker {
       }
       
       const timeSinceLastHeartbeat = now - this.lastHeartbeat;
+      let sessionDuration;
       
-      // DEFENSIVE CHECK: Check for sleep BEFORE saving time
+      // DEFENSIVE CHECK: Check for sleep BEFORE calculating session duration
       if (timeSinceLastHeartbeat > 300000) { // 5 minutes gap indicates sleep
         console.log('💤 Sleep detected during save - handling sleep condition');
+        // Calculate session duration up to last heartbeat (excludes sleep time)
+        sessionDuration = Math.max(0, this.lastHeartbeat - this.currentSession.startTime);
+        
+        // Save time before sleep if any
+        if (sessionDuration >= 1000) { // At least 1 second of activity
+          await this.storageManager.saveTimeEntry(this.currentSession.domain, sessionDuration, 0);
+          console.log('💾 Saved time before sleep:', {
+            domain: this.currentSession.domain,
+            duration: this.storageManager.formatTime(sessionDuration),
+            sleepGap: Math.round(timeSinceLastHeartbeat / 1000) + 's'
+          });
+        }
+        
         this.isProcessingSleep = true;
         try {
           await this.handleSleepDetected();
         } finally {
           this.isProcessingSleep = false;
         }
-        return; // Don't save if sleep detected
+        return; // Don't continue with normal save logic
       }
+      
+      // Normal case: Calculate session duration from start to now (no sleep detected)
+      sessionDuration = now - this.currentSession.startTime;
+      
+      // Prevent saving if session duration is unreasonably long (backup safety check)
+      if (sessionDuration > 3600000) { // 1 hour max per save cycle
+        console.log('⚠️ Session duration too long, likely missed sleep detection. Resetting...');
+        this.currentSession.startTime = now;
+        return;
+      }
+      
+      // IMPROVEMENT #1: Reduce periodic save threshold from 5 seconds to 2 seconds
+      if (sessionDuration >= 2000) {
+        await this.storageManager.saveTimeEntry(this.currentSession.domain, sessionDuration, 0);
         
-        // Prevent saving if session duration is unreasonably long (indicates sleep)
-        if (sessionDuration > 3600000) { // 1 hour max per save cycle
-          console.log('⚠️ Session duration too long, likely due to sleep. Resetting...');
-          this.currentSession.startTime = now;
-          return;
-        }
+        // Reset tracking for next interval
+        this.currentSession.startTime = now;
         
-        // IMPROVEMENT #1: Reduce periodic save threshold from 5 seconds to 2 seconds
-        if (sessionDuration >= 2000) {
-          await this.storageManager.saveTimeEntry(this.currentSession.domain, sessionDuration, 0);
-          
-          // Reset tracking for next interval
-          this.currentSession.startTime = now;
-          
-          console.log('💾 Session saved:', {
-            domain: this.currentSession.domain,
-            duration: this.storageManager.formatTime(sessionDuration)
-          });
-        }
+        console.log('💾 Session saved:', {
+          domain: this.currentSession.domain,
+          duration: this.storageManager.formatTime(sessionDuration)
+        });
       }
     } catch (error) {
       console.error('Error saving session:', error);
