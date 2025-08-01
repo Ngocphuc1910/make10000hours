@@ -215,13 +215,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
     <>
       <aside
         id="sidebar"
-        className={`border-r-[0.5px] border-border flex flex-col min-h-screen relative group transition-all duration-300
+        className={`border-r-[0.5px] border-border flex flex-col min-h-screen relative group transition-all duration-300 bg-gray-50/50 dark:bg-gray-800/30
         ${isLeftSidebarOpen ? 'w-64' : 'w-0'} ${className}`}
         style={{ 
           zIndex: 40, 
-          transition: 'width 0.3s ease, opacity 0.3s ease',
-          backgroundColor: isDark ? '#181818' : '#F9F9F9', // Dark mode using #181818
-          backgroundImage: 'none' // Ensure no background images override this
+          transition: 'width 0.3s ease, opacity 0.3s ease'
         }}
       >
         {/* User Profile Section */}
