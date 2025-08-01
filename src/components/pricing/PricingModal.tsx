@@ -92,16 +92,31 @@ export const PricingModal: React.FC = () => {
       />
       
       {/* Modal Content */}
-      <div className="relative bg-background-primary rounded-xl w-full max-w-4xl mx-4 max-h-[95vh] overflow-y-auto shadow-2xl border border-border">
+      <div className="relative w-full max-w-4xl mx-4 max-h-[95vh] overflow-y-auto shadow-2xl border rounded-2xl"
+        style={{
+          backgroundColor: 'var(--bg-primary)',
+          borderColor: 'var(--border-color)'
+        }}>
         {/* Header */}
         <div className="relative px-8 pt-6 pb-4">
           <div className="text-center">
-            <h2 className="text-2xl font-bold text-text-primary mb-1">Choose Your Plan</h2>
-            <p className="text-text-secondary text-base">Upgrade your plan for more credits and features</p>
+            <h2 className="text-xl font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Choose Your Plan</h2>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Upgrade your plan for more credits and features</p>
           </div>
           <button
             onClick={closeModal}
-            className="absolute top-6 right-8 p-2 text-text-secondary hover:text-text-primary transition-colors rounded-full hover:bg-background-container focus:outline-none"
+            className="absolute top-6 right-8 p-2 transition-colors rounded-lg focus:outline-none"
+            style={{ 
+              color: 'var(--text-secondary)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--text-primary)';
+              e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--text-secondary)';
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             <Icon name="close-line" size={24} />
           </button>
@@ -147,9 +162,9 @@ export const PricingModal: React.FC = () => {
 
         {/* Footer */}
         <div className="px-8 py-6 text-center">
-          <p className="text-sm text-text-secondary">
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
             Need help?{' '}
-            <a href="#" className="text-primary hover:text-primary/80 transition-colors focus:outline-none">
+            <a href="#" className="hover:opacity-80 transition-colors focus:outline-none" style={{ color: 'var(--text-primary)' }}>
               Contact support
             </a>
           </p>
