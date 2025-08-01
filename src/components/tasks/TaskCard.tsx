@@ -147,18 +147,28 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
   // Get task card colors based on status
   const getTaskCardClasses = () => {
     if (task.completed) {
-      return 'bg-task-completed-bg border-task-completed-border';
+      return context === 'task-management' 
+        ? 'bg-task-completed-bg border-task-completed-border dark:border-transparent'
+        : 'bg-task-completed-bg border-task-completed-border';
     }
     
     switch (task.status) {
       case 'todo':
-        return 'bg-task-todo-bg border-task-todo-border';
+        return context === 'task-management'
+          ? 'bg-task-todo-bg border-task-todo-border dark:border-transparent'
+          : 'bg-task-todo-bg border-task-todo-border';
       case 'pomodoro':
-        return 'bg-task-pomodoro-bg border-task-pomodoro-border';
+        return context === 'task-management'
+          ? 'bg-task-pomodoro-bg border-task-pomodoro-border dark:border-transparent'
+          : 'bg-task-pomodoro-bg border-task-pomodoro-border';
       case 'completed':
-        return 'bg-task-completed-bg border-task-completed-border';
+        return context === 'task-management'
+          ? 'bg-task-completed-bg border-task-completed-border dark:border-transparent'
+          : 'bg-task-completed-bg border-task-completed-border';
       default:
-        return 'bg-background-secondary border-border';
+        return context === 'task-management'
+          ? 'bg-background-secondary border-border dark:border-transparent'
+          : 'bg-background-secondary border-border';
     }
   };
 
