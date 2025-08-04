@@ -3,8 +3,15 @@
  * Handles time tracking, tab management, and extension coordination
  */
 
-// Load timezone-safe date utilities
+// Load timezone-safe date utilities and UTC coordinator
 // importScripts('./utils/dateUtils.js'); // Commented out for service worker compatibility
+// Load UTC Coordinator after defining DateUtils
+try {
+  importScripts('./utils/utcCoordinator.js');
+  console.log('✅ UTC Coordinator loaded successfully');
+} catch (error) {
+  console.warn('⚠️ UTC Coordinator not available:', error);
+}
 
 // Define DateUtils directly in service worker context
 const DateUtils = {
@@ -4355,6 +4362,15 @@ async function initializeExtension() {
     console.log('🚀 Starting extension initialization...');
 console.log('📋 EXTENSION VERSION CHECK: Deep Focus handlers should be available');
 console.log('📋 BUILD TIMESTAMP:', new Date().toISOString());
+
+    // Initialize UTC coordinator first if available
+    if (typeof UTCCoordinator !== 'undefined') {
+      await UTCCoordinator.initialize();
+      console.log('🤝 UTC coordinator initialized:', UTCCoordinator.getStatus());
+    } else {
+      console.log('📅 UTC coordinator not available - using local date strategy');
+    }
+
     // Initialize the tracker when the service worker starts
     await focusTimeTracker.initialize();
     isInitialized = true;
@@ -4414,6 +4430,78 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       initialized: isInitialized
     });
     return false; // Don't keep channel open for sync response
+  }
+
+  // Handle UTC coordination messages immediately
+  if (message.type === 'UTC_STATUS_QUERY') {
+    const utcStatus = {
+      utcEnabled: UTCCoordinator?.isReady() || false,
+      mode: UTCCoordinator?.getStatus()?.mode || 'local',
+      timezone: UTCCoordinator?.getStatus()?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+      initialized: UTCCoordinator?.isReady() || false
+    };
+    sendResponse({ success: true, data: utcStatus });
+    return false;
+  }
+
+  if (message.type === 'UTC_COORDINATOR_INIT') {
+    // Handle initialization from web app
+    if (UTCCoordinator && message.data) {
+      if (message.data.utcEnabled) {
+        UTCCoordinator.enableUTCMode(message.data.userTimezone).then(() => {
+          sendResponse({ success: true, message: 'UTC mode enabled' });
+        }).catch(error => {
+          sendResponse({ success: false, error: error.message });
+        });
+      } else {
+        UTCCoordinator.enableLocalMode().then(() => {
+          sendResponse({ success: true, message: 'Local mode enabled' });
+        }).catch(error => {
+          sendResponse({ success: false, error: error.message });
+        });
+      }
+      return true; // Keep channel open for async response
+    }
+    sendResponse({ success: false, error: 'UTC Coordinator not available' });
+    return false;
+  }
+
+  if (message.type === 'TIMEZONE_CHANGE_COORDINATION') {
+    // Handle timezone change from web app
+    if (UTCCoordinator && message.data) {
+      UTCCoordinator.handleTimezoneChange(
+        message.data.oldTimezone, 
+        message.data.newTimezone
+      ).then(() => {
+        sendResponse({ success: true, message: 'Timezone change handled' });
+      }).catch(error => {
+        sendResponse({ success: false, error: error.message });
+      });
+      return true; // Keep channel open for async response
+    }
+    sendResponse({ success: false, error: 'UTC Coordinator not available' });
+    return false;
+  }
+
+  if (message.type === 'UTC_DATA_SYNC_REQUEST') {
+    // Handle data sync request from web app
+    if (UTCCoordinator && message.data) {
+      UTCCoordinator.getRecentDataForSync().then(recentData => {
+        sendResponse({ 
+          success: true, 
+          data: { 
+            extensionData: recentData,
+            mode: UTCCoordinator.getStatus().mode,
+            timezone: UTCCoordinator.getStatus().timezone
+          }
+        });
+      }).catch(error => {
+        sendResponse({ success: false, error: error.message });
+      });
+      return true; // Keep channel open for async response
+    }
+    sendResponse({ success: false, error: 'UTC Coordinator not available' });
+    return false;
   }
   
   // For other messages, ensure we're initialized

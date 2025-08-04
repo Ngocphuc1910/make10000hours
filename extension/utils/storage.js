@@ -30,8 +30,20 @@ class StorageManager {
     }
 
     try {
-      // Migrate UTC dates to local dates if needed
-      await this.migrateUTCtoLocalDates();
+      // Initialize UTC coordinator first to determine data strategy
+      if (typeof UTCCoordinator !== 'undefined') {
+        await UTCCoordinator.initialize();
+        console.log('🤝 UTC coordination status:', UTCCoordinator.getStatus());
+      }
+
+      // Only run local migration if not coordinating with UTC web app
+      const shouldRunLocalMigration = !UTCCoordinator?.isReady() || UTCCoordinator?.getStatus().mode === 'local';
+      
+      if (shouldRunLocalMigration) {
+        await this.migrateUTCtoLocalDates();
+      } else {
+        console.log('🌍 Skipping local migration - coordinating with UTC web app');
+      }
 
       // Initialize storage with default settings if needed
       const settings = await this.getSettings();
@@ -558,7 +570,10 @@ class StorageManager {
    * Save time entry for a specific domain
    */
   async saveTimeEntry(domain, timeSpent, visits = 1) {
-    const today = DateUtils.getLocalDateString();
+    // Use coordinated date string if UTC coordinator is available
+    const today = UTCCoordinator?.isReady() 
+      ? UTCCoordinator.getCurrentDateString() 
+      : DateUtils.getLocalDateString();
     
     if (this.mockMode) {
       // Update mock data
@@ -593,7 +608,10 @@ class StorageManager {
     
     // Real Chrome storage implementation
     try {
-      const key = `dailyStats_${today}`;
+      // Use coordinated storage key if UTC coordinator is available
+      const key = UTCCoordinator?.isReady() 
+        ? UTCCoordinator.getDailyStatsStorageKey(today)
+        : `dailyStats_${today}`;
       const result = await chrome.storage.local.get([key]);
       
       let dayStats = result[key] || {
@@ -1181,6 +1199,11 @@ class StorageManager {
    * Generate storage key for deep focus sessions by date
    */
   getDeepFocusStorageKey(date) {
+    // Use coordinated storage key if UTC coordinator is available
+    if (UTCCoordinator?.isReady()) {
+      return UTCCoordinator.getDeepFocusStorageKey(date);
+    }
+    
     const dateStr = typeof date === 'string' ? date : DateUtils.getLocalDateStringFromDate(date);
     return `deepFocusSessions_${dateStr}`;
   }

@@ -23,6 +23,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
     "echarts": "^5.6.0",
     "echarts-for-react": "^3.0.2",
     "firebase": "^10.14.1",
@@ -58,7 +59,10 @@
     "security-check": "node scripts/security-check.js",
     "check-env": "node scripts/check-env.js",
     "pre-commit": "npm run security-check",
-    "build-extension-firebase": "webpack --config webpack.extension.config.js"
+    "build-extension-firebase": "webpack --config webpack.extension.config.js",
+    "test-timezone": "npx ts-node scripts/runTimezoneTests.ts",
+    "test-timezone-quick": "npx ts-node scripts/runTimezoneTests.ts quick",
+    "test-timezone-simulate": "npx ts-node scripts/runTimezoneTests.ts simulate"
   },
   "eslintConfig": {
     "extends": [

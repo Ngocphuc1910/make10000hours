@@ -112,6 +112,134 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "startTime", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "workSessionsUTC",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "startTimeUTC", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workSessionsUTC",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "startTimeUTC", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workSessionsUTC",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "startTimeUTC", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workSessionsUTC",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "taskId", "order": "ASCENDING" },
+        { "fieldPath": "startTimeUTC", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workSessionsUTC",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "sessionType", "order": "ASCENDING" },
+        { "fieldPath": "startTimeUTC", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workSessionsUTC",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "startTimeUTC", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workSessionsUTC",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "startTimeUTC", "order": "ASCENDING" },
+        { "fieldPath": "endTimeUTC", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tasksUTC",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "scheduledStartTimeUTC", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tasksUTC",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "scheduledStartTimeUTC", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tasksUTC",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "scheduledStartTimeUTC", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "deepFocusSessionsUTC",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "startTimeUTC", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "deepFocusSessionsUTC",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "startTimeUTC", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "migrationJobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "migrationJobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "timezoneHistory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "changedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -125,6 +253,42 @@
       "fieldPath": "tags",
       "indexes": [
         { "arrayConfig": "CONTAINS", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
+      "collectionGroup": "workSessionsUTC",
+      "fieldPath": "startTimeUTC",
+      "ttl": false,
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
+      "collectionGroup": "workSessionsUTC",
+      "fieldPath": "endTimeUTC",
+      "ttl": false,
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
+      "collectionGroup": "tasksUTC",
+      "fieldPath": "scheduledStartTimeUTC",
+      "ttl": false,
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
+      "collectionGroup": "tasksUTC",
+      "fieldPath": "scheduledEndTimeUTC",
+      "ttl": false,
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" }
       ]
     }
   ]

@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useTaskStore } from '../../store/taskStore';
 import TaskItem from './TaskItem';
 import TaskForm from './TaskForm';
+import TaskFormUTC from './TaskFormUTC';
 import type { Task, Project } from '../../types/models';
 import { formatMinutesToHoursAndMinutes } from '../../utils/timeUtils';
 import TaskListSorted from './TaskListSorted';
 import TimeSpent from './TimeSpent';
 import { useAuthGuard, triggerAuthenticationFlow } from '../../utils/authGuard';
 import { useUIStore } from '../../store/uiStore';
+import { useUserStore } from '../../store/userStore';
+import { utcFeatureFlags } from '../../services/featureFlags';
 import { Icon } from '../ui/Icon';
 import { Tooltip } from '../ui/Tooltip';
 
@@ -22,6 +25,7 @@ export const TaskList: React.FC<TaskListProps> = ({
   compactView = false
 }) => {
   const navigate = useNavigate();
+  const { user } = useUserStore();
   const isAddingTask = useTaskStore(state => state.isAddingTask);
   const editingTaskId = useTaskStore(state => state.editingTaskId);
   const showDetailsMenu = useTaskStore(state => state.showDetailsMenu);
@@ -29,6 +33,10 @@ export const TaskList: React.FC<TaskListProps> = ({
   const setIsAddingTask = useTaskStore(state => state.setIsAddingTask);
   const setEditingTaskId = useTaskStore(state => state.setEditingTaskId);
   const setShowDetailsMenu = useTaskStore(state => state.setShowDetailsMenu);
+
+  // Determine which task form component to use based on UTC feature flags
+  const shouldUseUTC = user?.uid && utcFeatureFlags.getTransitionMode(user.uid) !== 'disabled';
+  const TaskFormComponent = shouldUseUTC ? TaskFormUTC : TaskForm;
   const setTaskListViewMode = useTaskStore(state => state.setTaskListViewMode);
   const handleMoveCompletedDown = useTaskStore(state => state.handleMoveCompletedDown);
   const handleArchiveCompleted = useTaskStore(state => state.handleArchiveCompleted);
@@ -181,7 +189,7 @@ export const TaskList: React.FC<TaskListProps> = ({
             {/* Task Creation Form */}
             {isAddingTask && (
               <div ref={taskFormRef}>
-                <TaskForm 
+                <TaskFormComponent 
                   onCancel={handleCancelForm} 
                   status="pomodoro"
                 />

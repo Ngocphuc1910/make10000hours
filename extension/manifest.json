@@ -67,6 +67,7 @@
         "icons/*", 
         "components/*",
         "utils/dateUtils.js",
+        "utils/utcCoordinator.js",
         "assets/fonts/*.woff2",
         "assets/fonts/*.woff",
         "assets/fonts/*.ttf",
