@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, Settings, Timer, Bell, Palette, ChevronDown, Keyboard } from 'lucide-react';
+import * as Select from '@radix-ui/react-select';
+import { X, Settings, Timer, Bell, Palette, ChevronDown, Keyboard, Check } from 'lucide-react';
 import { useUserStore } from '../../store/userStore';
 import { DEFAULT_SETTINGS, type AppSettings, type TimerSettings } from '../../types/models';
 import { Button } from '../ui/Button';
@@ -185,19 +186,41 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                             <div>
                               <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Theme</div>
                             </div>
-                            <div className="relative">
-                              <select 
-                                className="appearance-none bg-transparent border-0 text-right pr-6 text-sm focus:outline-none cursor-pointer min-w-[100px]"
-                                style={{ color: 'var(--text-secondary)' }}
-                                value={settings.darkMode ? 'dark' : 'light'}
-                                onChange={(e) => handleAppSettingChange('darkMode', e.target.value === 'dark')}
-                              >
-                                <option value="light">Light</option>
-                                <option value="dark">Dark</option>
-                                <option value="system">System</option>
-                              </select>
-                              <ChevronDown size={16} className="absolute right-0 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
-                            </div>
+                            <Select.Root 
+                              value={settings.darkMode ? 'dark' : 'light'} 
+                              onValueChange={(value) => handleAppSettingChange('darkMode', value === 'dark')}
+                            >
+                              <Select.Trigger className="inline-flex items-center justify-between rounded px-2 py-1 text-sm leading-none bg-transparent border-0 focus:outline-none hover:bg-gray-50 dark:hover:bg-gray-800 min-w-[100px] text-gray-600 dark:text-gray-400">
+                                <Select.Value />
+                                <Select.Icon>
+                                  <ChevronDown size={16} className="text-gray-400" />
+                                </Select.Icon>
+                              </Select.Trigger>
+                              <Select.Portal>
+                                <Select.Content className="overflow-hidden bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50" position="popper" side="bottom" align="end">
+                                  <Select.Viewport className="p-2">
+                                    <Select.Item value="light" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-8 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Select.ItemText>Light</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute left-0 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    <Select.Item value="dark" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-8 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Select.ItemText>Dark</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute left-0 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    <Select.Item value="system" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-8 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Select.ItemText>System</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute left-0 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                  </Select.Viewport>
+                                </Select.Content>
+                              </Select.Portal>
+                            </Select.Root>
                           </div>
                         </div>
 
@@ -206,19 +229,44 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                             <div>
                               <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Language</div>
                             </div>
-                            <div className="relative">
-                              <select 
-                                className="appearance-none bg-transparent border-0 text-right pr-6 text-sm focus:outline-none cursor-pointer min-w-[100px]"
-                                style={{ color: 'var(--text-secondary)' }}
-                                defaultValue="auto-detect"
-                              >
-                                <option value="auto-detect">Auto-detect</option>
-                                <option value="en">English</option>
-                                <option value="es">Spanish</option>
-                                <option value="fr">French</option>
-                              </select>
-                              <ChevronDown size={16} className="absolute right-0 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
-                            </div>
+                            <Select.Root defaultValue="auto-detect">
+                              <Select.Trigger className="inline-flex items-center justify-between rounded px-2 py-1 text-sm leading-none bg-transparent border-0 focus:outline-none hover:bg-gray-50 dark:hover:bg-gray-800 min-w-[100px] text-gray-600 dark:text-gray-400">
+                                <Select.Value />
+                                <Select.Icon>
+                                  <ChevronDown size={16} className="text-gray-400" />
+                                </Select.Icon>
+                              </Select.Trigger>
+                              <Select.Portal>
+                                <Select.Content className="overflow-hidden bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50" position="popper" side="bottom" align="end">
+                                  <Select.Viewport className="p-2">
+                                    <Select.Item value="auto-detect" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-8 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Select.ItemText>Auto-detect</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute left-0 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    <Select.Item value="en" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-8 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Select.ItemText>English</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute left-0 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    <Select.Item value="es" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-8 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Select.ItemText>Spanish</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute left-0 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    <Select.Item value="fr" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-8 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Select.ItemText>French</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute left-0 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                  </Select.Viewport>
+                                </Select.Content>
+                              </Select.Portal>
+                            </Select.Root>
                           </div>
                         </div>
                       </div>
