@@ -93,9 +93,9 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
   const sections = [
     { id: 'general', label: 'General', icon: Settings },
     { id: 'timer', label: 'Timer', icon: Timer },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
+    // { id: 'notifications', label: 'Notifications', icon: Bell }, // Temporarily hidden
     { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
-    { id: 'appearance', label: 'Personalization', icon: Palette },
+    // { id: 'appearance', label: 'Personalization', icon: Palette }, // Temporarily hidden
   ];
 
   if (!user) return null;
@@ -160,8 +160,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
               </div>
 
               {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto scrollbar-thin" style={{ maxHeight: '460px' }}>
-                <div className="p-6 pt-4">
+              <div className="flex-1 overflow-y-auto scrollbar-thin" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+                <div className="px-6 pt-4 pb-2">
 
                   {/* Success/Error Message */}
                   {message && (
@@ -566,36 +566,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                 </div>
               </div>
 
-              {/* Save/Cancel buttons - Fixed at bottom */}
-              {hasChanges && (
-                <div className="flex justify-end items-center gap-2 px-6 py-4 flex-shrink-0" style={{
-                  backgroundColor: 'var(--bg-primary)'
-                }}>
-                  <button 
-                    onClick={handleCancel} 
-                    disabled={isLoading}
-                    className="px-4 py-2 text-sm font-medium border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{
-                      color: 'var(--text-primary)',
-                      backgroundColor: 'var(--bg-secondary)',
-                      borderColor: 'var(--border-color)'
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={handleSave} 
-                    disabled={isLoading}
-                    className="px-4 py-2 text-sm font-medium text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                    style={{
-                      backgroundColor: '#000000',
-                      color: '#ffffff'
-                    }}
-                  >
-                    {isLoading ? 'Saving...' : 'Save'}
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </Dialog.Content>
