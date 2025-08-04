@@ -136,6 +136,19 @@ export const formatMinutesToHoursAndMinutes = (totalMinutes: number): string => 
 };
 
 /**
+ * Formats minutes into rounded hours for display (e.g., "3h")
+ * Rounds up to the nearest hour if there are any minutes
+ */
+export const formatMinutesToRoundedHours = (totalMinutes: number): string => {
+  if (totalMinutes < 60) {
+    return `${totalMinutes}m`;
+  }
+  
+  const hours = Math.ceil(totalMinutes / 60);
+  return `${hours}h`;
+};
+
+/**
  * Calculate percentage completed
  */
 export const calculatePercentage = (current: number, total: number): number => {
