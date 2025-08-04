@@ -9,6 +9,9 @@ import { auth, db } from '../api/firebase';
 import { DEFAULT_SETTINGS, DEFAULT_SUBSCRIPTION, type UserData, type UserSubscription } from '../types/models';
 import { collection, doc, getDoc, setDoc } from 'firebase/firestore';
 import { AuthDebugger } from '../utils/authDebug';
+import { timezoneUtils } from '../utils/timezoneUtils';
+import { utcMonitoring } from '../services/monitoring';
+import { extensionUTCCoordinator } from '../services/extension/extensionUTCCoordinator';
 
 export type User = UserProfile & UserData;
 
@@ -37,6 +40,13 @@ export interface UserState {
   // Subscription helpers
   hasActivePaidPlan: () => boolean;
   canAccessFeature: (feature: 'standard' | 'pro') => boolean;
+  
+  // NEW: Timezone management
+  initializeTimezone: () => Promise<void>;
+  confirmTimezone: (timezone: string, allowMigration?: boolean) => Promise<void>;
+  updateTimezone: (newTimezone: string) => Promise<void>;
+  autoDetectTimezone: () => Promise<void>;
+  getTimezone: () => string;
 }
 
 // Global flag to prevent double initialization in React.StrictMode
@@ -320,6 +330,168 @@ export const useUserStore = create<UserState>((set, get) => {
       }
       
       return false;
+    },
+
+    // NEW: Timezone management methods
+    initializeTimezone: async () => {
+      const { user } = get();
+      if (!user) return;
+
+      try {
+        const detected = timezoneUtils.getCurrentTimezone();
+        const stored = user.settings?.timezone;
+
+        // Initialize or update timezone settings
+        const timezoneSettings = {
+          current: stored?.current || detected,
+          confirmed: !!stored?.confirmed,
+          autoDetected: detected,
+          lastUpdated: new Date().toISOString(),
+          migrationConsent: stored?.migrationConsent || false,
+          source: stored?.source || 'auto' as const
+        };
+
+        const updatedSettings = {
+          ...user.settings,
+          timezone: timezoneSettings
+        };
+
+        await get().updateUserData({
+          ...user,
+          settings: updatedSettings
+        });
+
+        utcMonitoring.trackOperation('timezone_initialization', true);
+      } catch (error) {
+        console.error('Failed to initialize timezone:', error);
+        utcMonitoring.trackOperation('timezone_initialization', false);
+      }
+    },
+
+    confirmTimezone: async (timezone: string, allowMigration: boolean = false) => {
+      const { user } = get();
+      if (!user) return;
+
+      try {
+        if (!timezoneUtils.isValidTimezone(timezone)) {
+          throw new Error(`Invalid timezone: ${timezone}`);
+        }
+
+        const timezoneSettings = {
+          current: timezone,
+          confirmed: true,
+          autoDetected: user.settings?.timezone?.autoDetected || timezoneUtils.getCurrentTimezone(),
+          lastUpdated: new Date().toISOString(),
+          migrationConsent: allowMigration,
+          source: 'manual' as const
+        };
+
+        const updatedSettings = {
+          ...user.settings,
+          timezone: timezoneSettings
+        };
+
+        await get().updateUserData({
+          ...user,
+          settings: updatedSettings
+        });
+
+        utcMonitoring.trackOperation('timezone_confirmation', true);
+        console.log('Timezone confirmed:', timezone);
+      } catch (error) {
+        console.error('Failed to confirm timezone:', error);
+        utcMonitoring.trackOperation('timezone_confirmation', false);
+        throw error;
+      }
+    },
+
+    updateTimezone: async (newTimezone: string) => {
+      const { user } = get();
+      if (!user) return;
+
+      try {
+        if (!timezoneUtils.isValidTimezone(newTimezone)) {
+          throw new Error(`Invalid timezone: ${newTimezone}`);
+        }
+
+        const oldTimezone = user.settings?.timezone?.current || user.timezone;
+
+        const timezoneSettings = {
+          ...user.settings?.timezone,
+          current: newTimezone,
+          lastUpdated: new Date().toISOString(),
+          source: 'manual' as const
+        };
+
+        const updatedSettings = {
+          ...user.settings,
+          timezone: timezoneSettings
+        };
+
+        await get().updateUserData({
+          ...user,
+          settings: updatedSettings
+        });
+
+        // Coordinate timezone change with extension
+        if (oldTimezone && oldTimezone !== newTimezone) {
+          try {
+            await extensionUTCCoordinator.handleTimezoneChange(oldTimezone, newTimezone);
+            console.log('🤝 Extension timezone change coordinated successfully');
+          } catch (coordError) {
+            console.warn('⚠️ Failed to coordinate timezone change with extension:', coordError);
+            // Don't fail the timezone update if extension coordination fails
+          }
+        }
+
+        utcMonitoring.trackOperation('timezone_update', true);
+        console.log('Timezone updated:', newTimezone);
+      } catch (error) {
+        console.error('Failed to update timezone:', error);
+        utcMonitoring.trackOperation('timezone_update', false);
+        throw error;
+      }
+    },
+
+    autoDetectTimezone: async () => {
+      const { user } = get();
+      if (!user) return;
+
+      try {
+        const detected = timezoneUtils.getCurrentTimezone();
+        const current = user.settings?.timezone?.current;
+
+        if (detected !== current) {
+          const timezoneSettings = {
+            ...user.settings?.timezone,
+            current: detected,
+            autoDetected: detected,
+            lastUpdated: new Date().toISOString(),
+            source: 'auto' as const
+          };
+
+          const updatedSettings = {
+            ...user.settings,
+            timezone: timezoneSettings
+          };
+
+          await get().updateUserData({
+            ...user,
+            settings: updatedSettings
+          });
+
+          utcMonitoring.trackOperation('timezone_auto_detect', true);
+          console.log('Timezone auto-detected and updated:', detected);
+        }
+      } catch (error) {
+        console.error('Failed to auto-detect timezone:', error);
+        utcMonitoring.trackOperation('timezone_auto_detect', false);
+      }
+    },
+
+    getTimezone: () => {
+      const { user } = get();
+      return user?.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
     },
   };
 });

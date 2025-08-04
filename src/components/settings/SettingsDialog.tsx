@@ -6,6 +6,10 @@ import { useUserStore } from '../../store/userStore';
 import { useThemeStore } from '../../store/themeStore';
 import { DEFAULT_SETTINGS, type AppSettings, type TimerSettings } from '../../types/models';
 import { Button } from '../ui/Button';
+import { timezoneUtils } from '../../utils/timezoneUtils';
+import { utcMonitoring } from '../../services/monitoring';
+
+import { useTimezoneDisplay } from '../../hooks/useTimezoneDisplay';
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -14,13 +18,26 @@ interface SettingsDialogProps {
 }
 
 const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initialSection }) => {
-  const { user, updateUserData } = useUserStore();
+  const { user, updateUserData, updateTimezone, autoDetectTimezone } = useUserStore();
   const { mode, setMode } = useThemeStore();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [originalSettings, setOriginalSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [activeSection, setActiveSection] = useState(initialSection || 'general');
+
+  
+  // Use timezone display hook
+  const {
+    currentTimezone,
+    detectedTimezone,
+    displayName: timezoneDisplayName,
+    isLoading: isTimezoneLoading,
+    updateDisplay,
+    setLoading: setTimezoneLoading,
+    formatCurrentTime,
+    getTimezoneInfo
+  } = useTimezoneDisplay();
 
   useEffect(() => {
     if (user) {
@@ -34,6 +51,66 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
       setActiveSection(initialSection);
     }
   }, [initialSection]);
+
+  const handleTimezoneAutoDetect = async () => {
+    setTimezoneLoading(true);
+    try {
+      await autoDetectTimezone();
+      const detected = timezoneUtils.getCurrentTimezone();
+      updateDisplay(detected);
+      
+      setMessage({ type: 'success', text: `Timezone updated to ${detected}` });
+      setTimeout(() => setMessage(null), 3000);
+      
+      utcMonitoring.trackOperation('settings_timezone_auto_detect', true);
+    } catch (error) {
+      console.error('Failed to auto-detect timezone:', error);
+      setMessage({ type: 'error', text: 'Failed to detect timezone' });
+      setTimeout(() => setMessage(null), 3000);
+      utcMonitoring.trackOperation('settings_timezone_auto_detect', false);
+    } finally {
+      setTimezoneLoading(false);
+    }
+  };
+
+  const handleTimezoneChange = async (newTimezone: string) => {
+    try {
+      setTimezoneLoading(true);
+      setMessage(null);
+      
+      // If "auto" is selected, use the detected timezone
+      const timezoneToUse = newTimezone === 'auto' ? detectedTimezone : newTimezone;
+      
+      if (!timezoneToUse) {
+        throw new Error('No timezone available');
+      }
+      
+      // Skip if same timezone
+      if (timezoneToUse === currentTimezone) {
+        setTimezoneLoading(false);
+        return;
+      }
+      
+      await updateTimezone(timezoneToUse);
+      updateDisplay(timezoneToUse);
+      
+      const displayText = newTimezone === 'auto' 
+        ? `Auto-detect (${timezoneToUse.split('/').pop()})`
+        : timezoneToUse.split('/').pop() || timezoneToUse;
+      
+      setMessage({ type: 'success', text: `Timezone updated to ${displayText}` });
+      setTimeout(() => setMessage(null), 3000);
+      
+      utcMonitoring.trackOperation('settings_timezone_manual_update', true);
+    } catch (error) {
+      console.error('Failed to update timezone:', error);
+      setMessage({ type: 'error', text: 'Failed to update timezone' });
+      setTimeout(() => setMessage(null), 3000);
+      utcMonitoring.trackOperation('settings_timezone_manual_update', false);
+    } finally {
+      setTimezoneLoading(false);
+    }
+  };
 
   // Check if there are unsaved changes
   const hasChanges = JSON.stringify(settings) !== JSON.stringify(originalSettings);
@@ -276,9 +353,21 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                           <div className="flex items-center justify-between py-3">
                             <div>
                               <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Time Zone</div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {currentTimezone && (
+                                  <span>Current: {formatCurrentTime()}</span>
+                                )}
+                              </div>
                             </div>
-                            <Select.Root defaultValue="auto">
-                              <Select.Trigger className="inline-flex items-center justify-between rounded px-2 py-1 text-sm leading-none bg-transparent border-0 focus:outline-none hover:bg-gray-50 dark:hover:bg-gray-800 min-w-[100px] text-gray-600 dark:text-gray-400">
+                            <Select.Root 
+                              value={
+                                !currentTimezone || currentTimezone === detectedTimezone 
+                                  ? 'auto' 
+                                  : currentTimezone
+                              } 
+                              onValueChange={handleTimezoneChange}
+                            >
+                              <Select.Trigger className="inline-flex items-center justify-between rounded px-2 py-1 text-sm leading-none bg-transparent border-0 focus:outline-none hover:bg-gray-50 dark:hover:bg-gray-800 min-w-[140px] text-gray-600 dark:text-gray-400">
                                 <div className="flex items-center">
                                   <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
                                   <Select.Value />
@@ -288,39 +377,61 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                                 </Select.Icon>
                               </Select.Trigger>
                               <Select.Portal>
-                                <Select.Content className="overflow-hidden bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50" position="popper" side="bottom" align="end">
+                                <Select.Content className="overflow-hidden bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-80 overflow-y-auto" position="popper" side="bottom" align="end">
                                   <Select.Viewport className="p-2">
                                     <Select.Item value="auto" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
-                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
-                                      <Select.ItemText>Auto-detect</Select.ItemText>
+                                      <Globe size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
+                                      <Select.ItemText>Auto-detect ({detectedTimezone?.split('/').pop() || 'Unknown'})</Select.ItemText>
                                       <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
                                         <Check size={12} />
                                       </Select.ItemIndicator>
                                     </Select.Item>
-                                    <Select.Item value="utc" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                    
+                                    <Select.Separator className="h-px bg-gray-200 dark:bg-gray-600 m-1" />
+                                    
+                                    <Select.Item value="America/New_York" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
+                                      <Select.ItemText>Eastern Time (New York)</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    
+                                    <Select.Item value="America/Los_Angeles" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
+                                      <Select.ItemText>Pacific Time (Los Angeles)</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    
+                                    <Select.Item value="Europe/London" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
+                                      <Select.ItemText>London (GMT)</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    
+                                    <Select.Item value="Asia/Tokyo" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
+                                      <Select.ItemText>Tokyo (JST)</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    
+                                    <Select.Item value="Asia/Saigon" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
+                                      <Select.ItemText>Ho Chi Minh City (ICT)</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    
+                                    <Select.Item value="UTC" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
                                       <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
                                       <Select.ItemText>UTC</Select.ItemText>
-                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
-                                        <Check size={12} />
-                                      </Select.ItemIndicator>
-                                    </Select.Item>
-                                    <Select.Item value="est" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
-                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
-                                      <Select.ItemText>Eastern (EST)</Select.ItemText>
-                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
-                                        <Check size={12} />
-                                      </Select.ItemIndicator>
-                                    </Select.Item>
-                                    <Select.Item value="pst" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
-                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
-                                      <Select.ItemText>Pacific (PST)</Select.ItemText>
-                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
-                                        <Check size={12} />
-                                      </Select.ItemIndicator>
-                                    </Select.Item>
-                                    <Select.Item value="gmt" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
-                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
-                                      <Select.ItemText>GMT</Select.ItemText>
                                       <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
                                         <Check size={12} />
                                       </Select.ItemIndicator>
@@ -330,7 +441,11 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                               </Select.Portal>
                             </Select.Root>
                           </div>
+                          
+
                         </div>
+
+
                       </div>
                     </div>
                   </div>

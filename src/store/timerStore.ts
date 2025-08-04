@@ -4,6 +4,7 @@ import { useTaskStore } from './taskStore';
 import { useUserStore } from './userStore';
 import { timerService } from '../api/timerService';
 import { workSessionService } from '../api/workSessionService';
+import { transitionQueryService } from '../services/transitionService';
 import { getDateISOString } from '../utils/timeUtils';
 import { trackPomodoroStarted, trackPomodoroCompleted } from '../utils/analytics';
 
@@ -358,12 +359,16 @@ export const useTimerStore = create<TimerState>((set, get) => {
       if (!currentTask || !user) return;
       
       try {
-        const sessionId = await workSessionService.createActiveSession(
-          currentTask.id,
-          currentTask.projectId,
-          user.uid,
-          mode // Pass the mode directly as the session type
-        );
+        // Use transition service to create session (routes to UTC or legacy based on feature flags)
+        const sessionId = await transitionQueryService.createSession({
+          userId: user.uid,
+          taskId: currentTask.id,
+          projectId: currentTask.projectId,
+          duration: 0, // Start with 0 duration
+          sessionType: mode, // 'pomodoro', 'shortBreak', 'longBreak'
+          status: 'active',
+          notes: `${mode} session started`
+        });
         
         const activeSession: ActiveSession = {
           sessionId,
@@ -381,13 +386,14 @@ export const useTimerStore = create<TimerState>((set, get) => {
           lastCountedMinute: null // Will be set on first tick
         });
         
-        console.log('Created new session:', {
+        console.log('Created new session via transition service:', {
           sessionId,
           taskId: currentTask.id,
           startTimerPosition: currentTime,
           startMinute: currentMinute,
           timer_display: `${Math.floor(currentTime / 60)}:${String(currentTime % 60).padStart(2, '0')}`,
-          sessionType: mode
+          sessionType: mode,
+          service: 'TransitionQueryService' // ✅ Now using UTC-aware service
         });
       } catch (error) {
         console.error('Failed to create active session:', error);
