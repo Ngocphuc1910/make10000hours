@@ -160,8 +160,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
               </div>
 
               {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto scrollbar-thin" style={{ maxHeight: 'calc(100vh - 200px)' }}>
-                <div className="px-6 pt-4 pb-2">
+              <div className="flex-1 overflow-y-auto scrollbar-thin" style={{ maxHeight: '460px' }}>
+                <div className="px-6 pt-4 pb-4">
 
                   {/* Success/Error Message */}
                   {message && (
