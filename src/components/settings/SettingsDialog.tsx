@@ -144,9 +144,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
             {/* Main Content */}
             <div className="flex-1 flex flex-col h-full">
               {/* Fixed Header */}
-              <div className="px-6 pt-6 pb-4 border-b" style={{ 
-                backgroundColor: 'var(--bg-primary)',
-                borderColor: 'var(--border-color)'
+              <div className="px-6 pt-6 pb-4" style={{ 
+                backgroundColor: 'var(--bg-primary)'
               }}>
                 <Dialog.Title className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
                   {sections.find(s => s.id === activeSection)?.label || 'Settings'}
@@ -173,7 +172,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                   <div className="space-y-0">
                     <div>
                       
-                      <div className="space-y-8">
+                      <div className="space-y-3">
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
@@ -193,7 +192,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               <ChevronDown size={16} className="absolute right-0 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
                             </div>
                           </div>
-                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
 
                         <div>
@@ -215,7 +213,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               <ChevronDown size={16} className="absolute right-0 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
                             </div>
                           </div>
-                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
                       </div>
                     </div>
@@ -227,7 +224,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                   <div className="space-y-0">
                     <div>
                       
-                      <div className="space-y-6">
+                      <div className="space-y-3">
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
@@ -247,7 +244,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               }}
                             />
                           </div>
-                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
 
                         <div>
@@ -269,7 +265,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               }}
                             />
                           </div>
-                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
 
                         <div>
@@ -291,7 +286,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               }}
                             />
                           </div>
-                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
 
                         <div>
@@ -313,7 +307,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               }}
                             />
                           </div>
-                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
 
                         <div>
@@ -332,7 +325,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                             </label>
                           </div>
-                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
 
                         <div>
@@ -351,7 +343,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                             </label>
                           </div>
-                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
                       </div>
                     </div>
@@ -363,7 +354,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                   <div className="space-y-0">
                     <div>
                       
-                      <div className="space-y-6">
+                      <div className="space-y-3">
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
@@ -375,7 +366,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                             </label>
                           </div>
-                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
                         
                         <div>
@@ -389,7 +379,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                             </label>
                           </div>
-                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
                       </div>
                     </div>
@@ -527,7 +516,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                   <div className="space-y-0">
                     <div>
                       
-                      <div className="space-y-6">
+                      <div className="space-y-3">
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
@@ -544,7 +533,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                             </label>
                           </div>
-                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
                         
                         <div>
@@ -563,7 +551,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                               <ChevronDown size={16} className="absolute right-0 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
                             </div>
                           </div>
-                          <div className="border-b" style={{ borderColor: 'var(--border-color)' }}></div>
                         </div>
                       </div>
                     </div>
@@ -574,9 +561,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
 
               {/* Save/Cancel buttons - Fixed at bottom */}
               {hasChanges && (
-                <div className="flex justify-end items-center gap-2 px-6 py-4 border-t flex-shrink-0" style={{
-                  backgroundColor: 'var(--bg-primary)',
-                  borderColor: 'var(--border-color)'
+                <div className="flex justify-end items-center gap-2 px-6 py-4 flex-shrink-0" style={{
+                  backgroundColor: 'var(--bg-primary)'
                 }}>
                   <button 
                     onClick={handleCancel} 
@@ -595,8 +581,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
                     disabled={isLoading}
                     className="px-4 py-2 text-sm font-medium text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                     style={{
-                      backgroundColor: 'var(--bg-container)',
-                      color: 'var(--text-primary)'
+                      backgroundColor: '#000000',
+                      color: '#ffffff'
                     }}
                   >
                     {isLoading ? 'Saving...' : 'Save'}
