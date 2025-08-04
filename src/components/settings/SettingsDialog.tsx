@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Select from '@radix-ui/react-select';
-import { X, Settings, Timer, Bell, Palette, ChevronDown, Keyboard, Check, Sun, Moon, Monitor, Globe } from 'lucide-react';
+import { X, Settings, Timer, Bell, Palette, ChevronDown, Keyboard, Check, Sun, Moon, Monitor, Globe, Clock } from 'lucide-react';
 import { useUserStore } from '../../store/userStore';
 import { useThemeStore } from '../../store/themeStore';
 import { DEFAULT_SETTINGS, type AppSettings, type TimerSettings } from '../../types/models';
@@ -261,6 +261,66 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                                     <Select.Item value="en" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
                                       <Globe size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
                                       <Select.ItemText>English</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                  </Select.Viewport>
+                                </Select.Content>
+                              </Select.Portal>
+                            </Select.Root>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between py-3">
+                            <div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Time Zone</div>
+                            </div>
+                            <Select.Root defaultValue="auto">
+                              <Select.Trigger className="inline-flex items-center justify-between rounded px-2 py-1 text-sm leading-none bg-transparent border-0 focus:outline-none hover:bg-gray-50 dark:hover:bg-gray-800 min-w-[100px] text-gray-600 dark:text-gray-400">
+                                <div className="flex items-center">
+                                  <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
+                                  <Select.Value />
+                                </div>
+                                <Select.Icon>
+                                  <ChevronDown size={16} className="text-gray-400" />
+                                </Select.Icon>
+                              </Select.Trigger>
+                              <Select.Portal>
+                                <Select.Content className="overflow-hidden bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50" position="popper" side="bottom" align="end">
+                                  <Select.Viewport className="p-2">
+                                    <Select.Item value="auto" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
+                                      <Select.ItemText>Auto-detect</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    <Select.Item value="utc" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
+                                      <Select.ItemText>UTC</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    <Select.Item value="est" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
+                                      <Select.ItemText>Eastern (EST)</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    <Select.Item value="pst" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
+                                      <Select.ItemText>Pacific (PST)</Select.ItemText>
+                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
+                                        <Check size={12} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    <Select.Item value="gmt" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
+                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
+                                      <Select.ItemText>GMT</Select.ItemText>
                                       <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
                                         <Check size={12} />
                                       </Select.ItemIndicator>
