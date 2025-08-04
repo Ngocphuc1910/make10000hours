@@ -3,12 +3,13 @@ import { useSettings } from '../../contexts/SettingsContext';
 import SettingsDialog from './SettingsDialog';
 
 const SettingsDialogWrapper: React.FC = () => {
-  const { isSettingsOpen, closeSettings } = useSettings();
+  const { isSettingsOpen, initialSection, closeSettings } = useSettings();
 
   return (
     <SettingsDialog 
       isOpen={isSettingsOpen} 
-      onClose={closeSettings} 
+      onClose={closeSettings}
+      initialSection={initialSection}
     />
   );
 };

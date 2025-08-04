@@ -373,7 +373,7 @@ className={`flex items-center px-2 py-1 rounded text-sm transition-colors focus:
         <div className="px-2 py-2">
           <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 px-2">LIBRARY</div>
           <div className="space-y-1">
-            {navItems.slice(5).map((item, index) => {
+            {navItems.slice(5).filter(item => item.path !== '/data-sync').map((item, index) => {
               const isActive = isRouteActive(item.path);
               return (
                 <Link
@@ -408,7 +408,10 @@ className={`flex items-center px-2 py-1 rounded text-sm transition-colors focus:
               <span className="ml-3 text-sm">Settings</span>
             </button>
             
-            <button className="flex items-center px-2 py-1 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 w-full text-left focus:outline-none">
+            <button 
+              onClick={() => openSettings('shortcuts')}
+              className="flex items-center px-2 py-1 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 w-full text-left focus:outline-none"
+            >
               <div className="w-5 h-5 flex items-center justify-center">
 <Icon name="keyboard-line" size={18} />
               </div>
