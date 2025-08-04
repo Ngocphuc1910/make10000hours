@@ -118,19 +118,19 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
               </button>
             </Dialog.Close>
             {/* Sidebar */}
-            <div className="w-64 border-r bg-gray-50/50"
+            <div className="w-48 border-r bg-gray-50/50"
             style={{
-              backgroundColor: 'var(--bg-secondary)',
+              backgroundColor: document.documentElement.classList.contains('dark') ? 'var(--bg-secondary)' : '#FCFCFD',
               borderColor: 'var(--border-color)'
             }}>
-              <nav className="p-6 space-y-2">
+              <nav className="p-4 space-y-1">
                 {sections.map((section) => {
                   const IconComponent = section.icon;
                   return (
                     <button
                       key={section.id}
                       onClick={() => setActiveSection(section.id)}
-                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-all duration-200 text-sm focus:outline-none ${
+                      className={`w-full flex items-center gap-2 px-2 py-2 rounded-lg text-left transition-all duration-200 text-sm focus:outline-none ${
                         activeSection === section.id
                           ? 'shadow-sm'
                           : 'hover:bg-gray-100'
