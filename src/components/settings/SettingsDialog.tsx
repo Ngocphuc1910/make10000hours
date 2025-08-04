@@ -8,15 +8,16 @@ import { Button } from '../ui/Button';
 interface SettingsDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  initialSection?: string;
 }
 
-const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
+const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initialSection }) => {
   const { user, updateUserData } = useUserStore();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [originalSettings, setOriginalSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-  const [activeSection, setActiveSection] = useState('general');
+  const [activeSection, setActiveSection] = useState(initialSection || 'general');
 
   useEffect(() => {
     if (user) {
@@ -24,6 +25,12 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
       setOriginalSettings(user.settings);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (initialSection) {
+      setActiveSection(initialSection);
+    }
+  }, [initialSection]);
 
   // Check if there are unsaved changes
   const hasChanges = JSON.stringify(settings) !== JSON.stringify(originalSettings);
