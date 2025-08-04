@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import Card from '../../ui/Card';
 import { useTaskStore } from '../../../store/taskStore';
-import { formatMinutesToHoursAndMinutes } from '../../../utils/timeUtils';
+import { formatMinutesToHoursAndMinutes, formatMinutesToRoundedHours } from '../../../utils/timeUtils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useDashboardStore } from '../../../store/useDashboardStore';
 
@@ -175,14 +175,7 @@ export const TopProjects: React.FC = React.memo(() => {
   // Custom label component for the bars
   const CustomBarLabel = (props: any) => {
     const { x, y, value, width } = props;
-    let timeLabel = '';
-    if (value < 60) {
-      timeLabel = `${value}m`;
-    } else {
-      const hours = Math.floor(value / 60);
-      const minutes = value % 60;
-      timeLabel = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-    }
+    const timeLabel = formatMinutesToRoundedHours(value);
 
     return (
       <text
@@ -219,7 +212,7 @@ export const TopProjects: React.FC = React.memo(() => {
   
   return (
     <Card 
-      title="Top Projects"
+      title="Time Allocated By Projects"
     >
       <div className="flex flex-col w-full h-[360px]">
         <div className="flex-1">
@@ -227,10 +220,10 @@ export const TopProjects: React.FC = React.memo(() => {
             <BarChart
               data={chartData}
               margin={{
-                top: 50,
-                right: 30,
-                left: 25,
-                bottom: 20
+                top: 10,
+                right: 10,
+                left: 10,
+                bottom: 5
               }}
               barSize={35}
             >
@@ -252,14 +245,7 @@ export const TopProjects: React.FC = React.memo(() => {
                 dy={8}
               />
               <YAxis
-                tickFormatter={(value) => {
-                  if (value < 60) {
-                    return `${value}m`;
-                  }
-                  const hours = Math.floor(value / 60);
-                  const minutes = value % 60;
-                  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-                }}
+                tickFormatter={(value) => formatMinutesToRoundedHours(value)}
                 tick={{
                   fill: 'var(--text-secondary)',
                   fontSize: 11,
