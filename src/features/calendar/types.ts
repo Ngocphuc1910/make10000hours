@@ -14,6 +14,23 @@ export interface CalendarEvent {
   isDraggable?: boolean;
   isCompleted?: boolean;
   completedAt?: Date;
+  utcMetadata?: {
+    hasUTCFields: boolean;
+    timezone: string;
+    startTimeUTC?: string;
+    endTimeUTC?: string;
+    timezoneContext?: {
+      timezone: string;
+      source: 'user' | 'detected' | 'browser';
+      utcOffset: number;
+      detectedAt: string;
+    };
+    // Legacy field references for backward compatibility
+    legacyScheduledDate?: string;
+    legacyScheduledStartTime?: string;
+    legacyScheduledEndTime?: string;
+    legacyIncludeTime?: boolean;
+  };
 }
 
 export interface Project {
