@@ -113,11 +113,21 @@ export interface TimerState {
   lastCountedMinute?: number | null; // last minute boundary counted
 }
 
+export interface TimezoneSettings {
+  current: string;
+  confirmed: boolean;
+  autoDetected: string;
+  lastUpdated: string;
+  migrationConsent: boolean;
+  source: 'auto' | 'manual';
+}
+
 export interface AppSettings {
   timer: TimerSettings;
   darkMode: boolean;
   compactTaskView: boolean;
   taskListViewMode: 'pomodoro' | 'today';
+  timezone?: TimezoneSettings;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {

@@ -268,7 +268,8 @@ export const useUTCTimerStore = create<UTCTimerState>((set, get) => {
           projectId: currentTask.projectId,
           duration: 0, // Will be calculated on completion
           sessionType: mode,
-          status: 'active'
+          status: 'active',
+          userTimezone: userTimezone
         });
         
         const sessionStartTimeUTC = timezoneUtils.getCurrentUTC();

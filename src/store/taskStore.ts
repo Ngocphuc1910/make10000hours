@@ -5,6 +5,7 @@ import { useUserStore } from './userStore';
 import type { Task, Project } from '../types/models';
 import { trackTaskCreated, trackTaskCompleted, trackProjectCreated } from '../utils/analytics';
 import { workSessionService } from '../api/workSessionService';
+import { transitionQueryService } from '../services/transitionService';
 
 interface TaskState {
   tasks: Task[];
@@ -223,21 +224,16 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       
       console.log(`📋 Found ${taskIds.length} tasks in project ${projectId}`);
 
-      // Delete all work sessions for each task first
+      // Delete all work sessions for each task first (both UTC and legacy)
       if (taskIds.length > 0) {
         try {
+          let totalDeleted = 0;
           for (const taskId of taskIds) {
-            const workSessions = await workSessionService.getWorkSessionsByTask(user.uid, taskId);
-            console.log(`📋 Found ${workSessions.length} work sessions for task ${taskId}`);
-            
-            if (workSessions.length > 0) {
-              const deletePromises = workSessions.map(session => 
-                workSessionService.deleteWorkSession(session.id)
-              );
-              await Promise.all(deletePromises);
-              console.log(`✅ Deleted ${workSessions.length} work sessions for task ${taskId}`);
-            }
+            const deletedCount = await transitionQueryService.deleteWorkSessionsByTask(user.uid, taskId);
+            totalDeleted += deletedCount;
+            console.log(`✅ CASCADE DELETE: Deleted ${deletedCount} work sessions (UTC + legacy) for task ${taskId}`);
           }
+          console.log(`✅ Total sessions deleted for project ${projectId}: ${totalDeleted}`);
         } catch (workSessionError) {
           console.error('❌ Error deleting work sessions for project tasks:', workSessionError);
           console.warn(`⚠️ Work session cleanup failed for project ${projectId}, but continuing with deletion`);
@@ -419,23 +415,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
       console.log(`🗑️ Starting deletion of task ${id}...`);
 
-      // First delete all related work sessions for this task
+      // First delete all related work sessions for this task (both UTC and legacy)
       try {
-        const workSessions = await workSessionService.getWorkSessionsByTask(user.uid, id);
-        console.log(`📋 Found ${workSessions.length} work sessions for task ${id}`);
-        
-        if (workSessions.length > 0) {
-          // Delete each work session
-          const deletePromises = workSessions.map(async (session) => {
-            console.log(`🗑️ Deleting work session: ${session.id}`);
-            return workSessionService.deleteWorkSession(session.id);
-          });
-          
-          await Promise.all(deletePromises);
-          console.log(`✅ Successfully deleted ${workSessions.length} work sessions for task ${id}`);
-        } else {
-          console.log(`ℹ️ No work sessions found for task ${id}`);
-        }
+        const deletedCount = await transitionQueryService.deleteWorkSessionsByTask(user.uid, id);
+        console.log(`✅ CASCADE DELETE: Successfully deleted ${deletedCount} work sessions (UTC + legacy) for task ${id}`);
       } catch (workSessionError) {
         console.error('❌ Error deleting work sessions for task:', workSessionError);
         // Don't throw here - we still want to delete the task even if work session cleanup fails

@@ -40,11 +40,14 @@ import SettingsDialogWrapper from './components/settings/SettingsDialogWrapper';
 import { testDeepFocusFixes } from './utils/testDeepFocusFix';
 import DeepFocusCleanup from './utils/deepFocusCleanup';
 import { useSimpleGoogleCalendarAuth } from './hooks/useSimpleGoogleCalendarAuth';
+import './utils/resetMonitoring'; // Make resetUTCMonitoring available globally
 
 // Import test utilities in development mode
 if (process.env.NODE_ENV === 'development') {
   import('./utils/testTaskDeletion');
   import('./utils/authDebug'); // Import auth debugging utilities
+  import('./utils/debugTransitionService'); // Import transition service debugging
+  import('./utils/testEnhancedLegacySystem'); // Import enhanced legacy system testing
 }
 
 // Import cleanup utility for orphaned sessions
@@ -596,8 +599,18 @@ const App: React.FC = () => {
       // If there's an error, clear the localStorage to start fresh
       console.error('Error with localStorage data, clearing storage:', error);
       localStorage.removeItem('focus-time-storage');
-      // Force page reload to start with fresh data
-      window.location.reload();
+      
+      // Check if we've already tried to reload recently to prevent infinite loops
+      const lastReloadTime = sessionStorage.getItem('app-localStorage-reload');
+      const now = Date.now();
+      
+      if (!lastReloadTime || (now - parseInt(lastReloadTime)) > 30000) { // 30 second cooldown
+        sessionStorage.setItem('app-localStorage-reload', now.toString());
+        console.log('Reloading page due to localStorage corruption...');
+        window.location.reload();
+      } else {
+        console.warn('Skipping reload to prevent infinite loop - localStorage will be empty');
+      }
     }
     
     // Cleanup event listeners

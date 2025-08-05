@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Final UTC Fix</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; }
+        .section { margin: 20px 0; padding: 15px; border-radius: 8px; border: 1px solid #ddd; }
+        .success { background: #e8f5e8; border-color: #4caf50; }
+        .error { background: #ffe8e8; border-color: #f44336; }
+        .warning { background: #fff3cd; border-color: #ffc107; }
+        .info { background: #e8f4fd; border-color: #2196f3; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-warning { background: #ffc107; color: black; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+        .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 15px 0; }
+        .log-container { max-height: 400px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 4px; }
+        .timestamp { color: #666; font-size: 11px; }
+    </style>
+</head>
+<body>
+    <h1>🛠️ Final UTC System Fix</h1>
+    
+    <div class="section info">
+        <h3>🎯 Complete System Reset</h3>
+        <p>This tool performs a comprehensive reset of all UTC-related systems and monitors the results in real-time.</p>
+    </div>
+
+    <div class="status-grid">
+        <div class="section" id="monitoring-status">
+            <h4>📊 Monitoring Status</h4>
+            <div id="monitoring-info">Checking...</div>
+        </div>
+        <div class="section" id="feature-flags-status">
+            <h4>🏁 Feature Flags Status</h4>
+            <div id="feature-flags-info">Checking...</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>🔧 Actions</h3>
+        <button class="btn-danger" onclick="performCompleteReset()">🚨 Complete System Reset</button>
+        <button class="btn-primary" onclick="runDiagnostics()">🔍 Run Diagnostics</button>
+        <button class="btn-success" onclick="testSessionCreation()">🎯 Test Session Creation</button>
+        <button class="btn-warning" onclick="clearLogs()">🧹 Clear Logs</button>
+    </div>
+
+    <div class="section">
+        <h3>📋 Real-time Logs</h3>
+        <div class="log-container" id="log-container"></div>
+    </div>
+
+    <div class="section">
+        <h3>💡 Expected Console Output (After Reset)</h3>
+        <pre>🔄 Starting comprehensive UTC system reset...
+✅ UTC monitoring and emergency state reset complete
+🎯 Try creating a work session now - no page refresh needed
+🔍 DEBUG getTransitionMode: { userId: "user123...", isEmergencyDisabled: false, transitionMode: "dual" }
+✅ Returning transition mode: dual
+🎯 Creating active UTC session: { taskId, projectId, userId, sessionType, timezone, startTimeUTC }
+🌍 Created UTC work session: { sessionId, startTimeUTC, timezone, localTime, status, sessionType }</pre>
+    </div>
+
+    <script>
+        let logContainer = document.getElementById('log-container');
+        let logCount = 0;
+
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.createElement('div');
+            logDiv.innerHTML = `<span class="timestamp">${timestamp}</span> ${message}`;
+            logDiv.style.marginBottom = '5px';
+            
+            switch(type) {
+                case 'success': logDiv.style.color = '#28a745'; break;
+                case 'error': logDiv.style.color = '#dc3545'; break;
+                case 'warning': logDiv.style.color = '#ffc107'; break;
+                default: logDiv.style.color = '#007bff';
+            }
+            
+            logContainer.appendChild(logDiv);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            logCount++;
+            
+            // Keep only last 50 logs to prevent memory issues
+            if (logCount > 50) {
+                logContainer.removeChild(logContainer.firstChild);
+                logCount--;
+            }
+            
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        function clearLogs() {
+            logContainer.innerHTML = '';
+            logCount = 0;
+            console.clear();
+            addLog('🧹 Logs cleared', 'info');
+        }
+
+        async function performCompleteReset() {
+            addLog('🚨 Starting complete system reset...', 'warning');
+            
+            try {
+                // 1. Clear all localStorage and sessionStorage states
+                addLog('1️⃣ Clearing browser storage...', 'info');
+                
+                // Emergency states
+                localStorage.removeItem('utc-emergency-disable');
+                localStorage.removeItem('timezone_emergency_disable');
+                sessionStorage.removeItem('utc-emergency-disable-count');
+                sessionStorage.removeItem('monitoring-emergency-disable');
+                
+                // Feature flags
+                localStorage.removeItem('utc-feature-flags');
+                
+                // Monitoring states
+                sessionStorage.removeItem('utc-monitoring-metrics');
+                
+                // Circuit breaker states
+                const lsKeys = Object.keys(localStorage);
+                const ssKeys = Object.keys(sessionStorage);
+                
+                [...lsKeys, ...ssKeys].forEach(key => {
+                    if (key.includes('circuit-breaker') || key.includes('emergency') || key.includes('monitoring')) {
+                        if (lsKeys.includes(key)) localStorage.removeItem(key);
+                        if (ssKeys.includes(key)) sessionStorage.removeItem(key);
+                    }
+                });
+                
+                addLog('✅ Browser storage cleared', 'success');
+                
+                // 2. Reset monitoring state (if accessible)
+                addLog('2️⃣ Attempting to reset monitoring...', 'info');
+                if (typeof window !== 'undefined' && window.resetUTCMonitoring) {
+                    const resetResult = window.resetUTCMonitoring();
+                    addLog(resetResult ? '✅ UTC monitoring reset successful' : '⚠️ UTC monitoring reset partially failed', resetResult ? 'success' : 'warning');
+                } else {
+                    addLog('⚠️ UTC monitoring not accessible via window.resetUTCMonitoring', 'warning');
+                }
+                
+                // 3. Force reload page after delay
+                addLog('3️⃣ System reset complete! Reloading page in 3 seconds...', 'success');
+                addLog('🔄 Please wait for page reload...', 'info');
+                
+                setTimeout(() => {
+                    window.location.reload();
+                }, 3000);
+                
+            } catch (error) {
+                addLog(`❌ Reset error: ${error.message}`, 'error');
+            }
+        }
+
+        async function runDiagnostics() {
+            addLog('🔍 Running system diagnostics...', 'info');
+            
+            // Check storage states
+            const emergencyDisable = localStorage.getItem('utc-emergency-disable');
+            const emergencyCount = sessionStorage.getItem('utc-emergency-disable-count');
+            const monitoringDisable = sessionStorage.getItem('monitoring-emergency-disable');
+            
+            addLog(`Storage Check - Emergency Disable: ${emergencyDisable || 'none'}`, emergencyDisable === 'true' ? 'error' : 'success');
+            addLog(`Storage Check - Emergency Count: ${emergencyCount || 'none'}`, emergencyCount ? 'warning' : 'success');
+            addLog(`Storage Check - Monitoring Disable: ${monitoringDisable || 'none'}`, monitoringDisable ? 'error' : 'success');
+            
+            // Check if main app is accessible
+            try {
+                const response = await fetch('http://localhost:3004');
+                addLog(`App Accessibility: ${response.ok ? 'OK' : 'Failed'}`, response.ok ? 'success' : 'error');
+            } catch (error) {
+                addLog(`App Accessibility: Failed - ${error.message}`, 'error');
+            }
+            
+            // Check timezone
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            addLog(`Current Timezone: ${timezone}`, 'info');
+            
+            // Update status displays
+            updateStatusDisplays();
+            
+            addLog('🎉 Diagnostics complete', 'success');
+        }
+
+        function updateStatusDisplays() {
+            const monitoringStatus = document.getElementById('monitoring-info');
+            const featureFlagsStatus = document.getElementById('feature-flags-info');
+            
+            // Monitoring status
+            const monitoringDisable = sessionStorage.getItem('monitoring-emergency-disable');
+            monitoringStatus.innerHTML = monitoringDisable ? 
+                '<span style="color: #dc3545;">❌ Emergency Disabled</span>' : 
+                '<span style="color: #28a745;">✅ Active</span>';
+            
+            // Feature flags status
+            const emergencyDisable = localStorage.getItem('utc-emergency-disable');
+            featureFlagsStatus.innerHTML = emergencyDisable === 'true' ? 
+                '<span style="color: #dc3545;">❌ Emergency Disabled</span>' : 
+                '<span style="color: #28a745;">✅ Enabled</span>';
+        }
+
+        async function testSessionCreation() {
+            addLog('🎯 Testing session creation flow...', 'info');
+            addLog('📋 Instructions:', 'info');
+            addLog('1. Go to localhost:3004', 'info');
+            addLog('2. Login to your account', 'info');
+            addLog('3. Start a Pomodoro timer', 'info');
+            addLog('4. Watch console for these messages:', 'info');
+            addLog('   - "Creating active UTC session"', 'info');
+            addLog('   - "Created UTC work session"', 'info');
+            addLog('   - "Created new session via transition service"', 'info');
+            addLog('✅ Test preparation complete', 'success');
+        }
+
+        // Initialize
+        setTimeout(() => {
+            addLog('🛠️ UTC System Fix Tool Ready', 'success');
+            runDiagnostics();
+        }, 500);
+
+        // Update status displays periodically
+        setInterval(updateStatusDisplays, 2000);
+    </script>
+</body>
+</html>

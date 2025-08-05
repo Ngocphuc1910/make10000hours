@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Emergency Disable</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .emergency { background: #ff4444; color: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .success { background: #4caf50; color: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .info { background: #2196f3; color: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        button { padding: 12px 24px; font-size: 16px; cursor: pointer; margin: 10px; border: none; border-radius: 4px; }
+        .primary { background: #2196f3; color: white; }
+        .danger { background: #ff4444; color: white; }
+        pre { background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🚨 Emergency Disable Reset Tool</h1>
+    
+    <div class="emergency">
+        <h3>⚠️ Emergency State Detected</h3>
+        <p>The UTC monitoring system has triggered emergency disable due to high error rates. This tool will reset all emergency states and monitoring metrics.</p>
+    </div>
+
+    <div class="info">
+        <h3>📋 Steps to Fix</h3>
+        <ol>
+            <li>Click "Clear All Emergency States" below</li>
+            <li>Open browser console and run the console commands</li>
+            <li>Refresh the main application</li>
+            <li>Test session creation again</li>
+        </ol>
+    </div>
+
+    <div id="status-area"></div>
+
+    <button class="primary" onclick="clearEmergencyStates()">Clear All Emergency States</button>
+    <button class="danger" onclick="showConsoleCommands()">Show Console Commands</button>
+
+    <div id="console-commands" style="display: none;">
+        <h3>🖥️ Console Commands</h3>
+        <p>Copy and paste these commands into your browser console:</p>
+        <pre id="commands-text"></pre>
+        <button onclick="copyToClipboard()">Copy Commands</button>
+    </div>
+
+    <script>
+        function clearEmergencyStates() {
+            const statusArea = document.getElementById('status-area');
+            
+            try {
+                // Clear localStorage emergency states
+                localStorage.removeItem('utc-emergency-disable');
+                localStorage.removeItem('timezone_emergency_disable');
+                localStorage.removeItem('utc-feature-flags');
+                
+                // Clear sessionStorage states
+                sessionStorage.removeItem('utc-emergency-disable-count');
+                sessionStorage.removeItem('monitoring-emergency-disable');
+                sessionStorage.removeItem('utc-monitoring-metrics');
+                
+                // Clear any circuit breaker states
+                const keys = Object.keys(localStorage);
+                keys.forEach(key => {
+                    if (key.includes('circuit-breaker') || key.includes('emergency') || key.includes('monitoring')) {
+                        localStorage.removeItem(key);
+                    }
+                });
+                
+                const keys2 = Object.keys(sessionStorage);
+                keys2.forEach(key => {
+                    if (key.includes('circuit-breaker') || key.includes('emergency') || key.includes('monitoring')) {
+                        sessionStorage.removeItem(key);
+                    }
+                });
+
+                statusArea.innerHTML = `
+                    <div class="success">
+                        <h3>✅ Emergency States Cleared</h3>
+                        <p>All emergency disable states have been cleared from localStorage and sessionStorage.</p>
+                        <p><strong>Next:</strong> Click "Show Console Commands" and run the commands in the browser console.</p>
+                    </div>
+                `;
+                
+                console.log('🧹 Emergency states cleared successfully');
+                
+            } catch (error) {
+                statusArea.innerHTML = `
+                    <div class="emergency">
+                        <h3>❌ Error Clearing States</h3>
+                        <p>Error: ${error.message}</p>
+                    </div>
+                `;
+                console.error('Error clearing emergency states:', error);
+            }
+        }
+
+        function showConsoleCommands() {
+            const commandsDiv = document.getElementById('console-commands');
+            const commandsText = document.getElementById('commands-text');
+            
+            const commands = `
+// 1. Reset UTC monitoring if available
+if (window.utcMonitoring) {
+    window.utcMonitoring.reset();
+    console.log('✅ UTC monitoring reset');
+} else {
+    console.log('⚠️ UTC monitoring not available on window');
+}
+
+// 2. Reset feature flags if available  
+if (window.utcFeatureFlags) {
+    window.utcFeatureFlags.resetEmergencyState();
+    console.log('✅ Feature flags reset');
+} else {
+    console.log('⚠️ Feature flags not available on window');
+}
+
+// 3. Clear all emergency-related storage
+localStorage.removeItem('utc-emergency-disable');
+localStorage.removeItem('timezone_emergency_disable');
+sessionStorage.removeItem('utc-emergency-disable-count');
+sessionStorage.removeItem('monitoring-emergency-disable');
+console.log('✅ Storage cleared');
+
+// 4. Force reload to apply changes
+console.log('🔄 Reloading application...');
+setTimeout(() => window.location.reload(), 1000);`.trim();
+
+            commandsText.textContent = commands;
+            commandsDiv.style.display = 'block';
+        }
+
+        function copyToClipboard() {
+            const commandsText = document.getElementById('commands-text');
+            navigator.clipboard.writeText(commandsText.textContent).then(() => {
+                alert('Commands copied to clipboard! Paste them in the browser console.');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy. Please manually copy the commands.');
+            });
+        }
+
+        // Auto-show emergency state on load
+        setTimeout(() => {
+            const hasEmergencyDisable = localStorage.getItem('utc-emergency-disable') === 'true';
+            const hasEmergencyCount = sessionStorage.getItem('utc-emergency-disable-count');
+            const hasMonitoringDisable = sessionStorage.getItem('monitoring-emergency-disable');
+            
+            if (hasEmergencyDisable || hasEmergencyCount || hasMonitoringDisable) {
+                document.getElementById('status-area').innerHTML = `
+                    <div class="emergency">
+                        <h3>🚨 Active Emergency States Detected</h3>
+                        <ul>
+                            ${hasEmergencyDisable ? '<li>UTC Emergency Disable: ACTIVE</li>' : ''}
+                            ${hasEmergencyCount ? '<li>Emergency Disable Count: ' + hasEmergencyCount + '</li>' : ''}
+                            ${hasMonitoringDisable ? '<li>Monitoring Emergency Disable: ACTIVE</li>' : ''}
+                        </ul>
+                        <p><strong>Action Required:</strong> Click "Clear All Emergency States" to fix.</p>
+                    </div>
+                `;
+            } else {
+                document.getElementById('status-area').innerHTML = `
+                    <div class="success">
+                        <h3>✅ No Emergency States Detected</h3>
+                        <p>All emergency states appear to be clear. You can refresh the main application.</p>
+                    </div>
+                `;
+            }
+        }, 500);
+    </script>
+</body>
+</html>

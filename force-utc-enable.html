@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Force UTC Enable</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; }
+        .section { margin: 20px 0; padding: 15px; border-radius: 8px; border: 1px solid #ddd; }
+        .error { background: #ffe8e8; border-color: #f44336; }
+        .success { background: #e8f5e8; border-color: #4caf50; }
+        .warning { background: #fff3cd; border-color: #ffc107; }
+        .info { background: #e8f4fd; border-color: #2196f3; }
+        button { padding: 12px 24px; margin: 10px 5px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>🚀 Force UTC System Enable</h1>
+    
+    <div class="section error">
+        <h3>🚨 Issue Detected</h3>
+        <p>Sessions are still being created via legacy system due to emergency disable being active in the feature flags.</p>
+        <p><strong>Problem:</strong> <code>getTransitionMode()</code> returns 'disabled' instead of 'dual' or 'utc-only'</p>
+    </div>
+
+    <div class="section warning">
+        <h3>🎯 Solution</h3>
+        <p>This tool will force enable UTC mode by directly updating the localStorage feature flags and clearing all emergency states.</p>
+    </div>
+
+    <div id="status-area"></div>
+
+    <div class="section">
+        <h3>🔧 Actions</h3>
+        <button class="btn-danger" onclick="forceEnableUTC()">🚀 Force Enable UTC System</button>
+        <button class="btn-primary" onclick="checkCurrentState()">🔍 Check Current State</button>
+        <button class="btn-success" onclick="testAfterFix()">🎯 Test Session Creation</button>
+    </div>
+
+    <div class="section">
+        <h3>📋 Console Commands (Manual Alternative)</h3>
+        <p>Run these commands in your browser console at localhost:3004:</p>
+        <pre id="console-commands">// 1. Clear ALL emergency states
+localStorage.removeItem('utc-emergency-disable');
+localStorage.removeItem('timezone_emergency_disable');
+sessionStorage.removeItem('utc-emergency-disable-count');
+sessionStorage.removeItem('monitoring-emergency-disable');
+
+// 2. Force set UTC feature flags to enabled
+localStorage.setItem('utc-feature-flags', JSON.stringify({
+  "utcDataStorage": true,
+  "utcDashboard": true,
+  "utcTimerIntegration": true,
+  "utcExtensionSync": true,
+  "utcMigrationTools": true,
+  "utcCalendarSync": true,
+  "transitionMode": "dual",
+  "rolloutPercentage": 100
+}));
+
+// 3. Reset monitoring if available
+if (window.resetUTCMonitoring) {
+    window.resetUTCMonitoring();
+}
+
+// 4. Reload page
+window.location.reload();</pre>
+        <button class="btn-primary" onclick="copyCommands()">📋 Copy Commands</button>
+    </div>
+
+    <script>
+        function addStatus(message, type = 'info') {
+            const statusArea = document.getElementById('status-area');
+            const div = document.createElement('div');
+            div.className = `section ${type}`;
+            div.innerHTML = `<p>${message}</p>`;
+            statusArea.appendChild(div);
+            console.log(message);
+        }
+
+        function clearStatus() {
+            document.getElementById('status-area').innerHTML = '';
+        }
+
+        function forceEnableUTC() {
+            clearStatus();
+            addStatus('🚀 Force enabling UTC system...', 'warning');
+            
+            try {
+                // 1. Clear ALL emergency states
+                localStorage.removeItem('utc-emergency-disable');
+                localStorage.removeItem('timezone_emergency_disable');
+                sessionStorage.removeItem('utc-emergency-disable-count');
+                sessionStorage.removeItem('monitoring-emergency-disable');
+                
+                // Clear any other emergency-related keys
+                const lsKeys = Object.keys(localStorage);
+                const ssKeys = Object.keys(sessionStorage);
+                
+                [...lsKeys, ...ssKeys].forEach(key => {
+                    if (key.includes('emergency') || key.includes('disable') || key.includes('circuit-breaker')) {
+                        if (lsKeys.includes(key)) localStorage.removeItem(key);
+                        if (ssKeys.includes(key)) sessionStorage.removeItem(key);
+                    }
+                });
+                
+                addStatus('✅ Step 1: Cleared all emergency states', 'success');
+                
+                // 2. Force set UTC feature flags
+                const utcFlags = {
+                    "utcDataStorage": true,
+                    "utcDashboard": true,
+                    "utcTimerIntegration": true,
+                    "utcExtensionSync": true,
+                    "utcMigrationTools": true,
+                    "utcCalendarSync": true,
+                    "transitionMode": "dual",
+                    "rolloutPercentage": 100
+                };
+                
+                localStorage.setItem('utc-feature-flags', JSON.stringify(utcFlags));
+                addStatus('✅ Step 2: Force enabled UTC feature flags', 'success');
+                
+                // 3. Set transition mode override
+                localStorage.setItem('utc-transition-mode-override', 'dual');
+                addStatus('✅ Step 3: Set transition mode override to dual', 'success');
+                
+                addStatus('🎉 UTC system force enabled! Please refresh localhost:3004 and test session creation.', 'success');
+                addStatus('🔍 Expected: getTransitionMode() should now return "dual" instead of "disabled"', 'info');
+                
+            } catch (error) {
+                addStatus(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        function checkCurrentState() {
+            clearStatus();
+            addStatus('🔍 Checking current state...', 'info');
+            
+            // Check emergency states
+            const emergencyDisable = localStorage.getItem('utc-emergency-disable');
+            const emergencyCount = sessionStorage.getItem('utc-emergency-disable-count');
+            const monitoringDisable = sessionStorage.getItem('monitoring-emergency-disable');
+            const featureFlags = localStorage.getItem('utc-feature-flags');
+            
+            addStatus(`Emergency Disable: ${emergencyDisable || 'none'}`, emergencyDisable === 'true' ? 'error' : 'success');
+            addStatus(`Emergency Count: ${emergencyCount || 'none'}`, emergencyCount ? 'warning' : 'success');
+            addStatus(`Monitoring Disable: ${monitoringDisable || 'none'}`, monitoringDisable ? 'error' : 'success');
+            addStatus(`Feature Flags Set: ${featureFlags ? 'yes' : 'no'}`, featureFlags ? 'success' : 'warning');
+            
+            if (featureFlags) {
+                try {
+                    const flags = JSON.parse(featureFlags);
+                    addStatus(`Transition Mode: ${flags.transitionMode}`, flags.transitionMode === 'dual' ? 'success' : 'warning');
+                    addStatus(`Rollout Percentage: ${flags.rolloutPercentage}%`, flags.rolloutPercentage === 100 ? 'success' : 'warning');
+                } catch (e) {
+                    addStatus('❌ Invalid feature flags JSON', 'error');
+                }
+            }
+        }
+
+        function testAfterFix() {
+            addStatus('🎯 Testing instructions:', 'info');
+            addStatus('1. Go to localhost:3004', 'info');
+            addStatus('2. Open browser console', 'info');
+            addStatus('3. Start a Pomodoro timer', 'info');
+            addStatus('4. Look for these logs:', 'info');
+            addStatus('   - "getTransitionMode: { transitionMode: \'dual\' }"', 'info');
+            addStatus('   - "Creating UTC session" (not legacy)', 'info');
+            addStatus('   - "Created UTC work session"', 'info');
+        }
+
+        function copyCommands() {
+            const commands = document.getElementById('console-commands').textContent;
+            navigator.clipboard.writeText(commands).then(() => {
+                alert('Commands copied to clipboard!');
+            }).catch(() => {
+                alert('Failed to copy. Please manually copy the commands.');
+            });
+        }
+
+        // Auto-check state on load
+        setTimeout(checkCurrentState, 500);
+    </script>
+</body>
+</html>

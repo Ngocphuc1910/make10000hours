@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emergency Disable Fix</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .emergency-section {
+            background: #3d1a1a;
+            border: 2px solid #ff4444;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .fix-section {
+            background: #1a3d1a;
+            border: 2px solid #44ff44;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .info-section {
+            background: #1a2d3d;
+            border: 2px solid #4488ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        button {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover { background: #ff6666; }
+        .success-btn { background: #44ff44; color: #000; }
+        .success-btn:hover { background: #66ff66; }
+        .status {
+            font-weight: bold;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .error { background: #3d1a1a; color: #ff6666; }
+        .success { background: #1a3d1a; color: #66ff66; }
+        .warning { background: #3d3d1a; color: #ffff66; }
+        pre {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            padding: 15px;
+            overflow-x: auto;
+            color: #e6edf3;
+        }
+    </style>
+</head>
+<body>
+    <div class="emergency-section">
+        <h1>🚨 EMERGENCY DISABLE FIX</h1>
+        <p><strong>CRITICAL ISSUE DETECTED:</strong> Emergency Disable Loop</p>
+        <p>The UTC monitoring system has triggered an emergency disable cascade</p>
+        
+        <button onclick="emergencyReset()" style="font-size: 20px; padding: 20px 40px;">
+            🔄 EMERGENCY RESET
+        </button>
+    </div>
+
+    <div class="info-section">
+        <h2>📊 System Status</h2>
+        <div id="systemStatus">Checking...</div>
+        <button onclick="checkSystemStatus()">🔍 Check Status</button>
+        <button onclick="viewConsoleErrors()">👀 View Console Errors</button>
+    </div>
+
+    <div class="fix-section">
+        <h2>🛠️ Step-by-Step Fix</h2>
+        <ol>
+            <li><strong>Click Emergency Reset</strong> - Stops the error cascade</li>
+            <li><strong>Clear Browser Console</strong> - Removes error spam</li>
+            <li><strong>Refresh Main App</strong> - Reloads with clean state</li>
+            <li><strong>Test Work Session</strong> - Verify fix works</li>
+        </ol>
+        
+        <div class="status" id="fixStatus">Ready to apply fix</div>
+    </div>
+
+    <div class="info-section">
+        <h2>📋 Root Cause Analysis</h2>
+        <p>The emergency disable is triggered when:</p>
+        <ul>
+            <li>UTC monitoring detects error threshold exceeded</li>
+            <li>Feature flags system encounters repeated failures</li>
+            <li>Circuit breaker activates protective measures</li>
+            <li>Timezone conversion errors cascade</li>
+        </ul>
+        
+        <h3>Console Commands to Run After Reset:</h3>
+        <pre id="consoleCommands">
+// Step 1: Reset UTC monitoring
+resetUTCMonitoring();
+
+// Step 2: Clear feature flags emergency state  
+localStorage.removeItem('utc_emergency_disable');
+localStorage.removeItem('utc_monitoring_errors');
+sessionStorage.clear();
+
+// Step 3: Verify systems are online
+console.log('UTC System Status:', {
+  monitoring: window.utcMonitoring?.isActive,
+  emergencyDisable: localStorage.getItem('utc_emergency_disable'),
+  featureFlags: window.featureFlags?.isUTCEnabled()
+});
+        </pre>
+        
+        <button onclick="copyCommands()">📋 Copy Commands</button>
+    </div>
+
+    <script>
+        let fixApplied = false;
+
+        function emergencyReset() {
+            console.log('🚨 APPLYING EMERGENCY RESET...');
+            
+            const fixStatus = document.getElementById('fixStatus');
+            fixStatus.className = 'status warning';
+            fixStatus.textContent = 'Applying emergency reset...';
+            
+            try {
+                // Step 1: Stop error cascade by clearing monitoring
+                if (window.resetUTCMonitoring) {
+                    window.resetUTCMonitoring();
+                    console.log('✅ UTC monitoring reset');
+                }
+                
+                // Step 2: Clear emergency disable states
+                localStorage.removeItem('utc_emergency_disable');
+                localStorage.removeItem('utc_monitoring_errors');
+                localStorage.removeItem('utc_circuit_breaker_state');
+                localStorage.removeItem('utc_feature_disabled');
+                console.log('✅ Emergency disable states cleared');
+                
+                // Step 3: Clear session storage
+                sessionStorage.clear();
+                console.log('✅ Session storage cleared');
+                
+                // Step 4: Reset feature flags if available
+                if (window.featureFlags?.reset) {
+                    window.featureFlags.reset();
+                    console.log('✅ Feature flags reset');
+                }
+                
+                // Step 5: Clear console errors (attempt)
+                if (console.clear) {
+                    setTimeout(() => {
+                        console.clear();
+                        console.log('🔄 Emergency reset completed - console cleared');
+                    }, 1000);
+                }
+                
+                fixStatus.className = 'status success';
+                fixStatus.innerHTML = '✅ Emergency reset applied successfully!<br>Now refresh the main app page and test work session creation.';
+                fixApplied = true;
+                
+                // Auto-refresh status check
+                setTimeout(checkSystemStatus, 2000);
+                
+            } catch (error) {
+                console.error('❌ Emergency reset failed:', error);
+                fixStatus.className = 'status error';
+                fixStatus.textContent = `❌ Reset failed: ${error.message}`;
+            }
+        }
+
+        function checkSystemStatus() {
+            const statusDiv = document.getElementById('systemStatus');
+            statusDiv.innerHTML = 'Checking system status...';
+            
+            const status = {
+                emergencyDisable: localStorage.getItem('utc_emergency_disable'),
+                monitoringErrors: localStorage.getItem('utc_monitoring_errors'),
+                circuitBreaker: localStorage.getItem('utc_circuit_breaker_state'),
+                featureDisabled: localStorage.getItem('utc_feature_disabled'),
+                utcMonitoring: window.resetUTCMonitoring ? 'Available' : 'Not Available',
+                timestamp: new Date().toLocaleString()
+            };
+            
+            let statusHtml = '<pre>';
+            let hasIssues = false;
+            
+            for (const [key, value] of Object.entries(status)) {
+                const hasError = value && value !== 'Available' && value !== status.timestamp;
+                if (hasError) hasIssues = true;
+                
+                statusHtml += `${key}: ${value || 'null'}\n`;
+            }
+            
+            statusHtml += '</pre>';
+            
+            if (hasIssues) {
+                statusHtml = '<div class="error">❌ Issues detected</div>' + statusHtml;
+            } else {
+                statusHtml = '<div class="success">✅ System appears clean</div>' + statusHtml;
+            }
+            
+            statusDiv.innerHTML = statusHtml;
+            
+            console.log('System Status Check:', status);
+        }
+
+        function viewConsoleErrors() {
+            console.group('🔍 Console Error Analysis');
+            console.log('If you see repeated "Emergency Disable Triggered" errors:');
+            console.log('1. This indicates a cascade failure in the UTC monitoring system');
+            console.log('2. The system is protecting itself by disabling UTC features');
+            console.log('3. Root cause is likely in timezone conversion or Firebase operations');
+            console.log('4. The emergency reset should stop this cascade');
+            console.groupEnd();
+            
+            // Try to capture current error state
+            if (window.workSessionDebug?.errors) {
+                console.log('Captured errors:', window.workSessionDebug.errors.length);
+                console.log('Last 3 errors:', window.workSessionDebug.errors.slice(-3));
+            }
+        }
+
+        function copyCommands() {
+            const commands = document.getElementById('consoleCommands').textContent;
+            navigator.clipboard.writeText(commands).then(() => {
+                alert('Console commands copied to clipboard!');
+            }).catch(() => {
+                console.log('Commands to copy:', commands);
+                alert('Could not copy automatically. Check console for commands.');
+            });
+        }
+
+        // Auto-check status on load
+        setTimeout(checkSystemStatus, 1000);
+        
+        console.log('🚨 Emergency Disable Fix Tool Loaded');
+        console.log('📋 Instructions:');
+        console.log('1. Click "EMERGENCY RESET" button');
+        console.log('2. Wait for confirmation');
+        console.log('3. Refresh your main app page');
+        console.log('4. Try creating a work session again');
+    </script>
+</body>
+</html>

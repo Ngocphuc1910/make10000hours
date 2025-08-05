@@ -7,6 +7,7 @@ import { workSessionService } from '../api/workSessionService';
 import { transitionQueryService } from '../services/transitionService';
 import { getDateISOString } from '../utils/timeUtils';
 import { trackPomodoroStarted, trackPomodoroCompleted } from '../utils/analytics';
+import { resetUTCMonitoring } from '../utils/resetMonitoring';
 
 interface TimerState {
   // Timer status
@@ -62,6 +63,9 @@ interface TimerState {
   cleanupPersistence: () => void;
   resetTimerState: () => void;
   setEnableStartPauseBtn: (enable: boolean) => void;
+  
+  // Utility actions
+  resetMonitoring: () => void;
 
   // Add new fields for task persistence
   taskLoadRetryCount: number;
@@ -360,6 +364,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
       
       try {
         // Use transition service to create session (routes to UTC or legacy based on feature flags)
+        const userTimezone = useUserStore.getState().getTimezone();
         const sessionId = await transitionQueryService.createSession({
           userId: user.uid,
           taskId: currentTask.id,
@@ -368,7 +373,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
           sessionType: mode, // 'pomodoro', 'shortBreak', 'longBreak'
           status: 'active',
           notes: `${mode} session started`
-        });
+        }, userTimezone);
         
         const activeSession: ActiveSession = {
           sessionId,
@@ -397,6 +402,15 @@ export const useTimerStore = create<TimerState>((set, get) => {
         });
       } catch (error) {
         console.error('Failed to create active session:', error);
+        
+        // Reset monitoring metrics if we're hitting too many errors
+        const isDevelopment = process.env.NODE_ENV === 'development';
+        if (isDevelopment) {
+          setTimeout(() => {
+            console.log('🔄 Resetting UTC monitoring due to session creation error...');
+            get().resetMonitoring();
+          }, 1000);
+        }
       }
     },
     
@@ -408,7 +422,8 @@ export const useTimerStore = create<TimerState>((set, get) => {
       try {
         // With the new approach, we increment duration by 1 for each minute boundary crossed
         // This function is called when a minute boundary is detected in the tick function
-        await workSessionService.incrementDuration(activeSession.sessionId, 1);
+        // Route through transition service to use UTC or legacy based on session type
+        await transitionQueryService.incrementDuration(activeSession.sessionId, 1);
         
         // Update last update time locally
         set({
@@ -441,7 +456,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
           notes: 'Task switched'
         };
         
-        await workSessionService.updateSession(activeSession.sessionId, updates);
+        await transitionQueryService.updateSession(activeSession.sessionId, updates);
         
         set({ 
           activeSession: null,
@@ -470,7 +485,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
         
         // First, increment any remaining uncounted minutes
         if (remainingMinutes > 0) {
-          await workSessionService.incrementDuration(activeSession.sessionId, remainingMinutes);
+          await transitionQueryService.incrementDuration(activeSession.sessionId, remainingMinutes);
         }
         
         // Then update status and end time
@@ -480,7 +495,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
           notes: `Session ${status}${remainingMinutes > 0 ? `: +${remainingMinutes}m remaining` : ''}`,
         };
         
-        await workSessionService.updateSession(activeSession.sessionId, updates);
+        await transitionQueryService.updateSession(activeSession.sessionId, updates);
         
         set({ 
           activeSession: null,
@@ -817,6 +832,16 @@ export const useTimerStore = create<TimerState>((set, get) => {
       }
       
       get().saveToDatabase();
+    },
+    
+    // Reset UTC monitoring metrics (useful for development)
+    resetMonitoring: () => {
+      try {
+        resetUTCMonitoring();
+        console.log('✅ UTC monitoring reset from timer store');
+      } catch (error) {
+        console.error('❌ Failed to reset UTC monitoring:', error);
+      }
     },
   };
 });

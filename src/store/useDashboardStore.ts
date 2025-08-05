@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { WorkSession } from '../types/models';
 import { useUserStore } from './userStore';
 import { workSessionService } from '../api/workSessionService';
+import { transitionQueryService } from '../services/transitionService';
 
 export type RangeType = 'today' | 'yesterday' | 'last 7 days' | 'last 30 days' | 'all time' | 'custom';
 
@@ -80,9 +81,11 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
     },
     loadWorkSessionsForRange: async (userId: string, range: DateRange) => {
       const { startDate, endDate, rangeType } = range;
+      const userTimezone = useUserStore.getState().getTimezone();
       
-      console.log('DashboardStore - Loading work sessions for range:', {
+      console.log('DashboardStore - Loading work sessions for range (UTC-based):', {
         userId,
+        userTimezone,
         rangeType,
         startDate: startDate?.toISOString().split('T')[0] || 'null',
         endDate: endDate?.toISOString().split('T')[0] || 'null'
@@ -91,26 +94,77 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
       set({ isLoading: true });
       
       try {
-        let sessions;
+        let unifiedSessions;
         
         if (rangeType === 'all time' || !startDate || !endDate) {
-          // For "All time", get ALL sessions (no date filtering, no limit)
-          console.log('DashboardStore - Loading all sessions for "all time"');
-          sessions = await workSessionService.getAllWorkSessions(userId);
-        } else {
-          // For specific date ranges, use the range-based method
-          sessions = await workSessionService.getWorkSessionsForRange(
+          // For "All time", get ALL sessions from both UTC and legacy systems
+          console.log('DashboardStore - Loading all sessions for "all time" via transition service');
+          // Use a very wide date range to get all data
+          const veryOldDate = new Date('2020-01-01');
+          const today = new Date();
+          unifiedSessions = await transitionQueryService.getSessionsForDateRange(
+            veryOldDate,
+            today,
             userId,
+            userTimezone
+          );
+        } else {
+          // For specific date ranges, use UTC-aware transition service
+          console.log('DashboardStore - Loading sessions for date range via transition service');
+          unifiedSessions = await transitionQueryService.getSessionsForDateRange(
             startDate,
-            endDate
+            endDate,
+            userId,
+            userTimezone
           );
         }
         
-        console.log('DashboardStore - Successfully loaded sessions:', sessions.length);
+        // Convert unified sessions back to legacy format for compatibility
+        const sessions: WorkSession[] = unifiedSessions.map(unified => {
+          if (unified.dataSource === 'legacy') {
+            return unified.rawData as WorkSession;
+          } else {
+            // Convert UTC session to legacy format
+            return {
+              id: unified.id,
+              userId: unified.userId,
+              taskId: unified.taskId,
+              projectId: unified.projectId,
+              duration: unified.duration,
+              sessionType: unified.sessionType,
+              status: unified.status,
+              notes: unified.notes,
+              date: unified.startTime.toISOString().split('T')[0], // Convert to date string
+              startTime: unified.startTime,
+              endTime: unified.endTime,
+              createdAt: new Date(unified.createdAt),
+              updatedAt: new Date(unified.updatedAt)
+            };
+          }
+        });
+        
+        console.log('DashboardStore - Successfully loaded sessions via transition service:', {
+          totalSessions: sessions.length,
+          utcSessions: unifiedSessions.filter(s => s.dataSource === 'utc').length,
+          legacySessions: unifiedSessions.filter(s => s.dataSource === 'legacy').length
+        });
+        
         set({ workSessions: sessions });
       } catch (error) {
-        console.error('DashboardStore - Error loading work sessions:', error);
-        // Keep existing sessions on error to avoid breaking the UI
+        console.error('DashboardStore - Error loading work sessions via transition service:', error);
+        // Fallback to legacy system on error
+        try {
+          console.log('DashboardStore - Falling back to legacy system');
+          let sessions;
+          if (rangeType === 'all time' || !startDate || !endDate) {
+            sessions = await workSessionService.getAllWorkSessions(userId);
+          } else {
+            sessions = await workSessionService.getWorkSessionsForRange(userId, startDate, endDate);
+          }
+          set({ workSessions: sessions });
+        } catch (fallbackError) {
+          console.error('DashboardStore - Legacy fallback also failed:', fallbackError);
+        }
       } finally {
         set({ isLoading: false });
       }
