@@ -6,6 +6,8 @@ import type { Task, Project } from '../types/models';
 import { trackTaskCreated, trackTaskCompleted, trackProjectCreated } from '../utils/analytics';
 import { workSessionService } from '../api/workSessionService';
 import { transitionQueryService } from '../services/transitionService';
+import { TaskStorageService } from '../services/TaskStorageService';
+import { timezoneUtils } from '../utils/timezoneUtils';
 
 interface TaskState {
   tasks: Task[];
@@ -269,24 +271,23 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       if (!user) throw new Error('No user found');
       console.log('User found:', user.uid);
       
-      const tasksRef = collection(db, 'tasks');
       const { tasks } = get();
       console.log('Current tasks count:', tasks.length);
       
       // Add task with next order number (find max order + 1)
       const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order || 0)) : -1;
-      const newTask = {
+      const taskDataWithOrder = {
         ...taskData,
         userId: user.uid,
-        order: maxOrder + 1,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        order: maxOrder + 1
       };
       
-      // Fire and forget - don't wait for addDoc to complete since it hangs
-      // The real-time listener will update the UI when the task is created
-      const docRef = await addDoc(tasksRef, newTask);
-      console.log('Firestore addDoc completed, docRef:', docRef.id);
+      // Get user's timezone for UTC conversion
+      const userTimezone = user.settings?.timezone || timezoneUtils.getCurrentTimezone();
+      
+      // Use TaskStorageService for proper UTC handling
+      const docId = await TaskStorageService.createTask(taskDataWithOrder, userTimezone);
+      console.log('Task created with UTC fields, docId:', docId);
       // Track task creation in Analytics
       trackTaskCreated(taskData.projectId);
       
@@ -299,7 +300,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           // Add a small delay to ensure task is in the store
           setTimeout(async () => {
             try {
-              await useSyncStore.getState().syncTask(docRef.id);
+              await useSyncStore.getState().syncTask(docId);
               console.log('✅ Task auto-synced to Google Calendar');
             } catch (syncError) {
               console.error('❌ Failed to auto-sync task to Google Calendar:', syncError);
@@ -312,7 +313,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       }
       
       console.log('Task creation initiated successfully');
-      return docRef.id; // Return the new task ID
+      return docId; // Return the new task ID
     } catch (error) {
       console.error('Error adding task:', error);
       throw error;
@@ -351,12 +352,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         Object.entries(updates).filter(([_, value]) => value !== undefined)
       );
 
-      // Update the task
-      const taskRef = doc(db, 'tasks', id);
-      await updateDoc(taskRef, {
-        ...filteredUpdates,
-        updatedAt: new Date()
-      });
+      // Get user's timezone for UTC conversion
+      const userTimezone = user.settings?.timezone || timezoneUtils.getCurrentTimezone();
+
+      // Use TaskStorageService for proper UTC handling
+      await TaskStorageService.updateTask(id, filteredUpdates, userTimezone);
 
       // If projectId changed, update all related work sessions
       if (isProjectIdChanging && updates.projectId) {

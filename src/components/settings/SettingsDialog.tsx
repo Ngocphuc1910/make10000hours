@@ -389,53 +389,45 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                                     
                                     <Select.Separator className="h-px bg-gray-200 dark:bg-gray-600 m-1" />
                                     
-                                    <Select.Item value="America/New_York" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
-                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
-                                      <Select.ItemText>Eastern Time (New York)</Select.ItemText>
-                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
-                                        <Check size={12} />
-                                      </Select.ItemIndicator>
-                                    </Select.Item>
-                                    
-                                    <Select.Item value="America/Los_Angeles" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
-                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
-                                      <Select.ItemText>Pacific Time (Los Angeles)</Select.ItemText>
-                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
-                                        <Check size={12} />
-                                      </Select.ItemIndicator>
-                                    </Select.Item>
-                                    
-                                    <Select.Item value="Europe/London" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
-                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
-                                      <Select.ItemText>London (GMT)</Select.ItemText>
-                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
-                                        <Check size={12} />
-                                      </Select.ItemIndicator>
-                                    </Select.Item>
-                                    
-                                    <Select.Item value="Asia/Tokyo" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
-                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
-                                      <Select.ItemText>Tokyo (JST)</Select.ItemText>
-                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
-                                        <Check size={12} />
-                                      </Select.ItemIndicator>
-                                    </Select.Item>
-                                    
-                                    <Select.Item value="Asia/Saigon" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
-                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
-                                      <Select.ItemText>Ho Chi Minh City (ICT)</Select.ItemText>
-                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
-                                        <Check size={12} />
-                                      </Select.ItemIndicator>
-                                    </Select.Item>
-                                    
-                                    <Select.Item value="UTC" className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors">
-                                      <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
-                                      <Select.ItemText>UTC</Select.ItemText>
-                                      <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
-                                        <Check size={12} />
-                                      </Select.ItemIndicator>
-                                    </Select.Item>
+                                    {/* 24 Standard timezone options */}
+                                    {[
+                                      { value: 'UTC', label: 'UTC' },
+                                      { value: 'America/New_York', label: 'New York (Eastern Time)' },
+                                      { value: 'America/Chicago', label: 'Chicago (Central Time)' },
+                                      { value: 'America/Denver', label: 'Denver (Mountain Time)' },
+                                      { value: 'America/Los_Angeles', label: 'Los Angeles (Pacific Time)' },
+                                      { value: 'America/Anchorage', label: 'Anchorage (Alaska Time)' },
+                                      { value: 'America/Toronto', label: 'Toronto (Eastern Time)' },
+                                      { value: 'America/Mexico_City', label: 'Mexico City' },
+                                      { value: 'America/Sao_Paulo', label: 'São Paulo (Brazil Time)' },
+                                      { value: 'America/Buenos_Aires', label: 'Buenos Aires' },
+                                      { value: 'Europe/London', label: 'London (GMT)' },
+                                      { value: 'Europe/Paris', label: 'Paris (Central European Time)' },
+                                      { value: 'Europe/Berlin', label: 'Berlin (Central European Time)' },
+                                      { value: 'Europe/Moscow', label: 'Moscow (Moscow Time)' },
+                                      { value: 'Africa/Cairo', label: 'Cairo (Eastern European Time)' },
+                                      { value: 'Africa/Lagos', label: 'Lagos (West Africa Time)' },
+                                      { value: 'Africa/Johannesburg', label: 'Johannesburg (South Africa Time)' },
+                                      { value: 'Asia/Dubai', label: 'Dubai (Gulf Standard Time)' },
+                                      { value: 'Asia/Kolkata', label: 'Mumbai/Kolkata (India Standard Time)' },
+                                      { value: 'Asia/Shanghai', label: 'Shanghai (China Standard Time)' },
+                                      { value: 'Asia/Tokyo', label: 'Tokyo (Japan Standard Time)' },
+                                      { value: 'Asia/Ho_Chi_Minh', label: 'Ho Chi Minh City (Vietnam Time)' },
+                                      { value: 'Australia/Sydney', label: 'Sydney (Australian Eastern Time)' },
+                                      { value: 'Pacific/Auckland', label: 'Auckland (New Zealand Time)' }
+                                    ].map((timezone) => (
+                                      <Select.Item 
+                                        key={timezone.value} 
+                                        value={timezone.value} 
+                                        className="text-sm leading-none rounded-md flex items-center h-8 pr-8 pl-3 relative select-none data-[disabled]:text-gray-300 data-[disabled]:pointer-events-none data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[highlighted]:text-gray-900 dark:data-[highlighted]:text-gray-100 cursor-pointer transition-colors"
+                                      >
+                                        <Clock size={16} className="mr-2 text-gray-600 dark:text-gray-400" />
+                                        <Select.ItemText>{timezone.label}</Select.ItemText>
+                                        <Select.ItemIndicator className="absolute right-2 w-6 inline-flex items-center justify-center">
+                                          <Check size={12} />
+                                        </Select.ItemIndicator>
+                                      </Select.Item>
+                                    ))}
                                   </Select.Viewport>
                                 </Select.Content>
                               </Select.Portal>
