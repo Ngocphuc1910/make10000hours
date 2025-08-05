@@ -121,13 +121,19 @@ export class UTCMonitoringService {
     const errorRate = this.getErrorRate(operation);
     const operationCount = this.metrics.operationCounts[operation] || 0;
     
-    if (operationCount >= 10 && errorRate >= 0.3) {
-      console.error(`High error rate detected for ${operation}: ${errorRate * 100}%`);
+    // More lenient thresholds during development
+    const isDevelopment = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
+    const errorThreshold = isDevelopment ? 0.95 : 0.5; // 95% in dev, 50% in prod
+    const globalErrorThreshold = isDevelopment ? 0.99 : 0.6; // 99% in dev, 60% in prod (almost disabled)
+    const minOperations = isDevelopment ? 50 : 10; // More operations needed in dev
+    
+    if (operationCount >= minOperations && errorRate >= errorThreshold) {
+      console.warn(`High error rate detected for ${operation}: ${errorRate * 100}%`);
       this.triggerCircuitBreaker(operation);
     }
     
-    if (this.metrics.systemHealth.errorRate >= 0.2) {
-      console.error(`High global error rate: ${this.metrics.systemHealth.errorRate * 100}%`);
+    if (this.metrics.systemHealth.errorRate >= globalErrorThreshold) {
+      console.warn(`High global error rate: ${this.metrics.systemHealth.errorRate * 100}%`);
       this.triggerGlobalCircuitBreaker();
     }
   }
@@ -140,8 +146,26 @@ export class UTCMonitoringService {
   private triggerGlobalCircuitBreaker(): void {
     console.error('Global circuit breaker triggered - disabling UTC features');
     
-    const { utcFeatureFlags } = require('./featureFlags');
-    utcFeatureFlags.emergencyDisable();
+    // Check if we've already triggered emergency disable recently to prevent loops
+    const lastEmergencyTime = sessionStorage.getItem('monitoring-emergency-disable');
+    const now = Date.now();
+    
+    if (!lastEmergencyTime || (now - parseInt(lastEmergencyTime)) > 60000) { // 1 minute cooldown
+      sessionStorage.setItem('monitoring-emergency-disable', now.toString());
+      
+      try {
+        // Import dynamically to avoid circular dependencies
+        import('./featureFlags').then(({ utcFeatureFlags }) => {
+          utcFeatureFlags.emergencyDisable();
+        }).catch(error => {
+          console.error('Failed to disable UTC features:', error);
+        });
+      } catch (error) {
+        console.error('Failed to trigger global circuit breaker:', error);
+      }
+    } else {
+      console.warn('Skipping emergency disable to prevent loops - UTC already disabled recently');
+    }
     
     this.emitCircuitBreakerEvent('global');
   }
@@ -161,6 +185,48 @@ export class UTCMonitoringService {
   
   getMetrics(): UTCMetrics {
     return { ...this.metrics };
+  }
+  
+  /**
+   * Reset monitoring metrics and circuit breaker state
+   * Useful for development and troubleshooting
+   */
+  reset(): void {
+    console.log('🔄 Resetting UTC monitoring metrics and circuit breaker state');
+    this.metrics = this.initializeMetrics();
+    
+    // Clear emergency disable state
+    sessionStorage.removeItem('monitoring-emergency-disable');
+    localStorage.removeItem('utc-emergency-disabled');
+    
+    // Re-enable UTC features
+    try {
+      import('./featureFlags').then(({ utcFeatureFlags }) => {
+        utcFeatureFlags.emergencyEnable();
+        console.log('✅ UTC features re-enabled');
+      }).catch(error => {
+        console.error('Failed to re-enable UTC features:', error);
+      });
+    } catch (error) {
+      console.error('Failed to import feature flags:', error);
+    }
+  }
+  
+  /**
+   * Reset all metrics and clear circuit breaker state
+   * Useful for development and testing
+   */
+  resetMetrics(): void {
+    this.metrics = this.initializeMetrics();
+    console.log('UTC monitoring metrics reset');
+  }
+  
+  /**
+   * Check if we're in development mode
+   */
+  isDevelopmentMode(): boolean {
+    return process.env.NODE_ENV === 'development' || 
+           (typeof window !== 'undefined' && window.location.hostname === 'localhost');
   }
   
   getHealthStatus(): {

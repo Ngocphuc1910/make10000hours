@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useUserStore } from '../../store/userStore';
 import { timezoneUtils } from '../../utils/timezoneUtils';
 import { utcMonitoring } from '../../services/monitoring';
+import { COMPREHENSIVE_TIMEZONES, getTimezoneDisplayName, getGroupedTimezones } from '../../utils/timezoneList';
 
 interface TimezoneSelectorProps {
   className?: string;
@@ -29,70 +30,69 @@ export const TimezoneSelector: React.FC<TimezoneSelectorProps> = ({
   const [showDropdown, setShowDropdown] = useState(false);
   const [timezoneOptions, setTimezoneOptions] = useState<TimezoneOption[]>([]);
 
-  // Initialize timezone options
+  // Initialize timezone options with comprehensive list
   useEffect(() => {
     const loadTimezones = () => {
       try {
         const now = new Date();
-        const commonTimezones = [
-          'UTC',
-          'America/New_York',
-          'America/Chicago', 
-          'America/Denver',
-          'America/Los_Angeles',
-          'America/Toronto',
-          'America/Vancouver',
-          'Europe/London',
-          'Europe/Paris',
-          'Europe/Berlin',
-          'Europe/Rome',
-          'Europe/Madrid',
-          'Europe/Amsterdam',
-          'Asia/Tokyo',
-          'Asia/Shanghai',
-          'Asia/Singapore',
-          'Asia/Dubai',
-          'Asia/Kolkata',
-          'Australia/Sydney',
-          'Australia/Melbourne',
-          'Australia/Perth',
-        ];
-
-        const options: TimezoneOption[] = commonTimezones.map(tz => {
+        
+        const options: TimezoneOption[] = COMPREHENSIVE_TIMEZONES.map(tz => {
           try {
-            const formatter = new Intl.DateTimeFormat('en', {
-              timeZone: tz,
-              timeZoneName: 'short'
-            });
-            const parts = formatter.formatToParts(now);
-            const timeZoneName = parts.find(part => part.type === 'timeZoneName')?.value || '';
-            
-            // Calculate offset
+            // Calculate offset using proper timezone calculation
             const utcDate = new Date(now.getTime() + now.getTimezoneOffset() * 60000);
             const targetDate = new Date(utcDate.toLocaleString('en-US', { timeZone: tz }));
             const offsetMs = targetDate.getTime() - utcDate.getTime();
-            const offsetHours = offsetMs / (1000 * 60 * 60);
-            const offsetStr = offsetHours >= 0 ? `+${offsetHours}` : `${offsetHours}`;
+            const offsetMinutes = offsetMs / (1000 * 60);
+            
+            // Format offset as ±HH:MM
+            const absMinutes = Math.abs(offsetMinutes);
+            const hours = Math.floor(absMinutes / 60);
+            const minutes = absMinutes % 60;
+            const sign = offsetMinutes >= 0 ? '+' : '-';
+            const offsetStr = `${sign}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 
             return {
               value: tz,
-              label: tz.replace(/_/g, ' '),
+              label: getTimezoneDisplayName(tz),
               offset: `UTC${offsetStr}`,
-              region: tz.split('/')[0]
+              region: tz === 'UTC' ? 'UTC' : tz.split('/')[0]
             };
-          } catch {
+          } catch (error) {
+            console.error(`Error processing timezone ${tz}:`, error);
             return {
               value: tz,
-              label: tz.replace(/_/g, ' '),
+              label: getTimezoneDisplayName(tz),
               offset: 'Unknown',
-              region: tz.split('/')[0]
+              region: tz === 'UTC' ? 'UTC' : tz.split('/')[0]
             };
           }
         });
 
-        setTimezoneOptions(options);
+        // Sort options by region, then by label
+        const sortedOptions = options.sort((a, b) => {
+          if (a.region === 'UTC') return -1;
+          if (b.region === 'UTC') return 1;
+          if (a.region !== b.region) {
+            return a.region.localeCompare(b.region);
+          }
+          return a.label.localeCompare(b.label);
+        });
+
+        setTimezoneOptions(sortedOptions);
+        console.log(`✅ Loaded ${sortedOptions.length} timezone options from comprehensive list`);
+        console.log('First 5 timezones:', sortedOptions.slice(0, 5).map(opt => opt.value));
       } catch (error) {
-        console.error('Failed to load timezone options:', error);
+        console.error('❌ TIMEZONE LOADING ERROR - This is why you only see limited options:', error);
+        console.error('Error details:', error.message, error.stack);
+        console.error('COMPREHENSIVE_TIMEZONES available?', typeof COMPREHENSIVE_TIMEZONES, COMPREHENSIVE_TIMEZONES?.length);
+        console.error('getTimezoneDisplayName available?', typeof getTimezoneDisplayName);
+        // Fallback to minimal list if comprehensive loading fails
+        console.warn('🔄 Falling back to minimal timezone list due to error above');
+        setTimezoneOptions([
+          { value: 'UTC', label: 'UTC', offset: 'UTC+00:00', region: 'UTC' },
+          { value: 'America/New_York', label: 'New York', offset: 'UTC-05:00', region: 'America' },
+          { value: 'America/Los_Angeles', label: 'Los Angeles', offset: 'UTC-08:00', region: 'America' },
+        ]);
       }
     };
 
@@ -274,26 +274,58 @@ export const TimezoneSelector: React.FC<TimezoneSelectorProps> = ({
             />
             
             {showDropdown && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-80 overflow-y-auto">
                 {filteredOptions.length > 0 ? (
-                  filteredOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => handleTimezoneSelect(option.value)}
-                      className={`w-full px-3 py-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none ${
-                        option.value === selectedTimezone ? 'bg-blue-50 text-blue-700' : ''
-                      }`}
-                    >
-                      <div className="flex justify-between items-center">
-                        <span>{option.label}</span>
-                        <span className="text-sm text-gray-500">{option.offset}</span>
+                  (() => {
+                    // Group filtered options by region for better organization
+                    const groupedOptions: { [region: string]: TimezoneOption[] } = {};
+                    filteredOptions.forEach(option => {
+                      if (!groupedOptions[option.region]) {
+                        groupedOptions[option.region] = [];
+                      }
+                      groupedOptions[option.region].push(option);
+                    });
+
+                    const regions = Object.keys(groupedOptions).sort((a, b) => {
+                      if (a === 'UTC') return -1;
+                      if (b === 'UTC') return 1;
+                      return a.localeCompare(b);
+                    });
+
+                    return regions.map(region => (
+                      <div key={region}>
+                        {/* Region Header */}
+                        {regions.length > 1 && (
+                          <div className="px-3 py-1 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-600 uppercase tracking-wider">
+                            {region === 'UTC' ? 'Universal Time' : region.replace('_', ' ')}
+                          </div>
+                        )}
+                        
+                        {/* Timezone Options */}
+                        {groupedOptions[region].map((option) => (
+                          <button
+                            key={option.value}
+                            onClick={() => handleTimezoneSelect(option.value)}
+                            className={`w-full px-3 py-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none border-b border-gray-50 last:border-b-0 ${
+                              option.value === selectedTimezone ? 'bg-blue-50 text-blue-700' : ''
+                            }`}
+                          >
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm font-medium">{option.label}</span>
+                              <span className="text-xs text-gray-500 font-mono">{option.offset}</span>
+                            </div>
+                            {option.value !== 'UTC' && (
+                              <div className="text-xs text-gray-400 mt-0.5">{option.value}</div>
+                            )}
+                          </button>
+                        ))}
                       </div>
-                      <div className="text-xs text-gray-400">{option.region}</div>
-                    </button>
-                  ))
+                    ));
+                  })()
                 ) : (
-                  <div className="px-3 py-2 text-gray-500 text-sm">
-                    No timezones found
+                  <div className="px-3 py-4 text-center text-gray-500 text-sm">
+                    <div className="mb-1">No timezones found</div>
+                    <div className="text-xs text-gray-400">Try searching for a city or region</div>
                   </div>
                 )}
               </div>

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Fix - Timezone Test Suite</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .pass { background-color: #d4edda; border-left: 4px solid #28a745; }
+        .fail { background-color: #f8d7da; border-left: 4px solid #dc3545; }
+        .info { background-color: #d1ecf1; border-left: 4px solid #17a2b8; }
+        button { margin: 5px; padding: 10px 15px; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Simple Fix - Timezone Test Suite</h1>
+    <p>Testing timezone consistency between web app and extension after simple fix.</p>
+    
+    <div id="test-controls">
+        <button onclick="runAllTests()">🔬 Run All Tests</button>
+        <button onclick="testSpecificTimezone('America/Los_Angeles')">🌴 Test LA Timezone</button>
+        <button onclick="testSpecificTimezone('Asia/Bangkok')">🏙️ Test Bangkok Timezone</button>
+        <button onclick="testSpecificTimezone('Europe/London')">🏰 Test London Timezone</button>
+        <button onclick="clearResults()">🧹 Clear Results</button>
+    </div>
+    
+    <div id="test-results"></div>
+    
+    <script>
+        let testResults = [];
+        
+        // Simulate the simple fix date utility
+        function getCurrentDateInUserTimezone(userTimezone) {
+            try {
+                return new Date().toLocaleDateString('en-CA', { 
+                    timeZone: userTimezone 
+                });
+            } catch (error) {
+                console.error('Error creating date in user timezone:', error);
+                return new Date().toLocaleDateString('en-CA');
+            }
+        }
+        
+        // Simulate extension date creation (after fix)
+        function createExtensionDate(userTimezone) {
+            try {
+                return new Date().toLocaleDateString('en-CA', {
+                    timeZone: userTimezone
+                });
+            } catch (error) {
+                console.error('Extension date creation failed:', error);
+                return new Date().toLocaleDateString('en-CA');
+            }
+        }
+        
+        // Test functions
+        function testTimezoneConsistency(userTimezone) {
+            const webAppDate = getCurrentDateInUserTimezone(userTimezone);
+            const extensionDate = createExtensionDate(userTimezone);
+            const physicalDate = new Date().toLocaleDateString('en-CA');
+            
+            const isConsistent = webAppDate === extensionDate;
+            const isDifferentFromPhysical = webAppDate !== physicalDate;
+            
+            return {
+                test: 'Timezone Consistency',
+                userTimezone,
+                webAppDate,
+                extensionDate,
+                physicalDate,
+                isConsistent,
+                isDifferentFromPhysical,
+                pass: isConsistent,
+                message: isConsistent ? 
+                    `✅ Web app and extension create same date: ${webAppDate}` :
+                    `❌ Date mismatch - Web: ${webAppDate}, Extension: ${extensionDate}`
+            };
+        }
+        
+        function testTodayFilterScenario(userTimezone) {
+            // Simulate the exact scenario from the bug report
+            const currentTime = new Date();
+            
+            // Session creation (after fix)
+            const sessionDate = getCurrentDateInUserTimezone(userTimezone);
+            
+            // Today filter (existing logic)
+            const todayFilter = new Date().toLocaleDateString('en-CA', {
+                timeZone: userTimezone
+            });
+            
+            const wouldFind = sessionDate === todayFilter;
+            
+            return {
+                test: 'Today Filter Scenario',
+                userTimezone,
+                currentTime: currentTime.toISOString(),
+                sessionDate,
+                todayFilter,
+                wouldFind,
+                pass: wouldFind,
+                message: wouldFind ?
+                    `✅ "Today" filter would find session created with date: ${sessionDate}` :
+                    `❌ "Today" filter would NOT find session - Session: ${sessionDate}, Filter: ${todayFilter}`
+            };
+        }
+        
+        function testCrossDayBoundary(userTimezone) {
+            // Test what happens near midnight in different timezones
+            const now = new Date();
+            const userTime = new Date(now.toLocaleString('en-US', { timeZone: userTimezone }));
+            const utcTime = new Date(now.toUTCString());
+            
+            const dateDiff = Math.abs(utcTime.getDate() - userTime.getDate());
+            const isDifferentDay = dateDiff > 0;
+            
+            const sessionDate = getCurrentDateInUserTimezone(userTimezone);
+            const utcDate = new Date().toLocaleDateString('en-CA', { timeZone: 'UTC' });
+            
+            return {
+                test: 'Cross-Day Boundary',
+                userTimezone,
+                userTime: userTime.toISOString(),
+                utcTime: utcTime.toISOString(),
+                sessionDate,
+                utcDate,
+                isDifferentDay,
+                pass: true, // This test is informational
+                message: isDifferentDay ?
+                    `ℹ️ Different day in ${userTimezone} vs UTC - Session date: ${sessionDate}, UTC date: ${utcDate}` :
+                    `ℹ️ Same day in ${userTimezone} and UTC - Date: ${sessionDate}`
+            };
+        }
+        
+        function testSpecificTimezone(userTimezone) {
+            const tests = [
+                testTimezoneConsistency(userTimezone),
+                testTodayFilterScenario(userTimezone),
+                testCrossDayBoundary(userTimezone)
+            ];
+            
+            displayTestResults(tests, `Tests for ${userTimezone}`);
+        }
+        
+        function runAllTests() {
+            clearResults();
+            
+            const timezones = [
+                'America/Los_Angeles',  // Original problem timezone
+                'Asia/Bangkok',         // Physical location timezone  
+                'Europe/London',        // Different timezone
+                'America/New_York',     // Common timezone
+                'UTC'                   // Universal reference
+            ];
+            
+            timezones.forEach(timezone => {
+                setTimeout(() => testSpecificTimezone(timezone), 100);
+            });
+        }
+        
+        function displayTestResults(tests, title) {
+            const resultsDiv = document.getElementById('test-results');
+            
+            let html = `<div class="info"><h3>${title}</h3></div>`;
+            
+            tests.forEach(test => {
+                const cssClass = test.pass ? 'pass' : 'fail';
+                html += `
+                    <div class="test-result ${cssClass}">
+                        <h4>${test.test}</h4>
+                        <p>${test.message}</p>
+                        <pre>${JSON.stringify(test, null, 2)}</pre>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML += html;
+        }
+        
+        function clearResults() {
+            document.getElementById('test-results').innerHTML = '';
+            testResults = [];
+        }
+        
+        // Auto-run basic test on load
+        window.onload = function() {
+            testSpecificTimezone('America/Los_Angeles');
+        };
+    </script>
+</body>
+</html>

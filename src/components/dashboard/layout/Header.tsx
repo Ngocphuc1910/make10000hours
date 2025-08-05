@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Icon } from '../../ui/Icon';
 import { RangeType, useDashboardStore } from '../../../store/useDashboardStore';
 import { useUIStore } from '../../../store/uiStore';
+import { useUserStore } from '../../../store/userStore';
 import { useExtensionSync } from '../../../hooks/useExtensionSync';
 import { DeepFocusSwitch } from '../../ui/DeepFocusSwitch';
 import flatpickr from 'flatpickr';
@@ -60,25 +61,101 @@ export const Header: React.FC = () => {
     if (showDatePicker && dateRangeInputRef.current && !datePickerRef.current) {
       setIsInitializing(true);
       
+      // Get user's configured timezone
+      const { user } = useUserStore.getState();
+      const userTimezone = user?.settings?.timezone?.current || 
+                          Intl.DateTimeFormat().resolvedOptions().timeZone;
+      
+      // Calculate max date in user's timezone (today in their timezone)
+      const nowInUserTZ = new Date(new Date().toLocaleString("en-US", { timeZone: userTimezone }));
+      const maxDateInUserTZ = new Date(nowInUserTZ.getFullYear(), nowInUserTZ.getMonth(), nowInUserTZ.getDate());
+      maxDateInUserTZ.setHours(23, 59, 59, 999);
+      
+      console.log('DatePicker - Timezone configuration:', {
+        userTimezone,
+        physicalTime: new Date().toISOString(),
+        userTZTime: nowInUserTZ.toISOString(),
+        maxDate: maxDateInUserTZ.toISOString()
+      });
+      
       const fp = flatpickr(dateRangeInputRef.current, {
         mode: 'range',
         dateFormat: 'M d, Y',
-        maxDate: new Date(), // Prevent future date selection
+        maxDate: maxDateInUserTZ, // Prevent future date selection based on user timezone
         defaultDate: [startDate, endDate].filter(Boolean) as Date[],
+        onReady: function(selectedDates, dateStr, instance) {
+          // Custom logic to highlight "today" based on user's timezone
+          const calendar = instance.calendarContainer;
+          if (!calendar) return;
+          
+          // Find all day elements
+          const dayElements = calendar.querySelectorAll('.flatpickr-day');
+          
+          // Get today's date in user timezone (without time component)
+          const todayInUserTZ = new Date(nowInUserTZ.getFullYear(), nowInUserTZ.getMonth(), nowInUserTZ.getDate());
+          
+          dayElements.forEach((dayElement: any) => {
+            const dayDate = new Date(dayElement.dateObj);
+            
+            // Remove default "today" highlighting first
+            dayElement.classList.remove('today');
+            
+            // Add our custom "today" highlighting based on user timezone
+            if (dayDate.getTime() === todayInUserTZ.getTime()) {
+              dayElement.classList.add('today');
+              console.log('DatePicker - Highlighting today in user timezone:', {
+                highlightedDate: dayDate.toISOString(),
+                todayInUserTZ: todayInUserTZ.toISOString()
+              });
+            }
+          });
+        },
+        onMonthChange: function(selectedDates, dateStr, instance) {
+          // Re-apply today highlighting when month changes
+          setTimeout(() => {
+            const calendar = instance.calendarContainer;
+            if (!calendar) return;
+            
+            const dayElements = calendar.querySelectorAll('.flatpickr-day');
+            const todayInUserTZ = new Date(nowInUserTZ.getFullYear(), nowInUserTZ.getMonth(), nowInUserTZ.getDate());
+            
+            dayElements.forEach((dayElement: any) => {
+              const dayDate = new Date(dayElement.dateObj);
+              dayElement.classList.remove('today');
+              
+              if (dayDate.getTime() === todayInUserTZ.getTime()) {
+                dayElement.classList.add('today');
+              }
+            });
+          }, 50);
+        },
         onChange: function(selectedDates) {
           if (selectedDates.length === 2) {
+            // Check if range is within user's timezone limits
             const daysDiff = Math.ceil((selectedDates[1].getTime() - selectedDates[0].getTime()) / (1000 * 60 * 60 * 24));
             if (daysDiff > 365) {
               const adjustedEndDate = new Date(selectedDates[0]);
               adjustedEndDate.setDate(adjustedEndDate.getDate() + 364);
               fp.setDate([selectedDates[0], adjustedEndDate]);
+            } else if (selectedDates[1] > maxDateInUserTZ) {
+              // Don't allow selection beyond today in user's timezone
+              fp.setDate([selectedDates[0], maxDateInUserTZ]);
+              setStartDate(selectedDates[0]);
+              setEndDate(maxDateInUserTZ);
             } else {
               setStartDate(selectedDates[0]);
               setEndDate(selectedDates[1]);
             }
           } else if (selectedDates.length === 1) {
-            setStartDate(selectedDates[0]);
-            setEndDate(null);
+            if (selectedDates[0] > maxDateInUserTZ) {
+              // Don't allow selection beyond today in user's timezone
+              fp.setDate([maxDateInUserTZ]);
+              setStartDate(maxDateInUserTZ);
+              setEndDate(null);
+            } else {
+              setStartDate(selectedDates[0]);
+              setEndDate(null);
+            }
           }
         },
         onClose: function() {
@@ -104,21 +181,42 @@ export const Header: React.FC = () => {
     };
   }, [showDatePicker, isInitializing]);
 
-  // Format date for display
+  // Format date for display in user's timezone
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const { user } = useUserStore.getState();
+    const userTimezone = user?.settings?.timezone?.current || 
+                        Intl.DateTimeFormat().resolvedOptions().timeZone;
+    
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric',
+      timeZone: userTimezone
+    });
   };
 
   // Handle date range selection
   const handleDateRangeSelect = (range: string) => {
-    // Create robust today dates using local timezone (SAME FIX AS DEEP FOCUS PAGE)
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Create today dates using user's configured timezone, not physical location
+    const { user } = useUserStore.getState();
+    const userTimezone = user?.settings?.timezone?.current || 
+                        Intl.DateTimeFormat().resolvedOptions().timeZone;
+    
+    // Get current date in user's configured timezone
+    const nowInUserTZ = new Date(new Date().toLocaleString("en-US", { timeZone: userTimezone }));
+    const today = new Date(nowInUserTZ.getFullYear(), nowInUserTZ.getMonth(), nowInUserTZ.getDate());
     
     const end = new Date(today);
-    end.setHours(23, 59, 59, 999); // Set to end of today
+    end.setHours(23, 59, 59, 999); // Set to end of today in user timezone
     const start = new Date(today);
-    start.setHours(0, 0, 0, 0); // Set to start of today
+    start.setHours(0, 0, 0, 0); // Set to start of today in user timezone
+    
+    console.log('Header - Date range calculation:', {
+      userTimezone,
+      physicalTime: new Date().toISOString(),
+      userTZTime: nowInUserTZ.toISOString(),
+      todayRange: `${start.toISOString()} to ${end.toISOString()}`
+    });
     
     let type: RangeType = 'today';
     
@@ -167,12 +265,28 @@ export const Header: React.FC = () => {
   // Apply the custom date range
   const applyCustomDateRange = () => {
     if (startDate && endDate) {
-      const today = new Date();
-      today.setHours(23, 59, 59, 999); // Set to end of today for comparison
+      // Get user's configured timezone for validation
+      const { user } = useUserStore.getState();
+      const userTimezone = user?.settings?.timezone?.current || 
+                          Intl.DateTimeFormat().resolvedOptions().timeZone;
       
-      // Prevent future date selection
-      if (startDate > today || endDate > today) {
-        console.warn('Cannot select future dates for productivity analysis');
+      // Get today in user's timezone for comparison
+      const nowInUserTZ = new Date(new Date().toLocaleString("en-US", { timeZone: userTimezone }));
+      const todayInUserTZ = new Date(nowInUserTZ.getFullYear(), nowInUserTZ.getMonth(), nowInUserTZ.getDate());
+      todayInUserTZ.setHours(23, 59, 59, 999);
+      
+      console.log('Custom date range validation:', {
+        userTimezone,
+        selectedStart: startDate.toISOString(),
+        selectedEnd: endDate.toISOString(),
+        todayInUserTZ: todayInUserTZ.toISOString(),
+        startDateValid: startDate <= todayInUserTZ,
+        endDateValid: endDate <= todayInUserTZ
+      });
+      
+      // Prevent future date selection based on user's timezone
+      if (startDate > todayInUserTZ || endDate > todayInUserTZ) {
+        console.warn('Cannot select future dates for productivity analysis in your timezone');
         return;
       }
       
@@ -182,6 +296,11 @@ export const Header: React.FC = () => {
       
       const adjustedEndDate = new Date(endDate);
       adjustedEndDate.setHours(23, 59, 59, 999);
+      
+      console.log('Applying custom date range:', {
+        adjustedStart: adjustedStartDate.toISOString(),
+        adjustedEnd: adjustedEndDate.toISOString()
+      });
       
       setSelectedRange({ 
         startDate: adjustedStartDate, 
@@ -344,7 +463,7 @@ export const Header: React.FC = () => {
                 {startDate && !endDate ? 'Select end date' : !startDate ? 'Select start date' : ''}
                 {(!startDate || !endDate) && (
                   <div className="text-text-secondary mt-1">
-                    Note: Future dates cannot be selected for productivity analysis
+                    Note: Future dates cannot be selected for productivity analysis (based on your timezone setting)
                   </div>
                 )}
               </div>
