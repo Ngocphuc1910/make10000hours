@@ -18,6 +18,7 @@ import { db } from './firebase';
 import type { WorkSession } from '../types/models';
 import { toLocalISOString } from '../utils/timeUtils';
 import { timezoneUtils, type TimezoneContext } from '../utils/timezoneUtils';
+import { format } from 'date-fns';
 
 const WORK_SESSIONS_COLLECTION = 'workSessions';
 
@@ -52,6 +53,7 @@ export class WorkSessionService {
    */
   async createWorkSession(sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt'>, userTimezone?: string): Promise<string> {
     try {
+      
       // Generate unique session ID with timestamp
       const timestamp = new Date().getTime();
       const sessionId = `${sessionData.taskId}_${sessionData.date}_${timestamp}`;
@@ -59,7 +61,10 @@ export class WorkSessionService {
 
       // Get user's timezone context - use user preference instead of physical timezone
       const timezone = userTimezone || timezoneUtils.getCurrentTimezone();
+      
+      
       const timezoneContext = timezoneUtils.createTimezoneContext(timezone, 'browser');
+      
       
       // Enhanced session with UTC timezone support
       const sessionWithUTC: WorkSession & {
@@ -92,6 +97,7 @@ export class WorkSessionService {
       const newSession = Object.fromEntries(
         Object.entries(sessionWithUTC).filter(([_, value]) => value !== undefined)
       );
+
 
       await setDoc(sessionRef, newSession);
       
@@ -130,7 +136,8 @@ export class WorkSessionService {
         taskId,
         projectId,
         // Legacy compatibility: store local date string for existing queries
-        date: userNow.toISOString().split('T')[0],
+        // Format date in user's timezone (not UTC) to avoid timezone conversion bugs
+        date: format(userNow, 'yyyy-MM-dd'),
         duration: 0,
         sessionType,
         status: 'active',
@@ -138,7 +145,7 @@ export class WorkSessionService {
         notes: `${sessionType} session started`
       };
 
-      const sessionId = await this.createWorkSession(sessionData);
+      const sessionId = await this.createWorkSession(sessionData, timezone);
       
       console.log('🎯 Enhanced active session created:', {
         sessionId,
@@ -337,10 +344,11 @@ export class WorkSessionService {
   async upsertWorkSession(
     sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt' | 'duration' | 'sessionType' | 'status'>, 
     durationChange = 0,
-    sessionType: WorkSession['sessionType'] = 'manual'
+    sessionType: WorkSession['sessionType'] = 'manual',
+    userTimezone?: string
   ): Promise<string> {
     try {
-      const userTimezone = timezoneUtils.getCurrentTimezone();
+      const timezone = userTimezone || timezoneUtils.getCurrentTimezone();
       const now = new Date();
       
       // Create a new session instead of updating existing one
@@ -356,13 +364,13 @@ export class WorkSessionService {
           `${sessionType} session completed`
       };
 
-      const sessionId = await this.createWorkSession(workSession);
+      const sessionId = await this.createWorkSession(workSession, timezone);
       
       console.log('🌍 Enhanced legacy manual session created with UTC support:', {
         sessionId,
         sessionType,
         durationChange,
-        timezone: userTimezone,
+        timezone: timezone,
         isManualEntry: sessionType === 'manual'
       });
 
@@ -555,8 +563,8 @@ export class WorkSessionService {
       console.log('WorkSessionService - Loading sessions with timezone-aware filtering:', {
         userId,
         userTimezone,
-        userStartDate: startDate.toISOString().split('T')[0],
-        userEndDate: endDate.toISOString().split('T')[0],
+        userStartDate: format(startDate, 'yyyy-MM-dd'),
+        userEndDate: format(endDate, 'yyyy-MM-dd'),
         utcStartDate: startDateUTC.split('T')[0],
         utcEndDate: endDateUTC.split('T')[0]
       });
@@ -588,8 +596,8 @@ export class WorkSessionService {
         } else {
           // Legacy session: use date field
           const sessionDate = session.date;
-          const userStartDateStr = startDate.toISOString().split('T')[0];
-          const userEndDateStr = endDate.toISOString().split('T')[0];
+          const userStartDateStr = format(startDate, 'yyyy-MM-dd');
+          const userEndDateStr = format(endDate, 'yyyy-MM-dd');
           return sessionDate >= userStartDateStr && sessionDate <= userEndDateStr;
         }
       });

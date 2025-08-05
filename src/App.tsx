@@ -23,6 +23,11 @@ import SettingsPage from './components/pages/SettingsPage';
 import { formatTime } from './utils/timeUtils';
 import { trackPageView, setAnalyticsUserId } from './utils/analytics';
 import { verifyAnalyticsSetup } from './utils/verifyAnalytics';
+
+// Debug imports (remove in production)
+import { timezoneUtils } from './utils/timezoneUtils';
+import { workSessionService } from './api/workSessionService';
+import { format } from 'date-fns';
 import CalendarPage from './features/calendar/CalendarPage';
 import DeepFocusPage from './components/pages/DeepFocusPage';
 import { LoadingScreen } from './components/ui/LoadingScreen';
@@ -74,6 +79,16 @@ const GlobalTabTitleUpdater: React.FC = () => {
   // Store original title on mount
   useEffect(() => {
     originalTitleRef.current = document.title;
+    
+    // Expose debugging modules to window (remove in production)
+    if (process.env.NODE_ENV === 'development') {
+      window.timezoneUtils = timezoneUtils;
+      window.workSessionService = workSessionService;
+      window.useUserStore = useUserStore;
+      window.useTaskStore = useTaskStore;
+      window.format = format;
+      console.log('🔧 Debug modules exposed to window for timezone debugging');
+    }
   }, []);
 
   // Update browser tab title when timer is running
