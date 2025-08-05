@@ -2,7 +2,77 @@ import React, { useState, useEffect } from 'react';
 import { useUserStore } from '../../store/userStore';
 import { timezoneUtils } from '../../utils/timezoneUtils';
 import { utcMonitoring } from '../../services/monitoring';
-import { COMPREHENSIVE_TIMEZONES, getTimezoneDisplayName, getGroupedTimezones } from '../../utils/timezoneList';
+// Temporarily hardcode to bypass import issues
+const COMPREHENSIVE_TIMEZONES = [
+  'UTC',
+  'America/Adak', 'America/Anchorage', 'America/Phoenix', 'America/Los_Angeles', 'America/Denver',
+  'America/Chicago', 'America/New_York', 'America/Halifax', 'America/St_Johns',
+  'America/Mexico_City', 'America/Guatemala', 'America/Belize', 'America/Costa_Rica', 'America/Panama',
+  'America/Havana', 'America/Jamaica', 'America/Puerto_Rico', 'America/Barbados',
+  'America/Caracas', 'America/Bogota', 'America/Lima', 'America/La_Paz', 'America/Santiago',
+  'America/Buenos_Aires', 'America/Montevideo', 'America/Sao_Paulo', 'America/Manaus', 'America/Cayenne',
+  'Europe/London', 'Europe/Dublin', 'Europe/Lisbon', 'Europe/Madrid', 'Europe/Paris',
+  'Europe/Amsterdam', 'Europe/Brussels', 'Europe/Luxembourg', 'Europe/Zurich', 'Europe/Berlin',
+  'Europe/Copenhagen', 'Europe/Stockholm', 'Europe/Oslo', 'Europe/Rome', 'Europe/Vienna',
+  'Europe/Prague', 'Europe/Budapest', 'Europe/Warsaw', 'Europe/Helsinki', 'Europe/Tallinn',
+  'Europe/Riga', 'Europe/Vilnius', 'Europe/Kiev', 'Europe/Moscow', 'Europe/Istanbul',
+  'Europe/Athens', 'Europe/Bucharest', 'Europe/Sofia', 'Europe/Belgrade', 'Europe/Zagreb',
+  'Africa/Casablanca', 'Africa/Lagos', 'Africa/Cairo', 'Africa/Johannesburg', 'Africa/Nairobi',
+  'Africa/Addis_Ababa', 'Africa/Khartoum', 'Africa/Algiers', 'Africa/Tunis',
+  'Asia/Riyadh', 'Asia/Kuwait', 'Asia/Qatar', 'Asia/Dubai', 'Asia/Muscat', 'Asia/Tehran',
+  'Asia/Baghdad', 'Asia/Jerusalem', 'Asia/Beirut', 'Asia/Damascus', 'Asia/Tashkent',
+  'Asia/Almaty', 'Asia/Bishkek', 'Asia/Dushanbe', 'Asia/Ashgabat', 'Asia/Kabul',
+  'Asia/Karachi', 'Asia/Kolkata', 'Asia/Kathmandu', 'Asia/Dhaka', 'Asia/Shanghai',
+  'Asia/Hong_Kong', 'Asia/Taipei', 'Asia/Tokyo', 'Asia/Seoul', 'Asia/Pyongyang',
+  'Asia/Ulaanbaatar', 'Asia/Bangkok', 'Asia/Ho_Chi_Minh', 'Asia/Phnom_Penh', 'Asia/Vientiane',
+  'Asia/Kuala_Lumpur', 'Asia/Singapore', 'Asia/Jakarta', 'Asia/Manila', 'Asia/Brunei',
+  'Asia/Yangon', 'Asia/Colombo', 'Indian/Maldives',
+  'Australia/Perth', 'Australia/Darwin', 'Australia/Adelaide', 'Australia/Brisbane',
+  'Australia/Sydney', 'Australia/Melbourne', 'Australia/Hobart', 'Pacific/Auckland',
+  'Pacific/Chatham', 'Pacific/Honolulu', 'Pacific/Midway', 'Pacific/Samoa', 'Pacific/Fiji',
+  'Pacific/Tongatapu', 'Pacific/Guam', 'Pacific/Palau', 'Pacific/Tahiti', 'Pacific/Marquesas',
+  'Pacific/Easter', 'America/Vancouver', 'America/Edmonton', 'America/Edmonton',
+  'America/Winnipeg', 'America/Toronto', 'America/Montreal', 'America/Toronto',
+  'America/Los_Angeles', 'America/Detroit', 'America/New_York'
+];
+
+function getTimezoneDisplayName(timezone: string): string {
+  const specialNames: { [key: string]: string } = {
+    'UTC': 'UTC - Coordinated Universal Time',
+    'America/New_York': 'New York (Eastern Time)',
+    'America/Chicago': 'Chicago (Central Time)',
+    'America/Denver': 'Denver (Mountain Time)', 
+    'America/Los_Angeles': 'Los Angeles (Pacific Time)',
+    'America/Phoenix': 'Phoenix (Arizona Time)',
+    'Europe/London': 'London (Greenwich Mean Time)',
+    'Europe/Paris': 'Paris (Central European Time)',
+    'Asia/Tokyo': 'Tokyo (Japan Standard Time)',
+    'Asia/Shanghai': 'Shanghai (China Standard Time)',
+    'Asia/Kolkata': 'Mumbai/Kolkata (India Standard Time)',
+    'Asia/Dubai': 'Dubai (Gulf Standard Time)',
+    'Australia/Sydney': 'Sydney (Australian Eastern Time)',
+    'America/Sao_Paulo': 'São Paulo (Brazil Time)',
+    'Asia/Ho_Chi_Minh': 'Ho Chi Minh City (Vietnam Time)',
+    'Asia/Yangon': 'Yangon (Myanmar Time)',
+    'Indian/Maldives': 'Maldives (Maldives Time)',
+    'Pacific/Tongatapu': 'Tonga (Tonga Time)',
+  };
+
+  if (specialNames[timezone]) {
+    return specialNames[timezone];
+  }
+
+  const parts = timezone.split('/');
+  if (parts.length >= 2) {
+    const region = parts[0];
+    const city = parts[1].replace(/_/g, ' ');
+    return `${city} (${region})`;
+  }
+
+  return timezone.replace(/_/g, ' ');
+}
+
+// import { COMPREHENSIVE_TIMEZONES, getTimezoneDisplayName, getGroupedTimezones } from '../../utils/timezoneList';
 
 interface TimezoneSelectorProps {
   className?: string;

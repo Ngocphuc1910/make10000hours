@@ -4,6 +4,8 @@ import { CalendarEvent, DragItem, DropResult } from './types';
 import { DraggableEvent } from './components/DraggableEvent';
 import { DroppableTimeSlot } from './components/DroppableTimeSlot';
 import { useTaskStore } from '../../store/taskStore';
+import { useUserStore } from '../../store/userStore';
+import { timezoneUtils } from '../../utils/timezoneUtils';
 
 interface ScrollableWeekViewProps {
   currentDate: Date;
@@ -60,6 +62,7 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
   clearDragIndicator
 }, ref) => {
   const { projects } = useTaskStore();
+  const { user } = useUserStore();
   
   // Initialize date range with continuous day-based approach (not week-based)
   const [dateRange, setDateRange] = useState<CalendarDateRange>(() => {
@@ -134,6 +137,28 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
   const getTimeSlotHeight = useCallback((): number => {
     return TIME_SLOT_HEIGHT; // Use fixed height for better consistency
   }, []);
+
+  // Get current time in user's timezone
+  const getCurrentTimeInUserTimezone = useCallback(() => {
+    const userTimezone = user?.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
+    const now = new Date();
+    
+    try {
+      // Convert current UTC time to user's timezone
+      const userTime = timezoneUtils.utcToUserTime(now.toISOString(), userTimezone);
+      return {
+        hours: userTime.getHours(),
+        minutes: userTime.getMinutes()
+      };
+    } catch (error) {
+      console.warn('Failed to get current time in user timezone:', error);
+      // Fallback to browser local time
+      return {
+        hours: now.getHours(),
+        minutes: now.getMinutes()
+      };
+    }
+  }, [user?.settings?.timezone?.current]);
 
   // Get last used project color for drag indicator
   const getLastUsedProjectColor = useCallback(() => {
@@ -804,17 +829,40 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
                   ))}
 
                   {/* Current time indicator */}
-                  {isToday(day) && (
-                    <div
-                      className="current-time-indicator absolute"
-                      style={{
-                        top: `${(new Date().getHours() * getTimeSlotHeight()) + ((new Date().getMinutes() / 60) * getTimeSlotHeight())}px`,
-                        left: 0,
-                        right: 0,
-                        zIndex: 15,
-                      }}
-                    />
-                  )}
+                  {(() => {
+                    const userTimezone = user?.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
+                    const now = new Date();
+                    
+                    try {
+                      // Get current time in user's timezone
+                      const userTime = timezoneUtils.utcToUserTime(now.toISOString(), userTimezone);
+                      const userTimeDate = new Date(userTime.getFullYear(), userTime.getMonth(), userTime.getDate());
+                      const dayDateOnly = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+                      
+                      const isUserToday = userTimeDate.getTime() === dayDateOnly.getTime();
+                      
+                      if (isUserToday) {
+                        return (
+                          <div
+                            className="current-time-indicator absolute"
+                            style={{
+                              top: `${(userTime.getHours() * getTimeSlotHeight()) + ((userTime.getMinutes() / 60) * getTimeSlotHeight())}px`,
+                              left: 0,
+                              right: 0,
+                              height: '2px',
+                              backgroundColor: '#ef4444',
+                              zIndex: 15,
+                            }}
+                          />
+                        );
+                      }
+                      
+                      return null;
+                    } catch (error) {
+                      console.warn('Failed to display current time indicator:', error);
+                      return null;
+                    }
+                  })()}
                   </div>
                 ))}
               </div>
