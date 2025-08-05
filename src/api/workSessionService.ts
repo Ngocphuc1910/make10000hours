@@ -17,6 +17,7 @@ import {
 import { db } from './firebase';
 import type { WorkSession } from '../types/models';
 import { toLocalISOString } from '../utils/timeUtils';
+import { timezoneUtils, type TimezoneContext } from '../utils/timezoneUtils';
 
 const WORK_SESSIONS_COLLECTION = 'workSessions';
 
@@ -47,63 +48,115 @@ export class WorkSessionService {
   private workSessionsCollection = collection(db, WORK_SESSIONS_COLLECTION);
 
   /**
-   * Create a new work session (no longer upserts - creates separate sessions)
+   * Create a new work session with UTC timezone support (enhanced legacy system)
    */
-  async createWorkSession(sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+  async createWorkSession(sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt'>, userTimezone?: string): Promise<string> {
     try {
       // Generate unique session ID with timestamp
       const timestamp = new Date().getTime();
       const sessionId = `${sessionData.taskId}_${sessionData.date}_${timestamp}`;
       const sessionRef = doc(this.workSessionsCollection, sessionId);
 
-      const newSession: WorkSession = {
+      // Get user's timezone context - use user preference instead of physical timezone
+      const timezone = userTimezone || timezoneUtils.getCurrentTimezone();
+      const timezoneContext = timezoneUtils.createTimezoneContext(timezone, 'browser');
+      
+      // Enhanced session with UTC timezone support
+      const sessionWithUTC: WorkSession & {
+        // UTC timezone fields (new)
+        startTimeUTC?: string;
+        endTimeUTC?: string;
+        timezoneContext?: TimezoneContext;
+        createdAtUTC?: string;
+        updatedAtUTC?: string;
+      } = {
         ...sessionData,
         id: sessionId,
-        status: sessionData.status || 'completed', // Default to completed if not specified
+        status: sessionData.status || 'completed',
+        // Legacy fields (maintain compatibility)
         createdAt: new Date(),
         updatedAt: new Date(),
+        // UTC timezone fields (new enhancement)
+        startTimeUTC: sessionData.startTime ? timezoneUtils.userTimeToUTC(sessionData.startTime, timezone) : timezoneUtils.getCurrentUTC(),
+        timezoneContext,
+        createdAtUTC: timezoneUtils.getCurrentUTC(),
+        updatedAtUTC: timezoneUtils.getCurrentUTC()
       };
 
+      // Only add endTimeUTC if endTime exists (avoid undefined values in Firebase)
+      if (sessionData.endTime) {
+        sessionWithUTC.endTimeUTC = timezoneUtils.userTimeToUTC(sessionData.endTime, timezone);
+      }
+
+      // Filter out any undefined values to prevent Firebase errors
+      const newSession = Object.fromEntries(
+        Object.entries(sessionWithUTC).filter(([_, value]) => value !== undefined)
+      );
+
       await setDoc(sessionRef, newSession);
+      
+      console.log('🌍 Enhanced legacy session created with UTC support:', {
+        sessionId,
+        timezone: userTimezone,
+        startTimeUTC: newSession.startTimeUTC,
+        localStartTime: newSession.startTime,
+        hasTimezoneContext: !!newSession.timezoneContext
+      });
+      
       return sessionId;
     } catch (error) {
-      console.error('Error creating work session:', error);
+      console.error('Error creating enhanced work session:', error);
       throw error;
     }
   }
 
   /**
-   * Create an active work session for timer
+   * Create an active work session for timer with UTC timezone support
    */
   async createActiveSession(
     taskId: string,
     projectId: string,
     userId: string,
-    sessionType: 'pomodoro' | 'shortBreak' | 'longBreak'
+    sessionType: 'pomodoro' | 'shortBreak' | 'longBreak',
+    userTimezone?: string
   ): Promise<string> {
     try {
       const now = new Date();
+      const timezone = userTimezone || timezoneUtils.getCurrentTimezone();
+      const userNow = timezoneUtils.utcToUserTime(now.toISOString(), timezone);
+      
       const sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt'> = {
         userId,
         taskId,
         projectId,
-        date: now.toISOString().split('T')[0], // YYYY-MM-DD format
-        duration: 0, // Start with 0 duration
-        sessionType, // Use the session type as provided
+        // Legacy compatibility: store local date string for existing queries
+        date: userNow.toISOString().split('T')[0],
+        duration: 0,
+        sessionType,
         status: 'active',
-        startTime: now,
+        startTime: now, // Legacy field (local time)
         notes: `${sessionType} session started`
       };
 
-      return await this.createWorkSession(sessionData);
+      const sessionId = await this.createWorkSession(sessionData);
+      
+      console.log('🎯 Enhanced active session created:', {
+        sessionId,
+        sessionType,
+        timezone,
+        localDate: sessionData.date,
+        startTime: now.toISOString()
+      });
+      
+      return sessionId;
     } catch (error) {
-      console.error('Error creating active session:', error);
+      console.error('Error creating enhanced active session:', error);
       throw error;
     }
   }
 
   /**
-   * Update session status and duration
+   * Update session status and duration with UTC timezone support
    */
   async updateSession(
     sessionId: string,
@@ -111,12 +164,35 @@ export class WorkSessionService {
   ): Promise<void> {
     try {
       const sessionRef = doc(this.workSessionsCollection, sessionId);
-      const updateData = {
+      const userTimezone = timezoneUtils.getCurrentTimezone();
+      
+      // Enhanced update data with UTC timezone support
+      const updateData: any = {
         ...updates,
-        updatedAt: new Date()
+        // Legacy fields (maintain compatibility)
+        updatedAt: new Date(),
+        // UTC timezone fields (new enhancement)
+        updatedAtUTC: timezoneUtils.getCurrentUTC()
       };
 
-      await updateDoc(sessionRef, updateData);
+      // If endTime is being updated, also set endTimeUTC
+      if (updates.endTime) {
+        updateData.endTimeUTC = timezoneUtils.userTimeToUTC(updates.endTime, userTimezone);
+      }
+
+      // Filter out any undefined values to prevent Firebase errors
+      const cleanUpdateData = Object.fromEntries(
+        Object.entries(updateData).filter(([_, value]) => value !== undefined)
+      );
+
+      await updateDoc(sessionRef, cleanUpdateData);
+      
+      console.log('🌍 Enhanced legacy session updated with UTC support:', {
+        sessionId,
+        timezone: userTimezone,
+        hasEndTime: !!updates.endTime,
+        endTimeUTC: updateData.endTimeUTC
+      });
     } catch (error) {
       console.error('Error updating session:', error);
       throw error;
@@ -124,7 +200,7 @@ export class WorkSessionService {
   }
 
   /**
-   * Increment session duration by specified minutes
+   * Increment session duration by specified minutes with UTC timezone support
    */
   async incrementDuration(
     sessionId: string,
@@ -132,12 +208,23 @@ export class WorkSessionService {
   ): Promise<void> {
     try {
       const sessionRef = doc(this.workSessionsCollection, sessionId);
+      
+      // Enhanced update data with UTC timezone support
       const updateData = {
         duration: increment(minutesToAdd),
-        updatedAt: new Date()
+        // Legacy fields (maintain compatibility)
+        updatedAt: new Date(),
+        // UTC timezone fields (new enhancement)
+        updatedAtUTC: timezoneUtils.getCurrentUTC()
       };
 
       await updateDoc(sessionRef, updateData);
+      
+      console.log('🌍 Enhanced legacy session duration incremented with UTC support:', {
+        sessionId,
+        minutesToAdd,
+        updatedAtUTC: updateData.updatedAtUTC
+      });
     } catch (error) {
       console.error('Error incrementing session duration:', error);
       throw error;
@@ -145,7 +232,7 @@ export class WorkSessionService {
   }
 
   /**
-   * Complete a session with final duration and status
+   * Complete a session with final duration and status (UTC timezone support)
    */
   async completeSession(
     sessionId: string,
@@ -154,11 +241,20 @@ export class WorkSessionService {
     notes?: string
   ): Promise<void> {
     try {
+      const endTime = new Date();
+      
       await this.updateSession(sessionId, {
         duration,
         status,
-        endTime: new Date(),
+        endTime,
         notes: notes || `Session ${status}: ${duration}m`
+      });
+      
+      console.log('🌍 Enhanced legacy session completed with UTC support:', {
+        sessionId,
+        duration,
+        status,
+        endTime: endTime.toISOString()
       });
     } catch (error) {
       console.error('Error completing session:', error);
@@ -236,7 +332,7 @@ export class WorkSessionService {
   }
 
   /**
-   * Legacy upsert method - kept for backward compatibility but now creates separate sessions
+   * Legacy upsert method - enhanced with UTC timezone support for manual time tracking
    */
   async upsertWorkSession(
     sessionData: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt' | 'duration' | 'sessionType' | 'status'>, 
@@ -244,18 +340,33 @@ export class WorkSessionService {
     sessionType: WorkSession['sessionType'] = 'manual'
   ): Promise<string> {
     try {
+      const userTimezone = timezoneUtils.getCurrentTimezone();
+      const now = new Date();
+      
       // Create a new session instead of updating existing one
       const workSession: Omit<WorkSession, 'id' | 'createdAt' | 'updatedAt'> = {
         ...sessionData,
         duration: durationChange, // Preserve the sign: positive for additions, negative for reductions
         sessionType,
         status: 'completed', // Manual sessions are always completed
+        startTime: now, // Set current time as start time
+        endTime: now, // Set current time as end time for manual entries
         notes: sessionType === 'manual' ? 
           (durationChange > 0 ? `Manual time addition: +${durationChange}m` : `Manual time reduction: ${durationChange}m`) :
           `${sessionType} session completed`
       };
 
-      return await this.createWorkSession(workSession);
+      const sessionId = await this.createWorkSession(workSession);
+      
+      console.log('🌍 Enhanced legacy manual session created with UTC support:', {
+        sessionId,
+        sessionType,
+        durationChange,
+        timezone: userTimezone,
+        isManualEntry: sessionType === 'manual'
+      });
+
+      return sessionId;
     } catch (error) {
       console.error('Error upserting work session:', error);
       throw error;
@@ -426,7 +537,7 @@ export class WorkSessionService {
   }
 
   /**
-   * Get work sessions for a specific date range
+   * Get work sessions for a specific date range with timezone-aware filtering
    * Used by Productivity Insight page for efficient data loading
    */
   async getWorkSessionsForRange(
@@ -435,24 +546,29 @@ export class WorkSessionService {
     endDate: Date
   ): Promise<WorkSession[]> {
     try {
-      const startDateStr = toLocalISOString(startDate).split('T')[0];
-      const endDateStr = toLocalISOString(endDate).split('T')[0];
-
-      console.log('WorkSessionService - Loading sessions for range:', {
+      const userTimezone = timezoneUtils.getCurrentTimezone();
+      
+      // Convert user's date range to UTC for proper comparison
+      const startDateUTC = timezoneUtils.userTimeToUTC(startDate.toISOString(), userTimezone);
+      const endDateUTC = timezoneUtils.userTimeToUTC(endDate.toISOString(), userTimezone);
+      
+      console.log('WorkSessionService - Loading sessions with timezone-aware filtering:', {
         userId,
-        startDate: startDateStr,
-        endDate: endDateStr
+        userTimezone,
+        userStartDate: startDate.toISOString().split('T')[0],
+        userEndDate: endDate.toISOString().split('T')[0],
+        utcStartDate: startDateUTC.split('T')[0],
+        utcEndDate: endDateUTC.split('T')[0]
       });
       
+      // Get all sessions for the user (we'll filter by timezone in memory)
       const q = query(
         this.workSessionsCollection,
-        where('userId', '==', userId),
-        where('date', '>=', startDateStr),
-        where('date', '<=', endDateStr),
+        where('userId', '==', userId)
       );
       
       const querySnapshot = await getDocs(q);
-      const sessions = querySnapshot.docs.map(doc => {
+      const allSessions = querySnapshot.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -462,10 +578,41 @@ export class WorkSessionService {
         };
       }) as WorkSession[];
       
-      // Sort by date descending in memory
-      sessions.sort((a, b) => b.date.localeCompare(a.date));
+      // Filter sessions based on timezone-aware date comparison
+      const filteredSessions = allSessions.filter(session => {
+        // Use UTC fields if available (enhanced sessions), otherwise fall back to legacy logic
+        if (session.startTimeUTC) {
+          // Enhanced session: compare UTC times directly
+          const sessionStartUTC = session.startTimeUTC;
+          return sessionStartUTC >= startDateUTC && sessionStartUTC <= endDateUTC;
+        } else {
+          // Legacy session: use date field
+          const sessionDate = session.date;
+          const userStartDateStr = startDate.toISOString().split('T')[0];
+          const userEndDateStr = endDate.toISOString().split('T')[0];
+          return sessionDate >= userStartDateStr && sessionDate <= userEndDateStr;
+        }
+      });
       
-      return sessions;
+      // Sort by date descending
+      filteredSessions.sort((a, b) => {
+        if (a.startTimeUTC && b.startTimeUTC) {
+          // Both have UTC times
+          return b.startTimeUTC.localeCompare(a.startTimeUTC);
+        } else {
+          // Fall back to date field comparison
+          return b.date.localeCompare(a.date);
+        }
+      });
+      
+      console.log('WorkSessionService - Filtered sessions result:', {
+        totalSessions: allSessions.length,
+        filteredSessions: filteredSessions.length,
+        enhancedSessions: filteredSessions.filter(s => s.startTimeUTC).length,
+        legacySessions: filteredSessions.filter(s => !s.startTimeUTC).length
+      });
+      
+      return filteredSessions;
     } catch (error) {
       console.error('Error getting work sessions for range:', error);
       throw error;
@@ -504,6 +651,70 @@ export class WorkSessionService {
       return sessions;
     } catch (error) {
       console.error('Error getting all work sessions:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get work sessions for a specific date in user's timezone (timezone-aware)
+   */
+  async getWorkSessionsByDate(userId: string, dateString: string): Promise<WorkSession[]> {
+    try {
+      const userTimezone = timezoneUtils.getCurrentTimezone();
+      
+      // Convert user's date to UTC range for proper comparison
+      const startOfDay = new Date(dateString + 'T00:00:00');
+      const endOfDay = new Date(dateString + 'T23:59:59');
+      const startOfDayUTC = timezoneUtils.userTimeToUTC(startOfDay.toISOString(), userTimezone);
+      const endOfDayUTC = timezoneUtils.userTimeToUTC(endOfDay.toISOString(), userTimezone);
+      
+      console.log('WorkSessionService - Loading sessions for date with timezone awareness:', {
+        userId,
+        userDate: dateString,
+        userTimezone,
+        utcRange: `${startOfDayUTC.split('T')[0]} to ${endOfDayUTC.split('T')[0]}`
+      });
+      
+      // Get all sessions for the user (we'll filter by timezone in memory)
+      const q = query(
+        this.workSessionsCollection,
+        where('userId', '==', userId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const allSessions = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: safeToDate(data.createdAt),
+          updatedAt: safeToDate(data.updatedAt),
+        };
+      }) as WorkSession[];
+      
+      // Filter sessions based on timezone-aware date comparison
+      const filteredSessions = allSessions.filter(session => {
+        // Use UTC fields if available (enhanced sessions), otherwise fall back to legacy logic
+        if (session.startTimeUTC) {
+          // Enhanced session: compare UTC times directly
+          const sessionStartUTC = session.startTimeUTC;
+          return sessionStartUTC >= startOfDayUTC && sessionStartUTC <= endOfDayUTC;
+        } else {
+          // Legacy session: use date field
+          return session.date === dateString;
+        }
+      });
+      
+      console.log('WorkSessionService - Date filtering result:', {
+        totalSessions: allSessions.length,
+        filteredSessions: filteredSessions.length,
+        enhancedSessions: filteredSessions.filter(s => s.startTimeUTC).length,
+        legacySessions: filteredSessions.filter(s => !s.startTimeUTC).length
+      });
+      
+      return filteredSessions;
+    } catch (error) {
+      console.error('Error getting work sessions for date:', error);
       throw error;
     }
   }

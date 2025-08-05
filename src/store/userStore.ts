@@ -227,15 +227,25 @@ export const useUserStore = create<UserState>((set, get) => {
     updateUserData: async (userData: UserData) => {
       try {
         const userDocRef = doc(usersCollection, userData.uid);
-        await setDoc(userDocRef, userData, { merge: true });
+        
+        // Sanitize userData to remove Firebase Auth objects before saving to Firestore
+        const sanitizedUserData: UserData = {
+          uid: userData.uid,
+          userName: userData.userName,
+          settings: userData.settings,
+          subscription: userData.subscription
+        };
+        
+        await setDoc(userDocRef, sanitizedUserData, { merge: true });
         
         // Update local state
         const { user } = get();
         if (user) {
-          console.log('Updating user data in store:', userData);
+          console.log('Updating user data in store:', sanitizedUserData);
           set({ user: { ...user, ...userData } });
         }
       } catch (error) {
+        console.error('❌ Failed to update user data:', error);
         throw new Error(`Failed to update user data: ${error}`);
       }
     },
@@ -356,10 +366,13 @@ export const useUserStore = create<UserState>((set, get) => {
           timezone: timezoneSettings
         };
 
-        await get().updateUserData({
-          ...user,
-          settings: updatedSettings
-        });
+        const sanitizedUserData = {
+          uid: user.uid,
+          userName: user.userName,
+          settings: updatedSettings,
+          subscription: user.subscription
+        };
+        await get().updateUserData(sanitizedUserData);
 
         utcMonitoring.trackOperation('timezone_initialization', true);
       } catch (error) {
@@ -391,10 +404,13 @@ export const useUserStore = create<UserState>((set, get) => {
           timezone: timezoneSettings
         };
 
-        await get().updateUserData({
-          ...user,
-          settings: updatedSettings
-        });
+        const sanitizedUserData = {
+          uid: user.uid,
+          userName: user.userName,
+          settings: updatedSettings,
+          subscription: user.subscription
+        };
+        await get().updateUserData(sanitizedUserData);
 
         utcMonitoring.trackOperation('timezone_confirmation', true);
         console.log('Timezone confirmed:', timezone);
@@ -414,7 +430,7 @@ export const useUserStore = create<UserState>((set, get) => {
           throw new Error(`Invalid timezone: ${newTimezone}`);
         }
 
-        const oldTimezone = user.settings?.timezone?.current || user.timezone;
+        const oldTimezone = user.settings?.timezone?.current;
 
         const timezoneSettings = {
           ...user.settings?.timezone,
@@ -428,10 +444,13 @@ export const useUserStore = create<UserState>((set, get) => {
           timezone: timezoneSettings
         };
 
-        await get().updateUserData({
-          ...user,
-          settings: updatedSettings
-        });
+        const sanitizedUserData = {
+          uid: user.uid,
+          userName: user.userName,
+          settings: updatedSettings,
+          subscription: user.subscription
+        };
+        await get().updateUserData(sanitizedUserData);
 
         // Coordinate timezone change with extension
         if (oldTimezone && oldTimezone !== newTimezone) {
@@ -475,10 +494,13 @@ export const useUserStore = create<UserState>((set, get) => {
             timezone: timezoneSettings
           };
 
-          await get().updateUserData({
-            ...user,
-            settings: updatedSettings
-          });
+          const sanitizedUserData = {
+            uid: user.uid,
+            userName: user.userName,
+            settings: updatedSettings,
+            subscription: user.subscription
+          };
+          await get().updateUserData(sanitizedUserData);
 
           utcMonitoring.trackOperation('timezone_auto_detect', true);
           console.log('Timezone auto-detected and updated:', detected);

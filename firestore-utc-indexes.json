@@ -1,0 +1,28 @@
+{
+  "indexes": [
+    {
+      "collectionId": "workSessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "mode": "ASCENDING" },
+        { "fieldPath": "startTimeUTC", "mode": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionId": "workSessions", 
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "mode": "ASCENDING" },
+        { "fieldPath": "startTimeUTC", "mode": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionId": "workSessions",
+      "queryScope": "COLLECTION", 
+      "fields": [
+        { "fieldPath": "userId", "mode": "ASCENDING" },
+        { "fieldPath": "createdAtUTC", "mode": "DESCENDING" }
+      ]
+    }
+  ]
+}

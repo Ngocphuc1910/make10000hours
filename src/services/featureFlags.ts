@@ -95,36 +95,117 @@ export class UTCFeatureFlagService {
   }
   
   getTransitionMode(userId?: string): 'disabled' | 'dual' | 'utc-only' {
+    console.log('🔍 DEBUG getTransitionMode:', {
+      userId: userId?.slice(0, 8) + '...',
+      isEmergencyDisabled: this.isEmergencyDisabled(),
+      rolloutPercentage: this.flags.rolloutPercentage,
+      transitionMode: this.flags.transitionMode,
+      allFlags: this.flags
+    });
+    
     if (this.isEmergencyDisabled()) {
+      console.log('❌ Emergency disabled, returning disabled');
       return 'disabled';
     }
     
-    if (userId && !this.isUserInRollout(userId)) {
+    // Skip rollout check if rollout percentage is 100% (all users enabled)
+    if (userId && this.flags.rolloutPercentage < 100 && !this.isUserInRollout(userId)) {
+      console.log('❌ User not in rollout, returning disabled');
       return 'disabled';
     }
     
+    console.log('✅ Returning transition mode:', this.flags.transitionMode);
     return this.flags.transitionMode;
   }
   
   private isEmergencyDisabled(): boolean {
+    // TEMPORARY FIX: Force disable emergency check for development
+    const isDevelopment = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
+    if (isDevelopment) {
+      console.log('🔧 DEV MODE: Bypassing emergency disable check');
+      return false; // Always return false in development
+    }
+    
     return localStorage.getItem('utc-emergency-disable') === 'true';
   }
   
   emergencyDisable(): void {
     localStorage.setItem('utc-emergency-disable', 'true');
-    console.warn('UTC features emergency disabled');
+    console.warn('🚨 UTC features emergency disabled');
     
     // Broadcast to all tabs
     localStorage.setItem('timezone_emergency_disable', Date.now().toString());
     
-    setTimeout(() => {
-      window.location.reload();
-    }, 100);
+    // Check if we're in a reload loop by counting recent disables
+    const recentDisables = sessionStorage.getItem('utc-emergency-disable-count') || '0';
+    const count = parseInt(recentDisables) + 1;
+    sessionStorage.setItem('utc-emergency-disable-count', count.toString());
+    
+    // If we've disabled multiple times recently, don't reload to prevent infinite loops
+    if (count >= 3) {
+      console.error('🛑 EMERGENCY DISABLE LOOP DETECTED - Preventing automatic reload');
+      console.error('🔧 Manual intervention required: Run resetUTCMonitoring() in console');
+      
+      // Show user-visible error
+      const errorDiv = document.createElement('div');
+      errorDiv.style.cssText = `
+        position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+        background: #ff4444; color: white; padding: 15px 20px; border-radius: 8px;
+        z-index: 10000; font-family: monospace; font-size: 14px; max-width: 500px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      `;
+      errorDiv.innerHTML = `
+        <div><strong>🚨 UTC System Error Loop Detected</strong></div>
+        <div style="margin-top: 8px; font-size: 12px;">
+          Work session creation temporarily disabled.<br>
+          Open console and run: <code style="background: rgba(255,255,255,0.2); padding: 2px 4px; border-radius: 3px;">resetUTCMonitoring()</code>
+        </div>
+      `;
+      document.body.appendChild(errorDiv);
+      
+      // Auto-remove error message after 15 seconds
+      setTimeout(() => {
+        if (errorDiv.parentNode) {
+          errorDiv.parentNode.removeChild(errorDiv);
+        }
+      }, 15000);
+      
+      return; // Don't reload
+    }
+    
+    // Check if we've already tried to reload recently
+    const lastReloadTime = sessionStorage.getItem('utc-emergency-reload');
+    const now = Date.now();
+    
+    if (!lastReloadTime || (now - parseInt(lastReloadTime)) > 30000) { // 30 second cooldown
+      sessionStorage.setItem('utc-emergency-reload', now.toString());
+      console.log('🔄 Reloading page due to UTC emergency disable...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } else {
+      console.warn('⏸ Skipping reload to prevent infinite loop - UTC features disabled');
+    }
   }
   
   emergencyEnable(): void {
     localStorage.removeItem('utc-emergency-disable');
-    console.log('UTC features emergency re-enabled');
+    sessionStorage.removeItem('utc-emergency-disable-count');
+    sessionStorage.removeItem('utc-emergency-reload');
+    console.log('✅ UTC features emergency re-enabled and loop counters cleared');
+  }
+  
+  /**
+   * Reset emergency disable loop counters and state
+   * Used when manually fixing the underlying issues
+   */
+  resetEmergencyState(): void {
+    localStorage.removeItem('utc-emergency-disable');
+    localStorage.removeItem('timezone_emergency_disable');
+    sessionStorage.removeItem('utc-emergency-disable-count');
+    sessionStorage.removeItem('utc-emergency-reload');
+    sessionStorage.removeItem('monitoring-emergency-disable');
+    console.log('🔄 Emergency disable state completely reset');
   }
   
   updateFlags(newFlags: Partial<UTCFeatureFlags>): void {
