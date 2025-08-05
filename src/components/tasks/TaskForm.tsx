@@ -366,12 +366,21 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       // Create WorkSession record for manual time changes (both additions and reductions)
       if (timeSpentChanged && timeDifference !== 0) {
         try {
+          const userTimezone = useUserStore.getState().getTimezone();
+          
+          // Calculate date in user's timezone, not browser timezone
+          const now = new Date();
+          const userTime = userTimezone 
+            ? (await import('../../utils/timezoneUtils')).timezoneUtils.utcToUserTime(now.toISOString(), userTimezone)
+            : now;
+          const userDate = (await import('date-fns')).format(userTime, 'yyyy-MM-dd');
+          
           await workSessionService.upsertWorkSession({
             userId: user.uid,
             taskId: task.id,
             projectId: finalProjectId || 'no-project',
-            date: getDateISOString(), // Use today's date in YYYY-MM-DD format
-          }, timeDifference, 'manual'); // Specify this is a manual session
+            date: userDate, // Use user's timezone date
+          }, timeDifference, 'manual', userTimezone); // Pass user's selected timezone
         } catch (error) {
           console.error('Failed to create work session for manual edit:', error);
         }

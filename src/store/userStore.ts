@@ -513,7 +513,19 @@ export const useUserStore = create<UserState>((set, get) => {
 
     getTimezone: () => {
       const { user } = get();
-      return user?.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
+      const userTimezone = user?.settings?.timezone?.current;
+      const fallbackTimezone = timezoneUtils.getCurrentTimezone();
+      
+      console.log('🔍 UserStore getTimezone debug:', {
+        userTimezone,
+        fallbackTimezone,
+        user: user ? 'exists' : 'null',
+        settings: user?.settings ? 'exists' : 'null',
+        timezoneSettings: user?.settings?.timezone,
+        finalTimezone: userTimezone || fallbackTimezone
+      });
+      
+      return userTimezone || fallbackTimezone;
     },
   };
 });
