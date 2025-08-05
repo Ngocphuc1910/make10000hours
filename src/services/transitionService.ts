@@ -5,6 +5,7 @@ import { utcMonitoring } from './monitoring';
 import { utcFeatureFlags } from './featureFlags';
 import type { WorkSession } from '../types/models';
 import type { WorkSessionUTC, UnifiedWorkSession } from '../types/utcModels';
+import { format } from 'date-fns';
 
 interface TransitionConfig {
   preferUTC: boolean;
@@ -246,7 +247,7 @@ export class TransitionQueryService {
         
         const sessionId = await workSessionService.createWorkSession({
           ...sessionData,
-          date: userLocalDate.toISOString().split('T')[0], // Use user's local date
+          date: format(userLocalDate, 'yyyy-MM-dd'), // Format date in user timezone (fixed bug)
           startTime: now, // Use Date object for legacy compatibility
           userId: sessionData.userId
         }, timezone);
@@ -257,7 +258,7 @@ export class TransitionQueryService {
         console.log('✅ Enhanced legacy session created successfully:', {
           sessionId,
           userTimezone: timezone,
-          localDate: userLocalDate.toISOString().split('T')[0]
+          localDate: format(userLocalDate, 'yyyy-MM-dd')
         });
         
         return sessionId;
@@ -493,7 +494,7 @@ export class TransitionQueryService {
   ): Promise<WorkSession[]> {
     // Convert date to local date string
     const localDate = timezoneUtils.utcToUserTime(date.toISOString(), userTimezone);
-    const dateString = localDate.toISOString().split('T')[0]; // YYYY-MM-DD
+    const dateString = format(localDate, 'yyyy-MM-dd'); // Format in user timezone (fixed bug)
     
     // Use existing legacy service
     return workSessionService.getWorkSessionsByDate(userId, dateString);

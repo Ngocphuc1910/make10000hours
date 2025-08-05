@@ -400,12 +400,21 @@ const TaskFormUTC: React.FC<TaskFormUTCProps> = ({
           } else {
             // Legacy work session creation
             const { workSessionService } = await import('../../api/workSessionService');
+            const userTimezone = useUserStore.getState().getTimezone();
+            
+            // Calculate date in user's timezone, not browser timezone
+            const now = new Date();
+            const userTime = userTimezone 
+              ? timezoneUtils.utcToUserTime(now.toISOString(), userTimezone)
+              : now;
+            const userDate = format(userTime, 'yyyy-MM-dd');
+            
             await workSessionService.upsertWorkSession({
               userId: user.uid,
               taskId: task.id,
               projectId: finalProjectId || 'no-project',
-              date: getDateISOString(),
-            }, timeDifference, 'manual');
+              date: userDate, // Use user's timezone date
+            }, timeDifference, 'manual', userTimezone);
           }
         }
       } else {

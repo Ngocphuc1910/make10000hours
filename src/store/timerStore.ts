@@ -365,6 +365,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
       try {
         // Use transition service to create session (routes to UTC or legacy based on feature flags)
         const userTimezone = useUserStore.getState().getTimezone();
+        console.log('🔍 TimerStore creating session with timezone:', userTimezone);
         const sessionId = await transitionQueryService.createSession({
           userId: user.uid,
           taskId: currentTask.id,
