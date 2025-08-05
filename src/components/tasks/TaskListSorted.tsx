@@ -4,6 +4,8 @@ import TaskItem from './TaskItem';
 import TaskForm from './TaskForm';
 import type { Task } from '../../types/models';
 import { useTimerStore } from '../../store/timerStore';
+import { TaskFilteringService } from '../../services/TaskFilteringService';
+import { useUserStore } from '../../store/userStore';
 
 export const TaskListSorted: React.FC = () => {
   const {
@@ -22,6 +24,8 @@ export const TaskListSorted: React.FC = () => {
     start,
     currentTask,
   } = useTimerStore();
+  
+  const { user } = useUserStore();
 
   // UI state
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -122,43 +126,20 @@ export const TaskListSorted: React.FC = () => {
     }
   };
 
-  // Helper function to get today's date in YYYY-MM-DD format
-  const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  };
-
-  // Sort tasks by order and filter based on current view mode
-  // Keep completed tasks visible until manually archived
+  // Filter and sort tasks using TaskFilteringService with timezone awareness
   const sortedTasks = [...tasks]
     .filter(task => {
       // Don't show archived tasks
       if (task.hideFromPomodoro) return false;
-
+      
+      // Use TaskFilteringService for timezone-aware filtering
+      const userTimezone = user?.settings?.timezone;
+      
       if (taskListViewMode === 'pomodoro') {
-        // Show tasks with status "pomodoro" (IN POMODORO)
-        if (task.status === 'pomodoro') return true;
-
-        // Show completed tasks (status becomes "completed" when task is marked done)
-        if (task.status === 'completed' && task.completed) return true;
-
-        return false;
-      } else if (taskListViewMode === 'today') {
-        const todayDate = getTodayDate();
-        
-        // Show tasks scheduled for today
-        if (task.scheduledDate === todayDate) return true;
-
-        // Show completed tasks that were completed today (we can still show completed ones)
-        if (task.status === 'completed' && task.completed) {
-          // If the task was scheduled for today or has no scheduled date but was completed today
-          if (task.scheduledDate === todayDate || !task.scheduledDate) return true;
-        }
-
-        return false;
+        return TaskFilteringService.getPomodoroTasks([task]).length > 0;
+      } else {
+        return TaskFilteringService.getTodaysTasks([task], userTimezone).length > 0;
       }
-
-      return false;
     })
     .sort((a, b) => a.order - b.order);
 

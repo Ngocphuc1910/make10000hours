@@ -4,6 +4,8 @@ import { CalendarEvent, DragItem, DropResult } from './types';
 import { DraggableEvent } from './components/DraggableEvent';
 import { DroppableTimeSlot } from './components/DroppableTimeSlot';
 import { useTaskStore } from '../../store/taskStore';
+import { useUserStore } from '../../store/userStore';
+import { timezoneUtils } from '../../utils/timezoneUtils';
 
 interface DayViewProps {
   currentDate: Date;
@@ -38,12 +40,33 @@ export const DayView: React.FC<DayViewProps> = ({
   clearDragIndicator
 }) => {
   const { projects } = useTaskStore();
+  const { user } = useUserStore();
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
     startElement: null,
     startY: 0,
     startTime: null
   });
+
+  // Get current time in user's timezone for the time indicator
+  const getCurrentTimeInUserTimezone = useCallback(() => {
+    const userTimezone = user?.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
+    const now = new Date();
+    
+    try {
+      const userTime = timezoneUtils.utcToUserTime(now.toISOString(), userTimezone);
+      return {
+        hours: userTime.getHours(),
+        minutes: userTime.getMinutes()
+      };
+    } catch (error) {
+      console.warn('Failed to get current time in user timezone:', error);
+      return {
+        hours: now.getHours(),
+        minutes: now.getMinutes()
+      };
+    }
+  }, [user?.settings?.timezone?.current]);
   
   const [dragIndicator, setDragIndicator] = useState<{
     visible: boolean;
@@ -443,17 +466,50 @@ export const DayView: React.FC<DayViewProps> = ({
               ))}
 
               {/* Current time indicator */}
-              {isToday(currentDate) && (
-                <div
-                  className="current-time-indicator absolute"
-                  style={{
-                    top: `${(new Date().getHours() * getTimeSlotHeight()) + ((new Date().getMinutes() / 60) * getTimeSlotHeight())}px`,
-                    left: 0,
-                    right: 0,
-                    zIndex: 15,
-                  }}
-                />
-              )}
+              {(() => {
+                const userTimezone = user?.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
+                const now = new Date();
+                
+                try {
+                  // Get current time in user's timezone
+                  const userTime = timezoneUtils.utcToUserTime(now.toISOString(), userTimezone);
+                  const userTimeDate = new Date(userTime.getFullYear(), userTime.getMonth(), userTime.getDate());
+                  const currentDateOnly = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
+                  
+                  const isUserToday = userTimeDate.getTime() === currentDateOnly.getTime();
+                  
+                  console.log('DayView current time indicator:', { 
+                    userTime, 
+                    userTimeDate, 
+                    currentDateOnly,
+                    isUserToday, 
+                    userTimezone,
+                    hours: userTime.getHours(),
+                    minutes: userTime.getMinutes()
+                  });
+                  
+                  if (isUserToday) {
+                    return (
+                      <div
+                        className="current-time-indicator absolute"
+                        style={{
+                          top: `${(userTime.getHours() * getTimeSlotHeight()) + ((userTime.getMinutes() / 60) * getTimeSlotHeight())}px`,
+                          left: 0,
+                          right: 0,
+                          height: '2px',
+                          backgroundColor: '#ef4444',
+                          zIndex: 15,
+                        }}
+                      />
+                    );
+                  }
+                  
+                  return null;
+                } catch (error) {
+                  console.warn('Failed to display current time indicator:', error);
+                  return null;
+                }
+              })()}
             </div>
           </div>
         </div>

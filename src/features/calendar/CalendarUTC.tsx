@@ -28,6 +28,7 @@ import {
   calculateNewEventTimeUTC, 
   isValidDropUTC 
 } from './utcUtils';
+import { mergeEventsAndTasks, calculateNewEventTime } from './utils';
 
 import TaskFormUTC from '../../components/tasks/TaskFormUTC';
 import { Task } from '../../types/models';
@@ -145,7 +146,6 @@ export const CalendarUTC: React.FC = () => {
       return mergeEventsAndTasksUTC(calendarEvents, tasks, projects, userTimezone);
     } else {
       // Fallback to legacy merge
-      const { mergeEventsAndTasks } = require('./utils');
       return mergeEventsAndTasks(calendarEvents, tasks, projects);
     }
   }, [calendarEvents, tasks, projects, useUTCCalendar, userTimezone]);
@@ -345,10 +345,7 @@ export const CalendarUTC: React.FC = () => {
         if (event.id === draggedEvent.id) {
           const { start, end } = useUTCCalendar 
             ? calculateNewEventTimeUTC(draggedEvent, dropResult, userTimezone)
-            : (() => {
-                const { calculateNewEventTime } = require('./utils');
-                return calculateNewEventTime(draggedEvent, dropResult);
-              })();
+            : calculateNewEventTime(draggedEvent, dropResult);
           return { ...event, start, end };
         }
         return event;
@@ -364,7 +361,6 @@ export const CalendarUTC: React.FC = () => {
       const calculation = useUTCCalendar 
         ? calculateNewEventTimeUTC(draggedEvent, dropResult, userTimezone)
         : (() => {
-            const { calculateNewEventTime } = require('./utils');
             const { start, end } = calculateNewEventTime(draggedEvent, dropResult);
             return {
               start,

@@ -22,6 +22,8 @@ import { Task } from '../../types/models';
 import { useAuthGuard, triggerAuthenticationFlow } from '../../utils/authGuard';
 import { useSyncStore } from '../../store/syncStore';
 import { useSimpleGoogleCalendarAuth } from '../../hooks/useSimpleGoogleCalendarAuth';
+import { TaskDisplayService } from '../../services/TaskDisplayService';
+import { timezoneUtils } from '../../utils/timezoneUtils';
 
 // Old DragState interface - removed since we have new drag-to-create system
 
@@ -102,10 +104,33 @@ export const Calendar: React.FC = () => {
     return hasCalendarAccess && token && token.syncEnabled && syncEnabled && !syncError;
   }, [hasCalendarAccess, token, syncEnabled, syncError]);
 
-  // Merge calendar events with task events
+  // Merge calendar events with task events using timezone-aware display
   const allEvents = useMemo(() => {
-    return mergeEventsAndTasks(calendarEvents, tasks, projects);
-  }, [calendarEvents, tasks, projects]);
+    try {
+      // Get user's timezone for proper display conversion
+      const userTimezone = user?.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
+      
+      console.log('🔄 Calendar: Converting tasks for timezone:', userTimezone);
+      console.log('📋 Calendar: Processing', tasks.length, 'tasks');
+      
+      // Convert tasks to display format with proper timezone
+      const displayTasks = TaskDisplayService.batchConvertForDisplay(tasks, userTimezone);
+      
+      console.log('✅ Calendar: Successfully converted', displayTasks.length, 'tasks');
+      
+      // Merge calendar events with timezone-converted tasks
+      const events = mergeEventsAndTasks(calendarEvents, displayTasks, projects);
+      
+      console.log('🎯 Calendar: Generated', events.length, 'total events');
+      
+      return events;
+    } catch (error) {
+      console.error('❌ Calendar: Failed to process events:', error);
+      
+      // Fallback: use original tasks without timezone conversion
+      return mergeEventsAndTasks(calendarEvents, tasks, projects);
+    }
+  }, [calendarEvents, tasks, projects, user?.settings?.timezone?.current]);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -168,6 +193,15 @@ export const Calendar: React.FC = () => {
       setSyncCompleted(false);
     }
   }, [syncEnabled, syncError]);
+
+  // Force re-render when user timezone changes
+  useEffect(() => {
+    const userTimezone = user?.settings?.timezone?.current;
+    if (userTimezone) {
+      console.log('🌍 Calendar: User timezone changed to:', userTimezone);
+      // The useMemo dependency will automatically trigger recalculation
+    }
+  }, [user?.settings?.timezone?.current]);
 
   // Handle URL query parameters for view selection
   useEffect(() => {

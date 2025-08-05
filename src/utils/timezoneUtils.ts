@@ -57,10 +57,46 @@ export class UTCTimezoneService {
    */
   utcToUserTime(utcTime: string, timezone: string): Date {
     try {
-      return toZonedTime(utcTime, timezone);
+      // Validate inputs
+      if (!utcTime || typeof utcTime !== 'string') {
+        throw new Error(`Invalid utcTime parameter: ${utcTime}`);
+      }
+      
+      if (!timezone || typeof timezone !== 'string') {
+        throw new Error(`Invalid timezone parameter: ${timezone}`);
+      }
+      
+      // Validate UTC time format
+      const utcDate = new Date(utcTime);
+      if (isNaN(utcDate.getTime())) {
+        throw new Error(`Invalid UTC time string: ${utcTime}`);
+      }
+      
+      // Attempt conversion
+      const result = toZonedTime(utcTime, timezone);
+      
+      // Validate result
+      if (isNaN(result.getTime())) {
+        throw new Error(`Conversion resulted in invalid date: ${utcTime} to ${timezone}`);
+      }
+      
+      return result;
     } catch (error) {
-      console.warn('UTC conversion failed, using local time:', error);
-      return new Date(utcTime);
+      console.warn('UTC conversion failed:', {
+        utcTime,
+        timezone,
+        error: error.message
+      });
+      
+      // Fallback to parsing as local time
+      const fallbackDate = new Date(utcTime);
+      if (isNaN(fallbackDate.getTime())) {
+        // Last resort - return current time
+        console.error('Critical timezone conversion failure, returning current time');
+        return new Date();
+      }
+      
+      return fallbackDate;
     }
   }
   
@@ -110,6 +146,33 @@ export class UTCTimezoneService {
     return this.getUserDateBoundariesUTC(userToday, timezone);
   }
   
+  /**
+   * Format date in specific timezone
+   */
+  formatDateInTimezone(date: Date, timezone: string, formatStr: string): string {
+    try {
+      const userTime = this.utcToUserTime(date.toISOString(), timezone);
+      return format(userTime, formatStr);
+    } catch (error) {
+      console.warn('Date formatting failed:', error);
+      return format(date, formatStr);
+    }
+  }
+
+  /**
+   * Create date in specific timezone
+   */
+  createDateInTimezone(dateTimeString: string, timezone: string): Date {
+    try {
+      // Parse the local date string and treat it as being in the specified timezone
+      const localDate = new Date(dateTimeString);
+      return fromZonedTime(localDate, timezone);
+    } catch (error) {
+      console.warn('Date creation failed:', error);
+      return new Date(dateTimeString);
+    }
+  }
+
   /**
    * Create timezone context for current moment
    */

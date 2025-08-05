@@ -1,6 +1,10 @@
 import { useTaskStore } from '../store/taskStore';
 import { useSyncStore } from '../store/syncStore';
 import { useUserStore } from '../store/userStore';
+import { TaskDisplayService } from '../services/TaskDisplayService';
+import { TaskNormalizationService } from '../services/TaskNormalizationService';
+import { TaskDetectionService } from '../services/TaskDetectionService';
+import { timezoneUtils } from './timezoneUtils';
 
 export const debugSyncStatus = () => {
   const { tasks, projects } = useTaskStore.getState();
@@ -70,4 +74,16 @@ export const fixTaskSyncStatus = async () => {
 if (typeof window !== 'undefined') {
   (window as any).debugSyncStatus = debugSyncStatus;
   (window as any).fixTaskSyncStatus = fixTaskSyncStatus;
+  
+  // Expose timezone services for debugging
+  (window as any).TaskDisplayService = TaskDisplayService;
+  (window as any).TaskNormalizationService = TaskNormalizationService;
+  (window as any).TaskDetectionService = TaskDetectionService;
+  (window as any).timezoneUtils = timezoneUtils;
+  
+  // Convenience access to stores
+  (window as any).useTaskStore = useTaskStore;
+  (window as any).useUserStore = useUserStore;
+  
+  console.log('🔧 Debug utilities and timezone services loaded');
 }

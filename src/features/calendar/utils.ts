@@ -1,13 +1,20 @@
 import { Task, Project } from '../../types/models';
 import { CalendarEvent, DropResult, DragItem } from './types';
 import { isSameDay, addMinutes, format } from 'date-fns';
+import type { TaskDisplay } from '../../types/taskEnhanced';
 
 /**
  * Convert a task with scheduled date/time to a CalendarEvent
+ * Now supports both TaskDisplay (with timezone conversion) and legacy Task formats
  */
-export const taskToCalendarEvent = (task: Task, project?: Project): CalendarEvent | null => {
-  // Only convert tasks that have a scheduled date
-  if (!task.scheduledDate) {
+export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project): CalendarEvent | null => {
+  const taskDisplay = task as TaskDisplay;
+  
+  // Check for display scheduling first (timezone-converted), then fallback to legacy
+  const hasDisplayScheduling = !!(taskDisplay.displayScheduledDate);
+  const hasLegacyScheduling = !!(task.scheduledDate);
+  
+  if (!hasDisplayScheduling && !hasLegacyScheduling) {
     return null;
   }
 
@@ -16,15 +23,29 @@ export const taskToCalendarEvent = (task: Task, project?: Project): CalendarEven
   const eventDescription = task.description;
   const projectName = project?.name || 'No Project';
   const projectColor = project?.color || '#6B7280'; // Default gray color
-
-  // Parse the scheduled date
-  const scheduledDate = new Date(task.scheduledDate);
   
   // Check completion status
   const isCompleted = task.completed || task.status === 'completed';
+
+  // Use display fields if available (timezone-converted), otherwise use legacy fields
+  let scheduledDate: Date;
+  let startTime: string | undefined;
+  let endTime: string | undefined;
+  
+  if (hasDisplayScheduling) {
+    // Use timezone-converted display fields
+    scheduledDate = new Date(taskDisplay.displayScheduledDate!);
+    startTime = taskDisplay.displayScheduledTime;
+    endTime = taskDisplay.displayScheduledEndTime; // Use timezone-converted end time
+  } else {
+    // Use legacy fields
+    scheduledDate = new Date(task.scheduledDate!);
+    startTime = task.scheduledStartTime;
+    endTime = task.scheduledEndTime;
+  }
   
   // If task doesn't include specific time, make it an all-day event
-  if (!task.includeTime || !task.scheduledStartTime || !task.scheduledEndTime) {
+  if (!task.includeTime || !startTime || !endTime) {
     return {
       id: eventId,
       title: eventTitle,
@@ -43,15 +64,42 @@ export const taskToCalendarEvent = (task: Task, project?: Project): CalendarEven
   }
 
   // Parse start and end times
-  const [startHour, startMinute] = task.scheduledStartTime.split(':').map(Number);
-  const [endHour, endMinute] = task.scheduledEndTime.split(':').map(Number);
+  const [startHour, startMinute] = startTime.split(':').map(Number);
+  const [endHour, endMinute] = endTime.split(':').map(Number);
 
   // Create start and end dates with specified times
-  const startDate = new Date(scheduledDate);
-  startDate.setHours(startHour, startMinute, 0, 0);
-
-  const endDate = new Date(scheduledDate);
-  endDate.setHours(endHour, endMinute, 0, 0);
+  let startDate: Date;
+  let endDate: Date;
+  
+  if (hasDisplayScheduling) {
+    // For display tasks, the times are already in the correct timezone
+    // Create dates using the display date and times (already converted)
+    const baseDateStr = taskDisplay.displayScheduledDate!;
+    startDate = new Date(`${baseDateStr}T${startTime}:00`);
+    endDate = new Date(`${baseDateStr}T${endTime}:00`);
+    
+    console.log(`📅 Calendar Event (${task.title}):`, {
+      displayDate: baseDateStr,
+      displayTime: `${startTime}-${endTime}`,
+      finalStartDate: startDate.toISOString(),
+      finalEndDate: endDate.toISOString(),
+      timezone: taskDisplay.displayTimezone
+    });
+  } else {
+    // For legacy tasks, use the original logic
+    startDate = new Date(scheduledDate);
+    startDate.setHours(startHour, startMinute, 0, 0);
+    
+    endDate = new Date(scheduledDate);
+    endDate.setHours(endHour, endMinute, 0, 0);
+    
+    console.log(`📅 Calendar Event (${task.title}) - Legacy:`, {
+      legacyDate: scheduledDate.toISOString(),
+      legacyTime: `${startTime}-${endTime}`,
+      finalStartDate: startDate.toISOString(),
+      finalEndDate: endDate.toISOString()
+    });
+  }
 
   // If end time is before start time, assume it's the next day
   if (endDate < startDate) {
