@@ -297,7 +297,14 @@ export const DayView: React.FC<DayViewProps> = ({
             {/* Day header */}
             <div className="flex flex-col items-center justify-center py-3">
               <div className="text-xs text-text-secondary font-medium mb-1">{format(currentDate, 'EEE').toUpperCase()}</div>
-              <div className={`text-lg font-medium ${isToday(currentDate) ? 'text-primary bg-primary text-white rounded-full w-8 h-8 flex items-center justify-center' : 'text-text-primary'}`}>
+              <div className={`text-lg font-medium ${(() => {
+                // Use timezone-aware today check
+                const userTimezone = user?.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
+                const todayInUserTimezone = timezoneUtils.formatDateInTimezone(new Date(), userTimezone, 'yyyy-MM-dd');
+                const currentDateString = format(currentDate, 'yyyy-MM-dd');
+                const isTodayInUserTz = todayInUserTimezone === currentDateString;
+                return isTodayInUserTz ? 'text-primary bg-primary text-white rounded-full w-8 h-8 flex items-center justify-center' : 'text-text-primary';
+              })()}`}>
                 {format(currentDate, 'd')}
               </div>
             </div>
@@ -473,20 +480,13 @@ export const DayView: React.FC<DayViewProps> = ({
                 try {
                   // Get current time in user's timezone
                   const userTime = timezoneUtils.utcToUserTime(now.toISOString(), userTimezone);
-                  const userTimeDate = new Date(userTime.getFullYear(), userTime.getMonth(), userTime.getDate());
-                  const currentDateOnly = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
                   
-                  const isUserToday = userTimeDate.getTime() === currentDateOnly.getTime();
+                  // Use timezone-aware today date calculation
+                  const todayInUserTimezone = timezoneUtils.formatDateInTimezone(now, userTimezone, 'yyyy-MM-dd');
+                  const currentDateString = format(currentDate, 'yyyy-MM-dd');
                   
-                  console.log('DayView current time indicator:', { 
-                    userTime, 
-                    userTimeDate, 
-                    currentDateOnly,
-                    isUserToday, 
-                    userTimezone,
-                    hours: userTime.getHours(),
-                    minutes: userTime.getMinutes()
-                  });
+                  const isUserToday = todayInUserTimezone === currentDateString;
+                  
                   
                   if (isUserToday) {
                     return (
