@@ -114,18 +114,25 @@ export const Calendar: React.FC = () => {
       // Get user's timezone for proper display conversion
       const userTimezone = user?.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
       
-      console.log('🔄 Calendar: Converting tasks for timezone:', userTimezone);
-      console.log('📋 Calendar: Processing', tasks.length, 'tasks');
+      // Only log conversion process in debug mode to prevent excessive logging during drag operations
+      if (globalThis.__debug_calendar_conversion) {
+        console.log('🔄 Calendar: Converting tasks for timezone:', userTimezone);
+        console.log('📋 Calendar: Processing', tasks.length, 'tasks');
+      }
       
       // Convert tasks to display format with proper timezone
       const displayTasks = TaskDisplayService.batchConvertForDisplay(tasks, userTimezone);
       
-      console.log('✅ Calendar: Successfully converted', displayTasks.length, 'tasks');
+      if (globalThis.__debug_calendar_conversion) {
+        console.log('✅ Calendar: Successfully converted', displayTasks.length, 'tasks');
+      }
       
       // Merge calendar events with timezone-converted tasks
       const events = mergeEventsAndTasks(calendarEvents, displayTasks, projects);
       
-      console.log('🎯 Calendar: Generated', events.length, 'total events');
+      if (globalThis.__debug_calendar_conversion) {
+        console.log('🎯 Calendar: Generated', events.length, 'total events');
+      }
       
       return events;
     } catch (error) {
@@ -629,6 +636,7 @@ export const Calendar: React.FC = () => {
           ? format(dropResult.targetDate, 'yyyy-MM-dd') // Use target date directly for all-day events
           : `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`; // Use calculated start for timed events
           
+          
         const taskUpdateData: any = {
           scheduledDate,
           includeTime: !shouldBeAllDay
@@ -684,7 +692,7 @@ export const Calendar: React.FC = () => {
 
         // Update the task through the task store
         updateTask(task.id, taskUpdateData).catch(error => {
-          console.error('Failed to update task scheduling:', error);
+          console.error('❌ Failed to update task scheduling:', error);
           // Remove the action from undo stack if update failed
           setUndoStack(prev => prev.slice(0, -1));
         });

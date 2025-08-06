@@ -45,10 +45,37 @@ export class UTCTimezoneService {
   userTimeToUTC(userTime: string | Date, timezone: string): string {
     try {
       const date = typeof userTime === 'string' ? new Date(userTime) : userTime;
-      return fromZonedTime(date, timezone).toISOString();
+      
+      // Validate the input date
+      if (isNaN(date.getTime())) {
+        throw new Error(`Invalid date input: ${userTime}`);
+      }
+      
+      const result = fromZonedTime(date, timezone);
+      
+      // Validate the result
+      if (isNaN(result.getTime())) {
+        throw new Error(`Invalid result after timezone conversion`);
+      }
+      
+      return result.toISOString();
     } catch (error) {
-      console.warn('Timezone conversion failed, using UTC:', error);
-      return new Date(userTime).toISOString();
+      console.error('❌ Timezone conversion failed:', error);
+      console.error('Input:', { userTime, timezone });
+      
+      // More robust fallback
+      try {
+        const fallbackDate = typeof userTime === 'string' ? new Date(userTime) : userTime;
+        if (!isNaN(fallbackDate.getTime())) {
+          return fallbackDate.toISOString();
+        }
+      } catch (fallbackError) {
+        console.error('❌ Fallback conversion also failed:', fallbackError);
+      }
+      
+      // Last resort: return current time
+      console.warn('⚠️ Using current time as fallback');
+      return new Date().toISOString();
     }
   }
   

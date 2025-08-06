@@ -79,13 +79,16 @@ export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project)
     startDate = new Date(`${baseDateStr}T${startTime}:00`);
     endDate = new Date(`${baseDateStr}T${endTime}:00`);
     
-    console.log(`📅 Calendar Event (${task.title}):`, {
-      displayDate: baseDateStr,
-      displayTime: `${startTime}-${endTime}`,
-      finalStartDate: startDate.toISOString(),
-      finalEndDate: endDate.toISOString(),
-      timezone: taskDisplay.displayTimezone
-    });
+    // Only log in debug mode to prevent excessive logging during drag operations
+    if (process.env.NODE_ENV === 'development' && globalThis.__debug_calendar_events) {
+      console.log(`📅 Calendar Event (${task.title}):`, {
+        displayDate: baseDateStr,
+        displayTime: `${startTime}-${endTime}`,
+        finalStartDate: startDate.toISOString(),
+        finalEndDate: endDate.toISOString(),
+        timezone: taskDisplay.displayTimezone
+      });
+    }
   } else {
     // For legacy tasks, use the original logic
     startDate = new Date(scheduledDate);
@@ -94,12 +97,15 @@ export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project)
     endDate = new Date(scheduledDate);
     endDate.setHours(endHour, endMinute, 0, 0);
     
-    console.log(`📅 Calendar Event (${task.title}) - Legacy:`, {
-      legacyDate: scheduledDate.toISOString(),
-      legacyTime: `${startTime}-${endTime}`,
-      finalStartDate: startDate.toISOString(),
-      finalEndDate: endDate.toISOString()
-    });
+    // Only log in debug mode to prevent excessive logging during drag operations
+    if (process.env.NODE_ENV === 'development' && globalThis.__debug_calendar_events) {
+      console.log(`📅 Calendar Event (${task.title}) - Legacy:`, {
+        legacyDate: scheduledDate.toISOString(),
+        legacyTime: `${startTime}-${endTime}`,
+        finalStartDate: startDate.toISOString(),
+        finalEndDate: endDate.toISOString()
+      });
+    }
   }
 
   // If end time is before start time, assume it's the next day
@@ -259,9 +265,11 @@ export const isValidDrop = (
   userTimezone?: string
 ): boolean => {
   // Can't drop on same position
-  if (isSameDay(draggedEvent.start, dropResult.targetDate) && 
-      !dropResult.targetTime && 
-      draggedEvent.isAllDay === (dropResult.isAllDay || false)) {
+  const sameDate = isSameDay(draggedEvent.start, dropResult.targetDate);
+  const sameAllDayStatus = draggedEvent.isAllDay === (dropResult.isAllDay || false);
+  const noTargetTime = !dropResult.targetTime;
+  
+  if (sameDate && noTargetTime && sameAllDayStatus) {
     return false;
   }
   
