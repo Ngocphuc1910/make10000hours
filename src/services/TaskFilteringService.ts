@@ -62,28 +62,61 @@ export class TaskFilteringService {
     endUTC: string;
     localDate: string;
   } {
-    const now = new Date();
-    
-    // Get today's date in user's timezone
-    const localDateString = timezoneUtils.formatDateInTimezone(now, userTimezone, 'yyyy-MM-dd');
-    
-    // Get start of day in user's timezone, then convert to UTC
-    const startOfDayLocal = timezoneUtils.createDateInTimezone(
-      `${localDateString}T00:00:00`,
-      userTimezone
-    );
-    
-    // Get end of day in user's timezone, then convert to UTC
-    const endOfDayLocal = timezoneUtils.createDateInTimezone(
-      `${localDateString}T23:59:59`,
-      userTimezone
-    );
-    
-    return {
-      startUTC: startOfDayLocal.toISOString(),
-      endUTC: endOfDayLocal.toISOString(),
-      localDate: localDateString
-    };
+    try {
+      const now = new Date();
+      
+      // Validate current date
+      if (isNaN(now.getTime())) {
+        throw new Error('Current date is invalid');
+      }
+      
+      // Get today's date in user's timezone
+      const localDateString = timezoneUtils.formatDateInTimezone(now, userTimezone, 'yyyy-MM-dd');
+      
+      // Validate localDateString format
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(localDateString)) {
+        throw new Error(`Invalid local date string format: ${localDateString}`);
+      }
+      
+      // Get start of day in user's timezone, then convert to UTC
+      const startOfDayLocal = timezoneUtils.createDateInTimezone(
+        `${localDateString}T00:00:00`,
+        userTimezone
+      );
+      
+      // Get end of day in user's timezone, then convert to UTC
+      const endOfDayLocal = timezoneUtils.createDateInTimezone(
+        `${localDateString}T23:59:59`,
+        userTimezone
+      );
+      
+      // Validate dates before calling toISOString
+      if (isNaN(startOfDayLocal.getTime())) {
+        throw new Error(`Invalid start of day date: ${localDateString}T00:00:00 in ${userTimezone}`);
+      }
+      
+      if (isNaN(endOfDayLocal.getTime())) {
+        throw new Error(`Invalid end of day date: ${localDateString}T23:59:59 in ${userTimezone}`);
+      }
+      
+      return {
+        startUTC: startOfDayLocal.toISOString(),
+        endUTC: endOfDayLocal.toISOString(),
+        localDate: localDateString
+      };
+    } catch (error) {
+      console.error('Failed to get today range, using fallback:', error);
+      
+      // Fallback to UTC-based calculation
+      const now = new Date();
+      const todayUTC = now.toISOString().split('T')[0];
+      
+      return {
+        startUTC: `${todayUTC}T00:00:00.000Z`,
+        endUTC: `${todayUTC}T23:59:59.999Z`,
+        localDate: todayUTC
+      };
+    }
   }
   
   /**
@@ -148,28 +181,43 @@ export class TaskFilteringService {
     targetDate: string, // YYYY-MM-DD format
     userTimezone?: string
   ): Task[] {
-    const timezone = userTimezone || timezoneUtils.getCurrentTimezone();
-    
-    // Create date range for the target date
-    const startOfDayLocal = timezoneUtils.createDateInTimezone(
-      `${targetDate}T00:00:00`,
-      timezone
-    );
-    
-    const endOfDayLocal = timezoneUtils.createDateInTimezone(
-      `${targetDate}T23:59:59`,
-      timezone
-    );
-    
-    const dateRange = {
-      startUTC: startOfDayLocal.toISOString(),
-      endUTC: endOfDayLocal.toISOString(),
-      localDate: targetDate
-    };
-    
-    // Normalize and filter tasks
-    const normalizedTasks = TaskNormalizationService.batchNormalize(tasks);
-    return this.filterTasksForDateRange(normalizedTasks, dateRange);
+    try {
+      const timezone = userTimezone || timezoneUtils.getCurrentTimezone();
+      
+      // Validate targetDate format
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+        throw new Error(`Invalid target date format: ${targetDate}`);
+      }
+      
+      // Create date range for the target date
+      const startOfDayLocal = timezoneUtils.createDateInTimezone(
+        `${targetDate}T00:00:00`,
+        timezone
+      );
+      
+      const endOfDayLocal = timezoneUtils.createDateInTimezone(
+        `${targetDate}T23:59:59`,
+        timezone
+      );
+      
+      // Validate dates before calling toISOString
+      if (isNaN(startOfDayLocal.getTime()) || isNaN(endOfDayLocal.getTime())) {
+        throw new Error(`Failed to create valid dates for ${targetDate} in ${timezone}`);
+      }
+      
+      const dateRange = {
+        startUTC: startOfDayLocal.toISOString(),
+        endUTC: endOfDayLocal.toISOString(),
+        localDate: targetDate
+      };
+      
+      // Normalize and filter tasks
+      const normalizedTasks = TaskNormalizationService.batchNormalize(tasks);
+      return this.filterTasksForDateRange(normalizedTasks, dateRange);
+    } catch (error) {
+      console.error(`Failed to get tasks for date ${targetDate}:`, error);
+      return [];
+    }
   }
   
   /**
@@ -181,36 +229,51 @@ export class TaskFilteringService {
     endDate: string,   // YYYY-MM-DD format
     userTimezone?: string
   ): Task[] {
-    const timezone = userTimezone || timezoneUtils.getCurrentTimezone();
-    
-    // Create UTC range from local dates
-    const rangeStartLocal = timezoneUtils.createDateInTimezone(
-      `${startDate}T00:00:00`,
-      timezone
-    );
-    
-    const rangeEndLocal = timezoneUtils.createDateInTimezone(
-      `${endDate}T23:59:59`,
-      timezone
-    );
-    
-    // Normalize tasks first
-    const normalizedTasks = TaskNormalizationService.batchNormalize(tasks);
-    
-    return normalizedTasks.filter(task => {
-      // Check UTC scheduling
-      if (task.scheduledTimeUTC) {
-        const scheduledTime = new Date(task.scheduledTimeUTC);
-        return scheduledTime >= rangeStartLocal && scheduledTime <= rangeEndLocal;
+    try {
+      const timezone = userTimezone || timezoneUtils.getCurrentTimezone();
+      
+      // Validate date formats
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+        throw new Error(`Invalid date format: ${startDate} to ${endDate}`);
       }
       
-      // Fallback to legacy date comparison
-      if (task.scheduledDate) {
-        return task.scheduledDate >= startDate && task.scheduledDate <= endDate;
+      // Create UTC range from local dates
+      const rangeStartLocal = timezoneUtils.createDateInTimezone(
+        `${startDate}T00:00:00`,
+        timezone
+      );
+      
+      const rangeEndLocal = timezoneUtils.createDateInTimezone(
+        `${endDate}T23:59:59`,
+        timezone
+      );
+      
+      // Validate dates before using them
+      if (isNaN(rangeStartLocal.getTime()) || isNaN(rangeEndLocal.getTime())) {
+        throw new Error(`Failed to create valid date range: ${startDate} to ${endDate} in ${timezone}`);
       }
       
-      return false;
-    });
+      // Normalize tasks first
+      const normalizedTasks = TaskNormalizationService.batchNormalize(tasks);
+      
+      return normalizedTasks.filter(task => {
+        // Check UTC scheduling
+        if (task.scheduledTimeUTC) {
+          const scheduledTime = new Date(task.scheduledTimeUTC);
+          return scheduledTime >= rangeStartLocal && scheduledTime <= rangeEndLocal;
+        }
+        
+        // Fallback to legacy date comparison
+        if (task.scheduledDate) {
+          return task.scheduledDate >= startDate && task.scheduledDate <= endDate;
+        }
+        
+        return false;
+      });
+    } catch (error) {
+      console.error(`Failed to get tasks in date range ${startDate} to ${endDate}:`, error);
+      return [];
+    }
   }
   
   /**

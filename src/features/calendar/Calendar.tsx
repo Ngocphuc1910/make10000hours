@@ -48,7 +48,11 @@ interface UndoRedoState {
 }
 
 export const Calendar: React.FC = () => {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  // Initialize currentDate to today in user's timezone
+  const [currentDate, setCurrentDate] = useState(() => {
+    // This will be updated once user data loads, but start with browser local time
+    return new Date();
+  });
   const [currentView, setCurrentView] = useState<CalendarView>('week');
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -194,14 +198,23 @@ export const Calendar: React.FC = () => {
     }
   }, [syncEnabled, syncError]);
 
-  // Force re-render when user timezone changes
+  // Update currentDate when user timezone changes and ensure we're showing today in user's timezone
   useEffect(() => {
     const userTimezone = user?.settings?.timezone?.current;
     if (userTimezone) {
-      console.log('🌍 Calendar: User timezone changed to:', userTimezone);
-      // The useMemo dependency will automatically trigger recalculation
+      // Check if currentDate represents today in the user's timezone
+      const now = new Date();
+      const todayInUserTimezone = timezoneUtils.formatDateInTimezone(now, userTimezone, 'yyyy-MM-dd');
+      const currentDateString = format(currentDate, 'yyyy-MM-dd');
+      
+      // If we're currently showing today but timezone changed, update to today in new timezone
+      const browserToday = format(new Date(), 'yyyy-MM-dd');
+      if (currentDateString === browserToday) {
+        const todayDate = new Date(todayInUserTimezone + 'T12:00:00');
+        setCurrentDate(todayDate);
+      }
     }
-  }, [user?.settings?.timezone?.current]);
+  }, [user?.settings?.timezone?.current, currentDate]);
 
   // Handle URL query parameters for view selection
   useEffect(() => {
@@ -355,7 +368,15 @@ export const Calendar: React.FC = () => {
 
   const handleNavigate = (direction: 'prev' | 'next' | 'today') => {
     if (direction === 'today') {
-      setCurrentDate(new Date());
+      // Get today's date in user's timezone
+      const userTimezone = user?.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
+      const now = new Date();
+      const todayInUserTimezone = timezoneUtils.formatDateInTimezone(now, userTimezone, 'yyyy-MM-dd');
+      
+      // Create a date object for today in user's timezone
+      const todayDate = new Date(todayInUserTimezone + 'T12:00:00'); // Use noon to avoid timezone edge cases
+      
+      setCurrentDate(todayDate);
       // For week view, also use the smooth scrolling
       if (currentView === 'week' && scrollableWeekViewRef.current) {
         scrollableWeekViewRef.current.navigateWeek('today');

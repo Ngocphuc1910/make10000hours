@@ -649,14 +649,22 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
               </div>
               
               {/* Day headers */}
-              {allDays.map((day, dayIndex) => (
-                <div key={dayIndex} className={`calendar-week-day-header flex flex-col items-center justify-center py-3 bg-background-primary dark:bg-[#141414] border-t border-r border-border ${isToday(day) ? 'bg-primary bg-opacity-5' : ''}`} style={{ minWidth: `${DAY_WIDTH}px`, width: `${DAY_WIDTH}px`, flexShrink: 0 }}>
-                  <div className="text-xs text-text-secondary font-medium mb-1">{format(day, 'EEE').toUpperCase()}</div>
-                  <div className={`text-lg font-medium ${isToday(day) ? 'text-primary bg-primary text-white rounded-full w-8 h-8 flex items-center justify-center' : 'text-text-primary'}`}>
-                    {format(day, 'd')}
+              {allDays.map((day, dayIndex) => {
+                // Use timezone-aware today check
+                const userTimezone = user?.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
+                const todayInUserTimezone = timezoneUtils.formatDateInTimezone(new Date(), userTimezone, 'yyyy-MM-dd');
+                const dayString = format(day, 'yyyy-MM-dd');
+                const isTodayInUserTz = todayInUserTimezone === dayString;
+                
+                return (
+                  <div key={dayIndex} className={`calendar-week-day-header flex flex-col items-center justify-center py-3 bg-background-primary dark:bg-[#141414] border-t border-r border-border ${isTodayInUserTz ? 'bg-primary bg-opacity-5' : ''}`} style={{ minWidth: `${DAY_WIDTH}px`, width: `${DAY_WIDTH}px`, flexShrink: 0 }}>
+                    <div className="text-xs text-text-secondary font-medium mb-1">{format(day, 'EEE').toUpperCase()}</div>
+                    <div className={`text-lg font-medium ${isTodayInUserTz ? 'text-primary bg-primary text-white rounded-full w-8 h-8 flex items-center justify-center' : 'text-text-primary'}`}>
+                      {format(day, 'd')}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* All Day Events Row - Sticky */}
@@ -836,10 +844,13 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
                     try {
                       // Get current time in user's timezone
                       const userTime = timezoneUtils.utcToUserTime(now.toISOString(), userTimezone);
-                      const userTimeDate = new Date(userTime.getFullYear(), userTime.getMonth(), userTime.getDate());
-                      const dayDateOnly = new Date(day.getFullYear(), day.getMonth(), day.getDate());
                       
-                      const isUserToday = userTimeDate.getTime() === dayDateOnly.getTime();
+                      // Use timezone-aware today date calculation
+                      const todayInUserTimezone = timezoneUtils.formatDateInTimezone(now, userTimezone, 'yyyy-MM-dd');
+                      const dayString = format(day, 'yyyy-MM-dd');
+                      
+                      const isUserToday = todayInUserTimezone === dayString;
+                      
                       
                       if (isUserToday) {
                         return (
