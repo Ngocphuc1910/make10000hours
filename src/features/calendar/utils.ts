@@ -2,6 +2,7 @@ import { Task, Project } from '../../types/models';
 import { CalendarEvent, DropResult, DragItem } from './types';
 import { isSameDay, addMinutes, format } from 'date-fns';
 import type { TaskDisplay } from '../../types/taskEnhanced';
+import { timezoneUtils } from '../../utils/timezoneUtils';
 
 /**
  * Convert a task with scheduled date/time to a CalendarEvent
@@ -162,56 +163,100 @@ export const mergeEventsAndTasks = (
 // Drag & Drop Utilities
 
 /**
- * Calculate new event times based on drop position
+ * Calculate new event times based on drop position (timezone-aware version)
  */
 export const calculateNewEventTime = (
   originalEvent: CalendarEvent,
-  dropResult: DropResult
+  dropResult: DropResult,
+  userTimezone?: string
 ): { start: Date; end: Date } => {
-  // Use actual duration to preserve zero-duration events
-  const actualDuration = originalEvent.end.getTime() - originalEvent.start.getTime();
+  const timezone = userTimezone || timezoneUtils.getCurrentTimezone();
   
-  // Only check drop target, not original event type
-  if (dropResult.isAllDay) {
-    // For all-day drops, move to target date as all-day
-    const start = new Date(dropResult.targetDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
+  try {
+    // Use actual duration to preserve zero-duration events
+    const actualDuration = originalEvent.end.getTime() - originalEvent.start.getTime();
+    
+    // Only check drop target, not original event type
+    if (dropResult.isAllDay) {
+      // For all-day drops, use the target date directly without timezone conversion
+      // All-day events should preserve the calendar date exactly as shown
+      const start = new Date(dropResult.targetDate);
+      start.setHours(0, 0, 0, 0); // Set to start of day in local time
+      const end = new Date(start);
+      return { start, end };
+    }
+    
+    // For timed drops, use timezone-aware date creation
+    let start: Date;
+    const dateString = format(dropResult.targetDate, 'yyyy-MM-dd');
+    
+    if (dropResult.targetTime) {
+      // Use the target time from the drop result
+      const hour = String(dropResult.targetTime.hour).padStart(2, '0');
+      const minute = String(dropResult.targetTime.minute).padStart(2, '0');
+      start = timezoneUtils.createDateInTimezone(`${dateString}T${hour}:${minute}:00`, timezone);
+    } else {
+      // Keep original time but change date - need to extract time in user's timezone
+      const originalTimeInUserTz = timezoneUtils.utcToUserTime(originalEvent.start.toISOString(), timezone);
+      const hour = String(originalTimeInUserTz.getHours()).padStart(2, '0');
+      const minute = String(originalTimeInUserTz.getMinutes()).padStart(2, '0');
+      start = timezoneUtils.createDateInTimezone(`${dateString}T${hour}:${minute}:00`, timezone);
+    }
+    
+    // Smart duration calculation for converted events
+    let duration = actualDuration;
+    if (originalEvent.isAllDay && actualDuration === 0) {
+      // All-day to timed: use 1-hour default
+      duration = 60 * 60 * 1000;
+    } else if (actualDuration === 0) {
+      // Zero-duration to timed: use 30-min default
+      duration = 30 * 60 * 1000;
+    }
+    
+    const end = new Date(start.getTime() + duration);
+    return { start, end };
+  } catch (error) {
+    console.error('Failed to calculate new event time with timezone:', error);
+    
+    // Fallback to original logic for backwards compatibility
+    const actualDuration = originalEvent.end.getTime() - originalEvent.start.getTime();
+    
+    if (dropResult.isAllDay) {
+      const start = new Date(dropResult.targetDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      return { start, end };
+    }
+    
+    let start: Date;
+    if (dropResult.targetTime) {
+      start = new Date(dropResult.targetDate);
+      start.setHours(dropResult.targetTime.hour, dropResult.targetTime.minute, 0, 0);
+    } else {
+      start = new Date(dropResult.targetDate);
+      start.setHours(originalEvent.start.getHours(), originalEvent.start.getMinutes(), 0, 0);
+    }
+    
+    let duration = actualDuration;
+    if (originalEvent.isAllDay && actualDuration === 0) {
+      duration = 60 * 60 * 1000;
+    } else if (actualDuration === 0) {
+      duration = 30 * 60 * 1000;
+    }
+    
+    const end = new Date(start.getTime() + duration);
     return { start, end };
   }
-  
-  // For timed drops
-  let start: Date;
-  if (dropResult.targetTime) {
-    start = new Date(dropResult.targetDate);
-    start.setHours(dropResult.targetTime.hour, dropResult.targetTime.minute, 0, 0);
-  } else {
-    // Keep original time but change date
-    start = new Date(dropResult.targetDate);
-    start.setHours(originalEvent.start.getHours(), originalEvent.start.getMinutes(), 0, 0);
-  }
-  
-  // Smart duration calculation for converted events
-  let duration = actualDuration;
-  if (originalEvent.isAllDay && actualDuration === 0) {
-    // All-day to timed: use 1-hour default
-    duration = 60 * 60 * 1000;
-  } else if (actualDuration === 0) {
-    // Zero-duration to timed: use 30-min default
-    duration = 30 * 60 * 1000;
-  }
-  
-  const end = new Date(start.getTime() + duration);
-  return { start, end };
 };
 
 /**
- * Check if a drop operation is valid
+ * Check if a drop operation is valid (timezone-aware version)
  */
 export const isValidDrop = (
   draggedEvent: CalendarEvent,
   dropResult: DropResult,
-  allEvents: CalendarEvent[]
+  allEvents: CalendarEvent[],
+  userTimezone?: string
 ): boolean => {
   // Can't drop on same position
   if (isSameDay(draggedEvent.start, dropResult.targetDate) && 
@@ -220,8 +265,8 @@ export const isValidDrop = (
     return false;
   }
   
-  // Calculate new times
-  const { start, end } = calculateNewEventTime(draggedEvent, dropResult);
+  // Calculate new times using timezone-aware calculation
+  const { start, end } = calculateNewEventTime(draggedEvent, dropResult, userTimezone);
 
   // For all-day drops, allow them (no time conflict check needed)
   if (dropResult.isAllDay) {
