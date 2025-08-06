@@ -133,7 +133,7 @@ export const TaskListSorted: React.FC = () => {
       if (task.hideFromPomodoro) return false;
       
       // Use TaskFilteringService for timezone-aware filtering
-      const userTimezone = user?.settings?.timezone;
+      const userTimezone = user?.settings?.timezone?.current;
       
       if (taskListViewMode === 'pomodoro') {
         return TaskFilteringService.getPomodoroTasks([task]).length > 0;
