@@ -496,11 +496,14 @@ export const Calendar: React.FC = () => {
   // Old handleSaveEvent - removed since we only use TaskForm now
 
   const handleEventDrop = useCallback((item: DragItem, dropResult: DropResult) => {
+    // Get user's timezone for proper drag & drop calculations
+    const userTimezone = user?.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
+    
     // If user is duplicating via Alt/Option key, allow drop even at the same position
     const isAltDuplicate = item.isDuplicate === true;
 
     // For non-duplicate moves, validate the drop location
-    if (!isAltDuplicate && !isValidDrop(item.event, dropResult, allEvents)) {
+    if (!isAltDuplicate && !isValidDrop(item.event, dropResult, allEvents, userTimezone)) {
       return;
     }
 
@@ -513,7 +516,7 @@ export const Calendar: React.FC = () => {
     const { start, end } = calculateNewEventTime(item.event, {
       ...dropResult,
       isAllDay: shouldBeAllDay
-    });
+    }, userTimezone);
 
     const updatedEvent: CalendarEvent = {
       ...item.event,
@@ -545,7 +548,9 @@ export const Calendar: React.FC = () => {
             projectId: task.projectId,
             userId: user?.uid || task.userId,
             timeEstimated: task.timeEstimated,
-            scheduledDate: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`,
+            scheduledDate: shouldBeAllDay 
+              ? format(dropResult.targetDate, 'yyyy-MM-dd') // Use target date directly for all-day events
+              : `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`,
             includeTime: !shouldBeAllDay,
             completed: false,
             timeSpent: 0
@@ -619,8 +624,13 @@ export const Calendar: React.FC = () => {
         };
 
         // Prepare task update data
+        // For all-day events, use the target date directly to avoid timezone conversion issues
+        const scheduledDate = shouldBeAllDay 
+          ? format(dropResult.targetDate, 'yyyy-MM-dd') // Use target date directly for all-day events
+          : `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`; // Use calculated start for timed events
+          
         const taskUpdateData: any = {
-          scheduledDate: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`, // YYYY-MM-DD format in local timezone
+          scheduledDate,
           includeTime: !shouldBeAllDay
         };
 
@@ -685,7 +695,7 @@ export const Calendar: React.FC = () => {
         e.id === item.event.id ? updatedEvent : e
       ));
     }
-  }, [allEvents, calendarEvents, tasks, currentView]);
+  }, [allEvents, calendarEvents, tasks, currentView, user?.settings?.timezone?.current]);
 
   // Old calculateTime and formatTime - removed since we have new drag-to-create system
 
