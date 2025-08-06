@@ -44,14 +44,35 @@ export class UTCTimezoneService {
    */
   userTimeToUTC(userTime: string | Date, timezone: string): string {
     try {
-      const date = typeof userTime === 'string' ? new Date(userTime) : userTime;
+      let date: Date;
+      
+      if (typeof userTime === 'string') {
+        // Handle ISO string format without timezone (e.g., '2025-08-08T09:00:00')
+        // This format should be treated as local time in the specified timezone
+        if (userTime.includes('T') && !userTime.includes('Z') && !userTime.includes('+') && !userTime.includes('-', 10)) {
+          // Parse as local time in the specified timezone
+          date = this.createDateInTimezone(userTime, timezone);
+        } else {
+          date = new Date(userTime);
+        }
+      } else {
+        date = userTime;
+      }
       
       // Validate the input date
       if (isNaN(date.getTime())) {
         throw new Error(`Invalid date input: ${userTime}`);
       }
       
-      const result = fromZonedTime(date, timezone);
+      // For ISO strings without timezone info, createDateInTimezone already returned UTC
+      // For other dates, convert from the specified timezone to UTC
+      const needsTimezoneConversion = !(typeof userTime === 'string' && 
+                                        userTime.includes('T') && 
+                                        !userTime.includes('Z') && 
+                                        !userTime.includes('+') && 
+                                        !userTime.includes('-', 10));
+      
+      const result = needsTimezoneConversion ? fromZonedTime(date, timezone) : date;
       
       // Validate the result
       if (isNaN(result.getTime())) {
