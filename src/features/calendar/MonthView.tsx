@@ -7,12 +7,13 @@ import {
   startOfWeek,
   endOfWeek,
   isSameMonth,
-  isSameDay,
-  isToday
+  isSameDay
 } from 'date-fns';
 import { CalendarEvent, DragItem, DropResult } from './types';
 import { DraggableEvent } from './components/DraggableEvent';
 import { DroppableTimeSlot } from './components/DroppableTimeSlot';
+import { useUserStore } from '../../store/userStore';
+import { timezoneUtils } from '../../utils/timezoneUtils';
 
 interface MonthViewProps {
   currentDate: Date;
@@ -31,6 +32,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
   onEventDrop,
   onDayViewClick
 }) => {
+  const { user } = useUserStore();
   const [overflowData, setOverflowData] = useState<Record<number, { isOverflowing: boolean; visibleEvents: number; hiddenCount: number }>>({});
   const gridRef = useRef<HTMLDivElement>(null);
   const cellRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -359,7 +361,13 @@ export const MonthView: React.FC<MonthViewProps> = ({
         {days.map((day, idx) => {
           const dayEvents = getEventsForDay(day);
           const isCurrentMonth = isSameMonth(day, currentDate);
-          const isCurrentDay = isToday(day);
+          
+          // Use timezone-aware today check
+          const userTimezone = user?.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
+          const todayInUserTimezone = timezoneUtils.formatDateInTimezone(new Date(), userTimezone, 'yyyy-MM-dd');
+          const dayString = format(day, 'yyyy-MM-dd');
+          const isCurrentDay = todayInUserTimezone === dayString;
+          
           const allDayEvents = dayEvents.filter(event => event.isAllDay);
           const timedEvents = dayEvents.filter(event => !event.isAllDay);
 
