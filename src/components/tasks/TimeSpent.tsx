@@ -21,7 +21,7 @@ export const TimeSpent: React.FC = () => {
   const sortedTasks = TaskFilteringService.filterTasksByViewMode(
     tasks.filter(task => !task.hideFromPomodoro), // Don't show archived tasks
     taskListViewMode,
-    user?.settings?.timezone
+    user?.settings?.timezone?.current
   ).sort((a, b) => a.order - b.order);
 
   // Calculate total time statistics using stored task.timeSpent for consistency with TaskItem display
