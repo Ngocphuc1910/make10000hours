@@ -225,16 +225,49 @@ export class TaskStorageService {
     userTimezone: string
   ): {
     scheduledTimeUTC: string;
+    scheduledEndTimeUTC: string;
     scheduledTimezone: string;
   } {
-    // Use start of day in user's timezone
-    const dayStartDateTime = `${taskData.scheduledDate}T00:00:00`;
-    const startUTC = timezoneUtils.userTimeToUTC(dayStartDateTime, userTimezone);
-    
-    return {
-      scheduledTimeUTC: startUTC,
-      scheduledTimezone: userTimezone
-    };
+    // For all-day events, store the date directly without timezone conversion
+    // to avoid T-1 date offset issues. All-day events should preserve the calendar date exactly.
+    try {
+      // Validate the scheduled date format
+      if (!taskData.scheduledDate || !/^\d{4}-\d{2}-\d{2}$/.test(taskData.scheduledDate)) {
+        throw new Error(`Invalid scheduledDate format: ${taskData.scheduledDate}`);
+      }
+
+      // For all-day events, we store the date as midnight UTC to preserve the date
+      // This avoids timezone conversion issues that cause T-1 date problems
+      const allDayStartUTC = `${taskData.scheduledDate}T00:00:00.000Z`;
+      const allDayEndUTC = `${taskData.scheduledDate}T23:59:59.999Z`; // End of the same day
+      
+      // Validate the resulting UTC strings
+      const testStartDate = new Date(allDayStartUTC);
+      const testEndDate = new Date(allDayEndUTC);
+      if (isNaN(testStartDate.getTime()) || isNaN(testEndDate.getTime())) {
+        throw new Error(`Invalid date created: ${allDayStartUTC} or ${allDayEndUTC}`);
+      }
+      
+      return {
+        scheduledTimeUTC: allDayStartUTC,
+        scheduledEndTimeUTC: allDayEndUTC,
+        scheduledTimezone: userTimezone
+      };
+    } catch (error) {
+      console.error('❌ Failed to convert all-day scheduling to UTC:', error);
+      console.error('Task data:', { scheduledDate: taskData.scheduledDate, userTimezone });
+      
+      // Fallback: create a valid UTC date string for today
+      const fallbackDate = new Date().toISOString().split('T')[0];
+      const fallbackStartUTC = `${fallbackDate}T00:00:00.000Z`;
+      const fallbackEndUTC = `${fallbackDate}T23:59:59.999Z`;
+      
+      return {
+        scheduledTimeUTC: fallbackStartUTC,
+        scheduledEndTimeUTC: fallbackEndUTC,
+        scheduledTimezone: userTimezone
+      };
+    }
   }
   
   /**

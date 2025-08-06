@@ -149,7 +149,24 @@ export class TaskDisplayService {
         return this.fallbackSchedulingDisplay(task);
       }
       
-      // Convert UTC start time to user's timezone
+      // For all-day events (tasks without includeTime), preserve the original date without timezone conversion
+      // All-day events should show on the same calendar date regardless of timezone
+      if (task.includeTime === false) {
+        // Extract date directly from UTC string without timezone conversion
+        const utcDateOnly = task.scheduledTimeUTC.split('T')[0]; // "2025-08-11T00:00:00.000Z" → "2025-08-11"
+        const dateOnlyFormatted = format(new Date(utcDateOnly + 'T12:00:00'), 'PPP'); // Use noon to avoid timezone issues
+        
+        const result = {
+          displayScheduledDate: utcDateOnly,
+          displayScheduledTime: 'All day',
+          displayScheduledDateFormatted: dateOnlyFormatted,
+          displayScheduledTimeFormatted: 'All day'
+        };
+        
+        return result;
+      }
+      
+      // For timed events, convert UTC to user's timezone
       const localDateTime = timezoneUtils.utcToUserTime(task.scheduledTimeUTC, userTimezone);
       
       // Validate conversion result
