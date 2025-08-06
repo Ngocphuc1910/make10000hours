@@ -164,12 +164,43 @@ export class UTCTimezoneService {
    */
   createDateInTimezone(dateTimeString: string, timezone: string): Date {
     try {
+      // Validate inputs
+      if (!dateTimeString || typeof dateTimeString !== 'string') {
+        throw new Error(`Invalid dateTimeString parameter: ${dateTimeString}`);
+      }
+      
+      if (!timezone || typeof timezone !== 'string') {
+        throw new Error(`Invalid timezone parameter: ${timezone}`);
+      }
+      
       // Parse the local date string and treat it as being in the specified timezone
       const localDate = new Date(dateTimeString);
-      return fromZonedTime(localDate, timezone);
+      
+      // Validate the parsed date
+      if (isNaN(localDate.getTime())) {
+        throw new Error(`Invalid date string: ${dateTimeString}`);
+      }
+      
+      const result = fromZonedTime(localDate, timezone);
+      
+      // Validate the result
+      if (isNaN(result.getTime())) {
+        throw new Error(`Timezone conversion resulted in invalid date: ${dateTimeString} in ${timezone}`);
+      }
+      
+      return result;
     } catch (error) {
-      console.warn('Date creation failed:', error);
-      return new Date(dateTimeString);
+      console.warn('Date creation failed:', { dateTimeString, timezone, error: error.message });
+      
+      // Fallback: try parsing as ISO string directly
+      const fallbackDate = new Date(dateTimeString);
+      if (!isNaN(fallbackDate.getTime())) {
+        return fallbackDate;
+      }
+      
+      // Last resort: return current date
+      console.error('Critical date creation failure, returning current date');
+      return new Date();
     }
   }
 
