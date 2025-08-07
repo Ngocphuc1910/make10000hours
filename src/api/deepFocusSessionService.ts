@@ -10,10 +10,18 @@ import {
   getDocs,
   serverTimestamp,
   Timestamp,
-  increment
+  increment,
+  limit
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { DeepFocusSession, Source } from '../types/models';
+import { 
+  TimezoneFilteringUtils, 
+  SessionQueryOptions, 
+  UTC_FILTERING_ENABLED, 
+  UTCTimeRange 
+} from '../utils/timezoneFiltering';
+import { executeUTCQuery } from '../utils/queryCircuitBreaker';
 
 class DeepFocusSessionService {
   private readonly collectionName = 'deepFocusSessions';
@@ -27,25 +35,159 @@ class DeepFocusSessionService {
   // Removed - web app no longer creates or manages sessions, only extension does
 
   /**
-   * Get all deep focus sessions for a user with optional date filtering
+   * Get all deep focus sessions for a user with enhanced UTC filtering support
+   * 
+   * ENHANCED: Now supports both legacy and UTC-based filtering with automatic fallback
+   * - Uses UTC filtering when enabled and startDate/endDate provided
+   * - Falls back to legacy createdAt filtering if UTC fails
+   * - Circuit breaker protection prevents cascading failures
    */
-  async getUserSessions(userId: string, startDate?: Date, endDate?: Date): Promise<DeepFocusSession[]> {
-    try {
-      console.log('🚀 DeepFocusSessionService: Smart query with database-level filtering', { 
-        userId, 
-        hasDateFilter: !!(startDate && endDate),
-        dateRange: startDate && endDate ? `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}` : 'all time'
-      });
-      
-      // Build query with database-level date filtering for efficiency
-      let q = query(
-        collection(db, this.collectionName),
-        where('userId', '==', userId),
-        where('status', '!=', 'deleted') // Exclude deleted sessions
-      );
+  async getUserSessions(
+    userId: string, 
+    optionsOrStartDate?: SessionQueryOptions | Date, 
+    legacyEndDate?: Date
+  ): Promise<DeepFocusSession[]> {
+    // Handle legacy method signature for backward compatibility
+    let options: SessionQueryOptions;
+    
+    if (optionsOrStartDate instanceof Date) {
+      // Legacy signature: getUserSessions(userId, startDate, endDate)
+      options = {
+        startDate: optionsOrStartDate,
+        endDate: legacyEndDate,
+        timezone: TimezoneFilteringUtils.getUserEffectiveTimezone(),
+        useUTC: UTC_FILTERING_ENABLED,
+        orderBy: 'desc',
+        limit: 100
+      };
+    } else {
+      // New signature: getUserSessions(userId, options)
+      options = {
+        timezone: TimezoneFilteringUtils.getUserEffectiveTimezone(),
+        useUTC: UTC_FILTERING_ENABLED,
+        orderBy: 'desc',
+        limit: 100,
+        ...optionsOrStartDate
+      };
+    }
 
-      // Add date filtering at database level if provided
-      if (startDate && endDate) {
+    return this.executeSessionQuery(userId, this.resolveQueryOptions(options));
+  }
+
+  /**
+   * Resolve query options with defaults
+   */
+  private resolveQueryOptions(options: SessionQueryOptions): Required<SessionQueryOptions> {
+    // Try to get user data for timezone resolution
+    let userSettings;
+    try {
+      if (typeof window !== 'undefined' && (window as any).useUserStore) {
+        const userStore = (window as any).useUserStore;
+        userSettings = userStore.getState?.()?.user?.settings;
+      }
+    } catch (error) {
+      console.warn('⚠️ Could not access user store for timezone detection:', error);
+    }
+
+    return {
+      startDate: options.startDate || new Date(),
+      endDate: options.endDate || new Date(),
+      timezone: options.timezone || TimezoneFilteringUtils.getUserEffectiveTimezone(userSettings),
+      useUTC: options.useUTC ?? UTC_FILTERING_ENABLED,
+      orderBy: options.orderBy || 'desc',
+      limit: options.limit || 100
+    };
+  }
+
+  /**
+   * Core session query execution with UTC filtering and circuit breaker protection
+   */
+  private async executeSessionQuery(userId: string, options: Required<SessionQueryOptions>): Promise<DeepFocusSession[]> {
+    // Use circuit breaker for query protection with automatic fallback
+    return executeUTCQuery(
+      () => this.queryWithUTCFiltering(userId, options),
+      () => this.queryWithLegacyFiltering(userId, options),
+      `getUserSessions-${userId}`
+    );
+  }
+
+  /**
+   * UTC-based filtering query (new method)
+   */
+  private async queryWithUTCFiltering(userId: string, options: Required<SessionQueryOptions>): Promise<DeepFocusSession[]> {
+    const { startDate, endDate, timezone } = options;
+    
+    if (!startDate || !endDate) {
+      throw new Error('Start and end dates required for UTC filtering');
+    }
+
+    console.log('🌍 UTC filtering query:', {
+      userId,
+      dateRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`,
+      timezone,
+      utcEnabled: UTC_FILTERING_ENABLED
+    });
+
+    // Convert local date range to UTC for database query
+    const { utcStart, utcEnd } = TimezoneFilteringUtils.convertLocalDateRangeToUTC(
+      startDate,
+      endDate,
+      timezone
+    );
+
+    // Build Firestore query with UTC filtering
+    let q = query(
+      collection(db, this.collectionName),
+      where('userId', '==', userId),
+      where('startTimeUTC', '>=', utcStart),
+      where('startTimeUTC', '<=', utcEnd)
+    );
+
+    // Add status filtering (exclude deleted sessions)
+    // Note: Firestore doesn't allow multiple range queries, so we filter status in JavaScript
+    
+    // Add ordering
+    if (options.orderBy === 'desc') {
+      q = query(q, orderBy('startTimeUTC', 'desc'));
+    } else {
+      q = query(q, orderBy('startTimeUTC', 'asc'));
+    }
+
+    // Add limit
+    if (options.limit) {
+      q = query(q, limit(options.limit));
+    }
+
+    const querySnapshot = await getDocs(q);
+    const sessions = querySnapshot.docs
+      .map(doc => this.mapFirebaseSession(doc))
+      .filter(session => session.status === 'active' || session.status === 'completed' || session.status === 'suspended'); // Only include valid sessions
+
+    console.log(`✅ UTC filtering found ${sessions.length} sessions in range ${utcStart} to ${utcEnd}`);
+    return sessions;
+  }
+
+  /**
+   * Legacy createdAt-based filtering query (fallback method)
+   */
+  private async queryWithLegacyFiltering(userId: string, options: Required<SessionQueryOptions>): Promise<DeepFocusSession[]> {
+    console.log('🔄 Legacy filtering query:', {
+      userId,
+      hasDateFilter: !!(options.startDate && options.endDate),
+      dateRange: options.startDate && options.endDate ? 
+        `${options.startDate.toISOString().split('T')[0]} to ${options.endDate.toISOString().split('T')[0]}` : 'all time'
+    });
+      
+    // Build query with database-level date filtering for efficiency  
+    let q = query(
+      collection(db, this.collectionName),
+      where('userId', '==', userId)
+      // Note: status filtering done in JavaScript since 'deleted' is not a valid status
+    );
+
+    // Add date filtering at database level if provided
+    if (options.startDate && options.endDate) {
+      const { startDate, endDate } = options;
         // Convert to Firestore Timestamp for database filtering
         const startTimestamp = Timestamp.fromDate(startDate);
         const endTimestamp = Timestamp.fromDate(endDate);
@@ -58,49 +200,90 @@ class DeepFocusSessionService {
           where('createdAt', '<=', endTimestamp)
         );
         
-        console.log('✅ Database-level date filtering applied:', {
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
-          benefit: 'No individual session checking needed'
-        });
-      }
-      
-      const querySnapshot = await getDocs(q);
-      
-      // Map documents to sessions, filtering out deleted sessions if date filtering is used
-      const sessions = querySnapshot.docs
-        .map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            userId: data.userId,
-            startTime: data.startTime?.toDate() || new Date(),
-            endTime: data.endTime?.toDate(),
-            duration: data.duration,
-            status: data.status,
-            source: data.source || 'extension',
-            timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-            localDate: data.localDate || new Date(data.startTime?.toDate ? data.startTime.toDate() : data.startTime).toISOString().split('T')[0],
-            createdAt: data.createdAt?.toDate() || new Date(),
-            updatedAt: data.updatedAt?.toDate() || new Date()
-          };
-        })
-        .filter(session => session.status !== 'deleted'); // Filter out deleted sessions in JavaScript when date filtering is used
-
-      // Sort by createdAt in JavaScript (newest first)
-      sessions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      
-      console.log('✅ Smart query completed:', {
-        sessionsReturned: sessions.length,
-        approach: startDate && endDate ? 'database-filtered' : 'all-sessions',
-        efficiency: 'No JavaScript filtering or individual session logs'
+      console.log('✅ Database-level date filtering applied:', {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        benefit: 'No individual session checking needed'
       });
-      
-      return sessions;
-    } catch (error) {
-      console.error('❌ Error fetching user Deep Focus sessions:', error);
-      throw error;
     }
+    
+    // Add ordering and limit
+    if (options.orderBy === 'desc') {
+      q = query(q, orderBy('createdAt', 'desc'));
+    } else {
+      q = query(q, orderBy('createdAt', 'asc'));
+    }
+    
+    if (options.limit) {
+      q = query(q, limit(options.limit));
+    }
+    
+    const querySnapshot = await getDocs(q);
+    const sessions = querySnapshot.docs
+      .map(doc => this.mapFirebaseSession(doc))
+      .filter(session => session.status === 'active' || session.status === 'completed' || session.status === 'suspended');
+    
+    console.log('✅ Legacy query completed:', {
+      sessionsReturned: sessions.length,
+      approach: options.startDate && options.endDate ? 'database-filtered' : 'all-sessions'
+    });
+    
+    return sessions;
+  }
+
+  /**
+   * Helper method to map Firestore document to DeepFocusSession
+   */
+  private mapFirebaseSession(doc: any): DeepFocusSession {
+    const data = doc.data();
+    
+    // Helper function to safely convert timestamps
+    const safeToDate = (timestamp: any): Date | null => {
+      if (!timestamp) return null;
+      if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+        return timestamp.toDate();
+      }
+      if (timestamp instanceof Date) {
+        return timestamp;
+      }
+      if (typeof timestamp === 'string') {
+        return new Date(timestamp);
+      }
+      if (typeof timestamp === 'number') {
+        return new Date(timestamp);
+      }
+      return null;
+    };
+    
+    // Convert timestamps with fallback handling
+    const startTime = safeToDate(data.startTime);
+    const endTime = safeToDate(data.endTime);
+    const createdAt = safeToDate(data.createdAt) || new Date();
+    const updatedAt = safeToDate(data.updatedAt) || new Date();
+    
+    // Calculate localDate safely
+    let localDate = data.localDate;
+    if (!localDate && startTime) {
+      localDate = startTime.toISOString().split('T')[0];
+    }
+    
+    return {
+      id: doc.id,
+      userId: data.userId,
+      startTime: startTime || new Date(),
+      endTime: endTime,
+      duration: data.duration,
+      status: data.status,
+      source: data.source || 'extension',
+      timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+      localDate: localDate || new Date().toISOString().split('T')[0],
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      // Include UTC fields if present
+      startTimeUTC: data.startTimeUTC,
+      endTimeUTC: data.endTimeUTC,
+      utcDate: data.utcDate
+    };
   }
 
   /**
@@ -124,18 +307,49 @@ class DeepFocusSessionService {
       // Convert to array and sort by createdAt in JavaScript (newest first)
       const sessions = querySnapshot.docs.map(doc => {
         const data = doc.data();
+        
+        // Helper function to safely convert timestamps
+        const safeToDate = (timestamp: any): Date | null => {
+          if (!timestamp) return null;
+          if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+            return timestamp.toDate();
+          }
+          if (timestamp instanceof Date) {
+            return timestamp;
+          }
+          if (typeof timestamp === 'string') {
+            return new Date(timestamp);
+          }
+          if (typeof timestamp === 'number') {
+            return new Date(timestamp);
+          }
+          return null;
+        };
+        
+        // Convert timestamps with fallback handling
+        const startTime = safeToDate(data.startTime);
+        const endTime = safeToDate(data.endTime);
+        const createdAt = safeToDate(data.createdAt) || new Date();
+        const updatedAt = safeToDate(data.updatedAt) || new Date();
+        
+        // Calculate localDate safely
+        let localDate = data.localDate;
+        if (!localDate && startTime) {
+          localDate = startTime.toISOString().split('T')[0];
+        }
+        
         return {
           id: doc.id,
           userId: data.userId,
-          startTime: data.startTime?.toDate() || new Date(),
-          endTime: data.endTime?.toDate(),
+          startTime: startTime || new Date(),
+          endTime: endTime,
           duration: data.duration,
           status: data.status,
           source: data.source || 'extension',
           timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-          localDate: data.localDate || new Date(data.startTime?.toDate ? data.startTime.toDate() : data.startTime).toISOString().split('T')[0],
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date()
+          localDate: localDate || new Date().toISOString().split('T')[0],
+          createdAt: createdAt,
+          updatedAt: updatedAt
         };
       });
       
@@ -150,36 +364,68 @@ class DeepFocusSessionService {
   }
 
   /**
-   * Subscribe to user's deep focus sessions
+   * Subscribe to user's deep focus sessions with UTC filtering support
+   * CRITICAL FIX: Apply same filtering logic to real-time subscriptions (friend's feedback)
    */
-  subscribeToUserSessions(userId: string, callback: (sessions: DeepFocusSession[]) => void): () => void {
-    // Simple query without orderBy to avoid index requirement
-    const q = query(
+  subscribeToUserSessions(
+    userId: string, 
+    callback: (sessions: DeepFocusSession[]) => void,
+    options?: SessionQueryOptions
+  ): () => void {
+    const resolvedOptions = this.resolveQueryOptions(options || {});
+
+    let q = query(
       collection(db, this.collectionName),
       where('userId', '==', userId)
     );
 
-    return onSnapshot(q, (querySnapshot) => {
-      let sessions = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          userId: data.userId,
-          startTime: data.startTime?.toDate() || new Date(),
-          endTime: data.endTime?.toDate(),
-          duration: data.duration,
-          status: data.status,
-          source: data.source || 'extension',
-          timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-          localDate: data.localDate || new Date(data.startTime?.toDate ? data.startTime.toDate() : data.startTime).toISOString().split('T')[0],
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date()
-        };
+    // 🔧 CRITICAL: Apply same filtering logic to real-time subscriptions (friend's feedback)
+    if (resolvedOptions.useUTC && resolvedOptions.startDate && resolvedOptions.endDate) {
+      const { utcStart, utcEnd } = TimezoneFilteringUtils.convertLocalDateRangeToUTC(
+        resolvedOptions.startDate, 
+        resolvedOptions.endDate, 
+        resolvedOptions.timezone
+      );
+      
+      console.log('🌍 Real-time subscription with UTC filtering:', {
+        userId,
+        utcRange: `${utcStart} to ${utcEnd}`,
+        timezone: resolvedOptions.timezone
       });
       
-      // Sort by createdAt in JavaScript (newest first)
-      sessions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      q = query(q,
+        where('startTimeUTC', '>=', utcStart),
+        where('startTimeUTC', '<=', utcEnd)
+      );
       
+      // Add ordering
+      if (resolvedOptions.orderBy === 'desc') {
+        q = query(q, orderBy('startTimeUTC', 'desc'));
+      } else {
+        q = query(q, orderBy('startTimeUTC', 'asc'));
+      }
+    } else {
+      console.log('🔄 Real-time subscription with legacy filtering:', { userId });
+      
+      // Legacy ordering by createdAt
+      if (resolvedOptions.orderBy === 'desc') {
+        q = query(q, orderBy('createdAt', 'desc'));
+      } else {
+        q = query(q, orderBy('createdAt', 'asc'));
+      }
+    }
+
+    return onSnapshot(q, (querySnapshot) => {
+      let sessions = querySnapshot.docs
+        .map(doc => this.mapFirebaseSession(doc))
+        .filter(session => session.status === 'active' || session.status === 'completed' || session.status === 'suspended'); // Only include valid sessions
+      
+      // Apply limit in JavaScript if specified
+      if (resolvedOptions.limit) {
+        sessions = sessions.slice(0, resolvedOptions.limit);
+      }
+      
+      console.log(`📡 Real-time update: ${sessions.length} sessions received`);
       callback(sessions);
     });
   }

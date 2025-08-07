@@ -2,6 +2,7 @@ import { collection, addDoc, updateDoc, doc, serverTimestamp, Timestamp, query, 
 import { db } from '../api/firebase';
 import { DeepFocusSession } from '../types/models';
 import ExtensionDataService from './extensionDataService';
+import { timezoneUtils } from '../utils/timezoneUtils';
 
 export class DeepFocusSync {
   private static isEnabled = true;
@@ -180,7 +181,13 @@ export class DeepFocusSync {
           duration: extensionSession.duration || 0,
           endTime: extensionSession.endTime ? Timestamp.fromDate(new Date(extensionSession.endTime)) : null,
           status: extensionSession.status,
-          updatedAt: serverTimestamp()
+          updatedAt: serverTimestamp(),
+          
+          // ✅ PRESERVE ALL UTC FIELDS when updating existing sessions
+          startTimeUTC: extensionSession.startTimeUTC || null,
+          endTimeUTC: extensionSession.endTimeUTC || null,
+          utcDate: extensionSession.utcDate || (extensionSession.startTimeUTC ? 
+            extensionSession.startTimeUTC.split('T')[0] : null)
         };
         
         await updateDoc(doc(db, collectionName, existingSession.docId!), updateData);
@@ -191,8 +198,24 @@ export class DeepFocusSync {
       // Transform extension session to Firebase format for new sessions
       const firebaseSession: Partial<DeepFocusSession> = {
         userId,
-        startTime: new Date(extensionSession.startTime),
-        endTime: extensionSession.endTime ? new Date(extensionSession.endTime) : null,
+        
+        // ✅ PRESERVE UTC TIMESTAMPS - Use exact UTC strings from extension
+        startTime: extensionSession.startTimeUTC ? 
+          new Date(extensionSession.startTimeUTC) : 
+          new Date(extensionSession.startTime),
+        
+        endTime: extensionSession.endTimeUTC ? 
+          new Date(extensionSession.endTimeUTC) : 
+          (extensionSession.endTime ? new Date(extensionSession.endTime) : null),
+        
+        // ✅ ADD DEDICATED UTC FIELDS for consistent filtering
+        startTimeUTC: extensionSession.startTimeUTC || null,
+        endTimeUTC: extensionSession.endTimeUTC || null,
+        
+        // ✅ ADD UTC DATE FIELD from extension for easy filtering
+        utcDate: extensionSession.utcDate || (extensionSession.startTimeUTC ? 
+          new Date(extensionSession.startTimeUTC).toISOString().split('T')[0] : null),
+        
         duration: extensionSession.duration || 0,
         status: extensionSession.status || 'completed',
         source: 'extension' as const,
@@ -200,24 +223,43 @@ export class DeepFocusSync {
         // Track extension session ID to prevent duplicates
         extensionSessionId: extensionSession.id,
         
-        // Add timezone support fields
+        // Enhanced timezone data (prioritize extension timezone info)
         timezone: extensionSession.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-        localDate: extensionSession.localDate || new Date(extensionSession.startTime).toISOString().split('T')[0],
+        localDate: extensionSession.localDate || 
+          this.calculateLocalDate(extensionSession.startTimeUTC || extensionSession.startTime, extensionSession.timezone),
         
-        createdAt: extensionSession.createdAt ? new Date(extensionSession.createdAt) : new Date(extensionSession.startTime),
+        createdAt: extensionSession.createdAt ? new Date(extensionSession.createdAt) : 
+          (extensionSession.startTimeUTC ? new Date(extensionSession.startTimeUTC) : new Date(extensionSession.startTime)),
         updatedAt: extensionSession.updatedAt ? new Date(extensionSession.updatedAt) : new Date()
       };
 
-      await addDoc(collection(db, collectionName), {
-        ...firebaseSession,
-        // Convert dates to Firestore Timestamps
+      // Create Firebase document with explicit field control
+      const firebaseDoc = {
+        // Basic session info
+        userId: firebaseSession.userId,
+        duration: firebaseSession.duration,
+        status: firebaseSession.status,
+        source: firebaseSession.source,
+        extensionSessionId: firebaseSession.extensionSessionId,
+        timezone: firebaseSession.timezone,
+        localDate: firebaseSession.localDate,
+        
+        // Firebase Timestamps (for compatibility)
         startTime: Timestamp.fromDate(firebaseSession.startTime!),
         endTime: firebaseSession.endTime ? Timestamp.fromDate(firebaseSession.endTime) : null,
         createdAt: Timestamp.fromDate(firebaseSession.createdAt!),
-        updatedAt: serverTimestamp()
-      });
+        updatedAt: serverTimestamp(),
+        
+        // ✅ CRITICAL: Raw UTC strings from extension (exact preservation)
+        startTimeUTC: extensionSession.startTimeUTC || null,
+        endTimeUTC: extensionSession.endTimeUTC || null,
+        utcDate: extensionSession.utcDate || (extensionSession.startTimeUTC ? 
+          extensionSession.startTimeUTC.split('T')[0] : null)
+      };
 
-        console.log(`📝 Successfully synced new session ${extensionSession.id} to Firebase with duration: ${extensionSession.duration}ms`);
+      await addDoc(collection(db, collectionName), firebaseDoc);
+
+        console.log(`📝 Successfully synced new session ${extensionSession.id} to Firebase with UTC data: ${extensionSession.startTimeUTC}`);
         return 'synced';
       } catch (error) {
         console.error(`❌ Failed to sync session ${extensionSession.id}:`, error);
@@ -263,8 +305,16 @@ export class DeepFocusSync {
       // Transform extension session to Firebase format
       const firebaseSession: Partial<DeepFocusSession> = {
         userId,
-        startTime: new Date(extensionSession.startTime), // Convert from ISO string or timestamp
-        endTime: extensionSession.endTime ? new Date(extensionSession.endTime) : null,
+        
+        // Use UTC timestamp from extension (with fallback to converted local time)
+        startTime: extensionSession.startTimeUTC ? 
+          new Date(extensionSession.startTimeUTC) : 
+          new Date(extensionSession.startTime),
+        
+        endTime: extensionSession.endTimeUTC ? 
+          new Date(extensionSession.endTimeUTC) : 
+          (extensionSession.endTime ? new Date(extensionSession.endTime) : null),
+        
         duration: extensionSession.duration || 0,
         status: extensionSession.status || 'completed',
         source: 'extension' as const,
@@ -272,11 +322,13 @@ export class DeepFocusSync {
         // Track extension session ID to prevent duplicates
         extensionSessionId: extensionSession.id,
         
-        // Add timezone support fields
+        // Enhanced timezone data (prioritize extension timezone info)
         timezone: extensionSession.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-        localDate: extensionSession.localDate || new Date(extensionSession.startTime).toISOString().split('T')[0],
+        localDate: extensionSession.localDate || 
+          this.calculateLocalDate(extensionSession.startTimeUTC || extensionSession.startTime, extensionSession.timezone),
         
-        createdAt: extensionSession.createdAt ? new Date(extensionSession.createdAt) : new Date(extensionSession.startTime),
+        createdAt: extensionSession.createdAt ? new Date(extensionSession.createdAt) : 
+          (extensionSession.startTimeUTC ? new Date(extensionSession.startTimeUTC) : new Date(extensionSession.startTime)),
         updatedAt: extensionSession.updatedAt ? new Date(extensionSession.updatedAt) : new Date()
       };
 
@@ -530,6 +582,15 @@ export class DeepFocusSync {
 
     try {
       console.log('🔄 Starting last 10 Deep Focus sessions sync with tracking for user:', userId);
+      
+      // Check circuit breaker status and reset if needed
+      const circuitStatus = ExtensionDataService.getCircuitBreakerStatus();
+      if (circuitStatus.state === 'OPEN') {
+        console.log('🔧 Circuit breaker is open, attempting reset before sync...');
+        ExtensionDataService.resetCircuitBreaker();
+        // Wait a moment for reset to take effect
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
       
       const extensionResponse = await ExtensionDataService.getLast10DeepFocusSessions();
       
@@ -967,6 +1028,24 @@ export class DeepFocusSync {
     } catch (error) {
       console.error('❌ Extension connection test failed:', error);
       return false;
+    }
+  }
+
+  /**
+   * Calculate local date from timestamp and timezone
+   */
+  private static calculateLocalDate(timestamp: string | number, timezone?: string): string {
+    try {
+      const date = new Date(timestamp);
+      const userTimezone = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      
+      // Use existing timezone utils to convert UTC to local date
+      const localTime = timezoneUtils.utcToUserTime(date.toISOString(), userTimezone);
+      return timezoneUtils.formatInTimezone(localTime.toISOString(), userTimezone, 'yyyy-MM-dd');
+    } catch (error) {
+      console.warn('Failed to calculate local date:', error);
+      // Fallback to UTC date
+      return new Date(timestamp).toISOString().split('T')[0];
     }
   }
 }

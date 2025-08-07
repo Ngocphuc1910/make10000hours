@@ -215,6 +215,21 @@ export const TimezoneSelector: React.FC<TimezoneSelectorProps> = ({
         method: 'manual'
       });
 
+      // Notify extension of timezone change for coordination
+      try {
+        if (typeof (window as any).chrome !== 'undefined' && 
+            (window as any).chrome?.runtime?.sendMessage) {
+          (window as any).chrome.runtime.sendMessage({
+            type: 'TIMEZONE_PREFERENCE_CHANGED',
+            timezone: timezone,
+            timestamp: Date.now()
+          });
+          console.log('🌍 Notified extension of timezone change:', timezone);
+        }
+      } catch (error) {
+        console.warn('Could not notify extension of timezone change:', error);
+      }
+
     } catch (error) {
       console.error('Failed to update timezone:', error);
       setSelectedTimezone(user?.timezone || detectedTimezone);
@@ -241,6 +256,21 @@ export const TimezoneSelector: React.FC<TimezoneSelectorProps> = ({
         detected: newTimezone,
         method: 'auto'
       });
+
+      // Notify extension of timezone change for coordination
+      try {
+        if (typeof (window as any).chrome !== 'undefined' && 
+            (window as any).chrome?.runtime?.sendMessage) {
+          (window as any).chrome.runtime.sendMessage({
+            type: 'TIMEZONE_PREFERENCE_CHANGED',
+            timezone: newTimezone,
+            timestamp: Date.now()
+          });
+          console.log('🌍 Notified extension of auto-detected timezone:', newTimezone);
+        }
+      } catch (error) {
+        console.warn('Could not notify extension of timezone change:', error);
+      }
 
     } catch (error) {
       console.error('Failed to auto-detect timezone:', error);

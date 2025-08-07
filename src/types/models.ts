@@ -181,18 +181,23 @@ export interface ActiveSession {
 export interface DeepFocusSession {
   id: string;
   userId: string;
-  startTime: Date;           // UTC timestamp
-  endTime: Date | null;      // UTC timestamp
+  startTime: Date;           // UTC timestamp (for Firebase compatibility)
+  endTime: Date | null;      // UTC timestamp (for Firebase compatibility)
   duration: number;          // Minutes
   status: 'active' | 'completed' | 'suspended';
   source: 'extension';       // Always extension (web app removed)
   
+  // ✅ NEW: Raw UTC string fields for consistent filtering and querying
+  startTimeUTC?: string;     // "2025-08-06T08:56:38.263Z" - exact UTC string from extension
+  endTimeUTC?: string;       // "2025-08-06T09:56:38.263Z" - exact UTC string from extension
+  utcDate?: string;          // "2025-08-06" - UTC date for easy filtering
+  
   // Extension session tracking to prevent duplicates
   extensionSessionId?: string; // Original extension session ID for duplicate detection
   
-  // Future timezone support (store but don't use for filtering yet)
+  // Timezone support for display and context
   timezone: string;          // User's timezone when session created
-  localDate: string;         // "2023-01-22" - for future date filtering
+  localDate: string;         // "2023-01-22" - local date in user's timezone
   
   createdAt: Date;
   updatedAt: Date;

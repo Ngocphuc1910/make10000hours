@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Firebase Index Creator</title>
+    <style>
+        body { font-family: monospace; max-width: 1000px; margin: 0 auto; padding: 20px; background: #0a0a0a; color: #e0e0e0; }
+        .header { color: #ff6b35; font-size: 24px; margin-bottom: 20px; }
+        .section { background: #1a1a1a; padding: 20px; margin: 15px 0; border-radius: 8px; border: 1px solid #333; }
+        .btn { background: #ff6b35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 5px; }
+        .btn:hover { background: #e55a2b; }
+        .code { background: #0d0d0d; padding: 10px; margin: 10px 0; border-radius: 4px; font-family: 'Courier New', monospace; }
+        .warning { background: #ff5722; color: white; padding: 15px; border-radius: 6px; margin: 20px 0; }
+        .index { background: #2a2a2a; padding: 15px; margin: 10px 0; border-left: 4px solid #4fc3f7; }
+    </style>
+</head>
+<body>
+    <div class="header">🔥 Firebase Index Creator</div>
+    
+    <div class="warning">
+        <strong>⚠️ CRITICAL:</strong> These 3 indexes are required before UTC filtering implementation!
+    </div>
+    
+    <div class="section">
+        <h2>🚀 Quick Action</h2>
+        <a href="https://console.firebase.google.com/project/make10000hours/firestore/indexes" target="_blank" class="btn">🌐 Open Firebase Console (Indexes)</a>
+        <p><strong>Project:</strong> make10000hours</p>
+    </div>
+    
+    <div class="section">
+        <h2>📋 Required Indexes (Create All 3)</h2>
+        
+        <div class="index">
+            <h3>Index 1: Primary UTC Filtering Index (CRITICAL)</h3>
+            <p><strong>Purpose:</strong> Essential for userId + startTimeUTC queries</p>
+            <div class="code">
+                Collection: <strong>deepFocusSessions</strong><br>
+                Fields:<br>
+                &nbsp;&nbsp;• userId: ASC<br>&nbsp;&nbsp;• startTimeUTC: DESC
+            </div>
+        </div>
+        
+        <div class="index">
+            <h3>Index 2: UTC Date Filtering Index</h3>
+            <p><strong>Purpose:</strong> Efficient date-only queries</p>
+            <div class="code">
+                Collection: <strong>deepFocusSessions</strong><br>
+                Fields:<br>
+                &nbsp;&nbsp;• userId: ASC<br>&nbsp;&nbsp;• utcDate: ASC
+            </div>
+        </div>
+        
+        <div class="index">
+            <h3>Index 3: Status + UTC Time Index</h3>
+            <p><strong>Purpose:</strong> Status filtering with time ordering</p>
+            <div class="code">
+                Collection: <strong>deepFocusSessions</strong><br>
+                Fields:<br>
+                &nbsp;&nbsp;• userId: ASC<br>&nbsp;&nbsp;• status: ASC<br>&nbsp;&nbsp;• startTimeUTC: DESC
+            </div>
+        </div>
+        
+    </div>
+    
+    <div class="section">
+        <h2>🔧 Firebase CLI Commands</h2>
+        <div class="code">
+# Index 1: Primary UTC Filtering Index (CRITICAL)
+firebase firestore:indexes:create --project=make10000hours --collection-group=deepFocusSessions --fields="userId:asc,startTimeUTC:desc"
+
+# Index 2: UTC Date Filtering Index
+firebase firestore:indexes:create --project=make10000hours --collection-group=deepFocusSessions --fields="userId:asc,utcDate:asc"
+
+# Index 3: Status + UTC Time Index
+firebase firestore:indexes:create --project=make10000hours --collection-group=deepFocusSessions --fields="userId:asc,status:asc,startTimeUTC:desc"
+
+        </div>
+        <button onclick="copyCommands()" class="btn">📋 Copy Commands</button>
+    </div>
+    
+    <script>
+        function copyCommands() {
+            const commands = document.querySelector('.code').textContent;
+            navigator.clipboard.writeText(commands).then(() => {
+                alert('📋 Commands copied to clipboard!');
+            });
+        }
+    </script>
+</body>
+</html>
