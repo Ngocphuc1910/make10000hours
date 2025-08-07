@@ -15,7 +15,7 @@
       ]
     },
     {
-      "collectionGroup": "deepFocusSessions",
+      "collectionGroup": "deepFocusSessions", 
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -30,7 +30,7 @@
     },
     {
       "collectionGroup": "deepFocusSessions",
-      "queryScope": "COLLECTION",
+      "queryScope": "COLLECTION", 
       "fields": [
         {
           "fieldPath": "userId",

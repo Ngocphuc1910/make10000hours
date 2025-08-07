@@ -13,6 +13,23 @@ try {
   console.warn('⚠️ UTC Coordinator not available:', error);
 }
 
+// Load timezone coordination utilities
+try {
+  importScripts('./utils/timezoneCoordination.js');
+  console.log('✅ Timezone Coordination loaded successfully');
+  
+  // Explicitly initialize coordination (not automatic anymore)
+  if (typeof setupTimezoneCoordination !== 'undefined') {
+    setupTimezoneCoordination();
+    console.log('✅ Timezone Coordination initialized');
+  } else if (typeof TimezoneCoordination !== 'undefined' && TimezoneCoordination.setupTimezoneCoordination) {
+    TimezoneCoordination.setupTimezoneCoordination();
+    console.log('✅ Timezone Coordination initialized via object');
+  }
+} catch (error) {
+  console.warn('⚠️ Timezone Coordination not available:', error);
+}
+
 // Define DateUtils directly in service worker context
 const DateUtils = {
   getLocalDateString: function() {
@@ -1128,7 +1145,7 @@ class StorageManager {
   }
 
   /**
-   * Create a new deep focus session
+   * Create a new deep focus session with proper timezone handling
    */
   async createDeepFocusSession(userId = null) {
     try {
@@ -1162,28 +1179,48 @@ class StorageManager {
       }
 
       const now = new Date();
-      const today = DateUtils.getLocalDateString();
       const sessionId = this.generateSessionId();
+      
+      // Get coordinated timezone between extension and web app
+      let userTimezone;
+      try {
+        userTimezone = typeof TimezoneCoordination !== 'undefined' 
+          ? await TimezoneCoordination.getCoordinatedTimezoneWithCache()
+          : Intl.DateTimeFormat().resolvedOptions().timeZone;
+      } catch (error) {
+        console.warn('⚠️ Timezone coordination failed, using browser default:', error);
+        userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      }
       
       const newSession = {
         id: sessionId,
         userId: actualUserId,
+        
+        // Keep existing field for backward compatibility
         startTime: now.getTime(),
+        
+        // NEW: Proper UTC timestamp and timezone context
+        startTimeUTC: now.toISOString(), // "2025-08-06T21:30:00.000Z"
+        timezone: userTimezone, // "America/Los_Angeles"
+        utcDate: now.toISOString().split('T')[0], // "2025-08-06"
+        
         duration: 0,
         status: 'active',
         createdAt: now.getTime(),
         updatedAt: now.getTime()
       };
 
-      // Get storage and add session
+      // Use UTC date for storage key instead of local date
+      const utcDate = newSession.utcDate;
       const storage = await this.getDeepFocusStorage();
-      if (!storage[today]) {
-        storage[today] = [];
+      
+      if (!storage[utcDate]) {
+        storage[utcDate] = [];
       }
-      storage[today].push(newSession);
+      storage[utcDate].push(newSession);
       await this.saveDeepFocusStorage(storage);
       
-      console.log('✅ Created local deep focus session:', sessionId, 'Total sessions today:', storage[today].length);
+      console.log('✅ Created local deep focus session:', sessionId, 'Total sessions today:', storage[utcDate].length);
       console.log('📦 Session data:', newSession);
       return sessionId;
     } catch (error) {
@@ -1198,33 +1235,51 @@ class StorageManager {
   async updateDeepFocusSessionDuration(sessionId, duration) {
     try {
       const now = new Date();
-      const today = DateUtils.getLocalDateString();
+      const utcDate = now.toISOString().split('T')[0];
 
       console.log('⏱️ Updating session duration:', sessionId, 'to', duration, 'minutes');
 
       // Get storage and find session
       const storage = await this.getDeepFocusStorage();
-      if (storage[today]) {
-        const sessionIndex = storage[today].findIndex(s => s.id === sessionId);
+      let sessionFound = false;
+      
+      // Check UTC date first
+      if (storage[utcDate]) {
+        const sessionIndex = storage[utcDate].findIndex(s => s.id === sessionId);
         if (sessionIndex !== -1) {
-          storage[today][sessionIndex].duration = duration;
-          storage[today][sessionIndex].updatedAt = now.getTime();
+          storage[utcDate][sessionIndex].duration = duration;
+          storage[utcDate][sessionIndex].updatedAt = now.getTime();
           await this.saveDeepFocusStorage(storage);
-          console.log('✅ Updated local session duration:', sessionId, duration, 'minutes');
-          
-          // Get total minutes and emit event
-          const totalMinutes = await this.getTodayDeepFocusTime();
-          await ExtensionEventBus.emit(
-            ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE,
-            { minutes: totalMinutes }
-          );
-          return true;
-        } else {
-          console.warn('⚠️ Session not found for duration update:', sessionId);
-          return false;
+          console.log('✅ Updated session duration (UTC):', sessionId, duration, 'minutes');
+          sessionFound = true;
         }
+      }
+      
+      // If not found in UTC date, check legacy local date storage
+      if (!sessionFound) {
+        const legacyToday = DateUtils.getLocalDateString();
+        if (storage[legacyToday]) {
+          const sessionIndex = storage[legacyToday].findIndex(s => s.id === sessionId);
+          if (sessionIndex !== -1) {
+            storage[legacyToday][sessionIndex].duration = duration;
+            storage[legacyToday][sessionIndex].updatedAt = now.getTime();
+            await this.saveDeepFocusStorage(storage);
+            console.log('✅ Updated session duration (legacy):', sessionId, duration, 'minutes');
+            sessionFound = true;
+          }
+        }
+      }
+      
+      if (sessionFound) {
+        // Get total minutes and emit event
+        const totalMinutes = await this.getTodayDeepFocusTime();
+        await ExtensionEventBus.emit(
+          ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE,
+          { minutes: totalMinutes }
+        );
+        return true;
       } else {
-        console.warn('⚠️ No sessions found for today during duration update');
+        console.warn('⚠️ Session not found for duration update:', sessionId);
         return false;
       }
     } catch (error) {
@@ -1239,20 +1294,25 @@ class StorageManager {
   async completeDeepFocusSession(sessionId) {
     try {
       const now = new Date();
-      const today = DateUtils.getLocalDateString();
+      const utcDate = now.toISOString().split('T')[0];
 
       console.log('🏁 Completing deep focus session:', sessionId);
 
-      // Get storage and find session
+      // Get storage and find session (check both today's UTC date and any recent dates)
       const storage = await this.getDeepFocusStorage();
-      if (storage[today]) {
-        const sessionIndex = storage[today].findIndex(s => s.id === sessionId);
+      let sessionFound = false;
+      
+      // Check today's UTC date first
+      if (storage[utcDate]) {
+        const sessionIndex = storage[utcDate].findIndex(s => s.id === sessionId);
         if (sessionIndex !== -1) {
-          storage[today][sessionIndex].status = 'completed';
-          storage[today][sessionIndex].endTime = now.getTime();
-          storage[today][sessionIndex].updatedAt = now.getTime();
+          storage[utcDate][sessionIndex].status = 'completed';
+          storage[utcDate][sessionIndex].endTime = now.getTime();
+          storage[utcDate][sessionIndex].endTimeUTC = now.toISOString(); // NEW: UTC end time
+          storage[utcDate][sessionIndex].updatedAt = now.getTime();
           await this.saveDeepFocusStorage(storage);
           console.log('✅ Completed local deep focus session:', sessionId);
+          sessionFound = true;
           
           // Get total minutes and emit event
           const totalMinutes = await this.getTodayDeepFocusTime();
@@ -1260,11 +1320,35 @@ class StorageManager {
             ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE,
             { minutes: totalMinutes }
           );
-        } else {
-          console.warn('⚠️ Session not found for completion:', sessionId);
         }
-      } else {
-        console.warn('⚠️ No sessions found for today during completion');
+      }
+      
+      // If not found in UTC date, check legacy local date storage (for backward compatibility)
+      if (!sessionFound) {
+        const legacyToday = DateUtils.getLocalDateString();
+        if (storage[legacyToday]) {
+          const sessionIndex = storage[legacyToday].findIndex(s => s.id === sessionId);
+          if (sessionIndex !== -1) {
+            storage[legacyToday][sessionIndex].status = 'completed';
+            storage[legacyToday][sessionIndex].endTime = now.getTime();
+            storage[legacyToday][sessionIndex].endTimeUTC = now.toISOString();
+            storage[legacyToday][sessionIndex].updatedAt = now.getTime();
+            await this.saveDeepFocusStorage(storage);
+            console.log('✅ Completed legacy session:', sessionId);
+            sessionFound = true;
+            
+            // Get total minutes and emit event
+            const totalMinutes = await this.getTodayDeepFocusTime();
+            await ExtensionEventBus.emit(
+              ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE,
+              { minutes: totalMinutes }
+            );
+          }
+        }
+      }
+      
+      if (!sessionFound) {
+        console.warn('⚠️ Session not found for completion:', sessionId);
       }
     } catch (error) {
       console.error('❌ Failed to complete session:', error);
@@ -4365,8 +4449,24 @@ console.log('📋 BUILD TIMESTAMP:', new Date().toISOString());
 
     // Initialize UTC coordinator first if available
     if (typeof UTCCoordinator !== 'undefined') {
-      await UTCCoordinator.initialize();
-      console.log('🤝 UTC coordinator initialized:', UTCCoordinator.getStatus());
+      try {
+        // Check if global instance already exists from utcCoordinator.js
+        if (typeof globalThis.UTCCoordinator !== 'undefined' && globalThis.UTCCoordinator) {
+          // Use the existing global instance
+          globalThis.utcCoordinator = globalThis.UTCCoordinator;
+          console.log('🔗 Using existing global UTCCoordinator instance');
+        } else if (typeof globalThis.utcCoordinator === 'undefined') {
+          // Create new instance if none exists
+          globalThis.utcCoordinator = new UTCCoordinator();
+          console.log('🆕 Created new UTCCoordinator instance');
+        }
+        
+        await globalThis.utcCoordinator.initialize();
+        console.log('🤝 UTC coordinator initialized:', globalThis.utcCoordinator.getStatus());
+      } catch (error) {
+        console.error('❌ UTC coordinator initialization failed:', error);
+        console.log('📅 Falling back to local date strategy');
+      }
     } else {
       console.log('📅 UTC coordinator not available - using local date strategy');
     }
@@ -4411,6 +4511,115 @@ initializeExtension().catch(error => {
 });
 
 // Consolidated message handling - SINGLE LISTENER ONLY
+/**
+ * Migration utility: Convert local-date storage keys to UTC-date keys
+ */
+async function migrateStorageKeysToUTC() {
+  try {
+    const migrationKey = 'storageKeysMigrated_v2';
+    const migrationStatus = await chrome.storage.local.get([migrationKey]);
+    
+    if (migrationStatus[migrationKey]) {
+      console.log('✅ Storage keys already migrated to UTC');
+      return;
+    }
+    
+    console.log('🔄 Starting storage key migration to UTC...');
+    const allStorage = await chrome.storage.local.get(null);
+    const migrationsNeeded = [];
+    
+    // Find old local-date-based keys (format: YYYY-MM-DD with array of sessions)
+    Object.keys(allStorage).forEach(key => {
+      if (key.match(/^\d{4}-\d{2}-\d{2}$/) && Array.isArray(allStorage[key])) {
+        const sessions = allStorage[key];
+        console.log(`📝 Found legacy storage key: ${key} with ${sessions.length} sessions`);
+        
+        // Group sessions by their actual UTC date
+        const sessionsByUTCDate = {};
+        sessions.forEach(session => {
+          // Calculate UTC date from session timestamp
+          let utcDate;
+          if (session.startTimeUTC) {
+            // Already has UTC timestamp
+            utcDate = session.startTimeUTC.split('T')[0];
+          } else if (session.startTime) {
+            // Convert local timestamp to UTC date
+            utcDate = new Date(session.startTime).toISOString().split('T')[0];
+          } else {
+            // Fallback to key date
+            utcDate = key;
+          }
+          
+          // Ensure session has timezone info
+          if (!session.timezone) {
+            session.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          }
+          if (!session.startTimeUTC && session.startTime) {
+            session.startTimeUTC = new Date(session.startTime).toISOString();
+          }
+          if (!session.utcDate) {
+            session.utcDate = utcDate;
+          }
+          
+          if (!sessionsByUTCDate[utcDate]) {
+            sessionsByUTCDate[utcDate] = [];
+          }
+          sessionsByUTCDate[utcDate].push(session);
+        });
+        
+        migrationsNeeded.push({
+          oldKey: key,
+          newKeys: sessionsByUTCDate
+        });
+      }
+    });
+    
+    // Apply migrations
+    for (const migration of migrationsNeeded) {
+      console.log(`🔄 Migrating ${migration.oldKey}...`);
+      
+      // Add sessions to UTC-date-based keys
+      for (const [utcDate, sessions] of Object.entries(migration.newKeys)) {
+        const existingSessions = allStorage[utcDate] || [];
+        const mergedSessions = [...existingSessions, ...sessions];
+        
+        // Remove duplicates by session ID
+        const uniqueSessions = mergedSessions.filter((session, index, arr) => 
+          arr.findIndex(s => s.id === session.id) === index
+        );
+        
+        await chrome.storage.local.set({
+          [utcDate]: uniqueSessions
+        });
+        
+        console.log(`✅ Migrated ${sessions.length} sessions to UTC date: ${utcDate}`);
+      }
+      
+      // Remove old key
+      await chrome.storage.local.remove(migration.oldKey);
+      console.log(`🗑️ Removed legacy key: ${migration.oldKey}`);
+    }
+    
+    // Mark migration as completed
+    await chrome.storage.local.set({ [migrationKey]: true });
+    
+    if (migrationsNeeded.length > 0) {
+      console.log('✅ Storage key migration completed:', migrationsNeeded.length, 'keys migrated');
+    } else {
+      console.log('ℹ️ No legacy storage keys found to migrate');
+    }
+  } catch (error) {
+    console.error('❌ Storage key migration failed:', error);
+  }
+}
+
+// Run migration on extension startup
+chrome.runtime.onStartup.addListener(migrateStorageKeysToUTC);
+chrome.runtime.onInstalled.addListener((details) => {
+  console.log('🚀 Extension installed/updated:', details.reason);
+  migrateStorageKeysToUTC();
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('📨 Received message:', message.type, 'from:', sender.tab?.url || 'popup');
   console.log('🔍 DEBUG: Extension background script is running and receiving messages');
@@ -4446,15 +4655,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'UTC_COORDINATOR_INIT') {
     // Handle initialization from web app
-    if (UTCCoordinator && message.data) {
+    if (globalThis.utcCoordinator && message.data) {
       if (message.data.utcEnabled) {
-        UTCCoordinator.enableUTCMode(message.data.userTimezone).then(() => {
+        globalThis.utcCoordinator.enableUTCMode(message.data.userTimezone).then(() => {
           sendResponse({ success: true, message: 'UTC mode enabled' });
         }).catch(error => {
           sendResponse({ success: false, error: error.message });
         });
       } else {
-        UTCCoordinator.enableLocalMode().then(() => {
+        globalThis.utcCoordinator.enableLocalMode().then(() => {
           sendResponse({ success: true, message: 'Local mode enabled' });
         }).catch(error => {
           sendResponse({ success: false, error: error.message });
@@ -4468,8 +4677,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'TIMEZONE_CHANGE_COORDINATION') {
     // Handle timezone change from web app
-    if (UTCCoordinator && message.data) {
-      UTCCoordinator.handleTimezoneChange(
+    if (globalThis.utcCoordinator && message.data) {
+      globalThis.utcCoordinator.handleTimezoneChange(
         message.data.oldTimezone, 
         message.data.newTimezone
       ).then(() => {
@@ -4485,14 +4694,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'UTC_DATA_SYNC_REQUEST') {
     // Handle data sync request from web app
-    if (UTCCoordinator && message.data) {
-      UTCCoordinator.getRecentDataForSync().then(recentData => {
+    if (globalThis.utcCoordinator && message.data) {
+      globalThis.utcCoordinator.getRecentDataForSync().then(recentData => {
         sendResponse({ 
           success: true, 
           data: { 
             extensionData: recentData,
-            mode: UTCCoordinator.getStatus().mode,
-            timezone: UTCCoordinator.getStatus().timezone
+            mode: globalThis.utcCoordinator.getStatus().mode,
+            timezone: globalThis.utcCoordinator.getStatus().timezone
           }
         });
       }).catch(error => {

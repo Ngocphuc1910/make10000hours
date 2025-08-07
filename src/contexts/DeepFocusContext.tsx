@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { useDeepFocusStore } from '../store/deepFocusStore';
 import { useUserStore } from '../store/userStore';
+import { timezoneUtils } from '../utils/timezoneUtils';
 import { Source } from '../types/models';
 
 // Global state locks to prevent concurrent operations
@@ -238,6 +239,47 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
             });
           }
         }
+        
+        // Handle timezone coordination requests from extension
+        if (messageData?.type === 'GET_USER_TIMEZONE') {
+          console.log('🌍 Web app: Timezone request from extension');
+          
+          try {
+            const userTimezone = user?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+            console.log('🌍 Web app: Responding with timezone:', userTimezone);
+            
+            // For Chrome extension messages, use sendResponse if available
+            if (event.sendResponse) {
+              event.sendResponse({
+                timezone: userTimezone,
+                success: true,
+                timestamp: Date.now()
+              });
+              return true; // Keep message channel open for async response
+            }
+            
+            // For window messages, post response back
+            if (event.source && event.origin) {
+              event.source.postMessage({
+                type: 'GET_USER_TIMEZONE_RESPONSE',
+                timezone: userTimezone,
+                success: true,
+                timestamp: Date.now()
+              }, event.origin);
+            }
+          } catch (error) {
+            console.error('❌ Failed to respond to timezone request:', error);
+            
+            if (event.sendResponse) {
+              event.sendResponse({
+                success: false,
+                error: error.message,
+                timestamp: Date.now()
+              });
+            }
+          }
+        }
+        
       } catch (error) {
         console.error('Error in global extension message handler:', error);
       }
