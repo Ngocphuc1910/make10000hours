@@ -6,43 +6,38 @@ import { Icon } from '../ui/Icon';
 
 const pricingData = {
   monthly: { standard: 0, pro: 5 },
-  annual: { standard: 0, pro: 45 }
+  annual: { standard: 0, pro: 48 } // 20% discount ($4/month)
 };
 
 const plans = {
   standard: {
     name: 'Standard',
     features: [
-      '5,000 credits per month',
-      'Run up to 3 tasks concurrently',
-      'Basic analytics and reporting',
-      'Standard support',
-      'Mobile app access',
-      'Basic task templates',
-      'Email notifications',
-      'Basic time tracking',
-      '1 workspace',
-      'Community forum access',
-      'Standard integrations'
+      'Up to 1000 tasks & 5 projects',
+      'Full Pomodoro timer & task management',
+      'Kanban boards and project organization',
+      'Calendar scheduling (internal only)',
+      'Deep Focus mode & website blocking',
+      'Website usage tracking via extension',
+      'Productivity insights (current day only)',
+      'Cross-device sync'
     ]
   },
   pro: {
     name: 'Pro',
-    badge: undefined,
+    badge: 'Most Popular',
     betaBadge: false,
     features: [
       'Unlimited tasks and projects',
-      'Advanced Pomodoro timer settings',
-      'Deep Focus mode with website blocking',
-      'Google Calendar integration',
-      'Advanced analytics and insights',
-      'AI-powered productivity chat',
-      'Priority customer support',
-      'Chrome extension for usage tracking',
-      'Custom themes and personalization',
-      'Export data and reports',
-      'Team collaboration features',
-      'Advanced notification settings'
+      'Everything in Standard, plus:',
+      'Google Calendar bidirectional sync',
+      'Historical productivity insights & trends',
+      'AI productivity coach with context',
+      'Custom date range analytics',
+      'Advanced Pomodoro settings & themes',
+      'Export all historical data',
+      'Weekly & monthly productivity reports',
+      'Advanced focus session analysis'
     ]
   }
 };
@@ -101,7 +96,7 @@ export const PricingModal: React.FC = () => {
         <div className="relative px-8 pt-6 pb-4">
           <div className="text-center">
             <h2 className="text-xl font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Choose Your Plan</h2>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Upgrade your plan for more credits and features</p>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Start focusing for free, upgrade to unlock your full productivity potential</p>
           </div>
           <button
             onClick={closeModal}

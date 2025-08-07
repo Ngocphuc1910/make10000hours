@@ -1270,6 +1270,53 @@ async function handleMessage(event) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   try {
     switch (message.type) {
+      case 'getUserTimezoneSetting':
+        // Handle timezone request from extension
+        try {
+          console.log('📍 Content script: Received timezone request from extension');
+          
+          // Try to get user timezone from web app stores
+          let userTimezone = null;
+          
+          // Method 1: Try to get from userStore if available
+          if (typeof window !== 'undefined' && window.useUserStore) {
+            const userStore = window.useUserStore;
+            const user = userStore.getState?.()?.user;
+            userTimezone = user?.settings?.timezone?.current;
+            console.log('📍 Got timezone from userStore:', userTimezone);
+          }
+          
+          // Method 2: Try localStorage as fallback
+          if (!userTimezone) {
+            try {
+              const userStorage = localStorage.getItem('user-store');
+              if (userStorage) {
+                const parsed = JSON.parse(userStorage);
+                userTimezone = parsed.state?.user?.settings?.timezone?.current;
+                console.log('📍 Got timezone from localStorage:', userTimezone);
+              }
+            } catch (e) {
+              console.log('📍 localStorage fallback failed:', e.message);
+            }
+          }
+          
+          // Method 3: Browser timezone as last resort
+          if (!userTimezone) {
+            userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            console.log('📍 Using browser timezone as fallback:', userTimezone);
+          }
+          
+          console.log('📍 Content script: Responding with timezone:', userTimezone);
+          sendResponse({ success: true, data: userTimezone });
+          return true; // Keep the message channel open for async response
+          
+        } catch (error) {
+          console.error('❌ Content script: Failed to get timezone setting:', error);
+          sendResponse({ success: false, error: error.message });
+          return true;
+        }
+        break;
+        
       case 'FOCUS_STATE_CHANGED':
         try {
           // Get current state for validation
