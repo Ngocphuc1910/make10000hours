@@ -42,7 +42,8 @@ export const useUserSync = () => {
       const payload = { 
         userId: user.uid,
         userEmail: user.email || '',
-        displayName: user.displayName || ''
+        displayName: user.displayName || '',
+        timezone: user.settings?.timezone?.current || null
       };
 
       console.log('🔍 DEBUG: Starting user sync with extension for user:', user.uid);
@@ -61,6 +62,57 @@ export const useUserSync = () => {
           source: 'make10000hours'
         }, '*');
         console.log('📤 DEBUG: Sent SET_USER_ID via window.postMessage for user:', user.uid);
+
+        // Also try direct chrome extension API if available (bypass content script)
+        if (typeof (window as any).chrome !== 'undefined' && 
+            (window as any).chrome?.runtime?.sendMessage) {
+          try {
+            console.log('📤 DEBUG: Attempting direct extension message for user:', user.uid);
+            
+            // Try sending without extension ID first (for extensions that allow external messaging)
+            (window as any).chrome.runtime.sendMessage(
+              {
+                type: 'SET_USER_ID',
+                payload,
+                source: 'web_app_direct'
+              },
+              (response: any) => {
+                if ((window as any).chrome.runtime.lastError) {
+                  console.log('⚠️ Direct extension message failed (no ID):', (window as any).chrome.runtime.lastError.message);
+                  
+                  // Fallback: Try to detect extension ID from DOM injection
+                  const extensionElements = document.querySelectorAll('[data-extension-id]');
+                  if (extensionElements.length > 0) {
+                    const extensionId = extensionElements[0].getAttribute('data-extension-id');
+                    console.log('🔍 Found extension ID in DOM:', extensionId);
+                    
+                    if (extensionId) {
+                      (window as any).chrome.runtime.sendMessage(
+                        extensionId,
+                        {
+                          type: 'SET_USER_ID',
+                          payload,
+                          source: 'web_app_direct'
+                        },
+                        (response: any) => {
+                          if ((window as any).chrome.runtime.lastError) {
+                            console.log('⚠️ Direct extension message with ID failed:', (window as any).chrome.runtime.lastError.message);
+                          } else {
+                            console.log('✅ Direct extension message with ID response:', response);
+                          }
+                        }
+                      );
+                    }
+                  }
+                } else {
+                  console.log('✅ Direct extension message response:', response);
+                }
+              }
+            );
+          } catch (error) {
+            console.log('⚠️ Direct extension message failed:', error);
+          }
+        }
 
         // Load and sync blocking sites to extension (same as Deep Focus page)
         try {
@@ -105,7 +157,7 @@ export const useUserSync = () => {
     return () => {
       clearInterval(syncInterval);
     };
-  }, [user?.uid, user?.email, user?.displayName]);
+  }, [user?.uid, user?.email, user?.displayName, user?.settings?.timezone?.current]);
 
   return { user };
 }; 

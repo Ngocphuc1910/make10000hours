@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Extension & Web App UTC Filtering</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { border: 1px solid #ccc; padding: 15px; margin: 10px 0; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        button { padding: 10px 20px; margin: 5px; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+        .timezone-info { background: #e8f4fd; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Extension & Web App UTC Filtering Test</h1>
+    
+    <div class="timezone-info">
+        <h3>Current Timezone Information</h3>
+        <p><strong>Browser Timezone:</strong> <span id="browserTZ"></span></p>
+        <p><strong>User Setting Timezone:</strong> <span id="userTZ"></span></p>
+        <p><strong>Current Time (Local):</strong> <span id="localTime"></span></p>
+        <p><strong>Current Time (UTC):</strong> <span id="utcTime"></span></p>
+    </div>
+
+    <div class="test-section">
+        <h3>📱 Extension Storage Test</h3>
+        <button onclick="testExtensionStorage()">Test Extension UTC Storage</button>
+        <button onclick="testExtensionFiltering()">Test Extension UTC Filtering</button>
+        <pre id="extensionResults"></pre>
+    </div>
+
+    <div class="test-section">
+        <h3>🌐 Web App Service Test</h3>
+        <button onclick="testWebAppFiltering()">Test Web App UTC Filtering</button>
+        <pre id="webAppResults"></pre>
+    </div>
+
+    <div class="test-section">
+        <h3>🔄 Comparison Test</h3>
+        <button onclick="compareResults()">Compare Extension vs Web App</button>
+        <pre id="comparisonResults"></pre>
+    </div>
+
+    <script>
+        // Initialize timezone display
+        function updateTimezoneInfo() {
+            document.getElementById('browserTZ').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            document.getElementById('localTime').textContent = new Date().toLocaleString();
+            document.getElementById('utcTime').textContent = new Date().toISOString();
+
+            // Check if we can access user timezone setting
+            if (typeof window.userStore !== 'undefined') {
+                const userTZ = window.userStore.getState()?.user?.settings?.timezone?.current || 'Not set';
+                document.getElementById('userTZ').textContent = userTZ;
+            } else {
+                document.getElementById('userTZ').textContent = 'User store not available';
+            }
+        }
+
+        async function testExtensionStorage() {
+            const results = document.getElementById('extensionResults');
+            try {
+                // Test if extension messaging is available
+                if (!chrome?.runtime?.sendMessage) {
+                    throw new Error('Chrome extension API not available');
+                }
+
+                results.textContent = '🔄 Testing extension storage structure...\n';
+                
+                // Test getting extension storage
+                chrome.runtime.sendMessage(
+                    { action: 'getDeepFocusStorage' },
+                    (response) => {
+                        if (response?.success) {
+                            const storage = response.data;
+                            const dates = Object.keys(storage);
+                            
+                            results.textContent += `✅ Extension storage accessible\n`;
+                            results.textContent += `📅 Total date keys: ${dates.length}\n`;
+                            results.textContent += `🗂️ Date keys: ${dates.slice(0, 5).join(', ')}${dates.length > 5 ? '...' : ''}\n`;
+                            
+                            // Check if dates are in UTC format (YYYY-MM-DD)
+                            const utcFormat = dates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
+                            results.textContent += `🌍 UTC format dates: ${utcFormat.length}/${dates.length}\n`;
+                            
+                            if (utcFormat.length > 0) {
+                                const sampleDate = utcFormat[0];
+                                const sessionCount = storage[sampleDate]?.length || 0;
+                                results.textContent += `📊 Sample date ${sampleDate}: ${sessionCount} sessions\n`;
+                            }
+                        } else {
+                            results.textContent += `❌ Extension storage error: ${response?.error || 'Unknown error'}\n`;
+                        }
+                    }
+                );
+            } catch (error) {
+                results.textContent = `❌ Extension test failed: ${error.message}\n`;
+            }
+        }
+
+        async function testExtensionFiltering() {
+            const results = document.getElementById('extensionResults');
+            try {
+                if (!chrome?.runtime?.sendMessage) {
+                    throw new Error('Chrome extension API not available');
+                }
+
+                // Test with today's date
+                const today = new Date();
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+
+                results.textContent += '\n🔍 Testing extension UTC filtering...\n';
+                results.textContent += `📅 Filtering from ${today.toISOString().split('T')[0]} to ${tomorrow.toISOString().split('T')[0]}\n`;
+
+                chrome.runtime.sendMessage({
+                    action: 'getDeepFocusSessionsForDateRange',
+                    startDate: today,
+                    endDate: tomorrow
+                }, (response) => {
+                    if (response?.success) {
+                        const sessions = response.data || [];
+                        results.textContent += `✅ Extension filtering successful\n`;
+                        results.textContent += `📊 Found ${sessions.length} sessions\n`;
+                        
+                        if (sessions.length > 0) {
+                            const sample = sessions[0];
+                            results.textContent += `🔍 Sample session UTC date: ${sample.utcDate}\n`;
+                            results.textContent += `⏱️ Sample session start time: ${new Date(sample.startTime).toISOString()}\n`;
+                        }
+                    } else {
+                        results.textContent += `❌ Extension filtering error: ${response?.error || 'Unknown error'}\n`;
+                    }
+                });
+            } catch (error) {
+                results.textContent += `❌ Extension filtering test failed: ${error.message}\n`;
+            }
+        }
+
+        async function testWebAppFiltering() {
+            const results = document.getElementById('webAppResults');
+            try {
+                results.textContent = '🔄 Testing web app UTC filtering...\n';
+
+                // Check if deepFocusSessionService is available
+                if (typeof window.deepFocusSessionService === 'undefined') {
+                    throw new Error('deepFocusSessionService not available. Please open this from the Deep Focus page.');
+                }
+
+                const today = new Date();
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+
+                results.textContent += `📅 Filtering from ${today.toISOString().split('T')[0]} to ${tomorrow.toISOString().split('T')[0]}\n`;
+
+                // Get current user ID
+                const userId = window.userStore?.getState?.()?.user?.id;
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                // Test UTC filtering
+                const sessions = await window.deepFocusSessionService.getUserSessions(userId, {
+                    startDate: today,
+                    endDate: tomorrow,
+                    useUTC: true
+                });
+
+                results.textContent += `✅ Web app filtering successful\n`;
+                results.textContent += `📊 Found ${sessions.length} sessions\n`;
+
+                if (sessions.length > 0) {
+                    const sample = sessions[0];
+                    results.textContent += `🔍 Sample session start time UTC: ${sample.startTimeUTC}\n`;
+                    results.textContent += `📅 Sample session UTC date: ${sample.utcDate}\n`;
+                }
+            } catch (error) {
+                results.textContent = `❌ Web app filtering test failed: ${error.message}\n`;
+            }
+        }
+
+        async function compareResults() {
+            const results = document.getElementById('comparisonResults');
+            results.textContent = '🔄 Comparing extension vs web app results...\n';
+
+            try {
+                const today = new Date();
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+
+                // Test both systems
+                let extensionSessions = [];
+                let webAppSessions = [];
+
+                // Get extension sessions
+                await new Promise((resolve) => {
+                    if (chrome?.runtime?.sendMessage) {
+                        chrome.runtime.sendMessage({
+                            action: 'getDeepFocusSessionsForDateRange',
+                            startDate: today,
+                            endDate: tomorrow
+                        }, (response) => {
+                            if (response?.success) {
+                                extensionSessions = response.data || [];
+                            }
+                            resolve();
+                        });
+                    } else {
+                        resolve();
+                    }
+                });
+
+                // Get web app sessions
+                if (window.deepFocusSessionService && window.userStore) {
+                    const userId = window.userStore?.getState?.()?.user?.id;
+                    if (userId) {
+                        webAppSessions = await window.deepFocusSessionService.getUserSessions(userId, {
+                            startDate: today,
+                            endDate: tomorrow,
+                            useUTC: true
+                        });
+                    }
+                }
+
+                results.textContent += `📱 Extension sessions: ${extensionSessions.length}\n`;
+                results.textContent += `🌐 Web app sessions: ${webAppSessions.length}\n`;
+
+                // Compare session IDs
+                const extensionIds = new Set(extensionSessions.map(s => s.id));
+                const webAppIds = new Set(webAppSessions.map(s => s.id));
+                
+                const inBoth = [...extensionIds].filter(id => webAppIds.has(id));
+                const onlyExtension = [...extensionIds].filter(id => !webAppIds.has(id));
+                const onlyWebApp = [...webAppIds].filter(id => !extensionIds.has(id));
+
+                results.textContent += `🤝 Sessions in both: ${inBoth.length}\n`;
+                results.textContent += `📱 Only in extension: ${onlyExtension.length}\n`;
+                results.textContent += `🌐 Only in web app: ${onlyWebApp.length}\n`;
+
+                if (inBoth.length > 0) {
+                    results.textContent += `✅ UTC filtering working correctly - both systems return matching sessions\n`;
+                } else if (extensionSessions.length === 0 && webAppSessions.length === 0) {
+                    results.textContent += `ℹ️ No sessions found in the test date range\n`;
+                } else {
+                    results.textContent += `⚠️ Data sync issue - sessions don't match between systems\n`;
+                }
+
+            } catch (error) {
+                results.textContent += `❌ Comparison test failed: ${error.message}\n`;
+            }
+        }
+
+        // Initialize on page load
+        updateTimezoneInfo();
+        setInterval(updateTimezoneInfo, 1000); // Update every second
+    </script>
+</body>
+</html>

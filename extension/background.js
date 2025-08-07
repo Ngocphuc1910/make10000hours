@@ -89,6 +89,87 @@ const DateUtils = {
   }
 };
 
+// UTC Filtering Utilities for Extension (based on web app implementation)
+const UTCFilteringUtils = {
+  /**
+   * Convert local date range to UTC timestamps for session filtering
+   * This matches the web app's TimezoneFilteringUtils.convertLocalDateRangeToUTC
+   */
+  convertLocalDateRangeToUTC: function(startDate, endDate, userTimezone) {
+    console.log('🌍 Converting local date range to UTC:', {
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      userTimezone
+    });
+
+    // Create start/end of day in local context
+    const startOfDay = new Date(startDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    const endOfDay = new Date(endDate);  
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    console.log('📅 Local date boundaries:', {
+      startOfDay: startOfDay.toString(),
+      endOfDay: endOfDay.toString()
+    });
+
+    // Convert to UTC using sv-SE locale (same as web app)
+    const utcStart = new Date(
+      startOfDay.toLocaleString("sv-SE", { timeZone: userTimezone })
+    ).toISOString();
+    
+    const utcEnd = new Date(
+      endOfDay.toLocaleString("sv-SE", { timeZone: userTimezone })
+    ).toISOString();
+    
+    console.log('🕐 Converted to UTC:', {
+      utcStart,
+      utcEnd
+    });
+
+    // Validation: Ensure we cover approximately 24 hours
+    const hoursDiff = (new Date(utcEnd).getTime() - new Date(utcStart).getTime()) / (1000 * 60 * 60);
+    if (hoursDiff < 20 || hoursDiff > 28) {
+      console.warn(`⚠️ Unexpected time range: ${hoursDiff.toFixed(2)} hours`, {
+        utcStart,
+        utcEnd,
+        userTimezone
+      });
+    }
+
+    return { utcStart, utcEnd };
+  },
+
+  /**
+   * Filter sessions by startTimeUTC within a UTC date range
+   */
+  filterSessionsByUTCRange: function(sessions, utcStart, utcEnd) {
+    const filtered = sessions.filter(session => {
+      if (!session.startTimeUTC) {
+        console.warn('⚠️ Session missing startTimeUTC, skipping:', session.id);
+        return false;
+      }
+      
+      const sessionUTC = session.startTimeUTC;
+      const isInRange = sessionUTC >= utcStart && sessionUTC <= utcEnd;
+      
+      if (isInRange) {
+        console.log('✅ Session in range:', {
+          id: session.id,
+          startTimeUTC: sessionUTC,
+          range: `${utcStart} to ${utcEnd}`
+        });
+      }
+      
+      return isInRange;
+    });
+    
+    console.log(`📊 Filtered ${filtered.length} sessions from ${sessions.length} total using UTC range`);
+    return filtered;
+  }
+};
+
 // At the top of the file
 const ExtensionEventBus = {
   EVENTS: {
@@ -1181,12 +1262,12 @@ class StorageManager {
       const now = new Date();
       const sessionId = this.generateSessionId();
       
-      // Get coordinated timezone between extension and web app
+      // Get coordinated timezone between extension and web app using TimezoneManager
       let userTimezone;
       try {
-        userTimezone = typeof TimezoneCoordination !== 'undefined' 
-          ? await TimezoneCoordination.getCoordinatedTimezoneWithCache()
-          : Intl.DateTimeFormat().resolvedOptions().timeZone;
+        console.log('📍 Getting user timezone for session creation...');
+        userTimezone = await timezoneManager.getEffectiveTimezone();
+        console.log('✅ Using timezone for session:', userTimezone);
       } catch (error) {
         console.warn('⚠️ Timezone coordination failed, using browser default:', error);
         userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -1357,62 +1438,303 @@ class StorageManager {
   }
 
   /**
-   * Get deep focus sessions for a specific date
+   * Migrate existing sessions to include startTimeUTC field
    */
-  async getDeepFocusSessionsForDate(date) {
+  async migrateSessionsToUTC() {
     try {
-      const dateStr = typeof date === 'string' ? date : DateUtils.getLocalDateStringFromDate(date);
-      const storage = await this.getDeepFocusStorage();
-      const sessions = storage[dateStr] || [];
+      console.log('🔄 Starting session migration to add startTimeUTC fields...');
       
-      console.log('📖 Retrieved local sessions for', dateStr, ':', sessions.length, 'sessions');
-      return sessions;
+      const storage = await this.getDeepFocusStorage();
+      let migratedCount = 0;
+      let totalSessions = 0;
+      
+      // Migrate sessions in each date key
+      Object.keys(storage).forEach(dateKey => {
+        if (Array.isArray(storage[dateKey])) {
+          const sessions = storage[dateKey];
+          totalSessions += sessions.length;
+          
+          sessions.forEach(session => {
+            // Add missing startTimeUTC field
+            if (!session.startTimeUTC && session.startTime) {
+              session.startTimeUTC = new Date(session.startTime).toISOString();
+              migratedCount++;
+              console.log('✅ Added startTimeUTC to session:', session.id);
+            }
+            
+            // Add missing timezone (use browser timezone as fallback)
+            if (!session.timezone) {
+              session.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            }
+            
+            // Add missing utcDate
+            if (!session.utcDate && session.startTimeUTC) {
+              session.utcDate = session.startTimeUTC.split('T')[0];
+            }
+          });
+        }
+      });
+      
+      // Save migrated sessions back to storage
+      if (migratedCount > 0) {
+        await chrome.storage.local.set({
+          [this.getDeepFocusStorageKey()]: storage
+        });
+        
+        console.log('✅ Migration completed:', {
+          totalSessions,
+          migratedSessions: migratedCount,
+          alreadyMigrated: totalSessions - migratedCount
+        });
+      } else {
+        console.log('ℹ️ No sessions needed migration');
+      }
+      
+      return { totalSessions, migratedCount };
     } catch (error) {
-      console.error('❌ Failed to get sessions for date:', error);
+      console.error('❌ Session migration failed:', error);
+      return { totalSessions: 0, migratedCount: 0 };
+    }
+  }
+
+  /**
+   * Get all deep focus sessions from storage (for UTC filtering)
+   */
+  async getAllDeepFocusSessions() {
+    try {
+      // First, ensure sessions are migrated
+      console.log('🔄 Ensuring sessions are migrated before filtering...');
+      await this.migrateSessionsToUTC();
+      
+      const storage = await this.getDeepFocusStorage();
+      const allSessions = [];
+      
+      // Collect all sessions from all date keys
+      Object.keys(storage).forEach(dateKey => {
+        if (Array.isArray(storage[dateKey])) {
+          allSessions.push(...storage[dateKey]);
+        }
+      });
+      
+      console.log('📚 Retrieved all sessions from storage:', allSessions.length, 'total sessions');
+      
+      // Verify sessions have startTimeUTC
+      const sessionsWithUTC = allSessions.filter(s => s.startTimeUTC);
+      const sessionsWithoutUTC = allSessions.filter(s => !s.startTimeUTC);
+      
+      console.log('📊 Session UTC status after migration:', {
+        withStartTimeUTC: sessionsWithUTC.length,
+        missingStartTimeUTC: sessionsWithoutUTC.length
+      });
+      
+      if (sessionsWithoutUTC.length > 0) {
+        console.error('❌ Critical: Sessions still missing startTimeUTC after migration:', 
+          sessionsWithoutUTC.map(s => ({ id: s.id, startTime: s.startTime })).slice(0, 3));
+        
+        // Force immediate migration of these sessions
+        console.log('🔧 Force-migrating remaining sessions...');
+        sessionsWithoutUTC.forEach(session => {
+          if (session.startTime) {
+            session.startTimeUTC = new Date(session.startTime).toISOString();
+            session.timezone = session.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+            session.utcDate = session.startTimeUTC.split('T')[0];
+            console.log('✅ Force-migrated session:', session.id);
+          }
+        });
+        
+        // Save the force-migrated sessions
+        try {
+          await chrome.storage.local.set({
+            [this.getDeepFocusStorageKey()]: storage
+          });
+          console.log('💾 Saved force-migrated sessions');
+        } catch (saveError) {
+          console.error('❌ Failed to save force-migrated sessions:', saveError);
+        }
+      }
+      
+      return allSessions;
+    } catch (error) {
+      console.error('❌ Failed to get all sessions:', error);
       return [];
     }
   }
 
   /**
-   * Get today's deep focus sessions
+   * Get deep focus sessions for a specific date using UTC-based filtering (like web app)
    */
-  async getTodayDeepFocusSessions() {
-    const today = new Date();
-    return this.getDeepFocusSessionsForDate(today);
+  async getDeepFocusSessionsForDate(date) {
+    try {
+      // Get user timezone
+      const userTimezone = await timezoneManager.getEffectiveTimezone();
+      console.log('🌍 Using timezone for UTC filtering:', userTimezone);
+      
+      // Convert date to start/end of day in user timezone
+      const startDate = new Date(date);
+      const endDate = new Date(date);
+      
+      console.log('📅 Filtering sessions for date:', {
+        inputDate: date instanceof Date ? date.toISOString() : date,
+        userTimezone
+      });
+      
+      // Convert to UTC range using same logic as web app
+      const { utcStart, utcEnd } = UTCFilteringUtils.convertLocalDateRangeToUTC(
+        startDate,
+        endDate,
+        userTimezone
+      );
+      
+      // Get all sessions and filter by startTimeUTC
+      const allSessions = await this.getAllDeepFocusSessions();
+      const filteredSessions = UTCFilteringUtils.filterSessionsByUTCRange(
+        allSessions,
+        utcStart,
+        utcEnd
+      );
+      
+      console.log('✅ UTC-filtered sessions for date:', {
+        date: startDate.toISOString().split('T')[0],
+        timezone: userTimezone,
+        utcRange: `${utcStart} to ${utcEnd}`,
+        sessionsFound: filteredSessions.length
+      });
+      
+      return filteredSessions;
+      
+    } catch (error) {
+      console.error('❌ UTC filtering failed, falling back to legacy method:', error);
+      
+      // Fallback to old date-key method
+      try {
+        let dateStr;
+        if (typeof date === 'string') {
+          dateStr = date;
+        } else {
+          const userTimezone = await timezoneManager.getEffectiveTimezone();
+          const timeInUserTz = new Date(date.toLocaleString("en-US", { timeZone: userTimezone }));
+          dateStr = timeInUserTz.getFullYear() + '-' + 
+                   String(timeInUserTz.getMonth() + 1).padStart(2, '0') + '-' +
+                   String(timeInUserTz.getDate()).padStart(2, '0');
+        }
+        
+        const storage = await this.getDeepFocusStorage();
+        const sessions = storage[dateStr] || [];
+        
+        console.log('📖 Fallback: Retrieved sessions for', dateStr, ':', sessions.length, 'sessions');
+        return sessions;
+      } catch (fallbackError) {
+        console.error('❌ Fallback method also failed:', fallbackError);
+        return [];
+      }
+    }
   }
 
   /**
-   * Get deep focus sessions for a date range
+   * Get today's deep focus sessions using UTC-based filtering (like web app)
+   */
+  async getTodayDeepFocusSessions() {
+    try {
+      // Get user timezone
+      const userTimezone = await timezoneManager.getEffectiveTimezone();
+      console.log('🌍 Getting today sessions using UTC filtering for timezone:', userTimezone);
+      
+      // Create "today" date in user timezone
+      const now = new Date();
+      const todayInUserTz = new Date(now.toLocaleString("en-US", { timeZone: userTimezone }));
+      
+      console.log('📅 Today in user timezone:', {
+        userTimezone,
+        browserNow: now.toISOString(),
+        todayInUserTz: todayInUserTz.toISOString(),
+        todayDate: todayInUserTz.toDateString()
+      });
+      
+      // Use UTC-based filtering (same as getDeepFocusSessionsForDate)
+      return this.getDeepFocusSessionsForDate(todayInUserTz);
+    } catch (error) {
+      console.warn('⚠️ UTC-based today filtering failed, using fallback:', error);
+      const today = new Date();
+      return this.getDeepFocusSessionsForDate(today);
+    }
+  }
+
+  /**
+   * Get deep focus sessions for a date range using UTC-based filtering (like web app)
    */
   async getDeepFocusSessionsForDateRange(startDate, endDate) {
     try {
-      const storage = await this.getDeepFocusStorage();
-      const sessions = [];
+      // Get user timezone
+      const userTimezone = await timezoneManager.getEffectiveTimezone();
+      console.log('🌍 Getting date range sessions using UTC filtering:', {
+        startDate: typeof startDate === 'string' ? startDate : startDate.toISOString(),
+        endDate: typeof endDate === 'string' ? endDate : endDate.toISOString(),
+        userTimezone
+      });
       
-      // Convert dates to local date strings
-      const startStr = typeof startDate === 'string' ? startDate : DateUtils.getLocalDateStringFromDate(new Date(startDate));
-      const endStr = typeof endDate === 'string' ? endDate : DateUtils.getLocalDateStringFromDate(new Date(endDate));
+      // Convert inputs to Date objects if needed
+      const startDateObj = typeof startDate === 'string' ? new Date(startDate) : startDate;
+      const endDateObj = typeof endDate === 'string' ? new Date(endDate) : endDate;
       
-      // Iterate through all dates in range
-      const currentDate = new Date(startStr);
-      const endDateObj = new Date(endStr);
+      // Convert to UTC range using same logic as web app
+      const { utcStart, utcEnd } = UTCFilteringUtils.convertLocalDateRangeToUTC(
+        startDateObj,
+        endDateObj,
+        userTimezone
+      );
       
-      while (currentDate <= endDateObj) {
-        const dateStr = DateUtils.getLocalDateStringFromDate(currentDate);
-        if (storage[dateStr]) {
-          sessions.push(...storage[dateStr]);
-        }
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
+      // Get all sessions and filter by startTimeUTC
+      const allSessions = await this.getAllDeepFocusSessions();
+      const filteredSessions = UTCFilteringUtils.filterSessionsByUTCRange(
+        allSessions,
+        utcStart,
+        utcEnd
+      );
       
-      // Sort by creation time (newest first)
-      sessions.sort((a, b) => b.createdAt - a.createdAt);
+      console.log('✅ UTC-filtered sessions for date range:', {
+        dateRange: `${startDateObj.toISOString().split('T')[0]} to ${endDateObj.toISOString().split('T')[0]}`,
+        timezone: userTimezone,
+        utcRange: `${utcStart} to ${utcEnd}`,
+        sessionsFound: filteredSessions.length
+      });
       
-      console.log('📖 Retrieved sessions for date range', startStr, 'to', endStr, ':', sessions.length, 'sessions');
-      return sessions;
+      return filteredSessions;
+      
     } catch (error) {
-      console.error('❌ Failed to get sessions for date range:', error);
-      return [];
+      console.error('❌ UTC date range filtering failed, falling back to legacy method:', error);
+      
+      // Fallback to old method
+      try {
+        const storage = await this.getDeepFocusStorage();
+        const sessions = [];
+        
+        // Convert dates to UTC date strings (YYYY-MM-DD format) 
+        const startStr = typeof startDate === 'string' ? startDate : new Date(startDate).toISOString().split('T')[0];
+        const endStr = typeof endDate === 'string' ? endDate : new Date(endDate).toISOString().split('T')[0];
+        
+        // Iterate through all UTC dates in range
+        const currentDate = new Date(startStr + 'T00:00:00.000Z');
+        const endDateObj = new Date(endStr + 'T23:59:59.999Z');
+        
+        while (currentDate <= endDateObj) {
+          const utcDateStr = currentDate.toISOString().split('T')[0];
+          if (storage[utcDateStr]) {
+            console.log(`📅 Fallback: Found ${storage[utcDateStr].length} sessions for UTC date:`, utcDateStr);
+            sessions.push(...storage[utcDateStr]);
+          }
+          currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+        }
+        
+        // Sort by creation time (newest first)
+        sessions.sort((a, b) => b.createdAt - a.createdAt);
+        
+        console.log('📖 Fallback: Retrieved', sessions.length, 'sessions for date range');
+        return sessions;
+        
+      } catch (fallbackError) {
+        console.error('❌ Fallback method also failed:', fallbackError);
+        return [];
+      }
     }
   }
 
@@ -3100,8 +3422,25 @@ class FocusTimeTracker {
               userId: message.payload?.userId,
               userEmail: message.payload?.userEmail,
               displayName: message.payload?.displayName,
+              timezone: message.payload?.timezone,
               lastUpdated: Date.now()
             };
+            
+            // Store timezone in extension local storage for persistence
+            if (message.payload?.timezone) {
+              console.log('📍 Storing user timezone in extension:', message.payload.timezone);
+              await chrome.storage.local.set({
+                userTimezone: message.payload.timezone,
+                timezoneLastUpdated: Date.now(),
+                timezoneSource: 'web_app_sync'
+              });
+              
+              // Clear timezone manager cache to force refresh
+              if (typeof timezoneManager !== 'undefined') {
+                timezoneManager.clearCache();
+                console.log('🗑️ Cleared timezone cache to use new web app setting');
+              }
+            }
             
             // Persist user info to storage
             if (this.storageManager) {
@@ -3110,6 +3449,7 @@ class FocusTimeTracker {
                 userId: this.currentUserId,
                 userEmail: message.payload?.userEmail,
                 displayName: message.payload?.displayName,
+                timezone: message.payload?.timezone,
                 lastUpdated: Date.now()
               });
               
@@ -3521,6 +3861,28 @@ class FocusTimeTracker {
           break;
 
         // Deep Focus session data retrieval handlers
+        case 'GET_USER_TIMEZONE':
+          try {
+            const userTimezone = await timezoneManager.getEffectiveTimezone();
+            console.log('📍 Returning user timezone:', userTimezone);
+            sendResponse({ success: true, timezone: userTimezone });
+          } catch (error) {
+            console.error('Error getting user timezone:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'MIGRATE_SESSIONS_TO_UTC':
+          try {
+            const migrationResult = await this.storageManager.migrateSessionsToUTC();
+            console.log('🔄 Session migration completed:', migrationResult);
+            sendResponse({ success: true, data: migrationResult });
+          } catch (error) {
+            console.error('Error migrating sessions to UTC:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
         case 'GET_DEEP_FOCUS_SESSIONS_DATE_RANGE':
           try {
             const { startDate, endDate } = message.payload || {};
@@ -4510,7 +4872,198 @@ initializeExtension().catch(error => {
   console.error('❌ Top-level initialization failed:', error);
 });
 
+// Handle external messages from web app directly (bypass content script)
+chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+  console.log('📨 Received external message from web app:', message.type, 'from:', sender.url);
+  
+  if (message.type === 'SET_USER_ID' && message.source === 'web_app_direct') {
+    console.log('🔍 Processing direct SET_USER_ID from web app:', message.payload);
+    
+    // Forward to the main message handler
+    chrome.runtime.sendMessage({
+      type: 'SET_USER_ID',
+      payload: message.payload
+    }).then(response => {
+      console.log('✅ Forwarded SET_USER_ID response:', response);
+      sendResponse(response);
+    }).catch(error => {
+      console.error('❌ Failed to forward SET_USER_ID:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+    
+    return true; // Keep message channel open for async response
+  }
+});
+
 // Consolidated message handling - SINGLE LISTENER ONLY
+
+/**
+ * Timezone Manager for Extension-Web App Synchronization
+ * Handles getting and caching user's timezone setting from the web app
+ */
+class TimezoneManager {
+  constructor() {
+    this.cachedTimezone = null;
+    this.cacheExpiry = 0;
+    this.cacheTTL = 5 * 60 * 1000; // 5 minutes
+    this.fallbackTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  }
+
+  /**
+   * Get user's timezone setting - prioritizes web app sync, then storage, then browser
+   */
+  async getUserTimezone() {
+    try {
+      // Return cached timezone if still valid
+      if (this.cachedTimezone && Date.now() < this.cacheExpiry) {
+        console.log('📍 Using cached timezone:', this.cachedTimezone);
+        return this.cachedTimezone;
+      }
+
+      console.log('📍 Getting user timezone (prioritizing web app sync)...');
+      let userTimezone = null;
+
+      // PRIORITY 1: Check storage for timezone from web app sync
+      try {
+        const stored = await chrome.storage.local.get(['userTimezone', 'timezoneSource', 'timezoneLastUpdated']);
+        if (stored.userTimezone && stored.timezoneSource === 'web_app_sync') {
+          // Check if sync data is recent (within 24 hours)
+          const isRecent = stored.timezoneLastUpdated && 
+                          (Date.now() - stored.timezoneLastUpdated) < (24 * 60 * 60 * 1000);
+          
+          if (isRecent) {
+            userTimezone = stored.userTimezone;
+            console.log('✅ Using timezone from web app sync:', userTimezone);
+          } else {
+            console.log('⚠️ Stored timezone from web app sync is old, will try other methods');
+          }
+        }
+      } catch (storageError) {
+        console.warn('⚠️ Failed to get stored timezone:', storageError);
+      }
+
+      // PRIORITY 2: Try requesting from web app tabs (fallback)
+      if (!userTimezone) {
+        console.log('📡 Requesting user timezone from web app tabs...');
+        
+        const tabs = await new Promise(resolve => {
+          chrome.tabs.query({}, resolve);
+        });
+
+        // Look for web app tabs and request timezone
+        for (const tab of tabs) {
+          if (tab.url && (tab.url.includes('localhost') || tab.url.includes('make10000hours.com') || tab.url.includes('make10000hours'))) {
+            try {
+              console.log('📡 Found web app tab, requesting timezone from:', tab.url);
+              
+              const response = await new Promise((resolve, reject) => {
+                const timeoutId = setTimeout(() => reject(new Error('Timeout')), 5000);
+                
+                chrome.tabs.sendMessage(tab.id, {
+                  action: 'getUserTimezoneSetting'
+                }, (response) => {
+                  clearTimeout(timeoutId);
+                  if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                  } else {
+                    resolve(response);
+                  }
+                });
+              });
+
+              if (response?.success && response.data) {
+                userTimezone = response.data;
+                console.log('✅ Got timezone from web app tab:', userTimezone);
+                break; // Found valid timezone, stop searching
+              }
+            } catch (error) {
+              console.log('⚠️ Failed to get timezone from tab:', tab.url, error.message);
+              // Continue to next tab
+            }
+          }
+        }
+      }
+
+      // PRIORITY 3: Check any stored timezone (backup)
+      if (!userTimezone) {
+        try {
+          const stored = await chrome.storage.local.get(['userTimezone', 'timezoneSource']);
+          if (stored.userTimezone) {
+            userTimezone = stored.userTimezone;
+            console.log('📦 Using stored timezone:', userTimezone, `(source: ${stored.timezoneSource || 'unknown'})`);
+          } else {
+            console.log('📦 No timezone found in local storage, will use browser fallback');
+          }
+        } catch (storageError) {
+          console.error('❌ Failed to get any stored timezone:', storageError);
+          console.log('📦 Storage error, will use browser fallback');
+        }
+      }
+
+      // PRIORITY 4: Browser fallback
+      if (!userTimezone) {
+        userTimezone = this.fallbackTimezone;
+        console.log('📍 Using browser fallback timezone:', userTimezone);
+        
+        // Store browser timezone as fallback so we don't keep requesting
+        await chrome.storage.local.set({
+          userTimezone: userTimezone,
+          timezoneLastUpdated: Date.now(),
+          timezoneSource: 'browser_fallback'
+        });
+        console.log('💾 Stored browser timezone as fallback in local storage');
+      }
+
+      // Cache the result
+      this.cachedTimezone = userTimezone;
+      this.cacheExpiry = Date.now() + this.cacheTTL;
+
+      // Store result if it came from tab request (don't overwrite web app sync)
+      if (userTimezone && userTimezone === this.fallbackTimezone) {
+        // Already stored above in browser fallback case
+      } else if (userTimezone) {
+        const stored = await chrome.storage.local.get(['timezoneSource']);
+        if (stored.timezoneSource !== 'web_app_sync') {
+          await chrome.storage.local.set({
+            userTimezone: userTimezone,
+            timezoneLastUpdated: Date.now(),
+            timezoneSource: 'tab_request'
+          });
+        }
+      }
+
+      return userTimezone;
+
+    } catch (error) {
+      console.error('❌ TimezoneManager: Failed to get user timezone:', error);
+      
+      // Ultimate fallback
+      console.log('📍 Using ultimate fallback timezone:', this.fallbackTimezone);
+      return this.fallbackTimezone;
+    }
+  }
+
+  /**
+   * Clear timezone cache (useful when user changes timezone)
+   */
+  clearCache() {
+    console.log('🗑️ Clearing timezone cache');
+    this.cachedTimezone = null;
+    this.cacheExpiry = 0;
+  }
+
+  /**
+   * Get timezone for UTC conversion operations
+   * This is the main method other parts of extension should use
+   */
+  async getEffectiveTimezone() {
+    return await this.getUserTimezone();
+  }
+}
+
+// Create global timezone manager instance
+const timezoneManager = new TimezoneManager();
+
 /**
  * Migration utility: Convert local-date storage keys to UTC-date keys
  */
