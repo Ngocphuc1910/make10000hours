@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firestore Index Creator</title>
+    <style>
+        body {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0a0a0a;
+            color: #e0e0e0;
+        }
+        .container {
+            background: #1a1a1a;
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid #333;
+        }
+        h1 {
+            color: #ff6b35;
+            border-bottom: 2px solid #ff6b35;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #4fc3f7;
+            margin-top: 30px;
+        }
+        .index-card {
+            background: #2a2a2a;
+            padding: 20px;
+            margin: 15px 0;
+            border-left: 4px solid #4fc3f7;
+            border-radius: 8px;
+        }
+        .index-fields {
+            background: #1e1e1e;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            border-radius: 4px;
+        }
+        .btn {
+            background: #ff6b35;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            text-decoration: none;
+            display: inline-block;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #e55a2b;
+        }
+        .btn-secondary {
+            background: #4fc3f7;
+        }
+        .btn-secondary:hover {
+            background: #29b6f6;
+        }
+        .warning {
+            background: #ff5722;
+            color: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .success {
+            background: #4caf50;
+            color: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        .code-block {
+            background: #0d0d0d;
+            border: 1px solid #333;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+        }
+        .step {
+            background: #2a2a2a;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+        }
+        #projectInput {
+            width: 100%;
+            padding: 12px;
+            background: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 6px;
+            color: white;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 Firestore Index Creator for UTC Filtering</h1>
+        
+        <div class="warning">
+            ⚠️ <strong>CRITICAL:</strong> These indexes are required before implementing UTC filtering. Without them, queries will fail or be extremely slow!
+        </div>
+
+        <h2>📋 Step 1: Detect Your Firebase Project</h2>
+        <div class="step">
+            <label for="projectInput">Enter your Firebase Project ID:</label>
+            <input type="text" id="projectInput" placeholder="your-project-id (e.g., make10000hours-12345)">
+            <button class="btn" onclick="detectProject()">Auto-Detect Project</button>
+            <button class="btn btn-secondary" onclick="generateLinks()">Generate Index Links</button>
+        </div>
+
+        <div id="projectInfo" style="display: none;">
+            <div class="success">
+                ✅ <strong>Project Detected:</strong> <span id="detectedProject"></span>
+            </div>
+        </div>
+
+        <h2>📊 Required Indexes (3 Total)</h2>
+        
+        <div class="index-card">
+            <h3>🔥 Index 1: Primary UTC Filtering (CRITICAL)</h3>
+            <p><strong>Purpose:</strong> Essential for userId + startTimeUTC queries</p>
+            <div class="index-fields">
+                Collection: <strong>deepFocusSessions</strong><br>
+                Fields:<br>
+                &nbsp;&nbsp;• userId (Ascending)<br>
+                &nbsp;&nbsp;• startTimeUTC (Descending)
+            </div>
+            <div id="index1Links" style="display: none;"></div>
+        </div>
+
+        <div class="index-card">
+            <h3>📅 Index 2: UTC Date Filtering</h3>
+            <p><strong>Purpose:</strong> Efficient date-only queries</p>
+            <div class="index-fields">
+                Collection: <strong>deepFocusSessions</strong><br>
+                Fields:<br>
+                &nbsp;&nbsp;• userId (Ascending)<br>
+                &nbsp;&nbsp;• utcDate (Ascending)
+            </div>
+            <div id="index2Links" style="display: none;"></div>
+        </div>
+
+        <div class="index-card">
+            <h3>⚡ Index 3: Status + UTC Time</h3>
+            <p><strong>Purpose:</strong> Status filtering with time ordering</p>
+            <div class="index-fields">
+                Collection: <strong>deepFocusSessions</strong><br>
+                Fields:<br>
+                &nbsp;&nbsp;• userId (Ascending)<br>
+                &nbsp;&nbsp;• status (Ascending)<br>
+                &nbsp;&nbsp;• startTimeUTC (Descending)
+            </div>
+            <div id="index3Links" style="display: none;"></div>
+        </div>
+
+        <div id="mainLinks" style="display: none;">
+            <h2>🚀 Quick Actions</h2>
+            <div class="step">
+                <a id="consoleLink" href="#" class="btn" target="_blank">🌐 Open Firebase Console (Indexes)</a>
+                <button class="btn btn-secondary" onclick="copyCommands()">📋 Copy Firebase CLI Commands</button>
+            </div>
+
+            <h2>🔧 Firebase CLI Commands</h2>
+            <div class="code-block" id="cliCommands"></div>
+
+            <h2>📝 Next Steps</h2>
+            <div class="step">
+                <strong>1.</strong> Click "Open Firebase Console" above<br>
+                <strong>2.</strong> Click "Create Index" button<br>
+                <strong>3.</strong> Create each of the 3 indexes shown above<br>
+                <strong>4.</strong> Wait for build completion (5-10 minutes)<br>
+                <strong>5.</strong> Verify all indexes show "Enabled" status
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentProjectId = '';
+
+        async function detectProject() {
+            try {
+                // Try to detect from current URL or Firebase config
+                const urlParams = new URLSearchParams(window.location.search);
+                let projectId = urlParams.get('project');
+                
+                if (!projectId) {
+                    // Try to detect from Firebase SDK if loaded
+                    if (window.firebase && window.firebase.app) {
+                        projectId = window.firebase.app().options.projectId;
+                    }
+                }
+                
+                if (!projectId) {
+                    // Check for common project patterns
+                    const hostname = window.location.hostname;
+                    if (hostname.includes('make10000hours')) {
+                        projectId = 'make10000hours-12345'; // Update with your actual project ID
+                    } else {
+                        projectId = prompt('Enter your Firebase Project ID:', 'your-project-id');
+                    }
+                }
+                
+                if (projectId) {
+                    document.getElementById('projectInput').value = projectId;
+                    showProjectInfo(projectId);
+                    generateLinks();
+                } else {
+                    alert('⚠️ Could not detect project. Please enter it manually.');
+                }
+                
+            } catch (error) {
+                console.error('Detection error:', error);
+                alert('⚠️ Auto-detection failed. Please enter your project ID manually.');
+            }
+        }
+
+        function showProjectInfo(projectId) {
+            document.getElementById('detectedProject').textContent = projectId;
+            document.getElementById('projectInfo').style.display = 'block';
+            currentProjectId = projectId;
+        }
+
+        function generateLinks() {
+            const projectId = document.getElementById('projectInput').value.trim();
+            
+            if (!projectId) {
+                alert('⚠️ Please enter your Firebase Project ID first');
+                return;
+            }
+
+            currentProjectId = projectId;
+            showProjectInfo(projectId);
+
+            // Base console URL
+            const baseUrl = `https://console.firebase.google.com/project/${projectId}/firestore/indexes`;
+            
+            // Update main console link
+            document.getElementById('consoleLink').href = baseUrl;
+            
+            // Generate CLI commands
+            const cliCommands = [
+                '# Create all 3 required indexes:',
+                '',
+                '# Index 1: Primary UTC Filtering (CRITICAL)',
+                `firebase firestore:indexes:create --project=${projectId} --collection-group=deepFocusSessions --fields="userId:asc,startTimeUTC:desc"`,
+                '',
+                '# Index 2: UTC Date Filtering', 
+                `firebase firestore:indexes:create --project=${projectId} --collection-group=deepFocusSessions --fields="userId:asc,utcDate:asc"`,
+                '',
+                '# Index 3: Status + UTC Time',
+                `firebase firestore:indexes:create --project=${projectId} --collection-group=deepFocusSessions --fields="userId:asc,status:asc,startTimeUTC:desc"`,
+                '',
+                '# Wait for indexes to build (5-10 minutes)',
+                '# Check status with: firebase firestore:indexes:list'
+            ].join('\n');
+            
+            document.getElementById('cliCommands').textContent = cliCommands;
+            
+            // Show all the generated content
+            document.getElementById('mainLinks').style.display = 'block';
+            
+            // Success message
+            const success = document.createElement('div');
+            success.className = 'success';
+            success.innerHTML = '🎯 <strong>Links Generated!</strong> Click "Open Firebase Console" to create indexes.';
+            document.querySelector('.container').insertBefore(success, document.getElementById('mainLinks'));
+            
+            // Auto-remove success message after 5 seconds
+            setTimeout(() => success.remove(), 5000);
+        }
+
+        function copyCommands() {
+            const commands = document.getElementById('cliCommands').textContent;
+            navigator.clipboard.writeText(commands).then(() => {
+                alert('📋 Commands copied to clipboard!');
+            }).catch(() => {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = commands;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('📋 Commands copied to clipboard!');
+            });
+        }
+
+        // Auto-detect on page load
+        window.addEventListener('load', () => {
+            setTimeout(detectProject, 1000);
+        });
+    </script>
+</body>
+</html>

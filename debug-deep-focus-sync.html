@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Deep Focus Sync Debug Tool</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #00ff00; }
+        .debug-section { margin: 20px 0; padding: 15px; border: 1px solid #333; background: #0a0a0a; }
+        .error { color: #ff6b6b; }
+        .success { color: #51cf66; }
+        .warning { color: #ffd43b; }
+        .info { color: #74c0fc; }
+        button { 
+            margin: 5px; padding: 10px 15px; background: #333; color: #fff; 
+            border: 1px solid #666; cursor: pointer; font-family: monospace;
+        }
+        button:hover { background: #555; }
+        #output { 
+            max-height: 400px; overflow-y: auto; background: #000; 
+            padding: 10px; border: 1px solid #333; white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>🐛 Deep Focus Sync Debug Tool</h1>
+    
+    <div class="debug-section">
+        <h2>🔍 Quick Status Check</h2>
+        <button onclick="runQuickDiagnostic()">Run Quick Diagnostic</button>
+        <button onclick="checkCircuitBreaker()">Check Circuit Breaker</button>
+        <button onclick="resetCircuitBreaker()">Reset Circuit Breaker</button>
+        <button onclick="testExtensionConnection()">Test Extension Connection</button>
+    </div>
+
+    <div class="debug-section">
+        <h2>🧪 Extension Communication Tests</h2>
+        <button onclick="testPing()">Test PING</button>
+        <button onclick="testGetTodaySessions()">Test Get Today Sessions</button>
+        <button onclick="testGetLast10Sessions()">Test Get Last 10 Sessions</button>
+        <button onclick="testAllMessageTypes()">Test All Message Types</button>
+    </div>
+
+    <div class="debug-section">
+        <h2>🔄 Sync Operations</h2>
+        <button onclick="debugSmartSync()">Debug Smart Sync</button>
+        <button onclick="debugBasicSync()">Debug Basic Sync</button>
+        <button onclick="debugSyncWithDetails()">Detailed Sync Analysis</button>
+    </div>
+
+    <div class="debug-section">
+        <h2>📊 Extension Data Analysis</h2>
+        <button onclick="analyzeExtensionData()">Analyze Extension Data</button>
+        <button onclick="compareSchemas()">Compare Data Schemas</button>
+        <button onclick="testTimezoneCoordination()">Test Timezone Coordination</button>
+    </div>
+
+    <div class="debug-section">
+        <h2>🔧 Advanced Debugging</h2>
+        <button onclick="clearAllStates()">Clear All States</button>
+        <button onclick="simulateSessionCreation()">Simulate Session Creation</button>
+        <button onclick="debugFirebaseSync()">Debug Firebase Sync</button>
+        <button onclick="exportDebugReport()">Export Debug Report</button>
+    </div>
+
+    <div class="debug-section">
+        <h2>📝 Debug Output</h2>
+        <button onclick="clearOutput()">Clear Output</button>
+        <div id="output"></div>
+    </div>
+
+    <script>
+        let debugData = {};
+        
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            const colors = {
+                error: '#ff6b6b',
+                success: '#51cf66', 
+                warning: '#ffd43b',
+                info: '#74c0fc'
+            };
+            
+            const logEntry = `[${timestamp}] ${message}`;
+            output.innerHTML += `<span style="color: ${colors[type]}">${logEntry}</span>\n`;
+            output.scrollTop = output.scrollHeight;
+            
+            // Also log to browser console
+            console.log(`[DEBUG] ${logEntry}`);
+        }
+
+        function clearOutput() {
+            document.getElementById('output').innerHTML = '';
+        }
+
+        // ======================
+        // QUICK DIAGNOSTIC TESTS
+        // ======================
+
+        async function runQuickDiagnostic() {
+            log('🚀 Starting Quick Diagnostic...', 'info');
+            
+            try {
+                // 1. Check if extension exists
+                log('1. Checking extension availability...', 'info');
+                const hasExtension = typeof chrome !== 'undefined' && chrome.runtime;
+                log(`   Extension API available: ${hasExtension}`, hasExtension ? 'success' : 'error');
+                
+                // 2. Check ExtensionDataService
+                const ExtensionDataService = (await import('/src/services/extensionDataService.ts')).default;
+                log('2. ExtensionDataService imported successfully', 'success');
+                
+                // 3. Check circuit breaker status
+                const circuitStatus = ExtensionDataService.getCircuitBreakerStatus();
+                log(`3. Circuit Breaker Status:`, 'info');
+                log(`   State: ${circuitStatus.state}`, circuitStatus.state === 'CLOSED' ? 'success' : 'error');
+                log(`   Failure Count: ${circuitStatus.failureCount}`, 'info');
+                log(`   Time Until Retry: ${circuitStatus.timeUntilRetry}ms`, 'info');
+                
+                // 4. Test basic connection
+                log('4. Testing basic connection...', 'info');
+                const isConnected = await ExtensionDataService.testConnection();
+                log(`   Connection test: ${isConnected}`, isConnected ? 'success' : 'error');
+                
+                debugData.quickDiagnostic = {
+                    hasExtension,
+                    circuitStatus,
+                    isConnected,
+                    timestamp: new Date().toISOString()
+                };
+                
+                log('✅ Quick diagnostic completed', 'success');
+                
+            } catch (error) {
+                log(`❌ Quick diagnostic failed: ${error.message}`, 'error');
+                debugData.quickDiagnosticError = error.message;
+            }
+        }
+
+        async function checkCircuitBreaker() {
+            try {
+                const ExtensionDataService = (await import('/src/services/extensionDataService.ts')).default;
+                const status = ExtensionDataService.getCircuitBreakerStatus();
+                
+                log('🔍 Circuit Breaker Status:', 'info');
+                log(`   State: ${status.state}`, status.state === 'CLOSED' ? 'success' : 'error');
+                log(`   Failure Count: ${status.failureCount}`, 'info');
+                log(`   Time Until Retry: ${Math.ceil(status.timeUntilRetry / 1000)}s`, 'info');
+                
+                if (status.state === 'OPEN') {
+                    log('⚠️ Circuit breaker is OPEN - blocking all extension calls', 'warning');
+                    log('💡 Recommendation: Use "Reset Circuit Breaker" button', 'info');
+                }
+                
+            } catch (error) {
+                log(`❌ Failed to check circuit breaker: ${error.message}`, 'error');
+            }
+        }
+
+        async function resetCircuitBreaker() {
+            try {
+                const ExtensionDataService = (await import('/src/services/extensionDataService.ts')).default;
+                ExtensionDataService.resetCircuitBreaker();
+                log('🔄 Circuit breaker reset successfully', 'success');
+                
+                // Verify reset
+                await new Promise(resolve => setTimeout(resolve, 100));
+                const status = ExtensionDataService.getCircuitBreakerStatus();
+                log(`   New state: ${status.state}`, status.state === 'CLOSED' ? 'success' : 'warning');
+                
+            } catch (error) {
+                log(`❌ Failed to reset circuit breaker: ${error.message}`, 'error');
+            }
+        }
+
+        async function testExtensionConnection() {
+            log('🔌 Testing extension connection...', 'info');
+            
+            try {
+                const ExtensionDataService = (await import('/src/services/extensionDataService.ts')).default;
+                
+                // Test with different timeouts
+                const timeouts = [500, 1000, 2000, 5000];
+                
+                for (const timeout of timeouts) {
+                    log(`   Testing with ${timeout}ms timeout...`, 'info');
+                    try {
+                        const start = performance.now();
+                        const result = await ExtensionDataService.testRealExtensionConnection(timeout);
+                        const duration = Math.round(performance.now() - start);
+                        
+                        log(`   ✓ ${timeout}ms test: ${result} (took ${duration}ms)`, result ? 'success' : 'error');
+                        
+                        if (result) {
+                            log('🎉 Extension connection successful!', 'success');
+                            break;
+                        }
+                        
+                    } catch (error) {
+                        log(`   ✗ ${timeout}ms test failed: ${error.message}`, 'error');
+                    }
+                }
+                
+            } catch (error) {
+                log(`❌ Extension connection test failed: ${error.message}`, 'error');
+            }
+        }
+
+        // ========================
+        // MESSAGE TYPE TESTS  
+        // ========================
+
+        async function testPing() {
+            await testMessage('PING', {}, 'Testing basic PING message');
+        }
+
+        async function testGetTodaySessions() {
+            await testMessage('GET_TODAY_DEEP_FOCUS_SESSIONS', {}, 'Testing today sessions fetch');
+        }
+
+        async function testGetLast10Sessions() {
+            await testMessage('GET_LAST_10_DEEP_FOCUS_SESSIONS', {}, 'Testing last 10 sessions fetch');
+        }
+
+        async function testAllMessageTypes() {
+            log('🧪 Testing all extension message types...', 'info');
+            
+            const messageTypes = [
+                { type: 'PING', payload: {}, description: 'Basic ping' },
+                { type: 'GET_TODAY_DEEP_FOCUS_SESSIONS', payload: {}, description: 'Today sessions' },
+                { type: 'GET_LAST_10_DEEP_FOCUS_SESSIONS', payload: {}, description: 'Last 10 sessions' },
+                { type: 'GET_RECENT_7_DAYS_DEEP_FOCUS_SESSIONS', payload: {}, description: 'Recent 7 days' },
+                { type: 'GET_TOTAL_SESSIONS_COUNT', payload: {}, description: 'Total count' },
+                { type: 'GET_TODAY_STATS', payload: {}, description: 'Today stats' },
+                { type: 'GET_USER_TIMEZONE', payload: {}, description: 'User timezone' }
+            ];
+
+            for (const msg of messageTypes) {
+                await testMessage(msg.type, msg.payload, msg.description);
+                // Small delay between tests
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            log('✅ All message type tests completed', 'success');
+        }
+
+        async function testMessage(type, payload, description) {
+            try {
+                log(`📨 Testing: ${description} (${type})`, 'info');
+                
+                const ExtensionDataService = (await import('/src/services/extensionDataService.ts')).default;
+                const start = performance.now();
+                
+                const response = await ExtensionDataService.sendMessage({ 
+                    type, 
+                    ...payload 
+                }, 3000);
+                
+                const duration = Math.round(performance.now() - start);
+                
+                log(`   ✓ Success (${duration}ms): ${JSON.stringify(response).substring(0, 100)}...`, 'success');
+                
+                // Store response for analysis
+                if (!debugData.messageTests) debugData.messageTests = {};
+                debugData.messageTests[type] = {
+                    success: true,
+                    duration,
+                    response,
+                    timestamp: new Date().toISOString()
+                };
+                
+            } catch (error) {
+                log(`   ✗ Failed: ${error.message}`, 'error');
+                
+                if (!debugData.messageTests) debugData.messageTests = {};
+                debugData.messageTests[type] = {
+                    success: false,
+                    error: error.message,
+                    timestamp: new Date().toISOString()
+                };
+            }
+        }
+
+        // ===================
+        // SYNC OPERATIONS
+        // ===================
+
+        async function debugSmartSync() {
+            log('🎯 Testing Smart Sync...', 'info');
+            
+            try {
+                // Get current user
+                const userStore = window.zustand?.getState?.() || {};
+                const user = userStore.user;
+                
+                if (!user?.uid) {
+                    log('❌ No authenticated user found', 'error');
+                    return;
+                }
+                
+                log(`   User ID: ${user.uid}`, 'info');
+                
+                // Import sync service
+                const { DeepFocusSync } = await import('/src/services/deepFocusSync.ts');
+                
+                log('   Starting smart sync...', 'info');
+                const start = performance.now();
+                
+                const result = await DeepFocusSync.smartSync(user.uid, 'today');
+                
+                const duration = Math.round(performance.now() - start);
+                
+                log(`   Smart sync completed in ${duration}ms`, 'success');
+                log(`   Result: ${JSON.stringify(result, null, 2)}`, result.success ? 'success' : 'error');
+                
+                debugData.smartSync = {
+                    duration,
+                    result,
+                    userId: user.uid,
+                    timestamp: new Date().toISOString()
+                };
+                
+            } catch (error) {
+                log(`❌ Smart sync failed: ${error.message}`, 'error');
+                log(`   Stack: ${error.stack}`, 'error');
+                debugData.smartSyncError = error.message;
+            }
+        }
+
+        async function debugBasicSync() {
+            log('🔄 Testing basic sync methods...', 'info');
+            
+            try {
+                const userStore = window.zustand?.getState?.() || {};
+                const user = userStore.user;
+                
+                if (!user?.uid) {
+                    log('❌ No authenticated user found', 'error');
+                    return;
+                }
+                
+                const { DeepFocusSync } = await import('/src/services/deepFocusSync.ts');
+                
+                // Test individual sync methods
+                const methods = [
+                    { name: 'syncLast10SessionsFromExtension', method: () => DeepFocusSync.syncLast10SessionsFromExtension(user.uid) },
+                    { name: 'syncTodayFromExtension', method: () => DeepFocusSync.syncTodayFromExtension(user.uid) },
+                    { name: 'syncRecent7DaysFromExtension', method: () => DeepFocusSync.syncRecent7DaysFromExtension(user.uid) }
+                ];
+                
+                for (const testMethod of methods) {
+                    try {
+                        log(`   Testing ${testMethod.name}...`, 'info');
+                        const start = performance.now();
+                        
+                        const result = await testMethod.method();
+                        
+                        const duration = Math.round(performance.now() - start);
+                        log(`   ✓ ${testMethod.name} completed (${duration}ms)`, 'success');
+                        log(`     Synced: ${result.synced}, Skipped: ${result.skipped}`, 'info');
+                        
+                    } catch (error) {
+                        log(`   ✗ ${testMethod.name} failed: ${error.message}`, 'error');
+                    }
+                }
+                
+            } catch (error) {
+                log(`❌ Basic sync test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function debugSyncWithDetails() {
+            log('🔬 Detailed sync analysis...', 'info');
+            
+            try {
+                // Reset circuit breaker first
+                await resetCircuitBreaker();
+                
+                // Test extension data fetch
+                log('   Step 1: Testing extension data fetch...', 'info');
+                const ExtensionDataService = (await import('/src/services/extensionDataService.ts')).default;
+                
+                const extensionData = await ExtensionDataService.sendMessage({
+                    type: 'GET_LAST_10_DEEP_FOCUS_SESSIONS'
+                }, 5000);
+                
+                log(`   Extension data fetched: ${extensionData.data?.length || 0} sessions`, 'success');
+                
+                if (extensionData.data && extensionData.data.length > 0) {
+                    const sample = extensionData.data[0];
+                    log(`   Sample session schema:`, 'info');
+                    log(`     ID: ${sample.id}`, 'info');
+                    log(`     StartTime: ${sample.startTime} (${typeof sample.startTime})`, 'info');
+                    log(`     StartTimeUTC: ${sample.startTimeUTC} (${typeof sample.startTimeUTC})`, 'info');
+                    log(`     Timezone: ${sample.timezone}`, 'info');
+                    log(`     Duration: ${sample.duration}`, 'info');
+                    log(`     Status: ${sample.status}`, 'info');
+                }
+                
+                debugData.extensionData = extensionData.data;
+                
+                // Test Firebase sync
+                log('   Step 2: Testing Firebase sync...', 'info');
+                await debugSmartSync();
+                
+                log('✅ Detailed sync analysis completed', 'success');
+                
+            } catch (error) {
+                log(`❌ Detailed sync analysis failed: ${error.message}`, 'error');
+                log(`   Stack: ${error.stack}`, 'error');
+            }
+        }
+
+        // =======================
+        // DATA ANALYSIS
+        // =======================
+
+        async function analyzeExtensionData() {
+            log('📊 Analyzing extension data...', 'info');
+            
+            try {
+                const ExtensionDataService = (await import('/src/services/extensionDataService.ts')).default;
+                
+                // Fetch all types of session data
+                const dataTypes = [
+                    { type: 'GET_TODAY_DEEP_FOCUS_SESSIONS', name: 'Today Sessions' },
+                    { type: 'GET_LAST_10_DEEP_FOCUS_SESSIONS', name: 'Last 10 Sessions' },
+                    { type: 'GET_RECENT_7_DAYS_DEEP_FOCUS_SESSIONS', name: 'Recent 7 Days' }
+                ];
+                
+                for (const dataType of dataTypes) {
+                    try {
+                        log(`   Fetching ${dataType.name}...`, 'info');
+                        
+                        const response = await ExtensionDataService.sendMessage({ 
+                            type: dataType.type 
+                        }, 3000);
+                        
+                        if (response.success && response.data) {
+                            const sessions = response.data;
+                            log(`   ${dataType.name}: ${sessions.length} sessions`, 'success');
+                            
+                            // Analyze schema
+                            if (sessions.length > 0) {
+                                const schemas = analyzeSessionSchemas(sessions);
+                                log(`     Schema analysis:`, 'info');
+                                log(`       UTC schema: ${schemas.utcCount}/${sessions.length}`, 'info');
+                                log(`       Legacy schema: ${schemas.legacyCount}/${sessions.length}`, 'info');
+                                log(`       Mixed/unknown: ${schemas.unknownCount}/${sessions.length}`, 'info');
+                            }
+                        } else {
+                            log(`   ${dataType.name}: Failed - ${response.error || 'Unknown error'}`, 'error');
+                        }
+                        
+                    } catch (error) {
+                        log(`   ${dataType.name}: Error - ${error.message}`, 'error');
+                    }
+                }
+                
+            } catch (error) {
+                log(`❌ Extension data analysis failed: ${error.message}`, 'error');
+            }
+        }
+
+        function analyzeSessionSchemas(sessions) {
+            let utcCount = 0;
+            let legacyCount = 0;
+            let unknownCount = 0;
+            
+            sessions.forEach(session => {
+                if (session.startTimeUTC && session.timezone) {
+                    utcCount++;
+                } else if (session.startTime && typeof session.startTime === 'number') {
+                    legacyCount++;
+                } else {
+                    unknownCount++;
+                }
+            });
+            
+            return { utcCount, legacyCount, unknownCount };
+        }
+
+        async function compareSchemas() {
+            log('🔍 Comparing data schemas...', 'info');
+            
+            try {
+                // Get extension data
+                const ExtensionDataService = (await import('/src/services/extensionDataService.ts')).default;
+                const extensionResponse = await ExtensionDataService.sendMessage({
+                    type: 'GET_LAST_10_DEEP_FOCUS_SESSIONS'
+                }, 3000);
+                
+                if (!extensionResponse.success || !extensionResponse.data) {
+                    log('❌ Could not fetch extension data for comparison', 'error');
+                    return;
+                }
+                
+                const extensionSessions = extensionResponse.data;
+                log(`   Extension sessions: ${extensionSessions.length}`, 'info');
+                
+                // Get Firebase data
+                const userStore = window.zustand?.getState?.() || {};
+                const user = userStore.user;
+                
+                if (!user?.uid) {
+                    log('❌ No authenticated user for Firebase comparison', 'error');
+                    return;
+                }
+                
+                const { default: deepFocusSessionService } = await import('/src/api/deepFocusSessionService.ts');
+                const firebaseSessions = await deepFocusSessionService.getUserSessions(user.uid);
+                log(`   Firebase sessions: ${firebaseSessions.length}`, 'info');
+                
+                // Compare schemas
+                if (extensionSessions.length > 0) {
+                    const extSample = extensionSessions[0];
+                    log('   Extension sample session:', 'info');
+                    Object.keys(extSample).forEach(key => {
+                        log(`     ${key}: ${typeof extSample[key]} = ${extSample[key]}`, 'info');
+                    });
+                }
+                
+                if (firebaseSessions.length > 0) {
+                    const fbSample = firebaseSessions[0];
+                    log('   Firebase sample session:', 'info');
+                    Object.keys(fbSample).forEach(key => {
+                        log(`     ${key}: ${typeof fbSample[key]} = ${fbSample[key]}`, 'info');
+                    });
+                }
+                
+                debugData.schemaComparison = {
+                    extensionSessions: extensionSessions.slice(0, 3),
+                    firebaseSessions: firebaseSessions.slice(0, 3),
+                    timestamp: new Date().toISOString()
+                };
+                
+            } catch (error) {
+                log(`❌ Schema comparison failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testTimezoneCoordination() {
+            log('🌍 Testing timezone coordination...', 'info');
+            
+            try {
+                // Test web app → extension timezone request
+                log('   Testing web app timezone request...', 'info');
+                
+                if (typeof chrome !== 'undefined' && chrome.runtime) {
+                    const response = await new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => reject(new Error('Timeout')), 2000);
+                        
+                        chrome.runtime.sendMessage({
+                            type: 'GET_USER_TIMEZONE',
+                            timestamp: Date.now()
+                        }, (response) => {
+                            clearTimeout(timeout);
+                            if (chrome.runtime.lastError) {
+                                reject(new Error(chrome.runtime.lastError.message));
+                            } else {
+                                resolve(response);
+                            }
+                        });
+                    });
+                    
+                    log(`   Timezone response: ${JSON.stringify(response)}`, 'success');
+                } else {
+                    log('   Chrome extension API not available', 'warning');
+                }
+                
+                // Test timezone utilities
+                const { timezoneUtils } = await import('/src/utils/timezoneUtils.ts');
+                const currentTz = timezoneUtils.getCurrentTimezone();
+                log(`   Current timezone: ${currentTz}`, 'info');
+                
+                // Test UTC conversion
+                const now = new Date();
+                const utcTime = timezoneUtils.userTimeToUTC(now.toISOString(), currentTz);
+                const backToUser = timezoneUtils.utcToUserTime(utcTime, currentTz);
+                
+                log(`   UTC conversion test:`, 'info');
+                log(`     Original: ${now.toISOString()}`, 'info');
+                log(`     To UTC: ${utcTime}`, 'info');
+                log(`     Back to user: ${backToUser}`, 'info');
+                log(`     Round-trip success: ${Math.abs(new Date(backToUser).getTime() - now.getTime()) < 1000}`, 'success');
+                
+            } catch (error) {
+                log(`❌ Timezone coordination test failed: ${error.message}`, 'error');
+            }
+        }
+
+        // =====================
+        // ADVANCED DEBUGGING
+        // =====================
+
+        async function clearAllStates() {
+            log('🧹 Clearing all debug states...', 'info');
+            
+            try {
+                // Reset circuit breaker
+                await resetCircuitBreaker();
+                
+                // Clear local storage related to sync
+                const keysToRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && (key.includes('deep-focus') || key.includes('circuit') || key.includes('sync'))) {
+                        keysToRemove.push(key);
+                    }
+                }
+                
+                keysToRemove.forEach(key => {
+                    localStorage.removeItem(key);
+                    log(`   Removed: ${key}`, 'info');
+                });
+                
+                // Clear debug data
+                debugData = {};
+                
+                log('✅ All states cleared', 'success');
+                
+            } catch (error) {
+                log(`❌ Failed to clear states: ${error.message}`, 'error');
+            }
+        }
+
+        async function simulateSessionCreation() {
+            log('🎭 Simulating session creation...', 'info');
+            
+            try {
+                // This would require extension context, so we'll just log the attempt
+                log('   Note: Session creation must be done from extension context', 'warning');
+                log('   Current page can only observe extension sessions', 'info');
+                
+                // Instead, let's check if there are any active sessions
+                const ExtensionDataService = (await import('/src/services/extensionDataService.ts')).default;
+                const response = await ExtensionDataService.sendMessage({
+                    type: 'GET_TODAY_DEEP_FOCUS_SESSIONS'
+                }, 3000);
+                
+                if (response.success && response.data) {
+                    const activeSessions = response.data.filter(s => s.status === 'active');
+                    log(`   Currently active sessions: ${activeSessions.length}`, 'info');
+                    
+                    if (activeSessions.length > 0) {
+                        log(`   Active session details:`, 'info');
+                        activeSessions.forEach(session => {
+                            log(`     ID: ${session.id}, Duration: ${session.duration}min`, 'info');
+                        });
+                    }
+                }
+                
+            } catch (error) {
+                log(`❌ Session simulation failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function debugFirebaseSync() {
+            log('🔥 Debugging Firebase sync operations...', 'info');
+            
+            try {
+                const userStore = window.zustand?.getState?.() || {};
+                const user = userStore.user;
+                
+                if (!user?.uid) {
+                    log('❌ No authenticated user found', 'error');
+                    return;
+                }
+                
+                // Test Firebase connection
+                log('   Testing Firebase connection...', 'info');
+                const { default: deepFocusSessionService } = await import('/src/api/deepFocusSessionService.ts');
+                
+                const firebaseSessions = await deepFocusSessionService.getUserSessions(user.uid);
+                log(`   Firebase sessions loaded: ${firebaseSessions.length}`, 'success');
+                
+                // Test timezone display service
+                log('   Testing timezone display conversion...', 'info');
+                const { DeepFocusDisplayService } = await import('/src/services/deepFocusDisplayService.ts');
+                const { timezoneUtils } = await import('/src/utils/timezoneUtils.ts');
+                
+                const userTimezone = timezoneUtils.getCurrentTimezone();
+                const convertedSessions = DeepFocusDisplayService.convertSessionsForUser(
+                    firebaseSessions, 
+                    userTimezone
+                );
+                
+                log(`   Sessions converted for display: ${convertedSessions.length}`, 'success');
+                log(`   User timezone: ${userTimezone}`, 'info');
+                
+                if (convertedSessions.length > 0) {
+                    const sample = convertedSessions[0];
+                    log(`   Sample converted session:`, 'info');
+                    log(`     Display time: ${sample.displayStartTime}`, 'info');
+                    log(`     Display date: ${sample.displayDate}`, 'info');
+                    log(`     Show timezone label: ${sample.showTimezoneLabel}`, 'info');
+                    log(`     Is today: ${sample.isToday}`, 'info');
+                }
+                
+                debugData.firebaseSync = {
+                    firebaseCount: firebaseSessions.length,
+                    convertedCount: convertedSessions.length,
+                    userTimezone,
+                    sample: convertedSessions[0] || null,
+                    timestamp: new Date().toISOString()
+                };
+                
+            } catch (error) {
+                log(`❌ Firebase sync debug failed: ${error.message}`, 'error');
+                log(`   Stack: ${error.stack}`, 'error');
+            }
+        }
+
+        function exportDebugReport() {
+            log('📄 Generating debug report...', 'info');
+            
+            const report = {
+                timestamp: new Date().toISOString(),
+                userAgent: navigator.userAgent,
+                url: window.location.href,
+                debugData: debugData,
+                browserInfo: {
+                    hasChrome: typeof chrome !== 'undefined',
+                    hasChromeRuntime: typeof chrome !== 'undefined' && !!chrome.runtime,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    language: navigator.language
+                }
+            };
+            
+            const blob = new Blob([JSON.stringify(report, null, 2)], { 
+                type: 'application/json' 
+            });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `deep-focus-debug-${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            log('📄 Debug report exported', 'success');
+            
+            // Also copy to clipboard
+            navigator.clipboard.writeText(JSON.stringify(report, null, 2)).then(() => {
+                log('📋 Debug report copied to clipboard', 'success');
+            }).catch(() => {
+                log('📋 Could not copy to clipboard', 'warning');
+            });
+        }
+
+        // Auto-run quick diagnostic on page load
+        window.addEventListener('load', () => {
+            setTimeout(runQuickDiagnostic, 1000);
+        });
+    </script>
+</body>
+</html>

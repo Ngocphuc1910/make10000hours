@@ -337,13 +337,25 @@ class ExtensionDataService {
     // Smart debouncing based on message type
     const now = Date.now();
     const messageType = message.type || 'unknown';
-    const lastCallTime = this.lastCallTimes.get(messageType) || 0;
-    const debounceTime = this.isCriticalOperation(message) ? 
-      this.CRITICAL_DEBOUNCE_MS : this.CALL_DEBOUNCE_MS;
     
-    if (now - lastCallTime < debounceTime) {
-      throw new Error(`Extension call debounced - ${messageType} too frequent`);
+    // Skip debouncing for sync operations to prevent circuit breaker issues
+    const syncTypes = [
+      'GET_LAST_10_DEEP_FOCUS_SESSIONS',
+      'GET_TODAY_DEEP_FOCUS_SESSIONS',
+      'GET_RECENT_7_DAYS_DEEP_FOCUS_SESSIONS',
+      'GET_TOTAL_SESSIONS_COUNT'
+    ];
+    
+    if (!syncTypes.includes(messageType)) {
+      const lastCallTime = this.lastCallTimes.get(messageType) || 0;
+      const debounceTime = this.isCriticalOperation(message) ? 
+        this.CRITICAL_DEBOUNCE_MS : this.CALL_DEBOUNCE_MS;
+      
+      if (now - lastCallTime < debounceTime) {
+        throw new Error(`Extension call debounced - ${messageType} too frequent`);
+      }
     }
+    
     this.lastCallTimes.set(messageType, now);
 
     if (!this.circuitBreaker.canExecute()) {

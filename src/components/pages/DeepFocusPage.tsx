@@ -7,6 +7,8 @@ import { useDeepFocusContext } from '../../contexts/DeepFocusContext';
 import { DeepFocusSync } from '../../services/deepFocusSync';
 import { useDeepFocusDashboardStore } from '../../store/deepFocusDashboardStore';
 import { useUserStore } from '../../store/userStore';
+import { DeepFocusDisplayService, type SessionDisplayData } from '../../services/deepFocusDisplayService';
+import { timezoneUtils } from '../../utils/timezoneUtils';
 import { useUIStore } from '../../store/uiStore';
 import { useExtensionSync } from '../../hooks/useExtensionSync';
 import { Icon } from '../ui/Icon';
@@ -109,6 +111,9 @@ const DeepFocusPage: React.FC = () => {
   const [selectedRange, setSelectedRange] = useState<DateRange>(getTodayRange());
   const [datePickerStart, setDatePickerStart] = useState<Date | null>(null);
   const [datePickerEnd, setDatePickerEnd] = useState<Date | null>(null);
+  
+  // NEW: Display sessions converted for user's timezone
+  const [displaySessions, setDisplaySessions] = useState<SessionDisplayData[]>([]);
   
   // Flag to prevent automatic closing
   const [isInitializing, setIsInitializing] = useState(false);
@@ -220,6 +225,7 @@ const DeepFocusPage: React.FC = () => {
       }
     };
     (window as any).debugUser = user;
+    (window as any).resetExtensionConnection = resetExtensionConnection;
     (window as any).resetBackupState = () => {
       console.log('🔧 Manually resetting backup state...');
       const store = useDeepFocusStore.getState();
@@ -240,6 +246,7 @@ const DeepFocusPage: React.FC = () => {
       debugSyncLast10Sessions: 'function',
       debugBackupTodayData: typeof backupTodayData,
       debugUser: user?.uid || 'No user',
+      resetExtensionConnection: 'function (CIRCUIT BREAKER FIX)',
       resetBackupState: 'function'
     });
   }, [backupTodayData, user]);
@@ -316,6 +323,28 @@ const DeepFocusPage: React.FC = () => {
       loadBlockedSites(user.uid);
     }
   }, [user?.uid]);
+
+  // Convert deep focus sessions for timezone-aware display
+  useEffect(() => {
+    if (!deepFocusSessions || deepFocusSessions.length === 0) {
+      setDisplaySessions([]);
+      return;
+    }
+
+    const userTimezone = user?.timezone || timezoneUtils.getCurrentTimezone();
+    const convertedSessions = DeepFocusDisplayService.convertSessionsForUser(
+      deepFocusSessions,
+      userTimezone
+    );
+    
+    console.log('🌍 Converting sessions for display:', {
+      originalCount: deepFocusSessions.length,
+      convertedCount: convertedSessions.length,
+      userTimezone
+    });
+    
+    setDisplaySessions(convertedSessions);
+  }, [deepFocusSessions, user?.timezone]);
 
   const isDateInRange = (dateStr: string): boolean => {
     if (selectedRange.rangeType === 'all time' || !selectedRange.startDate || !selectedRange.endDate) {

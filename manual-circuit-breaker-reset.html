@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Extension Circuit Breaker Manual Reset</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .status {
+            background: #f5f5f5;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .error { background: #ffebee; }
+        .success { background: #e8f5e8; }
+        .warning { background: #fff3e0; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        #log {
+            background: #000;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Extension Circuit Breaker Manual Reset</h1>
+    
+    <div class="status warning">
+        <h3>⚠️ Instructions:</h3>
+        <p>1. Open the Deep Focus page in your app (localhost:3004)</p>
+        <p>2. Open browser console (F12)</p>
+        <p>3. Click the buttons below to test and reset the circuit breaker</p>
+        <p>4. Watch the logs below and in the browser console</p>
+    </div>
+
+    <div>
+        <button onclick="checkCircuitBreakerStatus()">🔍 Check Circuit Breaker Status</button>
+        <button onclick="resetCircuitBreaker()">🔄 Reset Circuit Breaker</button>
+        <button onclick="testExtensionPing()">📡 Test Extension Ping</button>
+        <button onclick="testGetSessions()">🎯 Test Get Sessions</button>
+        <button onclick="runFullTest()">🚀 Run Full Test Suite</button>
+        <button onclick="clearLog()">🗑️ Clear Log</button>
+    </div>
+
+    <h3>📋 Debug Log:</h3>
+    <div id="log"></div>
+
+    <script>
+        let logElement = document.getElementById('log');
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warning' ? '⚠️' : 'ℹ️';
+            const logMessage = `[${timestamp}] ${prefix} ${message}\n`;
+            logElement.textContent += logMessage;
+            logElement.scrollTop = logElement.scrollHeight;
+            
+            // Also log to console
+            console.log(logMessage.trim());
+        }
+
+        function clearLog() {
+            logElement.textContent = '';
+        }
+
+        // Direct postMessage test to extension
+        function sendExtensionMessage(message, timeout = 5000) {
+            return new Promise((resolve, reject) => {
+                const messageId = Math.random().toString(36).substring(2, 15);
+                const timeoutId = setTimeout(() => {
+                    window.removeEventListener('message', responseHandler);
+                    reject(new Error('Extension communication timeout'));
+                }, timeout);
+
+                const responseHandler = (event) => {
+                    if (event.data?.extensionResponseId === messageId) {
+                        clearTimeout(timeoutId);
+                        window.removeEventListener('message', responseHandler);
+                        resolve(event.data.response);
+                    }
+                };
+
+                window.addEventListener('message', responseHandler);
+                
+                log(`Sending message: ${JSON.stringify(message)}`);
+                window.postMessage({
+                    type: 'EXTENSION_REQUEST',
+                    messageId,
+                    payload: message
+                }, '*');
+            });
+        }
+
+        async function checkCircuitBreakerStatus() {
+            log('Checking circuit breaker status...');
+            
+            try {
+                // Try to access ExtensionDataService from the parent window
+                if (window.ExtensionDataService) {
+                    const status = window.ExtensionDataService.getCircuitBreakerStatus();
+                    log(`Circuit Breaker Status: ${JSON.stringify(status, null, 2)}`, 'info');
+                } else {
+                    log('ExtensionDataService not accessible from this context', 'warning');
+                    log('You need to run this from the web app console instead', 'warning');
+                }
+            } catch (error) {
+                log(`Failed to check circuit breaker status: ${error.message}`, 'error');
+            }
+        }
+
+        async function resetCircuitBreaker() {
+            log('Attempting to reset circuit breaker...');
+            
+            try {
+                if (window.ExtensionDataService) {
+                    window.ExtensionDataService.resetCircuitBreaker();
+                    log('Circuit breaker reset successfully', 'success');
+                } else {
+                    log('ExtensionDataService not accessible - please run from web app console:', 'warning');
+                    log('ExtensionDataService.resetCircuitBreaker();', 'info');
+                }
+            } catch (error) {
+                log(`Failed to reset circuit breaker: ${error.message}`, 'error');
+            }
+        }
+
+        async function testExtensionPing() {
+            log('Testing extension ping via postMessage...');
+            
+            try {
+                const response = await sendExtensionMessage({ type: 'PING' });
+                log(`Extension ping response: ${JSON.stringify(response)}`, 'success');
+            } catch (error) {
+                log(`Extension ping failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testGetSessions() {
+            log('Testing get last 10 sessions via postMessage...');
+            
+            try {
+                const response = await sendExtensionMessage({ 
+                    type: 'GET_LAST_10_DEEP_FOCUS_SESSIONS' 
+                });
+                log(`Get sessions response: ${JSON.stringify(response, null, 2)}`, 'success');
+                
+                if (response.success && response.data && response.data.length > 0) {
+                    log(`Found ${response.data.length} sessions in extension`, 'success');
+                }
+            } catch (error) {
+                log(`Get sessions failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function runFullTest() {
+            log('🚀 Running full test suite...', 'info');
+            
+            await checkCircuitBreakerStatus();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await resetCircuitBreaker();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testExtensionPing();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testGetSessions();
+            
+            log('🏁 Full test suite completed', 'info');
+        }
+
+        // Auto-start basic status check
+        window.addEventListener('load', () => {
+            log('Manual Circuit Breaker Reset Tool Loaded', 'info');
+            log('Click buttons above to test extension communication', 'info');
+        });
+    </script>
+</body>
+</html>

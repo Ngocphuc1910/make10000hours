@@ -460,7 +460,27 @@ class ActivityDetector {
 
     try {
       // Set up message listener for web app communication only
-      window.addEventListener('message', this.createWebAppMessageHandler());
+      const webAppMessageHandler = (event) => {
+        // Only handle messages from same origin for security
+        if (event.source !== window || !event.data) {
+          return;
+        }
+        
+        // Handle basic timezone coordination messages
+        if (event.data.type === 'GET_USER_TIMEZONE') {
+          // Forward to background script
+          chrome.runtime.sendMessage(event.data, (response) => {
+            if (response && !chrome.runtime.lastError) {
+              event.source.postMessage({
+                type: 'GET_USER_TIMEZONE_RESPONSE',
+                ...response
+              }, event.origin);
+            }
+          });
+        }
+      };
+      
+      window.addEventListener('message', webAppMessageHandler);
       this.messageListenersSetup = true;
       console.log('🌉 Web app communication bridge set up (limited mode)');
     } catch (error) {
@@ -544,8 +564,11 @@ class ActivityDetector {
     
     // Enhanced message handling for web app communication
     const messageHandler = async (event) => {
-      // Validate message origin
-      if (!event.data?.source?.includes('make10000hours') && event.data?.type !== 'EXTENSION_REQUEST') {
+      // Validate message origin - allow EXTENSION_REQUEST and requests from make10000hours
+      if (event.data?.type !== 'EXTENSION_REQUEST' && 
+          !event.data?.source?.includes('make10000hours') && 
+          !event.origin?.includes('make10000hours') &&
+          !event.origin?.includes('localhost')) {
         return;
       }
 
