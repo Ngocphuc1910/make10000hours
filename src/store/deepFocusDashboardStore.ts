@@ -3,12 +3,69 @@ import { persist } from 'zustand/middleware';
 import { SiteUsage, ComparisonData, TimeMetrics, DailyUsage } from '../types/deepFocus';
 import ExtensionDataService from '../services/extensionDataService';
 import { deepFocusSessionService } from '../api/deepFocusSessionService';
-import { siteUsageService } from '../api/siteUsageService';
+import { siteUsageSessionService } from '../api/siteUsageSessionService';
 import { overrideSessionService } from '../api/overrideSessionService';
+import { extensionSyncListener } from '../services/extensionSyncListener';
 import { useUserStore } from './userStore';
 import { useDashboardStore } from './useDashboardStore';
 import { composeDeepFocusData } from '../utils/stats';
 import { workSessionService } from '../api/workSessionService';
+import { DailySiteUsage } from '../api/siteUsageService';
+import { SiteUsageSession } from '../utils/SessionManager';
+
+// Helper function to convert session data to daily site usage format
+const convertSessionsToDailySiteUsage = (sessions: SiteUsageSession[]): DailySiteUsage[] => {
+  const dailyUsageMap = new Map<string, DailySiteUsage>();
+  
+  sessions.forEach(session => {
+    // Use UTC date for consistency
+    const dateKey = session.utcDate || new Date(session.startTime).toISOString().split('T')[0];
+    
+    if (!dailyUsageMap.has(dateKey)) {
+      dailyUsageMap.set(dateKey, {
+        userId: session.userId,
+        date: dateKey,
+        totalTime: 0,
+        sitesVisited: 0,
+        productivityScore: 0,
+        sites: {},
+        syncedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+    }
+    
+    const dayUsage = dailyUsageMap.get(dateKey)!;
+    
+    // Add session to sites
+    if (!dayUsage.sites[session.domain]) {
+      dayUsage.sites[session.domain] = {
+        domain: session.domain,
+        timeSpent: 0,
+        visits: 0,
+        lastVisit: session.startTime,
+        favicon: session.favicon || '',
+        title: session.title || session.domain,
+        category: session.category || 'uncategorized'
+      };
+      dayUsage.sitesVisited++;
+    }
+    
+    // Add session duration to total time and domain time
+    if (session.status === 'completed' && session.duration > 0) {
+      dayUsage.totalTime += session.duration;
+      dayUsage.sites[session.domain].timeSpent += session.duration;
+      dayUsage.sites[session.domain].visits++;
+      
+      // Update last visit time if this session is more recent
+      if (new Date(session.startTime) > new Date(dayUsage.sites[session.domain].lastVisit)) {
+        dayUsage.sites[session.domain].lastVisit = session.startTime;
+      }
+    }
+  });
+  
+  return Array.from(dailyUsageMap.values());
+};
 
 interface DeepFocusDashboardStore {
   timeMetrics: TimeMetrics;
@@ -44,6 +101,11 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
             console.warn('⚠️ Extension not installed - skipping data load');
             return;
           }
+          
+          // 🎯 TRIGGER: Request extension sync before loading data
+          console.log('🔄 Requesting extension to sync sessions to Firebase...');
+          await extensionSyncListener.triggerExtensionSync();
+          
           const user = useUserStore.getState().user;
           if (!user?.uid) {
             console.warn('⚠️ User not authenticated - skipping extension data load');
@@ -51,9 +113,24 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
           }
 
           set({ isLoading: true });
+          console.log('🔄 Loading data for deep focus dashboard using SESSION-BASED approach');
+          console.log('📅 Date range:', startDate.toISOString(), 'to', endDate.toISOString());
+          
           const userId = user.uid;
           const workSessions = await workSessionService.getWorkSessionsForRange(userId, startDate, endDate);
-          const dailySiteUsages = await siteUsageService.getDailyUsage(userId, startDate, endDate);
+          
+          // 🎯 NEW: Use session-based data for On Screen Time
+          const siteUsageSessions = await siteUsageSessionService.getSessionsForDateRange(
+            userId,
+            startDate,
+            endDate
+          );
+          console.log('📊 Retrieved', siteUsageSessions.length, 'site usage sessions');
+          
+          // Convert sessions to daily usage format for existing stats composition
+          const dailySiteUsages = convertSessionsToDailySiteUsage(siteUsageSessions);
+          console.log('📈 Converted to', dailySiteUsages.length, 'daily usage records');
+          
           const deepFocusSessions = await deepFocusSessionService.getUserSessions(userId, startDate, endDate);
           const overrideSessions = await overrideSessionService.getUserOverrides(userId, startDate, endDate);
 
@@ -83,9 +160,26 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
           }
 
           set({ isLoading: true });
+          console.log('🔄 Loading ALL TIME data for deep focus dashboard using SESSION-BASED approach');
+          
           const userId = user.uid;
           const workSessions = await workSessionService.getAllWorkSessions(userId);
-          const dailySiteUsages = await siteUsageService.getAllTimeDailyUsage(userId);
+          
+          // 🎯 NEW: Use session-based data for On Screen Time (all time)
+          // For all time, use a very wide date range
+          const startDate = new Date('2020-01-01');
+          const endDate = new Date();
+          const siteUsageSessions = await siteUsageSessionService.getSessionsForDateRange(
+            userId,
+            startDate,
+            endDate
+          );
+          console.log('📊 Retrieved', siteUsageSessions.length, 'site usage sessions (all time)');
+          
+          // Convert sessions to daily usage format for existing stats composition
+          const dailySiteUsages = convertSessionsToDailySiteUsage(siteUsageSessions);
+          console.log('📈 Converted to', dailySiteUsages.length, 'daily usage records (all time)');
+          
           const deepFocusSessions = await deepFocusSessionService.getUserSessions(userId);
           const overrideSessions = await overrideSessionService.getUserOverrides(userId);
           const mappedData = composeDeepFocusData({ workSessions, dailySiteUsages, deepFocusSessions, overrideSessions });

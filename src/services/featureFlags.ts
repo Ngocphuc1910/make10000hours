@@ -228,3 +228,10 @@ export const useUTCFeatureFlag = (feature: keyof Omit<UTCFeatureFlags, 'transiti
 export const useUTCTransitionMode = (userId?: string) => {
   return utcFeatureFlags.getTransitionMode(userId);
 };
+
+// Simple feature flag for multi-day task support
+export const isMultiDayEnabled = (): boolean => {
+  // Enable multi-day task support globally
+  // This could be made configurable via feature flags in the future
+  return true;
+};

@@ -743,14 +743,7 @@ class ExtensionDataService {
     });
   }
 
-  static resetCircuitBreaker(): void {
-    console.log('🔄 Manually resetting extension circuit breaker...');
-    this.circuitBreaker.reset();
-  }
 
-  static getCircuitBreakerStatus(): { state: string; failureCount: number; timeUntilRetry: number } {
-    return this.circuitBreaker.getStatus();
-  }
 
   /**
    * Ultra-fast extension check for instant UI feedback

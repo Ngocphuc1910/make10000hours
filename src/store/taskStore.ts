@@ -267,6 +267,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   addTask: async (taskData) => {
     try {
       console.log('addTask started');
+      
+      // Validate multi-day task data if feature is enabled
+      if (taskData.scheduledEndDate) {
+        const validation = get().validateMultiDayTask(taskData);
+        if (!validation.isValid) {
+          throw new Error(`Invalid multi-day task data: ${validation.errors.join(', ')}`);
+        }
+      }
+      
       const { user } = useUserStore.getState();
       if (!user) throw new Error('No user found');
       console.log('User found:', user.uid);
@@ -320,11 +329,43 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
   },
   
+  // Helper function to validate multi-day task data
+  validateMultiDayTask: (taskData: Partial<Task>): { isValid: boolean; errors: string[] } => {
+    const errors: string[] = [];
+    
+    // If scheduledEndDate is provided, validate it
+    if (taskData.scheduledEndDate) {
+      // scheduledDate must be provided for multi-day tasks
+      if (!taskData.scheduledDate) {
+        errors.push('scheduledDate is required for multi-day tasks');
+      } else {
+        // scheduledEndDate must be after or equal to scheduledDate
+        const startDate = new Date(taskData.scheduledDate);
+        const endDate = new Date(taskData.scheduledEndDate);
+        
+        if (endDate < startDate) {
+          errors.push('scheduledEndDate must be after or equal to scheduledDate');
+        }
+        
+        // For now, limit to reasonable multi-day ranges (e.g., max 30 days)
+        const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysDiff > 30) {
+          errors.push('Multi-day tasks cannot span more than 30 days');
+        }
+      }
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  },
+
   // Helper function to detect if scheduling-related fields have changed
   hasSchedulingChanges: (currentTask: Task | undefined, updates: Partial<Task>): boolean => {
     if (!currentTask) return false;
     
-    const schedulingFields = ['scheduledDate', 'scheduledStartTime', 'scheduledEndTime', 'includeTime'];
+    const schedulingFields = ['scheduledDate', 'scheduledEndDate', 'scheduledStartTime', 'scheduledEndTime', 'includeTime'];
     return schedulingFields.some(field => {
       const currentValue = currentTask[field as keyof Task];
       const newValue = updates[field as keyof Task];
@@ -334,6 +375,18 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   updateTask: async (id, updates) => {
     try {
+      // Validate multi-day task data if feature is enabled and scheduledEndDate is being updated
+      if (updates.scheduledEndDate !== undefined) {
+        const { tasks } = get();
+        const currentTask = tasks.find(t => t.id === id);
+        const mergedTaskData = { ...currentTask, ...updates };
+        
+        const validation = get().validateMultiDayTask(mergedTaskData);
+        if (!validation.isValid) {
+          throw new Error(`Invalid multi-day task data: ${validation.errors.join(', ')}`);
+        }
+      }
+      
       const { user } = useUserStore.getState();
       if (!user) throw new Error('No user found');
 

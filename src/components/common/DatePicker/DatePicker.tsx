@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, startOfWeek, endOfWeek } from 'date-fns';
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, startOfWeek, endOfWeek, isWithinInterval, addDays } from 'date-fns';
 import { useSmartPosition } from '../../../hooks/useSmartPosition';
 import TimeSelector from './TimeSelector';
 
@@ -21,6 +21,10 @@ export interface DatePickerProps {
   initialEndTime?: string;
   triggerRef?: React.RefObject<HTMLElement | null>;
   isOpen?: boolean;
+  // Multi-day support
+  isMultiDayEnabled?: boolean;
+  selectedEndDate?: Date;
+  onEndDateSelect?: (date: Date) => void;
 }
 
 export const DatePicker: React.FC<DatePickerProps> = ({
@@ -41,10 +45,15 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   initialEndTime = '10:00',
   triggerRef,
   isOpen = true,
+  // Multi-day props
+  isMultiDayEnabled = false,
+  selectedEndDate,
+  onEndDateSelect,
 }) => {
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
   const [showTimeSelector, setShowTimeSelector] = useState(includeTime);
   const [selectedTime, setSelectedTime] = useState('00:00 - 00:00');
+  const [isSelectingEndDate, setIsSelectingEndDate] = useState(false);
   
   const datePickerRef = useRef<HTMLDivElement>(null);
 
@@ -89,6 +98,13 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     }
   }, [initialStartTime, initialEndTime]);
 
+  // Reset end date selection state when multi-day mode changes
+  useEffect(() => {
+    if (!isMultiDayEnabled) {
+      setIsSelectingEndDate(false);
+    }
+  }, [isMultiDayEnabled]);
+
   // Handle click outside to close
   useEffect(() => {
     if (!isOpen || !onClose) return;
@@ -125,7 +141,21 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
 
   const handleDateClick = (date: Date) => {
-    onDateSelect(date);
+    if (isMultiDayEnabled && isSelectingEndDate) {
+      // Selecting end date for multi-day range
+      onEndDateSelect?.(date);
+      setIsSelectingEndDate(false);
+    } else {
+      // Selecting start date or single date
+      onDateSelect(date);
+      
+      // For multi-day mode, if we just selected a start date and no end date exists yet, 
+      // automatically switch to selecting end date
+      if (isMultiDayEnabled && !selectedEndDate) {
+        setIsSelectingEndDate(true);
+      }
+    }
+    
     // Update current month to match selected date
     if (date.getMonth() !== currentMonth.getMonth() || date.getFullYear() !== currentMonth.getFullYear()) {
       setCurrentMonth(date);
@@ -144,6 +174,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
 
   const handleClear = () => {
     setSelectedTime('00:00 - 00:00');
+    setIsSelectingEndDate(false);
     onClear?.();
   };
 
@@ -213,30 +244,95 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           {/* Calendar Grid */}
           <div className="grid grid-cols-7 gap-1 mb-3">
             {calendarDays.map((day, idx) => {
-              const isSelected = selectedDate && isSameDay(day, selectedDate);
+              const isStartDate = selectedDate && isSameDay(day, selectedDate);
+              const isEndDate = selectedEndDate && isSameDay(day, selectedEndDate);
               const isCurrentDay = isToday(day);
               const isDisabled = (minDate && day < minDate) || (maxDate && day > maxDate);
               const isCurrentMonth = day.getMonth() === currentMonth.getMonth();
+              
+              // Check if this day is within the selected range (for multi-day)
+              const isInRange = isMultiDayEnabled && selectedDate && selectedEndDate && 
+                selectedDate < selectedEndDate && 
+                isWithinInterval(day, { start: selectedDate, end: selectedEndDate });
+              
+              // Check if this day is invalid for end date selection (before start date)
+              const isInvalidEndDate = isMultiDayEnabled && isSelectingEndDate && selectedDate && day < selectedDate;
 
               return (
                 <button
                   key={idx}
-                  onClick={() => !isDisabled && handleDateClick(day)}
-                  disabled={isDisabled}
+                  onClick={() => !isDisabled && !isInvalidEndDate && handleDateClick(day)}
+                  disabled={isDisabled || isInvalidEndDate}
                   className={`
-                    h-7 w-7 flex items-center justify-center text-xs rounded-full transition-colors
-                    ${isDisabled ? 'text-text-secondary opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-background-container'}
+                    h-7 w-7 flex items-center justify-center text-xs transition-colors relative
+                    ${isDisabled || isInvalidEndDate ? 'text-text-secondary opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-background-container'}
                     ${!isCurrentMonth ? 'text-text-secondary opacity-60' : 'text-text-primary'}
-                    ${isSelected ? 'text-white font-medium' : ''}
-                    ${!isSelected && isCurrentDay ? 'text-[#BB5F5A] font-medium' : ''}
+                    ${isStartDate || isEndDate ? 'text-white font-medium rounded-full' : isInRange ? 'bg-[#BB5F5A] bg-opacity-20 text-[#BB5F5A] font-medium' : 'rounded-full'}
+                    ${!isStartDate && !isEndDate && !isInRange && isCurrentDay ? 'text-[#BB5F5A] font-medium' : ''}
                   `}
-                  style={isSelected ? { backgroundColor: '#BB5F5A' } : {}}
+                  style={(isStartDate || isEndDate) ? { backgroundColor: '#BB5F5A' } : {}}
                 >
                   {format(day, 'd')}
+                  {isSelectingEndDate && !isInvalidEndDate && day >= selectedDate! && (
+                    <div className="absolute inset-0 border-2 border-[#BB5F5A] border-opacity-50 rounded-full pointer-events-none" />
+                  )}
                 </button>
               );
             })}
           </div>
+
+          {/* Multi-day Range Info */}
+          {isMultiDayEnabled && (
+            <div className="mb-3 p-2 bg-background-container rounded-md">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-text-secondary">
+                  {isSelectingEndDate ? 'Select end date:' : 'Date range:'}
+                </span>
+                <div className="flex gap-2">
+                  {selectedDate && !isSelectingEndDate && (
+                    <button
+                      onClick={() => setIsSelectingEndDate(true)}
+                      className="text-[#BB5F5A] hover:text-[#A04F4A] transition-colors"
+                    >
+                      Change end date
+                    </button>
+                  )}
+                  {selectedDate && selectedEndDate && selectedEndDate !== selectedDate && (
+                    <button
+                      onClick={() => {
+                        onEndDateSelect?.(selectedDate); // Reset end date to start date (single day)
+                        setIsSelectingEndDate(false);
+                      }}
+                      className="text-[#BB5F5A] hover:text-[#A04F4A] transition-colors"
+                    >
+                      Make single day
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 mt-1 text-xs">
+                <span className="text-text-primary font-medium">
+                  {selectedDate ? format(selectedDate, 'MMM dd, yyyy') : 'No start date'}
+                </span>
+                {isMultiDayEnabled && (
+                  <>
+                    <span className="text-text-secondary">→</span>
+                    <span className="text-text-primary font-medium">
+                      {selectedEndDate && selectedEndDate !== selectedDate ? 
+                        format(selectedEndDate, 'MMM dd, yyyy') : 
+                        isSelectingEndDate ? 'Choose end date' : 'Same day'
+                      }
+                    </span>
+                  </>
+                )}
+              </div>
+              {isSelectingEndDate && (
+                <div className="mt-2 text-xs text-text-secondary">
+                  Click a date on or after {selectedDate ? format(selectedDate, 'MMM dd') : 'start date'} for the end date
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Time Selection Toggle */}
           <div className="space-y-2">

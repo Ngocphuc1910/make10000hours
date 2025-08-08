@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useImperativeHandle, forwardRef, useMemo } from 'react';
 import { addDays, startOfWeek, format, isSameDay, isToday, addWeeks } from 'date-fns';
 import { CalendarEvent, DragItem, DropResult } from './types';
 import { DraggableEvent } from './components/DraggableEvent';
@@ -6,6 +6,7 @@ import { DroppableTimeSlot } from './components/DroppableTimeSlot';
 import { useTaskStore } from '../../store/taskStore';
 import { useUserStore } from '../../store/userStore';
 import { timezoneUtils } from '../../utils/timezoneUtils';
+import { getEventsForDay } from './utils';
 
 interface ScrollableWeekViewProps {
   currentDate: Date;
@@ -99,6 +100,19 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
   const allDays = Array.from({ length: totalDays }, (_, i) => 
     addDays(dateRange.startDate, i)
   );
+
+  // Get all-day events for a specific day (including multi-day events that span this day)
+  const getAllDayEvents = useCallback((date: Date) => {
+    return getEventsForDay(events, date, true); // Only all-day events
+  }, [events]);
+
+  // Calculate the maximum number of all-day events for row height
+  const maxAllDayEventsCount = useMemo(() => {
+    return Math.max(
+      ...allDays.map(day => getAllDayEvents(day).length),
+      1
+    );
+  }, [allDays, getAllDayEvents]);
 
   // Generate all days for the calendar view
 
@@ -356,25 +370,16 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
     );
   };
 
-  // Get all-day events for a specific day
-  const getAllDayEvents = (date: Date) => {
-    return events.filter(event => 
-      isSameDay(event.start, date) && event.isAllDay
-    );
-  };
 
-  // Calculate the maximum number of all-day events across visible days
+  // Get the maximum number of all-day events for height calculation
   const getMaxAllDayEventsCount = () => {
-    return Math.max(
-      ...allDays.map(day => getAllDayEvents(day).length),
-      1
-    );
+    return maxAllDayEventsCount;
   };
 
   // Calculate all-day row height based on max events
   const getAllDayRowHeight = () => {
     const maxEvents = getMaxAllDayEventsCount();
-    return Math.max(40, maxEvents * 26 + 12);
+    return Math.max(40, maxEvents * 22 + 12); // 20px per event + 2px gap + 12px padding
   };
 
   // Calculate event position and height
@@ -696,30 +701,39 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
                         }
                       }}
                     >
-                      {getAllDayEvents(day).map((event) => (
+                      {/* Render all-day events for this specific day only */}
+                      {getAllDayEvents(day).map((event, eventIndex) => (
                         <div
                           key={event.id}
                           className="flex-shrink-0 relative w-full"
-                          style={{ height: '24px', marginBottom: '2px', minWidth: 0 }}
+                          style={{ 
+                            height: '20px', 
+                            marginBottom: '2px', 
+                            minWidth: 0,
+                            // Stack events vertically within this day cell only
+                            zIndex: 10 + eventIndex
+                          }}
                         >
                           <DraggableEvent
                             event={event}
                             onClick={onEventClick}
                             sourceView="week"
-                            className={`absolute inset-0 px-2 py-1 text-xs rounded truncate flex items-center ${
+                            className={`block w-full cursor-grab rounded text-xs px-2 py-1 flex items-center flex-shrink-0 ${
                               event.isTask ? 'border-l-2 border-white border-opacity-50' : ''
                             } ${event.isCompleted ? 'calendar-event-completed' : ''}`}
                             style={{
                               backgroundColor: event.color,
-                              position: 'relative',
+                              height: '20px',
+                              minHeight: '20px',
+                              maxHeight: '20px',
                               width: '100%',
-                              height: '100%'
+                              maxWidth: '100%'
                             }}
                           >
-                            <div className="flex items-center text-white w-full">
-                              <span className={`truncate ${event.isCompleted ? 'line-through' : ''}`}>
-                                {event.title}
-                              </span>
+                            <div className={`font-medium truncate leading-tight w-full text-white ${
+                              event.isCompleted ? 'line-through' : ''
+                            }`}>
+                              {event.title}
                             </div>
                           </DraggableEvent>
                         </div>
