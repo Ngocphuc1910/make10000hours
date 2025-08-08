@@ -20,6 +20,11 @@ interface UIState {
   // Toast notification
   toastMessage: string | null;
   
+  // Feature flags
+  featureFlags: {
+    multiDayTasks: boolean;
+  };
+  
   // Actions
   toggleLeftSidebar: () => void;
   toggleRightSidebar: () => void;
@@ -30,6 +35,7 @@ interface UIState {
   setActiveHelpTab: (tab: 'pomodoro' | 'features' | 'shortcuts') => void;
   showToast: (message: string) => void;
   hideToast: () => void;
+  setFeatureFlag: (flag: keyof UIState['featureFlags'], enabled: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -44,6 +50,11 @@ export const useUIStore = create<UIState>()(
       isFocusMode: false,
       activeHelpTab: 'pomodoro',
       toastMessage: null,
+      
+      // Feature flags - multi-day enabled for testing
+      featureFlags: {
+        multiDayTasks: true,
+      },
       
       // Actions
       toggleLeftSidebar: () => set(state => ({ isLeftSidebarOpen: !state.isLeftSidebarOpen })),
@@ -74,15 +85,24 @@ export const useUIStore = create<UIState>()(
         }, 3000);
       },
       
-      hideToast: () => set({ toastMessage: null })
+      hideToast: () => set({ toastMessage: null }),
+      
+      // Feature flag actions
+      setFeatureFlag: (flag, enabled) => set(state => ({
+        featureFlags: {
+          ...state.featureFlags,
+          [flag]: enabled
+        }
+      }))
     }),
     {
       name: 'ui-store', // unique name for localStorage key
       partialize: (state) => ({ 
         rightSidebarWidth: state.rightSidebarWidth,
         isLeftSidebarOpen: state.isLeftSidebarOpen,
-        isRightSidebarOpen: state.isRightSidebarOpen
+        isRightSidebarOpen: state.isRightSidebarOpen,
+        featureFlags: state.featureFlags // persist feature flags
       }), // only persist specific UI preferences
     }
   )
-); 
+);; 

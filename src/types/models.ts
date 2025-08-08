@@ -12,6 +12,7 @@ export interface Task {
   hideFromPomodoro?: boolean;
   // Calendar/scheduling fields
   scheduledDate?: string; // YYYY-MM-DD format
+  scheduledEndDate?: string; // YYYY-MM-DD format for multi-day tasks
   scheduledStartTime?: string; // HH:MM format
   scheduledEndTime?: string; // HH:MM format
   includeTime?: boolean; // whether time is included in the schedule

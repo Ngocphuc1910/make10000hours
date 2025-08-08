@@ -128,7 +128,7 @@ export const Calendar: React.FC = () => {
       }
       
       // Merge calendar events with timezone-converted tasks
-      const events = mergeEventsAndTasks(calendarEvents, displayTasks, projects);
+      const events = mergeEventsAndTasks(displayTasks, projects, calendarEvents);
       
       if (globalThis.__debug_calendar_conversion) {
         console.log('🎯 Calendar: Generated', events.length, 'total events');
@@ -139,7 +139,7 @@ export const Calendar: React.FC = () => {
       console.error('❌ Calendar: Failed to process events:', error);
       
       // Fallback: use original tasks without timezone conversion
-      return mergeEventsAndTasks(calendarEvents, tasks, projects);
+      return mergeEventsAndTasks(tasks, projects, calendarEvents);
     }
   }, [calendarEvents, tasks, projects, user?.settings?.timezone?.current]);
 

@@ -1,72 +1,33 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Calendar Debug Controls</title>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
-        .debug-control { margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
-        button { padding: 8px 16px; margin: 5px; cursor: pointer; }
-        .enabled { background-color: #d4edda; border-color: #c3e6cb; }
-        .disabled { background-color: #f8d7da; border-color: #f5c6cb; }
-    </style>
+    <title>Calendar Debug</title>
 </head>
 <body>
-    <h1>Calendar Debug Controls</h1>
-    <p>Use this page to enable/disable debug logging for calendar operations.</p>
+    <h1>Calendar Debugging</h1>
+    <p>Open browser console and check for:</p>
+    <ul>
+        <li>Tasks being loaded from task store</li>
+        <li>Events being passed to calendar component</li>
+        <li>Feature flag status</li>
+        <li>Any JavaScript errors</li>
+    </ul>
     
-    <div class="debug-control" id="events-control">
-        <h3>Calendar Events Logging</h3>
-        <p>Enable detailed logging for individual calendar event processing</p>
-        <button onclick="toggleEventsDebug()">Toggle Events Debug</button>
-        <span id="events-status">Disabled</span>
-    </div>
+    <p>To test multi-day functionality:</p>
+    <ol>
+        <li>Enable the feature flag in Settings → Beta Features → Multi-day Tasks</li>
+        <li>Create a task with both start date and end date</li>
+        <li>Check if the task appears in the calendar view</li>
+    </ol>
     
-    <div class="debug-control" id="conversion-control">
-        <h3>Calendar Conversion Logging</h3>
-        <p>Enable logging for timezone conversion and batch operations</p>
-        <button onclick="toggleConversionDebug()">Toggle Conversion Debug</button>
-        <span id="conversion-status">Disabled</span>
-    </div>
-    
-    <div class="debug-control">
-        <h3>Clear All Debug</h3>
-        <p>Disable all calendar debug logging</p>
-        <button onclick="clearAllDebug()">Clear All Debug</button>
-    </div>
-
     <script>
-        function updateStatus() {
-            const eventsEnabled = !!globalThis.__debug_calendar_events;
-            const conversionEnabled = !!globalThis.__debug_calendar_conversion;
-            
-            document.getElementById('events-status').textContent = eventsEnabled ? 'Enabled' : 'Disabled';
-            document.getElementById('events-control').className = 'debug-control ' + (eventsEnabled ? 'enabled' : 'disabled');
-            
-            document.getElementById('conversion-status').textContent = conversionEnabled ? 'Enabled' : 'Disabled';
-            document.getElementById('conversion-control').className = 'debug-control ' + (conversionEnabled ? 'enabled' : 'disabled');
-        }
-        
-        function toggleEventsDebug() {
-            globalThis.__debug_calendar_events = !globalThis.__debug_calendar_events;
-            console.log('Calendar events debug:', globalThis.__debug_calendar_events ? 'enabled' : 'disabled');
-            updateStatus();
-        }
-        
-        function toggleConversionDebug() {
-            globalThis.__debug_calendar_conversion = !globalThis.__debug_calendar_conversion;
-            console.log('Calendar conversion debug:', globalThis.__debug_calendar_conversion ? 'enabled' : 'disabled');
-            updateStatus();
-        }
-        
-        function clearAllDebug() {
-            globalThis.__debug_calendar_events = false;
-            globalThis.__debug_calendar_conversion = false;
-            console.log('All calendar debug logging disabled');
-            updateStatus();
-        }
-        
-        // Initialize status
-        updateStatus();
+        // Simple debug helper
+        console.log('Debug page loaded. Navigate to the actual app at localhost:3001');
+        console.log('1. Go to Settings page');
+        console.log('2. Check Beta Features section');
+        console.log('3. Enable Multi-day Tasks toggle');
+        console.log('4. Create a test task with date range');
+        console.log('5. Check calendar view');
     </script>
 </body>
 </html>

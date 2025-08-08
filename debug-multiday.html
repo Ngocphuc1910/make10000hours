@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Multi-Day Feature</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .debug-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .debug-step {
+            margin: 15px 0;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        .debug-step.completed {
+            border-color: #4CAF50;
+            background: #f8fff8;
+        }
+        .debug-step h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 5px;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        .console-output {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>🐛 Debug Multi-Day Feature Issue</h1>
+    
+    <div class="debug-container">
+        <h2>Problem Analysis</h2>
+        <p>The DatePicker is not showing the multi-day interface even when the feature should be enabled. Let's debug step by step:</p>
+    </div>
+
+    <div class="debug-container">
+        <h2>Step 1: Check Main App State</h2>
+        <div class="debug-step">
+            <h3>🔍 Open Browser Console & Navigate to App</h3>
+            <ol>
+                <li>Open browser dev tools (F12)</li>
+                <li>Navigate to <a href="http://localhost:3002" target="_blank">http://localhost:3002</a></li>
+                <li>Check console for any errors related to multi-day features</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="debug-container">
+        <h2>Step 2: Verify Feature Flag State</h2>
+        <div class="debug-step">
+            <h3>📱 Check UIStore in Console</h3>
+            <p>Paste this code in the browser console to check the feature flag state:</p>
+            <div class="console-output">// Check UIStore state
+const uiStore = window.useUIStore?.getState();
+console.log('UIStore state:', uiStore);
+console.log('Feature flags:', uiStore?.featureFlags);
+console.log('Multi-day enabled:', uiStore?.featureFlags?.multiDayTasks);
+
+// Check if isMultiDayEnabled function works
+if (window.isMultiDayEnabled) {
+    console.log('isMultiDayEnabled function result:', window.isMultiDayEnabled());
+} else {
+    console.log('isMultiDayEnabled function not available on window');
+}</div>
+        </div>
+    </div>
+
+    <div class="debug-container">
+        <h2>Step 3: Enable Feature Flag</h2>
+        <div class="debug-step">
+            <h3>⚙️ Force Enable Multi-Day Feature</h3>
+            <p>If the feature flag is disabled, enable it using this console command:</p>
+            <div class="console-output">// Force enable multi-day feature
+const uiStore = window.useUIStore?.getState();
+if (uiStore?.setFeatureFlag) {
+    uiStore.setFeatureFlag('multiDayTasks', true);
+    console.log('✅ Multi-day feature enabled');
+    console.log('New state:', uiStore.featureFlags);
+} else {
+    console.log('❌ setFeatureFlag function not available');
+}</div>
+        </div>
+    </div>
+
+    <div class="debug-container">
+        <h2>Step 4: Test DatePicker Props</h2>
+        <div class="debug-step">
+            <h3>🗓️ Check DatePicker Received Props</h3>
+            <p>After enabling the feature flag, create a new task and check if DatePicker receives correct props:</p>
+            <ol>
+                <li>Click "Add Task" or "+" button</li>
+                <li>Click the calendar button to open DatePicker</li>
+                <li>In console, check if the DatePicker element has the right props</li>
+            </ol>
+            <p>Use this console command to inspect DatePicker props:</p>
+            <div class="console-output">// Find DatePicker element and log its data
+const datePickerEl = document.querySelector('[data-datepicker]');
+if (datePickerEl) {
+    console.log('✅ DatePicker element found');
+    // Check if multi-day UI elements exist
+    const multiDayInfo = document.querySelector('[data-datepicker] .bg-background-container');
+    console.log('Multi-day info panel:', multiDayInfo ? '✅ Found' : '❌ Not found');
+} else {
+    console.log('❌ DatePicker element not found - is it open?');
+}</div>
+        </div>
+    </div>
+
+    <div class="debug-container">
+        <h2>Step 5: Manual Feature Flag Toggle</h2>
+        <div class="debug-step">
+            <h3>🔄 Use Settings Toggle</h3>
+            <p>Try enabling through the UI:</p>
+            <ol>
+                <li>Navigate to Settings page (gear icon)</li>
+                <li>Scroll to "Beta Features" section</li>
+                <li>Toggle ON "Multi-day tasks"</li>
+                <li>Check if the toggle persists and works</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="debug-container">
+        <h2>Troubleshooting Results</h2>
+        <div class="debug-step">
+            <h3>📋 Expected Multi-Day UI Elements</h3>
+            <p>When working correctly, the DatePicker should show:</p>
+            <ul>
+                <li>A "Date range:" info panel above the calendar</li>
+                <li>Range highlighting when selecting dates</li>
+                <li>"Change end date" and "Make single day" buttons</li>
+                <li>Helper text for date selection</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        console.log('🐛 Multi-day debug page loaded');
+        console.log('Use the steps above to diagnose the issue');
+        
+        // Periodically check if main app is available
+        const checkMainApp = () => {
+            if (window.parent !== window) {
+                // We're in iframe, try to access parent
+                try {
+                    const parentStore = window.parent.useUIStore?.getState();
+                    if (parentStore) {
+                        console.log('🎯 Found UIStore in parent window');
+                        console.log('Feature flags:', parentStore.featureFlags);
+                    }
+                } catch (e) {
+                    console.log('Cannot access parent window due to cross-origin restrictions');
+                }
+            }
+        };
+        
+        setTimeout(checkMainApp, 1000);
+    </script>
+</body>
+</html>

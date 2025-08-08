@@ -6,9 +6,11 @@ import GoogleCalendarSync from '../settings/GoogleCalendarSync';
 import WebhookDebugPanel from '../sync/WebhookDebugPanel';
 import Sidebar from '../layout/Sidebar';
 import { Header } from '../dashboard/layout/Header';
+import { useUIStore } from '../../store/uiStore';
 
 const SettingsPage = () => {
   const { user, updateUserData } = useUserStore();
+  const { featureFlags, setFeatureFlag } = useUIStore();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -229,6 +231,33 @@ const SettingsPage = () => {
                 Compact task view
               </label>
             </div>
+          </div>
+        </section>
+
+        {/* Beta Features */}
+        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Beta Features</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Enable experimental features that are currently in development. These features may not be fully stable.
+          </p>
+          
+          <div className="space-y-4">
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="multiDayTasks"
+                checked={featureFlags?.multiDayTasks || false}
+                onChange={(e) => setFeatureFlag('multiDayTasks', e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="multiDayTasks" className="ml-2 text-sm text-gray-700">
+                Multi-day tasks
+              </label>
+              <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-full">Beta</span>
+            </div>
+            <p className="ml-6 text-xs text-gray-500">
+              Allow tasks to span multiple consecutive days in the calendar view. Longer tasks will be positioned above shorter ones.
+            </p>
           </div>
         </section>
 
