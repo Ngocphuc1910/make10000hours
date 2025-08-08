@@ -14,6 +14,11 @@ export interface CalendarEvent {
   isDraggable?: boolean;
   isCompleted?: boolean;
   completedAt?: Date;
+  // Multi-day event properties
+  isMultiDay?: boolean;
+  daySpan?: number;
+  displayStart?: Date;
+  displayEnd?: Date;
   utcMetadata?: {
     hasUTCFields: boolean;
     timezone: string;

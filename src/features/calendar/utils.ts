@@ -1,311 +1,176 @@
-import { Task, Project } from '../../types/models';
-import { CalendarEvent, DropResult, DragItem } from './types';
-import { isSameDay, addMinutes, format } from 'date-fns';
-import type { TaskDisplay } from '../../types/taskEnhanced';
+import type { Task, TaskDisplay, Project } from '../../types/models';
+import type { CalendarEvent } from './types';
+import { format, addMinutes, subMinutes, parse, differenceInMinutes, isAfter, isBefore, startOfDay, endOfDay, isSameDay } from 'date-fns';
 import { timezoneUtils } from '../../utils/timezoneUtils';
 
-/**
- * Convert a task with scheduled date/time to a CalendarEvent
- * Now supports both TaskDisplay (with timezone conversion) and legacy Task formats
- */
+export interface EventDrop {
+  eventId: string;
+  start: Date;
+  end: Date;
+  isAllDay?: boolean;
+}
+
 export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project): CalendarEvent | null => {
-  const taskDisplay = task as TaskDisplay;
+  const taskAsTask = task as Task;
   
-  // Check for display scheduling first (timezone-converted), then fallback to legacy
-  const hasDisplayScheduling = !!(taskDisplay.displayScheduledDate);
-  const hasLegacyScheduling = !!(task.scheduledDate);
+  if (!taskAsTask.scheduledDate) return null;
   
-  if (!hasDisplayScheduling && !hasLegacyScheduling) {
-    return null;
-  }
-
-  const eventId = `task-${task.id}`;
-  const eventTitle = task.title;
-  const eventDescription = task.description;
-  const projectName = project?.name || 'No Project';
-  const projectColor = project?.color || '#6B7280'; // Default gray color
+  // Parse the scheduled date as local date (not UTC)
+  const baseDate = new Date(taskAsTask.scheduledDate + 'T00:00:00');
   
-  // Check completion status
-  const isCompleted = task.completed || task.status === 'completed';
-
-  // Use display fields if available (timezone-converted), otherwise use legacy fields
-  let scheduledDate: Date;
-  let startTime: string | undefined;
-  let endTime: string | undefined;
+  let start: Date;
+  let end: Date;
+  let isAllDay = false;
   
-  if (hasDisplayScheduling) {
-    // Use timezone-converted display fields
-    scheduledDate = new Date(taskDisplay.displayScheduledDate!);
-    startTime = taskDisplay.displayScheduledTime;
-    endTime = taskDisplay.displayScheduledEndTime; // Use timezone-converted end time
-  } else {
-    // Use legacy fields
-    scheduledDate = new Date(task.scheduledDate!);
-    startTime = task.scheduledStartTime;
-    endTime = task.scheduledEndTime;
-  }
-  
-  // If task doesn't include specific time, make it an all-day event
-  if (!task.includeTime || !startTime || !endTime) {
-    return {
-      id: eventId,
-      title: eventTitle,
-      description: eventDescription,
-      project: projectName,
-      color: projectColor,
-      start: scheduledDate,
-      end: scheduledDate,
-      isAllDay: true,
-      taskId: task.id, // Add reference to original task
-      isTask: true, // Flag to identify this as a task event
-      isDraggable: true,
-      isCompleted: isCompleted,
-      completedAt: isCompleted ? task.updatedAt : undefined
-    };
-  }
-
-  // Parse start and end times
-  const [startHour, startMinute] = startTime.split(':').map(Number);
-  const [endHour, endMinute] = endTime.split(':').map(Number);
-
-  // Create start and end dates with specified times
-  let startDate: Date;
-  let endDate: Date;
-  
-  if (hasDisplayScheduling) {
-    // For display tasks, the times are already in the correct timezone
-    // Create dates using the display date and times (already converted)
-    const baseDateStr = taskDisplay.displayScheduledDate!;
-    startDate = new Date(`${baseDateStr}T${startTime}:00`);
-    endDate = new Date(`${baseDateStr}T${endTime}:00`);
+  if (taskAsTask.includeTime && taskAsTask.scheduledStartTime && taskAsTask.scheduledEndTime) {
+    // Parse times and combine with date
+    const startTime = parse(taskAsTask.scheduledStartTime, 'HH:mm', baseDate);
+    const endTime = parse(taskAsTask.scheduledEndTime, 'HH:mm', baseDate);
     
-    // Only log in debug mode to prevent excessive logging during drag operations
-    if (process.env.NODE_ENV === 'development' && globalThis.__debug_calendar_events) {
-      console.log(`📅 Calendar Event (${task.title}):`, {
-        displayDate: baseDateStr,
-        displayTime: `${startTime}-${endTime}`,
-        finalStartDate: startDate.toISOString(),
-        finalEndDate: endDate.toISOString(),
-        timezone: taskDisplay.displayTimezone
-      });
+    start = startTime;
+    end = endTime;
+    
+    // If end time is before start time, assume it's the next day
+    if (isBefore(end, start)) {
+      end = addMinutes(end, 24 * 60);
     }
   } else {
-    // For legacy tasks, use the original logic
-    startDate = new Date(scheduledDate);
-    startDate.setHours(startHour, startMinute, 0, 0);
-    
-    endDate = new Date(scheduledDate);
-    endDate.setHours(endHour, endMinute, 0, 0);
-    
-    // Only log in debug mode to prevent excessive logging during drag operations
-    if (process.env.NODE_ENV === 'development' && globalThis.__debug_calendar_events) {
-      console.log(`📅 Calendar Event (${task.title}) - Legacy:`, {
-        legacyDate: scheduledDate.toISOString(),
-        legacyTime: `${startTime}-${endTime}`,
-        finalStartDate: startDate.toISOString(),
-        finalEndDate: endDate.toISOString()
-      });
-    }
+    // All-day event
+    start = startOfDay(baseDate);
+    end = endOfDay(baseDate);
+    isAllDay = true;
   }
 
-  // If end time is before start time, assume it's the next day
-  if (endDate < startDate) {
-    endDate.setDate(endDate.getDate() + 1);
+  // Determine the color
+  let color = '#EF4444'; // Default red
+  if (project) {
+    color = project.color;
+  } else {
+    // Try to find project by ID if not provided
+    // This would require access to projects array, so keeping default for now
   }
 
-  return {
-    id: eventId,
-    title: eventTitle,
-    description: eventDescription,
-    project: projectName,
-    color: projectColor,
-    start: startDate,
-    end: endDate,
-    isAllDay: false,
-    taskId: task.id, // Add reference to original task
-    isTask: true, // Flag to identify this as a task event
-    isDraggable: true,
-    isCompleted: isCompleted,
-    completedAt: isCompleted ? task.updatedAt : undefined
+  // Create the base calendar event
+  const calendarEvent: CalendarEvent = {
+    id: taskAsTask.id,
+    title: taskAsTask.title,
+    start,
+    end,
+    color,
+    isAllDay,
+    isTask: true,
+    isCompleted: taskAsTask.completed,
+    taskId: taskAsTask.id,
+    description: taskAsTask.description
   };
+
+  // Handle multi-day tasks
+  if (taskAsTask.scheduledEndDate && taskAsTask.scheduledEndDate !== taskAsTask.scheduledDate) {
+    const endDate = new Date(taskAsTask.scheduledEndDate + 'T23:59:59');
+    calendarEvent.end = endDate;
+    calendarEvent.isMultiDay = true;
+    
+    // Calculate day span for multi-day events
+    const startDate = new Date(taskAsTask.scheduledDate + 'T00:00:00');
+    const daySpan = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    calendarEvent.daySpan = daySpan;
+    
+    // Set display dates for rendering
+    calendarEvent.displayStart = startDate;
+    calendarEvent.displayEnd = endDate;
+  }
+
+  return calendarEvent;
 };
 
-/**
- * Convert multiple tasks to calendar events
- */
 export const tasksToCalendarEvents = (tasks: Task[], projects: Project[]): CalendarEvent[] => {
-  const events: CalendarEvent[] = [];
-  
-  // Create a map of projects for quick lookup
-  const projectMap = new Map<string, Project>();
-  projects.forEach(project => {
-    projectMap.set(project.id, project);
-  });
-
-  // Convert each task with scheduled date to calendar event
-  tasks.forEach(task => {
-    const project = projectMap.get(task.projectId);
-    const event = taskToCalendarEvent(task, project);
-    if (event) {
-      events.push(event);
-    }
-  });
-
-  return events;
+  return tasks
+    .filter(task => task.scheduledDate) // Only include tasks with scheduled dates
+    .map(task => {
+      const project = projects.find(p => p.id === task.projectId);
+      return taskToCalendarEvent(task, project);
+    })
+    .filter((event): event is CalendarEvent => event !== null);
 };
 
+
 /**
- * Merge calendar events and task events
+ * Merge calendar events and tasks with proper scheduling and conflict resolution
  */
 export const mergeEventsAndTasks = (
-  calendarEvents: CalendarEvent[],
-  tasks: Task[],
-  projects: Project[]
+  tasks: Task[], 
+  projects: Project[], 
+  calendarEvents: CalendarEvent[] = []
 ): CalendarEvent[] => {
   const taskEvents = tasksToCalendarEvents(tasks, projects);
-  return [...calendarEvents, ...taskEvents];
+  return [...taskEvents, ...calendarEvents];
 };
 
-// Drag & Drop Utilities
-
 /**
- * Calculate new event times based on drop position (timezone-aware version)
+ * Calculate new event time based on drag position
  */
 export const calculateNewEventTime = (
-  originalEvent: CalendarEvent,
-  dropResult: DropResult,
-  userTimezone?: string
+  event: CalendarEvent,
+  dragStartY: number,
+  dragCurrentY: number,
+  timeSlotHeight: number,
+  roundToMinutes: number = 15
 ): { start: Date; end: Date } => {
-  const timezone = userTimezone || timezoneUtils.getCurrentTimezone();
+  const pixelsMoved = dragCurrentY - dragStartY;
+  const minutesMoved = (pixelsMoved / timeSlotHeight) * 60;
   
-  try {
-    // Use actual duration to preserve zero-duration events
-    const actualDuration = originalEvent.end.getTime() - originalEvent.start.getTime();
-    
-    // Only check drop target, not original event type
-    if (dropResult.isAllDay) {
-      // For all-day drops, use the target date directly without timezone conversion
-      // All-day events should preserve the calendar date exactly as shown
-      const start = new Date(dropResult.targetDate);
-      start.setHours(0, 0, 0, 0); // Set to start of day in local time
-      const end = new Date(start);
-      return { start, end };
-    }
-    
-    // For timed drops, use timezone-aware date creation
-    let start: Date;
-    const dateString = format(dropResult.targetDate, 'yyyy-MM-dd');
-    
-    if (dropResult.targetTime) {
-      // Use the target time from the drop result
-      const hour = String(dropResult.targetTime.hour).padStart(2, '0');
-      const minute = String(dropResult.targetTime.minute).padStart(2, '0');
-      start = timezoneUtils.createDateInTimezone(`${dateString}T${hour}:${minute}:00`, timezone);
-    } else {
-      // Keep original time but change date - need to extract time in user's timezone
-      const originalTimeInUserTz = timezoneUtils.utcToUserTime(originalEvent.start.toISOString(), timezone);
-      const hour = String(originalTimeInUserTz.getHours()).padStart(2, '0');
-      const minute = String(originalTimeInUserTz.getMinutes()).padStart(2, '0');
-      start = timezoneUtils.createDateInTimezone(`${dateString}T${hour}:${minute}:00`, timezone);
-    }
-    
-    // Smart duration calculation for converted events
-    let duration = actualDuration;
-    if (originalEvent.isAllDay && actualDuration === 0) {
-      // All-day to timed: use 1-hour default
-      duration = 60 * 60 * 1000;
-    } else if (actualDuration === 0) {
-      // Zero-duration to timed: use 30-min default
-      duration = 30 * 60 * 1000;
-    }
-    
-    const end = new Date(start.getTime() + duration);
-    return { start, end };
-  } catch (error) {
-    console.error('Failed to calculate new event time with timezone:', error);
-    
-    // Fallback to original logic for backwards compatibility
-    const actualDuration = originalEvent.end.getTime() - originalEvent.start.getTime();
-    
-    if (dropResult.isAllDay) {
-      const start = new Date(dropResult.targetDate);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
-      return { start, end };
-    }
-    
-    let start: Date;
-    if (dropResult.targetTime) {
-      start = new Date(dropResult.targetDate);
-      start.setHours(dropResult.targetTime.hour, dropResult.targetTime.minute, 0, 0);
-    } else {
-      start = new Date(dropResult.targetDate);
-      start.setHours(originalEvent.start.getHours(), originalEvent.start.getMinutes(), 0, 0);
-    }
-    
-    let duration = actualDuration;
-    if (originalEvent.isAllDay && actualDuration === 0) {
-      duration = 60 * 60 * 1000;
-    } else if (actualDuration === 0) {
-      duration = 30 * 60 * 1000;
-    }
-    
-    const end = new Date(start.getTime() + duration);
-    return { start, end };
-  }
+  // Round to nearest increment
+  const roundedMinutes = Math.round(minutesMoved / roundToMinutes) * roundToMinutes;
+  
+  const originalDuration = event.end.getTime() - event.start.getTime();
+  const newStart = addMinutes(event.start, roundedMinutes);
+  const newEnd = new Date(newStart.getTime() + originalDuration);
+  
+  return { start: newStart, end: newEnd };
 };
 
 /**
- * Check if a drop operation is valid (timezone-aware version)
+ * Validate if an event can be dropped at a specific time/date
  */
 export const isValidDrop = (
-  draggedEvent: CalendarEvent,
-  dropResult: DropResult,
+  event: CalendarEvent,
+  newStart: Date,
+  newEnd: Date,
   allEvents: CalendarEvent[],
-  userTimezone?: string
+  allowOverlap: boolean = false
 ): boolean => {
-  // Can't drop on same position
-  const sameDate = isSameDay(draggedEvent.start, dropResult.targetDate);
-  const sameAllDayStatus = draggedEvent.isAllDay === (dropResult.isAllDay || false);
-  const noTargetTime = !dropResult.targetTime;
+  if (!allowOverlap) {
+    // Check for conflicts with other events (excluding the event being moved)
+    const otherEvents = allEvents.filter(e => e.id !== event.id);
+    
+    for (const otherEvent of otherEvents) {
+      // Check if the new time conflicts with existing event
+      if (
+        (newStart < otherEvent.end && newEnd > otherEvent.start) ||
+        (newEnd > otherEvent.start && newStart < otherEvent.end)
+      ) {
+        return false;
+      }
+    }
+  }
   
-  if (sameDate && noTargetTime && sameAllDayStatus) {
+  // Ensure the event doesn't end before it starts
+  if (newEnd <= newStart) {
     return false;
   }
   
-  // Calculate new times using timezone-aware calculation
-  const { start, end } = calculateNewEventTime(draggedEvent, dropResult, userTimezone);
-
-  // For all-day drops, allow them (no time conflict check needed)
-  if (dropResult.isAllDay) {
-    return true;
-  }
-  
-  // Check for conflicts with other events (excluding the dragged event)
-  const eventsOnSameDay = allEvents.filter(event => 
-    event.id !== draggedEvent.id &&
-    isSameDay(event.start, start)
-  );
-
-  const conflictingEvents = eventsOnSameDay.filter(event => 
-    !event.isAllDay &&
-    ((start >= event.start && start < event.end) ||
-     (end > event.start && end <= event.end) ||
-     (start <= event.start && end >= event.end))
-  );
-  
-  return conflictingEvents.length === 0;
+  return true;
 };
 
 /**
- * Format time for display
+ * Format time for display (e.g., "2:30 PM")
  */
 export const formatTimeForDisplay = (date: Date): string => {
-  return format(date, 'HH:mm');
+  return format(date, 'h:mm a');
 };
 
 /**
- * Get actual event duration in minutes (preserves original data)
+ * Get actual event duration in minutes
  */
 export const getActualEventDurationMinutes = (event: CalendarEvent): number => {
   const durationMs = event.end.getTime() - event.start.getTime();
@@ -326,4 +191,144 @@ export const getEventDurationMinutes = (event: CalendarEvent): number => {
   
   // For other events, return actual duration but with 30-minute minimum
   return Math.max(actualDurationMinutes, 30);
+};
+
+// Multi-day task utility functions
+
+/**
+ * Check if a task/event is multi-day
+ */
+export const isMultiDayTask = (task: Task): boolean => {
+  return !!(task.scheduledDate && task.scheduledEndDate && task.scheduledEndDate !== task.scheduledDate);
+};
+
+/**
+ * Get the day span of a multi-day task
+ */
+export const getTaskDaySpan = (task: Task): number => {
+  if (!isMultiDayTask(task)) return 1;
+  
+  const startDate = new Date(task.scheduledDate! + 'T00:00:00');
+  const endDate = new Date(task.scheduledEndDate! + 'T00:00:00');
+  return Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+};
+
+/**
+ * Get all events for a specific day, including multi-day events
+ */
+export const getEventsForDay = (events: CalendarEvent[], day: Date, allDayOnly: boolean = false): CalendarEvent[] => {
+  const dayStart = startOfDay(day);
+  const dayEnd = endOfDay(day);
+  
+  return events.filter(event => {
+    if (allDayOnly && !event.isAllDay) return false;
+    
+    // For multi-day events, check if the day falls within the event's date range
+    if (event.isMultiDay && event.displayStart && event.displayEnd) {
+      const eventStart = startOfDay(event.displayStart);
+      const eventEnd = endOfDay(event.displayEnd);
+      return day >= eventStart && day <= eventEnd;
+    }
+    
+    // For single-day events, check if they occur on this day
+    const eventStart = startOfDay(event.start);
+    const eventEnd = endOfDay(event.end);
+    return (event.start >= dayStart && event.start <= dayEnd) ||
+           (event.end >= dayStart && event.end <= dayEnd) ||
+           (event.start <= dayStart && event.end >= dayEnd);
+  });
+};
+
+/**
+ * Calculate positions for multi-day events to avoid overlaps
+ */
+export const calculateMultiDayEventPositions = (
+  events: CalendarEvent[], 
+  weekStart: Date, 
+  weekEnd: Date
+): { events: { event: CalendarEvent; position: { row: number; left: number; width: number } }[]; maxRow: number } => {
+  // Filter to only multi-day events that intersect with this week
+  const multiDayEvents = events.filter(event => {
+    if (!event.isMultiDay || !event.displayStart || !event.displayEnd) return false;
+    
+    const eventStart = startOfDay(event.displayStart);
+    const eventEnd = endOfDay(event.displayEnd);
+    const weekStartDay = startOfDay(weekStart);
+    const weekEndDay = endOfDay(weekEnd);
+    
+    return eventStart <= weekEndDay && eventEnd >= weekStartDay;
+  });
+  
+  // Sort by duration (longer events first) then by start date
+  const sortedEvents = multiDayEvents.sort((a, b) => {
+    const aDuration = a.daySpan || 1;
+    const bDuration = b.daySpan || 1;
+    if (aDuration !== bDuration) {
+      return bDuration - aDuration; // Longer duration first
+    }
+    return a.start.getTime() - b.start.getTime(); // Earlier start first
+  });
+  
+  const positionedEvents: { event: CalendarEvent; position: { row: number; left: number; width: number } }[] = [];
+  const rows: CalendarEvent[][] = [];
+  
+  for (const event of sortedEvents) {
+    // Find the first row where this event can fit
+    let row = 0;
+    let placed = false;
+    
+    while (!placed) {
+      if (!rows[row]) {
+        rows[row] = [];
+      }
+      
+      // Check if this event conflicts with any event in this row
+      const hasConflict = rows[row].some(existingEvent => {
+        if (!existingEvent.displayStart || !existingEvent.displayEnd || !event.displayStart || !event.displayEnd) {
+          return false;
+        }
+        
+        const existingStart = startOfDay(existingEvent.displayStart);
+        const existingEnd = endOfDay(existingEvent.displayEnd);
+        const eventStart = startOfDay(event.displayStart);
+        const eventEnd = endOfDay(event.displayEnd);
+        
+        return eventStart <= existingEnd && eventEnd >= existingStart;
+      });
+      
+      if (!hasConflict) {
+        rows[row].push(event);
+        
+        // Calculate position within the week
+        const weekStartDay = startOfDay(weekStart);
+        const eventStart = startOfDay(event.displayStart!);
+        const eventEnd = endOfDay(event.displayEnd!);
+        
+        // Clamp to week boundaries
+        const displayStart = eventStart < weekStartDay ? weekStartDay : eventStart;
+        const displayEnd = eventEnd > endOfDay(weekEnd) ? endOfDay(weekEnd) : eventEnd;
+        
+        const startDayOffset = Math.floor((displayStart.getTime() - weekStartDay.getTime()) / (1000 * 60 * 60 * 24));
+        const daysInWeek = Math.ceil((displayEnd.getTime() - displayStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        
+        positionedEvents.push({
+          event,
+          position: {
+            row,
+            left: startDayOffset,
+            width: daysInWeek
+          }
+        });
+        
+        placed = true;
+      } else {
+        row++;
+      }
+    }
+  }
+  
+  return {
+    events: positionedEvents,
+    maxRow: rows.length - 1
+  };
 };

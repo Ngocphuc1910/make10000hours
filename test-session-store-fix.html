@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Session Store Fix</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .test-button { padding: 10px 15px; margin: 5px; background: #007cba; color: white; border: none; cursor: pointer; border-radius: 3px; }
+        .test-output { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .info { color: blue; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Test Session Store Fix</h1>
+    <p>This verifies that the deep focus dashboard store is using session-based data</p>
+
+    <div class="test-section">
+        <h2>1. Check Store Implementation</h2>
+        <button class="test-button" onclick="checkStoreImplementation()">Check Store</button>
+        <div id="store-check" class="test-output"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Test Session Service Import</h2>
+        <button class="test-button" onclick="testSessionServiceImport()">Test Import</button>
+        <div id="import-test" class="test-output"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Manual Load Test (If Services Available)</h2>
+        <button class="test-button" onclick="manualLoadTest()">Test Load</button>
+        <div id="load-test" class="test-output"></div>
+    </div>
+
+    <script>
+        function log(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type;
+            element.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            element.scrollTop = element.scrollHeight;
+        }
+
+        function clearLog(elementId) {
+            document.getElementById(elementId).innerHTML = '';
+        }
+
+        // Check the store implementation by reading the source
+        function checkStoreImplementation() {
+            clearLog('store-check');
+            log('store-check', '🔍 Checking store implementation...', 'info');
+
+            // Check if we can access the deep focus dashboard store
+            if (window.useDeepFocusDashboardStore) {
+                log('store-check', '✅ Deep focus dashboard store accessible', 'success');
+                
+                const store = window.useDeepFocusDashboardStore.getState();
+                log('store-check', `Store methods: ${Object.keys(store).join(', ')}`, 'info');
+                
+                // Check if loadExtensionData method exists
+                if (store.loadExtensionData) {
+                    log('store-check', '✅ loadExtensionData method exists', 'success');
+                    
+                    // Try to inspect the method (won't show implementation but confirms it exists)
+                    const methodString = store.loadExtensionData.toString();
+                    if (methodString.includes('siteUsageSessionService')) {
+                        log('store-check', '✅ Method uses siteUsageSessionService (session-based)', 'success');
+                    } else if (methodString.includes('siteUsageService')) {
+                        log('store-check', '❌ Method still uses old siteUsageService (legacy)', 'error');
+                    } else {
+                        log('store-check', '⚠️ Cannot determine data source from method', 'info');
+                    }
+                } else {
+                    log('store-check', '❌ loadExtensionData method not found', 'error');
+                }
+            } else {
+                log('store-check', '❌ Deep focus dashboard store not accessible', 'error');
+                log('store-check', 'This is expected if you are not on the web app page', 'info');
+            }
+        }
+
+        // Test session service import
+        function testSessionServiceImport() {
+            clearLog('import-test');
+            log('import-test', '🔍 Testing session service availability...', 'info');
+
+            // Check for session service
+            if (window.siteUsageSessionService) {
+                log('import-test', '✅ siteUsageSessionService available', 'success');
+                
+                // Check available methods
+                const methods = Object.getOwnPropertyNames(window.siteUsageSessionService)
+                    .filter(name => typeof window.siteUsageSessionService[name] === 'function');
+                log('import-test', `Available methods: ${methods.join(', ')}`, 'info');
+                
+                // Specifically check for the method we need
+                if (window.siteUsageSessionService.getSessionsForDateRange) {
+                    log('import-test', '✅ getSessionsForDateRange method available', 'success');
+                } else {
+                    log('import-test', '❌ getSessionsForDateRange method not found', 'error');
+                }
+            } else {
+                log('import-test', '❌ siteUsageSessionService not available on window', 'error');
+                log('import-test', 'This is expected - service is imported in modules', 'info');
+            }
+
+            // Check for extension sync listener
+            if (window.extensionSyncListener) {
+                log('import-test', '✅ extensionSyncListener available', 'success');
+                
+                if (window.extensionSyncListener.triggerExtensionSync) {
+                    log('import-test', '✅ triggerExtensionSync method available', 'success');
+                } else {
+                    log('import-test', '❌ triggerExtensionSync method not found', 'error');
+                }
+            } else {
+                log('import-test', '❌ extensionSyncListener not available on window', 'error');
+            }
+        }
+
+        // Manual load test
+        async function manualLoadTest() {
+            clearLog('load-test');
+            log('load-test', '🧪 Testing manual load...', 'info');
+
+            try {
+                // Check if we have the necessary services
+                if (!window.useDeepFocusDashboardStore) {
+                    log('load-test', '❌ Deep focus dashboard store not available', 'error');
+                    return;
+                }
+
+                if (!window.useUserStore) {
+                    log('load-test', '❌ User store not available', 'error');
+                    return;
+                }
+
+                const userStore = window.useUserStore.getState();
+                if (!userStore.user) {
+                    log('load-test', '❌ User not authenticated', 'error');
+                    return;
+                }
+
+                log('load-test', `👤 User: ${userStore.user.uid}`, 'info');
+
+                // Get the store and try to load data
+                const dashboardStore = window.useDeepFocusDashboardStore.getState();
+                
+                // Create test date range (last 7 days)
+                const endDate = new Date();
+                const startDate = new Date();
+                startDate.setDate(startDate.getDate() - 7);
+
+                log('load-test', `📅 Testing load for date range: ${startDate.toISOString()} to ${endDate.toISOString()}`, 'info');
+
+                // Monitor the loading state
+                const unsubscribe = window.useDeepFocusDashboardStore.subscribe((state) => {
+                    log('load-test', `Loading state: ${state.isLoading}`, state.isLoading ? 'info' : 'success');
+                    if (!state.isLoading && (state.siteUsage.length > 0 || state.timeMetrics.onScreenTime > 0)) {
+                        log('load-test', `✅ Data loaded - On Screen Time: ${state.timeMetrics.onScreenTime}ms`, 'success');
+                        log('load-test', `Sites: ${state.siteUsage.length}`, 'info');
+                    }
+                });
+
+                // Trigger the load
+                await dashboardStore.loadExtensionData(startDate, endDate);
+                
+                // Clean up subscription after a delay
+                setTimeout(() => {
+                    unsubscribe();
+                    log('load-test', '🏁 Test completed', 'info');
+                }, 5000);
+
+            } catch (error) {
+                log('load-test', `❌ Error during manual load test: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-run store check on load
+        window.addEventListener('load', () => {
+            checkStoreImplementation();
+        });
+    </script>
+</body>
+</html>

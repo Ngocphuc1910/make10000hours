@@ -11,6 +11,7 @@ import { getDateISOString } from '../../utils/timeUtils';
 import { DatePicker, DateTimeProvider, useDateTimeContext } from '../common/DatePicker';
 import { format, isSameDay } from 'date-fns';
 import { getRandomPresetColor } from '../../utils/colorUtils';
+import { isMultiDayEnabled } from '../../utils/featureFlags';
 
 interface TaskFormProps {
   task?: Task;
@@ -65,6 +66,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       const today = new Date();
       return today.toISOString().split('T')[0]; // YYYY-MM-DD format
     }
+    return '';
+  });
+  const [calendarEndDate, setCalendarEndDate] = useState(() => {
+    // For existing tasks with multi-day support, use their scheduled end date
+    if (task?.scheduledEndDate) {
+      return task.scheduledEndDate;
+    }
+    // For new multi-day tasks, default to empty (will be single day)
     return '';
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -328,6 +337,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
     // Handle calendar fields - add them if they have values, or explicitly clear them if empty
     if (calendarDate && calendarDate.trim()) {
       taskData.scheduledDate = calendarDate.trim();
+      
+      // Handle multi-day end date if feature is enabled
+      if (isMultiDayEnabled() && calendarEndDate && calendarEndDate.trim()) {
+        taskData.scheduledEndDate = calendarEndDate.trim();
+      } else {
+        taskData.scheduledEndDate = null;
+      }
+      
       taskData.includeTime = includeTime;
       
       if (includeTime && startTime && endTime) {
@@ -348,6 +365,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
     } else {
       // Explicitly clear all calendar fields when date is cleared
       taskData.scheduledDate = null;
+      taskData.scheduledEndDate = null;
       taskData.includeTime = false;
       taskData.scheduledStartTime = null;
       taskData.scheduledEndTime = null;
@@ -452,6 +470,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
   const handleClearDate = useCallback((e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent triggering the calendar click
     setCalendarDate('');
+    setCalendarEndDate('');
     setStartTime('09:00');
     setEndTime('10:00');
     setIncludeTime(false);
@@ -483,6 +502,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
     const day = String(date.getDate()).padStart(2, '0');
     setCalendarDate(`${year}-${month}-${day}`);
     // Don't close the date picker here - let user click Confirm
+  }, []);
+
+  const handleEndDateSelect = useCallback((date: Date) => {
+    // Use local date formatting to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    setCalendarEndDate(`${year}-${month}-${day}`);
   }, []);
 
   const handleTimeSelect = useCallback((time: string) => {
@@ -819,7 +846,13 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                       <i className="ri-calendar-line"></i>
                     )}
                   </div>
-                  <span className="whitespace-nowrap">{calendarDate ? format(new Date(calendarDate), 'MMM dd, yyyy') + (includeTime ? `, ${startTime} - ${endTime}` : '') : 'Add to calendar'}</span>
+                  <span className="whitespace-nowrap">
+                    {calendarDate ? (
+                      isMultiDayEnabled() && calendarEndDate ? 
+                        `${format(new Date(calendarDate), 'MMM dd')} - ${format(new Date(calendarEndDate), 'MMM dd, yyyy')}${includeTime ? `, ${startTime} - ${endTime}` : ''}` :
+                        `${format(new Date(calendarDate), 'MMM dd, yyyy')}${includeTime ? `, ${startTime} - ${endTime}` : ''}`
+                    ) : 'Add to calendar'}
+                  </span>
                 </button>
                 
                 {showDatePicker && createPortal(
@@ -832,6 +865,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                     onClose={() => setShowDatePicker(false)}
                     onClear={() => {
                       setCalendarDate('');
+                      setCalendarEndDate('');
                       setStartTime('09:00');
                       setEndTime('10:00');
                       setIncludeTime(false);
@@ -842,6 +876,10 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                     initialEndTime={endTime}
                     triggerRef={calendarInputRef}
                     isOpen={showDatePicker}
+                    // Multi-day props (when feature is enabled)
+                    isMultiDayEnabled={isMultiDayEnabled()}
+                    selectedEndDate={calendarEndDate ? new Date(calendarEndDate) : undefined}
+                    onEndDateSelect={handleEndDateSelect}
                   />,
                   document.body
                 )}

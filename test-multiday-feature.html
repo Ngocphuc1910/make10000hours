@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-day Feature Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-step {
+            margin: 15px 0;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        .test-step.completed {
+            border-color: #4CAF50;
+            background: #f8fff8;
+        }
+        .test-step h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 5px;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        .success {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .instructions {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🗓️ Multi-Day Task Feature Testing</h1>
+    
+    <div class="instructions">
+        <h3>📋 Testing Instructions</h3>
+        <p>Follow these steps in order to test the multi-day task functionality:</p>
+        <ol>
+            <li>Launch the main application</li>
+            <li>Enable the feature flag in Settings</li>
+            <li>Create a test multi-day task</li>
+            <li>Verify calendar rendering</li>
+        </ol>
+    </div>
+
+    <div class="test-container">
+        <h2>Step 1: Launch Application</h2>
+        <div class="test-step">
+            <h3>🚀 Start Development Server</h3>
+            <p>Click below to open the main application (should open on localhost:3001)</p>
+            <a href="http://localhost:3001" class="button" target="_blank">Open Make10000hours App</a>
+            <p><small>If the link doesn't work, manually navigate to <code>http://localhost:3001</code></small></p>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2>Step 2: Enable Multi-Day Feature</h2>
+        <div class="test-step">
+            <h3>⚙️ Enable Feature Flag</h3>
+            <p>In the main app:</p>
+            <ol>
+                <li>Navigate to Settings page (gear icon or /settings route)</li>
+                <li>Scroll to "Beta Features" section</li>
+                <li>Toggle ON "Multi-day tasks"</li>
+                <li>✅ Verify the toggle shows as enabled</li>
+            </ol>
+            <p><em>Expected: Feature flag toggle should be visible and functional</em></p>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2>Step 3: Create Multi-Day Task</h2>
+        <div class="test-step">
+            <h3>📝 Test Task Creation</h3>
+            <p>Create a test task that spans multiple days:</p>
+            <ol>
+                <li>Click "Add Task" or "+" button</li>
+                <li>Fill in task title: "Multi-day Test Task"</li>
+                <li>Set scheduled date to today</li>
+                <li>Set end date to 3 days from now</li>
+                <li>Mark as "All Day" if that option exists</li>
+                <li>Save the task</li>
+            </ol>
+            <p><em>Expected: Task form should show end date picker when multi-day is enabled</em></p>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2>Step 4: Verify Calendar Display</h2>
+        <div class="test-step">
+            <h3>🗓️ Check Week View</h3>
+            <p>Navigate to calendar and verify:</p>
+            <ol>
+                <li>Switch to Week View</li>
+                <li>✅ Multi-day task should span across multiple days</li>
+                <li>✅ Task should appear as a continuous bar</li>
+                <li>✅ Longer duration tasks should be positioned above shorter ones</li>
+            </ol>
+            <p><em>Expected: Multi-day task renders as continuous bar across date range</em></p>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2>Step 5: Test Edge Cases</h2>
+        <div class="test-step">
+            <h3>🧪 Additional Tests</h3>
+            <p>Test these scenarios:</p>
+            <ul>
+                <li>Create overlapping multi-day tasks (should stack properly)</li>
+                <li>Create single-day task (should render normally)</li>
+                <li>Try editing multi-day task (should preserve end date)</li>
+                <li>Disable feature flag (multi-day tasks should still display but creation disabled)</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2>🐛 Troubleshooting</h2>
+        <div class="test-step">
+            <h3>Common Issues</h3>
+            <ul>
+                <li><strong>Feature toggle not visible:</strong> Check UIStore initialization in browser dev tools</li>
+                <li><strong>End date picker missing:</strong> Verify featureFlags import in TaskForm.tsx</li>
+                <li><strong>Calendar not showing tasks:</strong> Check browser console for errors</li>
+                <li><strong>Multi-day rendering broken:</strong> Verify MultiDayEventBar component import</li>
+            </ul>
+            <p><strong>Browser Dev Tools:</strong> Check Console tab for any JavaScript errors</p>
+        </div>
+    </div>
+
+    <script>
+        // Simple test tracking
+        let testResults = {
+            appLaunched: false,
+            featureEnabled: false,
+            taskCreated: false,
+            calendarVerified: false
+        };
+
+        function markStepCompleted(step) {
+            testResults[step] = true;
+            updateProgress();
+        }
+
+        function updateProgress() {
+            const completed = Object.values(testResults).filter(Boolean).length;
+            const total = Object.keys(testResults).length;
+            document.title = `Multi-day Test (${completed}/${total} completed)`;
+        }
+
+        // Auto-refresh every 30 seconds to check if main app is running
+        setInterval(() => {
+            fetch('http://localhost:3001')
+                .then(() => {
+                    if (!testResults.appLaunched) {
+                        console.log('✅ Main app detected running on localhost:3001');
+                        markStepCompleted('appLaunched');
+                    }
+                })
+                .catch(() => {
+                    console.log('⏳ Waiting for main app to start...');
+                });
+        }, 30000);
+
+        console.log('🧪 Multi-day feature test page loaded');
+        console.log('📝 Follow the steps above to test the new functionality');
+    </script>
+</body>
+</html>
