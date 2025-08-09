@@ -182,11 +182,11 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     setShowTimeSelector(includeTime);
   }, [includeTime]);
 
-  // Sync isDateRangeEnabled with props
+  // Only sync on mount/initial load, not during user interaction
   useEffect(() => {
     const shouldEnableRange = isMultiDayEnabled && hasValidDateRange(selectedDate, selectedEndDate);
     setIsDateRangeEnabled(shouldEnableRange);
-  }, [isMultiDayEnabled, selectedDate, selectedEndDate]);
+  }, [isMultiDayEnabled]); // Removed selectedDate, selectedEndDate dependencies
 
   // Removed delayed recalculation to prevent visible repositioning
   // The position should be calculated once and stay stable

@@ -1,5 +1,5 @@
 import type { Task, TaskDisplay, Project } from '../../types/models';
-import type { CalendarEvent } from './types';
+import type { CalendarEvent, DropResult } from './types';
 import { format, addMinutes, subMinutes, parse, differenceInMinutes, isAfter, isBefore, startOfDay, endOfDay, isSameDay } from 'date-fns';
 import { timezoneUtils } from '../../utils/timezoneUtils';
 
@@ -110,15 +110,77 @@ export const mergeEventsAndTasks = (
 /**
  * Calculate new event time based on drag position
  */
-export const calculateNewEventTime = (
+export function calculateNewEventTime(
   event: CalendarEvent,
   dragStartY: number,
   dragCurrentY: number,
   timeSlotHeight: number,
+  roundToMinutes?: number
+): { start: Date; end: Date };
+
+/**
+ * Calculate new event time based on drop result (overloaded version)
+ */
+export function calculateNewEventTime(
+  event: CalendarEvent,
+  dropResult: DropResult,
+  userTimezone?: string
+): { start: Date; end: Date };
+
+export function calculateNewEventTime(
+  event: CalendarEvent,
+  dragStartYOrDropResult: number | DropResult,
+  dragCurrentYOrUserTimezone?: number | string,
+  timeSlotHeight?: number,
   roundToMinutes: number = 15
-): { start: Date; end: Date } => {
+): { start: Date; end: Date } {
+  // Check if this is the DropResult overload
+  if (typeof dragStartYOrDropResult === 'object') {
+    const dropResult = dragStartYOrDropResult as DropResult;
+    const actualDuration = event.end.getTime() - event.start.getTime();
+    
+    let start: Date;
+    let end: Date;
+    
+    if (dropResult.isAllDay) {
+      // For all-day drops, move to target date as all-day
+      start = new Date(dropResult.targetDate);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(start);
+      end.setHours(23, 59, 59, 999); // End of day
+    } else {
+      // For timed drops
+      if (dropResult.targetTime) {
+        start = new Date(dropResult.targetDate);
+        start.setHours(dropResult.targetTime.hour, dropResult.targetTime.minute, 0, 0);
+      } else {
+        // Keep original time but change date
+        start = new Date(dropResult.targetDate);
+        start.setHours(event.start.getHours(), event.start.getMinutes(), 0, 0);
+      }
+      
+      // Smart duration calculation
+      let duration = actualDuration;
+      if (event.isAllDay && actualDuration <= 24 * 60 * 60 * 1000) {
+        // All-day to timed: use 1-hour default
+        duration = 60 * 60 * 1000;
+      } else if (actualDuration === 0) {
+        // Zero-duration to timed: use 30-min default
+        duration = 30 * 60 * 1000;
+      }
+      
+      end = new Date(start.getTime() + duration);
+    }
+    
+    return { start, end };
+  }
+  
+  // Original drag position implementation
+  const dragStartY = dragStartYOrDropResult as number;
+  const dragCurrentY = dragCurrentYOrUserTimezone as number;
+  
   const pixelsMoved = dragCurrentY - dragStartY;
-  const minutesMoved = (pixelsMoved / timeSlotHeight) * 60;
+  const minutesMoved = (pixelsMoved / timeSlotHeight!) * 60;
   
   // Round to nearest increment
   const roundedMinutes = Math.round(minutesMoved / roundToMinutes) * roundToMinutes;
@@ -128,18 +190,78 @@ export const calculateNewEventTime = (
   const newEnd = new Date(newStart.getTime() + originalDuration);
   
   return { start: newStart, end: newEnd };
-};
+}
 
 /**
  * Validate if an event can be dropped at a specific time/date
  */
-export const isValidDrop = (
+export function isValidDrop(
   event: CalendarEvent,
   newStart: Date,
   newEnd: Date,
   allEvents: CalendarEvent[],
+  allowOverlap?: boolean
+): boolean;
+
+/**
+ * Validate if an event can be dropped (overloaded version for DropResult)
+ */
+export function isValidDrop(
+  event: CalendarEvent,
+  dropResult: DropResult,
+  allEvents: CalendarEvent[],
+  userTimezone?: string
+): boolean;
+
+export function isValidDrop(
+  event: CalendarEvent,
+  newStartOrDropResult: Date | DropResult,
+  newEndOrAllEvents: Date | CalendarEvent[],
+  allEventsOrUserTimezone?: CalendarEvent[] | string,
   allowOverlap: boolean = false
-): boolean => {
+): boolean {
+  // Check if this is the DropResult overload
+  if (typeof newStartOrDropResult === 'object' && 'targetDate' in newStartOrDropResult) {
+    const dropResult = newStartOrDropResult as DropResult;
+    const allEvents = newEndOrAllEvents as CalendarEvent[];
+    
+    // Check if dropping on the same position
+    if (isSameDay(event.start, dropResult.targetDate) && 
+        !dropResult.targetTime && 
+        event.isAllDay === (dropResult.isAllDay || false)) {
+      return false;
+    }
+    
+    // Calculate new times for conflict checking
+    const { start: newStart, end: newEnd } = calculateNewEventTime(event, dropResult, allEventsOrUserTimezone as string);
+    
+    // For all-day drops, allow them (no time conflict check needed)
+    if (dropResult.isAllDay) {
+      return true;
+    }
+    
+    // Check for conflicts with other events (excluding the dragged event)
+    const otherEvents = allEvents.filter(e => e.id !== event.id);
+    
+    for (const otherEvent of otherEvents) {
+      // Skip all-day events when checking timed event conflicts
+      if (otherEvent.isAllDay) continue;
+      
+      // Check if the new time conflicts with existing event on same day
+      if (isSameDay(otherEvent.start, newStart) &&
+          newStart < otherEvent.end && newEnd > otherEvent.start) {
+        return false;
+      }
+    }
+    
+    return true;
+  }
+  
+  // Original date-based implementation
+  const newStart = newStartOrDropResult as Date;
+  const newEnd = newEndOrAllEvents as Date;
+  const allEvents = allEventsOrUserTimezone as CalendarEvent[];
+  
   if (!allowOverlap) {
     // Check for conflicts with other events (excluding the event being moved)
     const otherEvents = allEvents.filter(e => e.id !== event.id);
@@ -161,7 +283,7 @@ export const isValidDrop = (
   }
   
   return true;
-};
+}
 
 /**
  * Format time for display (e.g., "2:30 PM")
