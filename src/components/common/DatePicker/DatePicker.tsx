@@ -188,10 +188,8 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     setIsDateRangeEnabled(shouldEnableRange);
   }, [isMultiDayEnabled, selectedDate, selectedEndDate]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => position.recalculate(), 100);
-    return () => clearTimeout(timer);
-  }, [showTimeSelector, position.recalculate]);
+  // Removed delayed recalculation to prevent visible repositioning
+  // The position should be calculated once and stay stable
 
   // Handle click outside to close
   useEffect(() => {
@@ -285,18 +283,17 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   // Don't render if not open
   if (!isOpen) return null;
 
-  // Dynamic classes for positioning
+  // Dynamic classes for positioning - Fixed to prevent visible repositioning
   const getPlacementClasses = () => {
-    const baseClasses = 'bg-background-secondary rounded-lg shadow-lg border border-border w-[300px] fixed transition-all duration-200 ease-out z-50';
-    const visibilityClass = position.isReady ? 'opacity-100' : 'opacity-0 pointer-events-none';
+    const baseClasses = 'bg-background-secondary rounded-lg shadow-lg border border-border w-[300px] fixed z-50';
     
-    switch (position.placement) {
-      case 'top':
-        return `${baseClasses} ${visibilityClass} animate-slide-up`;
-      case 'bottom':
-      default:
-        return `${baseClasses} ${visibilityClass} animate-slide-down`;
+    // Use visibility instead of opacity to completely hide during positioning
+    if (!position.isReady) {
+      return `${baseClasses} invisible`;
     }
+    
+    // Once positioned, show immediately without animation to prevent repositioning flash
+    return `${baseClasses} visible`;
   };
 
   const isRangeMode = isDateRangeEnabled && isMultiDayEnabled;

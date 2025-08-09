@@ -163,14 +163,14 @@ export const useSmartPosition = ({
     currentPositionRef.current = position;
   }, [position]);
 
-  // Calculate initial position when opening
+  // Calculate initial position when opening - Optimized to reduce flash
   useEffect(() => {
     if (isOpen) {
       setIsReady(false);
-      // Use setTimeout to ensure the DOM is ready
-      setTimeout(() => {
+      // Use requestAnimationFrame for immediate positioning without setTimeout delay
+      requestAnimationFrame(() => {
         calculatePosition();
-      }, 0);
+      });
     }
   }, [isOpen, calculatePosition]);
 
