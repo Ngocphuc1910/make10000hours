@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, startOfWeek, endOfWeek, isWithinInterval, addDays } from 'date-fns';
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { useSmartPosition } from '../../../hooks/useSmartPosition';
 import TimeSelector from './TimeSelector';
 
@@ -27,6 +27,103 @@ export interface DatePickerProps {
   onEndDateSelect?: (date: Date) => void;
 }
 
+// Theme constants - replace hardcoded colors
+const THEME = {
+  primary: '#BA4949', // Using the theme primary color
+  primaryHover: '#A04F4A',
+  primaryLight: 'rgba(186, 73, 73, 0.1)',
+  primaryBorder: 'rgba(186, 73, 73, 0.3)',
+  rangeBackground: 'rgba(186, 73, 73, 0.08)',
+  switchGreen: '#22c55e', // Green color for date range switch
+} as const;
+
+// Date selection modes
+type DateMode = 'single' | 'range';
+
+// Utility functions for cleaner className logic
+const getCalendarDayClasses = (params: {
+  isDisabled: boolean;
+  isCurrentMonth: boolean;
+  isCurrentDay: boolean;
+  isSelected: boolean;
+  isInRange: boolean;
+  isRangeStart: boolean;
+  isRangeEnd: boolean;
+}) => {
+  const baseClasses = 'h-6 w-6 flex items-center justify-center text-xs transition-all duration-200 relative';
+  
+  if (params.isDisabled) {
+    return `${baseClasses} text-text-secondary opacity-50 cursor-not-allowed`;
+  }
+
+  if (params.isSelected || params.isRangeStart || params.isRangeEnd) {
+    return `${baseClasses} text-white font-semibold rounded-full cursor-pointer shadow-sm z-10 relative focus:outline-none`;
+  }
+
+  if (params.isInRange) {
+    return `${baseClasses} text-text-primary font-medium cursor-pointer`;
+  }
+
+  if (params.isCurrentDay) {
+    return `${baseClasses} text-primary font-semibold cursor-pointer rounded-full hover:bg-background-container`;
+  }
+
+  const textClass = params.isCurrentMonth ? 'text-text-primary' : 'text-text-secondary opacity-60';
+  return `${baseClasses} ${textClass} cursor-pointer rounded-full hover:bg-background-container`;
+};
+
+const getCalendarDayStyles = (params: {
+  isSelected: boolean;
+  isInRange: boolean;
+  isRangeStart: boolean;
+  isRangeEnd: boolean;
+}) => {
+  if (params.isSelected || params.isRangeStart || params.isRangeEnd) {
+    return { backgroundColor: THEME.primary };
+  }
+
+  if (params.isInRange) {
+    return { backgroundColor: THEME.primaryLight };
+  }
+
+  return {};
+};
+
+// Helper function to get range background positioning
+const getRangeBackgroundClasses = (params: {
+  isInRange: boolean;
+  isRangeStart: boolean;
+  isRangeEnd: boolean;
+  dayIndex: number;
+}) => {
+  if (!params.isInRange && !params.isRangeStart && !params.isRangeEnd) {
+    return '';
+  }
+
+  let classes = 'absolute inset-0 -z-10';
+  
+  if (params.isRangeStart && params.isRangeEnd) {
+    // Single day range
+    classes += ' rounded-full';
+  } else if (params.isRangeStart) {
+    // Start of range - rounded left
+    classes += ' rounded-l-full';
+  } else if (params.isRangeEnd) {
+    // End of range - rounded right
+    classes += ' rounded-r-full';
+  } else if (params.isInRange) {
+    // Middle of range - no rounding
+    classes += '';
+  }
+  
+  return classes;
+};
+
+// Helper function to check if we have a valid date range
+const hasValidDateRange = (startDate?: Date, endDate?: Date): boolean => {
+  return !!(startDate && endDate && startDate.getTime() !== endDate.getTime());
+};
+
 export const DatePicker: React.FC<DatePickerProps> = ({
   selectedDate,
   onDateSelect,
@@ -50,14 +147,19 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   selectedEndDate,
   onEndDateSelect,
 }) => {
+  // State management
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
   const [showTimeSelector, setShowTimeSelector] = useState(includeTime);
-  const [selectedTime, setSelectedTime] = useState('00:00 - 00:00');
-  const [isSelectingEndDate, setIsSelectingEndDate] = useState(false);
+  const [selectedTime, setSelectedTime] = useState(`${initialStartTime} - ${initialEndTime}`);
+  // Initialize isDateRangeEnabled based on actual data
+  const [isDateRangeEnabled, setIsDateRangeEnabled] = useState(() => {
+    return isMultiDayEnabled && hasValidDateRange(selectedDate, selectedEndDate);
+  });
+  const [hoverDate, setHoverDate] = useState<Date | null>(null);
   
   const datePickerRef = useRef<HTMLDivElement>(null);
 
-  // Use smart positioning hook
+  // Smart positioning
   const position = useSmartPosition({
     isOpen,
     triggerRef: triggerRef || { current: null },
@@ -65,45 +167,31 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     preferredPlacement: 'bottom',
     offset: 8,
     viewportPadding: 12,
-    modalThreshold: 9999 // Disable modal mode - always use popup positioning
+    modalThreshold: 9999
   });
 
+  // Calendar calculations
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
-  
-  // Get the start and end of the calendar view (including days from previous/next month)
-  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 }); // Sunday
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 });
   const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
-  // Update showTimeSelector when includeTime prop changes
+  // Consolidated effects
   useEffect(() => {
     setShowTimeSelector(includeTime);
   }, [includeTime]);
-  
-  // Recalculate position when time selector visibility changes
+
+  // Sync isDateRangeEnabled with props
   useEffect(() => {
-    // Use a small timeout to allow the DOM to update first
-    const timer = setTimeout(() => {
-      position.recalculate();
-    }, 100);
-    
+    const shouldEnableRange = isMultiDayEnabled && hasValidDateRange(selectedDate, selectedEndDate);
+    setIsDateRangeEnabled(shouldEnableRange);
+  }, [isMultiDayEnabled, selectedDate, selectedEndDate]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => position.recalculate(), 100);
     return () => clearTimeout(timer);
   }, [showTimeSelector, position.recalculate]);
-
-  // Initialize selected time based on props
-  useEffect(() => {
-    if (initialStartTime && initialEndTime) {
-      setSelectedTime(`${initialStartTime} - ${initialEndTime}`);
-    }
-  }, [initialStartTime, initialEndTime]);
-
-  // Reset end date selection state when multi-day mode changes
-  useEffect(() => {
-    if (!isMultiDayEnabled) {
-      setIsSelectingEndDate(false);
-    }
-  }, [isMultiDayEnabled]);
 
   // Handle click outside to close
   useEffect(() => {
@@ -112,7 +200,6 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
       
-      // Check if click is outside both trigger and date picker
       if (
         datePickerRef.current && !datePickerRef.current.contains(target) &&
         triggerRef?.current && !triggerRef.current.contains(target)
@@ -127,7 +214,6 @@ export const DatePicker: React.FC<DatePickerProps> = ({
       }
     };
 
-    // Use capture phase to ensure we get events before they bubble
     document.addEventListener('mousedown', handleClickOutside, true);
     document.addEventListener('keydown', handleEscape);
 
@@ -137,22 +223,36 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     };
   }, [isOpen, onClose, triggerRef]);
 
+  // Event handlers
   const handlePrevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
 
   const handleDateClick = (date: Date) => {
-    if (isMultiDayEnabled && isSelectingEndDate) {
-      // Selecting end date for multi-day range
-      onEndDateSelect?.(date);
-      setIsSelectingEndDate(false);
-    } else {
-      // Selecting start date or single date
+    if (!isDateRangeEnabled) {
       onDateSelect(date);
-      
-      // For multi-day mode, if we just selected a start date and no end date exists yet, 
-      // automatically switch to selecting end date
-      if (isMultiDayEnabled && !selectedEndDate) {
-        setIsSelectingEndDate(true);
+      // Clear end date when not in range mode
+      if (onEndDateSelect) {
+        onEndDateSelect(date);
+      }
+    } else {
+      // Range mode logic - proper implementation
+      if (!selectedDate || (selectedDate && selectedEndDate && selectedEndDate > selectedDate)) {
+        // Start new range selection - only set start date
+        onDateSelect(date);
+        onEndDateSelect?.(date); // Clear end date to same as start temporarily
+      } else if (selectedDate && (!selectedEndDate || selectedEndDate <= selectedDate)) {
+        // We have start date, now setting end date
+        if (date > selectedDate) {
+          // Date is after start date - set as end date
+          onEndDateSelect?.(date);
+        } else if (date < selectedDate) {
+          // Date is before start date - swap them
+          onEndDateSelect?.(selectedDate); // Old start becomes end
+          onDateSelect(date); // New date becomes start
+        } else {
+          // Same date clicked - keep as single date
+          onEndDateSelect?.(date);
+        }
       }
     }
     
@@ -161,6 +261,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
       setCurrentMonth(date);
     }
   };
+
 
   const handleTimeToggle = (enabled: boolean) => {
     setShowTimeSelector(enabled);
@@ -172,10 +273,9 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     onTimeSelect?.(time);
   };
 
-  const handleClear = () => {
-    setSelectedTime('00:00 - 00:00');
-    setIsSelectingEndDate(false);
-    onClear?.();
+  const handleCancel = () => {
+    // Cancel changes and close DatePicker without applying
+    onClose?.();
   };
 
   const handleConfirm = () => {
@@ -185,7 +285,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   // Don't render if not open
   if (!isOpen) return null;
 
-  // Get dynamic classes based on placement
+  // Dynamic classes for positioning
   const getPlacementClasses = () => {
     const baseClasses = 'bg-background-secondary rounded-lg shadow-lg border border-border w-[300px] fixed transition-all duration-200 ease-out z-50';
     const visibilityClass = position.isReady ? 'opacity-100' : 'opacity-0 pointer-events-none';
@@ -199,190 +299,291 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     }
   };
 
+  const isRangeMode = isDateRangeEnabled && isMultiDayEnabled;
+  const hasDateRange = selectedDate && selectedEndDate && selectedEndDate > selectedDate;
+  const hasValidRange = hasDateRange; // For cleaner code
+  const isSelectingRange = isRangeMode && selectedDate && (!selectedEndDate || selectedEndDate <= selectedDate);
+  
+  // For hover preview during range selection
+  const previewEndDate = isSelectingRange && hoverDate && hoverDate >= selectedDate ? hoverDate : null;
+  const hasHoverRange = selectedDate && previewEndDate && previewEndDate > selectedDate;
+
   return (
     <div 
-        ref={datePickerRef}
-        className={`${getPlacementClasses()} ${className}`}
-        style={{
-          top: `${position.top}px`,
-          left: `${position.left}px`,
-          transformOrigin: position.transformOrigin,
-        }}
-        data-datepicker
-      >
-        <div className="p-3">
-          {/* Month Navigation */}
-          <div className="flex items-center justify-between mb-3">
-            <button 
-              className="p-1.5 hover:bg-background-container rounded-full text-text-secondary hover:text-text-primary transition-colors"
-              onClick={handlePrevMonth}
-              type="button"
-            >
-              <i className="ri-arrow-left-s-line text-base"></i>
-            </button>
-            <h3 className="text-sm font-medium text-text-primary">
-              {format(currentMonth, 'MMMM yyyy')}
-            </h3>
-            <button 
-              className="p-1.5 hover:bg-background-container rounded-full text-text-secondary hover:text-text-primary transition-colors"
-              onClick={handleNextMonth}
-              type="button"
-            >
-              <i className="ri-arrow-right-s-line text-base"></i>
-            </button>
-          </div>
-
-          {/* Weekday Headers */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-              <div key={day} className="h-6 flex items-center justify-center text-xs font-medium text-text-secondary">
-                {day}
-              </div>
-            ))}
-          </div>
-
-          {/* Calendar Grid */}
-          <div className="grid grid-cols-7 gap-1 mb-3">
-            {calendarDays.map((day, idx) => {
-              const isStartDate = selectedDate && isSameDay(day, selectedDate);
-              const isEndDate = selectedEndDate && isSameDay(day, selectedEndDate);
-              const isCurrentDay = isToday(day);
-              const isDisabled = (minDate && day < minDate) || (maxDate && day > maxDate);
-              const isCurrentMonth = day.getMonth() === currentMonth.getMonth();
-              
-              // Check if this day is within the selected range (for multi-day)
-              const isInRange = isMultiDayEnabled && selectedDate && selectedEndDate && 
-                selectedDate < selectedEndDate && 
-                isWithinInterval(day, { start: selectedDate, end: selectedEndDate });
-              
-              // Check if this day is invalid for end date selection (before start date)
-              const isInvalidEndDate = isMultiDayEnabled && isSelectingEndDate && selectedDate && day < selectedDate;
-
-              return (
-                <button
-                  key={idx}
-                  onClick={() => !isDisabled && !isInvalidEndDate && handleDateClick(day)}
-                  disabled={isDisabled || isInvalidEndDate}
-                  className={`
-                    h-7 w-7 flex items-center justify-center text-xs transition-colors relative
-                    ${isDisabled || isInvalidEndDate ? 'text-text-secondary opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-background-container'}
-                    ${!isCurrentMonth ? 'text-text-secondary opacity-60' : 'text-text-primary'}
-                    ${isStartDate || isEndDate ? 'text-white font-medium rounded-full' : isInRange ? 'bg-[#BB5F5A] bg-opacity-20 text-[#BB5F5A] font-medium' : 'rounded-full'}
-                    ${!isStartDate && !isEndDate && !isInRange && isCurrentDay ? 'text-[#BB5F5A] font-medium' : ''}
-                  `}
-                  style={(isStartDate || isEndDate) ? { backgroundColor: '#BB5F5A' } : {}}
-                >
-                  {format(day, 'd')}
-                  {isSelectingEndDate && !isInvalidEndDate && day >= selectedDate! && (
-                    <div className="absolute inset-0 border-2 border-[#BB5F5A] border-opacity-50 rounded-full pointer-events-none" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Multi-day Range Info */}
-          {isMultiDayEnabled && (
-            <div className="mb-3 p-2 bg-background-container rounded-md">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-text-secondary">
-                  {isSelectingEndDate ? 'Select end date:' : 'Date range:'}
-                </span>
-                <div className="flex gap-2">
-                  {selectedDate && !isSelectingEndDate && (
-                    <button
-                      onClick={() => setIsSelectingEndDate(true)}
-                      className="text-[#BB5F5A] hover:text-[#A04F4A] transition-colors"
-                    >
-                      Change end date
-                    </button>
-                  )}
-                  {selectedDate && selectedEndDate && selectedEndDate !== selectedDate && (
-                    <button
-                      onClick={() => {
-                        onEndDateSelect?.(selectedDate); // Reset end date to start date (single day)
-                        setIsSelectingEndDate(false);
-                      }}
-                      className="text-[#BB5F5A] hover:text-[#A04F4A] transition-colors"
-                    >
-                      Make single day
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 mt-1 text-xs">
-                <span className="text-text-primary font-medium">
-                  {selectedDate ? format(selectedDate, 'MMM dd, yyyy') : 'No start date'}
-                </span>
-                {isMultiDayEnabled && (
-                  <>
-                    <span className="text-text-secondary">→</span>
-                    <span className="text-text-primary font-medium">
-                      {selectedEndDate && selectedEndDate !== selectedDate ? 
-                        format(selectedEndDate, 'MMM dd, yyyy') : 
-                        isSelectingEndDate ? 'Choose end date' : 'Same day'
-                      }
-                    </span>
-                  </>
-                )}
-              </div>
-              {isSelectingEndDate && (
-                <div className="mt-2 text-xs text-text-secondary">
-                  Click a date on or after {selectedDate ? format(selectedDate, 'MMM dd') : 'start date'} for the end date
-                </div>
+      ref={datePickerRef}
+      className={`${getPlacementClasses()} ${className}`}
+      style={{
+        top: `${position.top}px`,
+        left: `${position.left}px`,
+        transformOrigin: position.transformOrigin,
+      }}
+      data-datepicker
+    >
+      <div className="p-3">
+        {/* Selected Date Display */}
+        {selectedDate && (
+          <div className="mb-3 p-2 bg-background-container rounded-md">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="font-medium text-text-primary">
+                {format(selectedDate, 'MMM dd, yyyy')}
+              </span>
+              {isDateRangeEnabled && hasValidRange && (
+                <>
+                  <i className="ri-arrow-right-line text-text-secondary"></i>
+                  <span className="font-medium text-text-primary">
+                    {format(selectedEndDate, 'MMM dd, yyyy')}
+                  </span>
+                </>
               )}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Time Selection Toggle */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-text-secondary">Include time</span>
+        {/* Month Navigation */}
+        <div className="flex items-center justify-between mb-3">
+          <button 
+            className="p-1.5 hover:bg-background-container rounded-full text-text-secondary hover:text-text-primary transition-colors"
+            onClick={handlePrevMonth}
+            type="button"
+            aria-label="Previous month"
+          >
+            <i className="ri-arrow-left-s-line text-lg"></i>
+          </button>
+          <h3 className="text-sm font-medium text-text-primary">
+            {format(currentMonth, 'MMMM yyyy')}
+          </h3>
+          <button 
+            className="p-1.5 hover:bg-background-container rounded-full text-text-secondary hover:text-text-primary transition-colors"
+            onClick={handleNextMonth}
+            type="button"
+            aria-label="Next month"
+          >
+            <i className="ri-arrow-right-s-line text-lg"></i>
+          </button>
+        </div>
+
+        {/* Weekday Headers */}
+        <div className="grid grid-cols-7 gap-0 mb-1">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+            <div key={day} className="h-6 flex items-center justify-center text-xs font-medium text-text-secondary">
+              {day}
+            </div>
+          ))}
+        </div>
+
+        {/* Calendar Grid */}
+        <div 
+          className="grid grid-cols-7 gap-1 mb-3"
+          onMouseLeave={() => {
+            if (isSelectingRange) {
+              setHoverDate(null);
+            }
+          }}
+        >
+          {calendarDays.map((day, idx) => {
+            const isCurrentMonth = day.getMonth() === currentMonth.getMonth();
+            const isCurrentDay = isToday(day);
+            const isDisabled = (minDate && day < minDate) || (maxDate && day > maxDate);
+            
+            // Date selection states
+            const isStartDate = selectedDate && isSameDay(day, selectedDate);
+            const isEndDate = isDateRangeEnabled && selectedEndDate && isSameDay(day, selectedEndDate) && hasValidRange;
+            const isSelected = isStartDate || isEndDate;
+            
+            // Range states - only show range when range mode is enabled and we have a valid range
+            const isInRange = isDateRangeEnabled && isRangeMode && hasValidRange && 
+              isWithinInterval(day, { start: selectedDate, end: selectedEndDate }) &&
+              !isStartDate && !isEndDate;
+              
+            // Hover preview for range selection (when selecting second date)
+            const isHoverPreviewEnd = isSelectingRange && hoverDate && isSameDay(day, hoverDate);
+            const isHoverPreviewRange = isSelectingRange && hasHoverRange &&
+              isWithinInterval(day, { start: selectedDate, end: previewEndDate }) &&
+              !isStartDate && !isHoverPreviewEnd;
+            const isHoverPreview = isHoverPreviewEnd || isHoverPreviewRange;
+
+            const dayClasses = getCalendarDayClasses({
+              isDisabled,
+              isCurrentMonth,
+              isCurrentDay,
+              isSelected: (isSelected || isHoverPreviewEnd) && !isDateRangeEnabled, // Only show circle for single dates
+              isInRange: isInRange || isHoverPreviewRange,
+              isRangeStart: isDateRangeEnabled && (!!isStartDate && (hasValidRange || hasHoverRange)),
+              isRangeEnd: isDateRangeEnabled && (!!isEndDate && hasValidRange || isHoverPreviewEnd),
+            });
+
+            const dayStyles = getCalendarDayStyles({
+              isSelected: (isSelected || isHoverPreviewEnd) && !isDateRangeEnabled, // Only apply background for single dates
+              isInRange: isInRange || isHoverPreviewRange,
+              isRangeStart: isDateRangeEnabled && (!!isStartDate && (hasValidRange || hasHoverRange)),
+              isRangeEnd: isDateRangeEnabled && (!!isEndDate && hasValidRange || isHoverPreviewEnd),
+            });
+
+            // Special styles for hover preview
+            if (isHoverPreview && !isSelected) {
+              if (isHoverPreviewEnd) {
+                // Make hover end date look exactly like selected date
+                dayStyles.backgroundColor = THEME.primary;
+                dayStyles.opacity = '1';
+              } else {
+                // Light background for range preview
+                dayStyles.backgroundColor = 'rgba(186, 73, 73, 0.05)';
+              }
+            }
+
+            const rangeBackgroundClasses = getRangeBackgroundClasses({
+              isInRange: isInRange || isHoverPreviewRange,
+              isRangeStart: isDateRangeEnabled && (!!isStartDate && (hasValidRange || hasHoverRange)),
+              isRangeEnd: isDateRangeEnabled && (!!isEndDate && hasValidRange || isHoverPreviewEnd),
+              dayIndex: idx % 7,
+            });
+
+            return (
+              <div key={idx} className="relative flex items-center justify-center h-7 group">
+                {/* Range background - show oval shapes for start/end dates and background for middle range */}
+                {isDateRangeEnabled && (isInRange || isHoverPreviewRange || (isStartDate && (hasValidRange || hasHoverRange)) || (isEndDate && hasValidRange) || isHoverPreviewEnd) && (
+                  <div 
+                    className={rangeBackgroundClasses}
+                    style={{
+                      backgroundColor: (isStartDate || isEndDate || isHoverPreviewEnd) ? THEME.primary : (isHoverPreview ? 'rgba(186, 73, 73, 0.05)' : THEME.primaryLight),
+                      margin: '2px 0'
+                    }}
+                  />
+                )}
+                
+                <button
+                  onClick={() => !isDisabled && handleDateClick(day)}
+                  onMouseEnter={() => {
+                    if (!isDisabled && isSelectingRange && day >= selectedDate) {
+                      setHoverDate(day);
+                    }
+                  }}
+                  disabled={isDisabled}
+                  className={dayClasses}
+                  style={{
+                    ...dayStyles,
+                    outline: 'none',
+                    border: 'none'
+                  }}
+                  aria-label={format(day, 'MMMM d, yyyy')}
+                  type="button"
+                  title={isRangeMode && selectedDate && !isDisabled ? 
+                    (isStartDate ? 'Range start' : isEndDate ? 'Range end' : isInRange ? 'In selected range' : 'Click to select date') :
+                    undefined
+                  }
+                >
+                  {format(day, 'd')}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Time Selection Toggle */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between py-1.5 border-t border-border">
+            <div className="flex items-center gap-2">
+              <i className="ri-time-line text-text-secondary"></i>
+              <span className="text-sm text-text-secondary">Include time</span>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showTimeSelector}
+                onChange={(e) => handleTimeToggle(e.target.checked)}
+                className="sr-only"
+              />
+              <div 
+                className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
+                  showTimeSelector ? 'shadow-sm' : 'bg-background-container'
+                }`}
+                style={showTimeSelector ? { backgroundColor: THEME.primary } : {}}
+              >
+                <div 
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 shadow-sm ${
+                    showTimeSelector ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </div>
+            </label>
+          </div>
+
+          {/* Date Range Toggle */}
+          <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <i className="ri-calendar-2-line text-text-secondary"></i>
+                <span className="text-sm text-text-secondary">Date Range</span>
+              </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={showTimeSelector}
-                  onChange={(e) => handleTimeToggle(e.target.checked)}
+                  checked={isDateRangeEnabled}
+                  onChange={(e) => {
+                    const enabled = e.target.checked;
+                    setIsDateRangeEnabled(enabled);
+                    if (!enabled) {
+                      // When turning off range mode, clear end date selection
+                      if (selectedDate) {
+                        onEndDateSelect?.(selectedDate);
+                      }
+                    }
+                  }}
                   className="sr-only"
                 />
                 <div 
-                  className={`relative w-9 h-5 rounded-full transition-colors ${showTimeSelector ? '' : 'bg-background-container'}`}
-                  style={showTimeSelector ? { backgroundColor: '#BB5F5A' } : {}}
+                  className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
+                    isDateRangeEnabled ? 'shadow-sm' : 'bg-background-container'
+                  }`}
+                  style={isDateRangeEnabled ? { backgroundColor: THEME.switchGreen } : {}}
                 >
-                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${showTimeSelector ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                  <div 
+                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 shadow-sm ${
+                      isDateRangeEnabled ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
                 </div>
               </label>
             </div>
 
-            {/* Time Selector Component */}
-            {showTimeSelector && (
-              <TimeSelector
-                onTimeSelect={handleTimeSelect}
-                showTimezone={showTimezone}
-                initialTime={selectedTime}
-                is24Hour={true}
-              />
-            )}
-          </div>
+          {/* Time Selector Component */}
+          {showTimeSelector && (
+            <TimeSelector
+              onTimeSelect={handleTimeSelect}
+              showTimezone={showTimezone}
+              initialTime={selectedTime}
+              is24Hour={true}
+            />
+          )}
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
-            <button
-              onClick={handleClear}
-              className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
-            >
-              Clear
-            </button>
-            <button
+        {/* Action Buttons */}
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
+          <button
+            onClick={handleCancel}
+            className="px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors flex items-center gap-1"
+            type="button"
+          >
+            <i className="ri-close-line text-xs"></i>
+            Cancel
+          </button>
+          <button
               onClick={handleConfirm}
-              className="px-4 py-1.5 text-xs text-white rounded-md transition-colors hover:opacity-90"
-              style={{ backgroundColor: '#BB5F5A' }}
+              className="px-4 py-1.5 text-sm text-white rounded-md transition-all duration-200 hover:shadow-md font-medium flex items-center gap-1"
+              style={{ backgroundColor: THEME.primary }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = THEME.primaryHover;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = THEME.primary;
+              }}
+              type="button"
             >
+              <i className="ri-check-line text-xs"></i>
               Confirm
             </button>
-          </div>
         </div>
       </div>
+    </div>
   );
 };
 

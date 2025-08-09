@@ -7,6 +7,12 @@ export interface TimeSelectorProps {
   is24Hour?: boolean;
 }
 
+// Theme constants - consistent with DatePicker
+const THEME = {
+  primary: '#BA4949',
+  focusBorder: '#BA4949',
+} as const;
+
 const TimeSelector: React.FC<TimeSelectorProps> = ({
   onTimeSelect,
   showTimezone = false,
@@ -91,7 +97,7 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
               value={startTime}
               onChange={(e) => handleStartTimeChange(e.target.value)}
               className="w-full pl-6 pr-2 py-1.5 border border-border rounded-md text-xs text-text-primary bg-background-primary focus:outline-none"
-              onFocus={(e) => e.target.style.borderColor = '#BB5F5A'}
+              onFocus={(e) => e.target.style.borderColor = THEME.focusBorder}
               onBlur={(e) => e.target.style.borderColor = 'var(--border-color)'}
             />
             <div className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 flex items-center justify-center text-text-secondary">
@@ -107,7 +113,7 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
               value={endTime}
               onChange={(e) => handleEndTimeChange(e.target.value)}
               className="w-full pl-6 pr-2 py-1.5 border border-border rounded-md text-xs text-text-primary bg-background-primary focus:outline-none"
-              onFocus={(e) => e.target.style.borderColor = '#BB5F5A'}
+              onFocus={(e) => e.target.style.borderColor = THEME.focusBorder}
               onBlur={(e) => e.target.style.borderColor = 'var(--border-color)'}
             />
             <div className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 flex items-center justify-center text-text-secondary">
@@ -120,4 +126,4 @@ const TimeSelector: React.FC<TimeSelectorProps> = ({
   );
 };
 
-export default TimeSelector; 
+export default TimeSelector;
