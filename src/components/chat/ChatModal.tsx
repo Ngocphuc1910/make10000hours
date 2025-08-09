@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Bot, User, AlertCircle, FileText, ExternalLink, ChevronDown, ChevronRight, Plus, History, MoreHorizontal, Paperclip, AtSign, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 import { useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
 import { useTaskStore } from '../../store/taskStore';
 import type { ChatMessage, ChatSource } from '../../types/chat';
+import '../../styles/chat.css';
 
 interface ChatModalProps {
   isOpen: boolean;
@@ -412,6 +414,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
 const MessageBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
   const isUser = message.role === 'user';
   const { user } = useUserStore();
+  const [imageError, setImageError] = React.useState(false);
 
   return (
     <div className={`flex items-start space-x-3 ${isUser ? 'flex-row-reverse space-x-reverse' : ''}`}>
@@ -424,11 +427,14 @@ const MessageBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
         }}
       >
         {isUser ? (
-          user?.photoURL ? (
+          user?.photoURL && !imageError ? (
             <img 
               src={user.photoURL} 
               alt={user.displayName || 'User'} 
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover rounded-full"
+              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
+              onError={() => setImageError(true)}
             />
           ) : (
             <User className="w-4 h-4 text-gray-600" />
@@ -453,22 +459,16 @@ const MessageBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
             <p className="text-sm whitespace-pre-wrap text-white">{message.content}</p>
           ) : (
             <ReactMarkdown 
-              className="text-sm text-gray-900 leading-normal break-words whitespace-pre-wrap"
+              className="chat-markdown text-gray-900"
+              remarkPlugins={[remarkBreaks]}
               components={{
-                strong: ({node, ...props}) => <strong className="font-bold text-gray-900" {...props} />,
-                em: ({node, ...props}) => <em className="italic text-gray-900" {...props} />,
-                ul: ({node, ...props}) => <ul className="space-y-2 my-3" {...props} />,
-                li: ({node, ...props}) => (
-                  <li className="flex items-start pl-0 mb-2" {...props}>
-                    <span className="text-gray-900 font-bold mr-2 mt-0.5 flex-shrink-0">•</span>
-                    <div className="text-sm leading-normal flex-1 break-words">{props.children}</div>
-                  </li>
-                ),
-                p: ({node, ...props}) => <div className="text-sm mb-3 last:mb-0 leading-normal break-words" {...props} />,
-                h1: ({node, ...props}) => <h1 className="text-lg font-bold mb-3 text-gray-900 border-b border-gray-200 pb-2 mt-4 first:mt-0" {...props} />,
-                h2: ({node, ...props}) => <h2 className="text-base font-bold mb-2 text-gray-900 mt-4 first:mt-0" {...props} />,
-                h3: ({node, ...props}) => <h3 className="text-sm font-bold mb-2 text-gray-900 mt-3 first:mt-0" {...props} />,
-                code: ({node, ...props}) => <code className="bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded text-xs font-mono font-semibold" {...props} />,
+                p: ({children}) => <p className="mb-3">{children}</p>,
+                strong: ({node, ...props}) => <strong className="font-semibold" {...props} />,
+                em: ({node, ...props}) => <em className="italic" {...props} />,
+                code: ({node, ...props}) => <code className="bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />,
+                ul: ({children}) => <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>,
+                ol: ({children}) => <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>,
+                li: ({children}) => <li className="ml-2">{children}</li>,
               }}
             >
               {message.content}

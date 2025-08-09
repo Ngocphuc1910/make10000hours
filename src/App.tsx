@@ -36,6 +36,7 @@ import DataSyncPage from './components/pages/DataSyncPage';
 import PrivacyPolicyPage from './components/pages/PrivacyPolicyPage';
 import { PricingModal } from './components/pricing/PricingModal';
 import { ChatIntegrationService } from './services/chatIntegration';
+import { DebugMarkdown } from './debug-markdown';
 // LemonSqueezyClient removed - checkout now handled securely server-side
 import { usePricingStore } from './store/pricingStore';
 import { useDeepFocusStore } from './store/deepFocusStore';
@@ -768,6 +769,7 @@ const App: React.FC = () => {
               <Route path="data-sync" element={<DataSyncPageWithLayout />} />
               <Route path="support" element={<SupportPageWithLayout />} />
               <Route path="privacy-policy" element={<PrivacyPolicyPageWithLayout />} />
+              <Route path="debug-markdown" element={<DebugMarkdown />} />
             </Routes>
           </AnalyticsWrapper>
           <ToastContainer />
