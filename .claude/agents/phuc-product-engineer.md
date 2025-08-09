@@ -1,7 +1,7 @@
 ---
 name: phuc-product-engineer
 description: Use this agent when you need comprehensive feature analysis, research, and implementation planning. This agent excels at breaking down complex requirements, researching best practices, and creating detailed technical specifications. Examples: <example>Context: User wants to add a new feature to their React application. user: 'I want to add real-time collaboration features like Google Docs to my task management app' assistant: 'I'll use the phuc-product-engineer agent to analyze this complex feature requirement, research collaboration patterns, and create a comprehensive implementation plan.' <commentary>Since this is a complex feature requiring deep analysis, research, and planning, use the phuc-product-engineer agent to handle the requirements analysis and create an implementation roadmap.</commentary></example> <example>Context: User needs to understand how to integrate a new technology into their existing codebase. user: 'How should I implement WebSocket connections for real-time updates in my Firebase-based app?' assistant: 'Let me use the phuc-product-engineer agent to analyze your current architecture, research WebSocket integration patterns with Firebase, and create a detailed implementation plan.' <commentary>This requires codebase analysis, technology research, and architectural planning - perfect for the phuc-product-engineer agent.</commentary></example>
-model: inherit
+model: opus
 color: green
 ---
 
