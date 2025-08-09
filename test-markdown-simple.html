@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ReactMarkdown v9 Line Break Test</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/react-markdown@9.0.1/react-markdown.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; }
+        .test-case { margin: 20px 0; border: 1px solid #ddd; padding: 15px; border-radius: 8px; }
+        .test-title { font-weight: bold; margin-bottom: 10px; color: #333; }
+        .raw-input { background: #f5f5f5; padding: 10px; margin: 10px 0; white-space: pre-wrap; font-family: monospace; }
+        .output { background: #e8f4ff; padding: 10px; margin: 10px 0; border-left: 3px solid #0066cc; }
+        .html-view { background: #fff3cd; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+        .diagnosis { background: #ffebee; padding: 15px; margin-top: 20px; border-radius: 8px; }
+        p { margin: 0 0 1em 0; background: rgba(255, 0, 0, 0.1); padding: 2px; }
+    </style>
+</head>
+<body>
+    <h1>ReactMarkdown v9 Line Break Parsing Analysis</h1>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const ReactMarkdown = window.ReactMarkdown.default || window.ReactMarkdown;
+
+        const TestCase = ({ title, content, description }) => {
+            const [showHtml, setShowHtml] = React.useState(false);
+            const outputRef = React.useRef(null);
+            
+            React.useEffect(() => {
+                if (showHtml && outputRef.current) {
+                    const htmlContent = outputRef.current.innerHTML;
+                    console.log(`HTML for "${title}":`, htmlContent);
+                }
+            }, [showHtml, title]);
+
+            return (
+                <div className="test-case">
+                    <div className="test-title">{title}</div>
+                    <div>{description}</div>
+                    
+                    <div className="raw-input">
+                        <strong>Raw Input (with \n visible):</strong><br/>
+                        {JSON.stringify(content)}
+                    </div>
+                    
+                    <div className="output" ref={outputRef}>
+                        <strong>ReactMarkdown Output:</strong><br/>
+                        <ReactMarkdown>{content}</ReactMarkdown>
+                    </div>
+                    
+                    <button onClick={() => setShowHtml(!showHtml)}>
+                        {showHtml ? 'Hide' : 'Show'} HTML Structure
+                    </button>
+                    
+                    {showHtml && (
+                        <div className="html-view">
+                            {outputRef.current ? outputRef.current.innerHTML : 'Loading...'}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const sampleAIResponse = `🎯 **Key Insights**
+
+**Priority Tasks**
+• **Make10000hours** project needs \`2h 15m\` more work
+• Calendar improvements \`66%\` complete
+
+**Progress**  
+• \`20 tasks\` completed this week
+• Strong productivity momentum
+
+**Next Action**
+• Focus on morning sessions`;
+
+            const testCases = [
+                {
+                    title: "Test 1: Single Line Breaks",
+                    content: "Line 1\nLine 2\nLine 3",
+                    description: "Three lines separated by single \\n"
+                },
+                {
+                    title: "Test 2: Double Line Breaks",
+                    content: "Line 1\n\nLine 2\n\nLine 3",
+                    description: "Three lines separated by double \\n\\n"
+                },
+                {
+                    title: "Test 3: Bullet Points with Single Breaks",
+                    content: "**Section**\n• Item 1\n• Item 2\n• Item 3",
+                    description: "A section followed by bullet points, all with single \\n"
+                },
+                {
+                    title: "Test 4: Actual AI Response",
+                    content: sampleAIResponse,
+                    description: "The actual AI response format causing issues"
+                }
+            ];
+
+            return (
+                <div>
+                    {testCases.map((test, index) => (
+                        <TestCase key={index} {...test} />
+                    ))}
+                    
+                    <div className="diagnosis">
+                        <h2>Diagnosis</h2>
+                        <p><strong>Issue:</strong> ReactMarkdown v9 treats every single line break (\n) as a paragraph break, creating a new &lt;p&gt; tag for each line.</p>
+                        <p><strong>Result:</strong> Each bullet point and line becomes its own paragraph with default margin-bottom, causing excessive spacing.</p>
+                        <p><strong>Expected:</strong> Single line breaks should not create new paragraphs for list items or continuous text.</p>
+                        <p><strong>Solution Needed:</strong> Either modify the input format (use proper markdown lists) or customize ReactMarkdown's paragraph rendering.</p>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
