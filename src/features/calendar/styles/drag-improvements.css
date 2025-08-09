@@ -120,6 +120,85 @@
   animation: eventAppear 0.2s ease-out;
 }
 
+/* Multi-day event visual continuity improvements */
+.multi-day-event {
+  position: relative;
+  overflow: visible;
+}
+
+.multi-day-event::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -2px;
+  right: -2px;
+  background: inherit;
+  opacity: 0.15;
+  border-radius: inherit;
+  z-index: -1;
+}
+
+/* Enhanced visual cues for spanning events */
+.multi-day-event.rounded-l-md.rounded-r-none::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.multi-day-event.rounded-none::before,
+.multi-day-event.rounded-none::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.multi-day-event.rounded-none::before {
+  left: -1px;
+}
+
+.multi-day-event.rounded-none::after {
+  right: -1px;
+}
+
+.multi-day-event.rounded-r-md.rounded-l-none::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Priority styling for all-day events in month view */
+.month-view-event.multi-day-event {
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.month-view-event.single-day-event {
+  font-weight: 500;
+}
+
+/* Timed events have lower visual priority */
+.month-view-event.timed-event {
+  font-weight: 400;
+  opacity: 0.9;
+}
+
+/* Visual hierarchy improvements */
+.multi-day-event {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
 /* Responsive drag improvements for mobile */
 @media (max-width: 768px) {
   .task-item {
@@ -128,5 +207,9 @@
   
   .drop-zone {
     min-height: 48px;
+  }
+  
+  .multi-day-event {
+    font-size: 11px; /* Slightly smaller text on mobile */
   }
 } 
