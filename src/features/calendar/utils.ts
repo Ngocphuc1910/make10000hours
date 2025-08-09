@@ -72,7 +72,8 @@ export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project)
     
     // Calculate day span for multi-day events
     const startDate = new Date(taskAsTask.scheduledDate + 'T00:00:00');
-    const daySpan = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const diffInDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const daySpan = diffInDays + 1;
     calendarEvent.daySpan = daySpan;
     
     // Set display dates for rendering
@@ -210,7 +211,8 @@ export const getTaskDaySpan = (task: Task): number => {
   
   const startDate = new Date(task.scheduledDate! + 'T00:00:00');
   const endDate = new Date(task.scheduledEndDate! + 'T00:00:00');
-  return Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  const diffInDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  return diffInDays + 1;
 };
 
 /**
@@ -218,7 +220,6 @@ export const getTaskDaySpan = (task: Task): number => {
  */
 export const getEventsForDay = (events: CalendarEvent[], day: Date, allDayOnly: boolean = false): CalendarEvent[] => {
   const dayStart = startOfDay(day);
-  const dayEnd = endOfDay(day);
   
   return events.filter(event => {
     if (allDayOnly && !event.isAllDay) return false;
@@ -227,17 +228,35 @@ export const getEventsForDay = (events: CalendarEvent[], day: Date, allDayOnly: 
     if (event.isMultiDay && event.displayStart && event.displayEnd) {
       const eventStart = startOfDay(event.displayStart);
       const eventEnd = endOfDay(event.displayEnd);
-      return day >= eventStart && day <= eventEnd;
+      return dayStart >= eventStart && dayStart <= eventEnd;
     }
     
     // For single-day events, check if they occur on this day
-    const eventStart = startOfDay(event.start);
-    const eventEnd = endOfDay(event.end);
-    return (event.start >= dayStart && event.start <= dayEnd) ||
-           (event.end >= dayStart && event.end <= dayEnd) ||
-           (event.start <= dayStart && event.end >= dayEnd);
+    return isSameDay(event.start, day);
   });
 };
+
+/**
+ * Row occupation map for efficient space management
+ */
+export interface RowOccupationMap {
+  [rowIndex: number]: {
+    occupiedDays: Set<number>; // day indices that are occupied by multi-day events
+    availableDays: Set<number>; // day indices that are free for single-day events
+    multiDayEvents: CalendarEvent[];
+    singleDayEvents: { [dayIndex: number]: CalendarEvent[] };
+  };
+}
+
+/**
+ * Optimized event layout result
+ */
+export interface OptimizedEventLayout {
+  multiDayEvents: { event: CalendarEvent; position: { row: number; left: number; width: number } }[];
+  singleDayEvents: { event: CalendarEvent; position: { row: number; dayIndex: number } }[];
+  totalRows: number;
+  occupationMap: RowOccupationMap;
+}
 
 /**
  * Calculate positions for multi-day events to avoid overlaps
@@ -259,14 +278,19 @@ export const calculateMultiDayEventPositions = (
     return eventStart <= weekEndDay && eventEnd >= weekStartDay;
   });
   
-  // Sort by duration (longer events first) then by start date
+  if (multiDayEvents.length === 0) {
+    return { events: [], maxRow: -1 };
+  }
+  
+  // Sort by start date first, then by duration (longer events first)
   const sortedEvents = multiDayEvents.sort((a, b) => {
+    const startComparison = a.start.getTime() - b.start.getTime();
+    if (startComparison !== 0) {
+      return startComparison; // Earlier start first
+    }
     const aDuration = a.daySpan || 1;
     const bDuration = b.daySpan || 1;
-    if (aDuration !== bDuration) {
-      return bDuration - aDuration; // Longer duration first
-    }
-    return a.start.getTime() - b.start.getTime(); // Earlier start first
+    return bDuration - aDuration; // Longer duration first for same start date
   });
   
   const positionedEvents: { event: CalendarEvent; position: { row: number; left: number; width: number } }[] = [];
@@ -293,30 +317,35 @@ export const calculateMultiDayEventPositions = (
         const eventStart = startOfDay(event.displayStart);
         const eventEnd = endOfDay(event.displayEnd);
         
-        return eventStart <= existingEnd && eventEnd >= existingStart;
+        // Check for any overlap
+        return !(eventEnd < existingStart || eventStart > existingEnd);
       });
       
       if (!hasConflict) {
         rows[row].push(event);
         
-        // Calculate position within the week
+        // Calculate position within the visible range
         const weekStartDay = startOfDay(weekStart);
         const eventStart = startOfDay(event.displayStart!);
         const eventEnd = endOfDay(event.displayEnd!);
         
-        // Clamp to week boundaries
+        // Clamp to visible boundaries
         const displayStart = eventStart < weekStartDay ? weekStartDay : eventStart;
         const displayEnd = eventEnd > endOfDay(weekEnd) ? endOfDay(weekEnd) : eventEnd;
         
-        const startDayOffset = Math.floor((displayStart.getTime() - weekStartDay.getTime()) / (1000 * 60 * 60 * 24));
-        const daysInWeek = Math.ceil((displayEnd.getTime() - displayStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        // Calculate day offset from the start of the visible range
+        const startDayOffset = Math.max(0, Math.floor((displayStart.getTime() - weekStartDay.getTime()) / (1000 * 60 * 60 * 24)));
+        
+        // Calculate width in days using proper date arithmetic
+        const diffInDays = Math.floor((displayEnd.getTime() - displayStart.getTime()) / (1000 * 60 * 60 * 24));
+        const totalDays = Math.max(1, diffInDays + 1);
         
         positionedEvents.push({
           event,
           position: {
             row,
             left: startDayOffset,
-            width: daysInWeek
+            width: totalDays
           }
         });
         
@@ -329,6 +358,174 @@ export const calculateMultiDayEventPositions = (
   
   return {
     events: positionedEvents,
-    maxRow: rows.length - 1
+    maxRow: rows.length > 0 ? rows.length - 1 : -1
+  };
+};
+
+/**
+ * Create occupation map from multi-day event positions
+ */
+const createOccupationMap = (
+  multiDayLayout: { events: { event: CalendarEvent; position: { row: number; left: number; width: number } }[]; maxRow: number },
+  weekStart: Date,
+  weekEnd: Date
+): RowOccupationMap => {
+  const totalDays = Math.floor((weekEnd.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  const occupationMap: RowOccupationMap = {};
+
+  // Initialize rows with multi-day events
+  for (const { event, position } of multiDayLayout.events) {
+    const { row, left, width } = position;
+    
+    if (!occupationMap[row]) {
+      occupationMap[row] = {
+        occupiedDays: new Set(),
+        availableDays: new Set(),
+        multiDayEvents: [],
+        singleDayEvents: {}
+      };
+      
+      // Initialize all days as available
+      for (let dayIndex = 0; dayIndex < totalDays; dayIndex++) {
+        occupationMap[row].availableDays.add(dayIndex);
+      }
+    }
+    
+    // Mark days as occupied by this multi-day event
+    for (let dayIndex = left; dayIndex < left + width; dayIndex++) {
+      if (dayIndex < totalDays) {
+        occupationMap[row].occupiedDays.add(dayIndex);
+        occupationMap[row].availableDays.delete(dayIndex);
+      }
+    }
+    
+    occupationMap[row].multiDayEvents.push(event);
+  }
+  
+  return occupationMap;
+};
+
+/**
+ * Fit single-day events into available spaces in existing rows
+ */
+const fitSingleDayEvents = (
+  singleDayEvents: CalendarEvent[],
+  occupationMap: RowOccupationMap,
+  weekStart: Date,
+  weekEnd: Date
+): { event: CalendarEvent; position: { row: number; dayIndex: number } }[] => {
+  const totalDays = Math.floor((weekEnd.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  const positionedEvents: { event: CalendarEvent; position: { row: number; dayIndex: number } }[] = [];
+  
+  // Group single-day events by day
+  const eventsByDay: { [dayIndex: number]: CalendarEvent[] } = {};
+  
+  for (const event of singleDayEvents) {
+    const eventStart = startOfDay(event.start);
+    const weekStartDay = startOfDay(weekStart);
+    const dayIndex = Math.floor((eventStart.getTime() - weekStartDay.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (dayIndex >= 0 && dayIndex < totalDays) {
+      if (!eventsByDay[dayIndex]) {
+        eventsByDay[dayIndex] = [];
+      }
+      eventsByDay[dayIndex].push(event);
+    }
+  }
+  
+  // For each day, try to place events in available row spaces
+  Object.entries(eventsByDay).forEach(([dayIndexStr, events]) => {
+    const dayIndex = parseInt(dayIndexStr);
+    
+    events.forEach(event => {
+      let placed = false;
+      
+      // Try to place in existing rows first (sorted by row number)
+      const sortedRows = Object.keys(occupationMap).map(Number).sort((a, b) => a - b);
+      
+      for (const rowIndex of sortedRows) {
+        if (occupationMap[rowIndex].availableDays.has(dayIndex)) {
+          // Found available space in existing row
+          occupationMap[rowIndex].availableDays.delete(dayIndex);
+          if (!occupationMap[rowIndex].singleDayEvents[dayIndex]) {
+            occupationMap[rowIndex].singleDayEvents[dayIndex] = [];
+          }
+          occupationMap[rowIndex].singleDayEvents[dayIndex].push(event);
+          
+          positionedEvents.push({
+            event,
+            position: { row: rowIndex, dayIndex }
+          });
+          
+          placed = true;
+          break;
+        }
+      }
+      
+      // If not placed in existing rows, create a new row
+      if (!placed) {
+        const existingRowIndices = Object.keys(occupationMap).map(Number);
+        const newRowIndex = existingRowIndices.length > 0 ? Math.max(...existingRowIndices) + 1 : 0;
+        
+        occupationMap[newRowIndex] = {
+          occupiedDays: new Set(),
+          availableDays: new Set(),
+          multiDayEvents: [],
+          singleDayEvents: { [dayIndex]: [event] }
+        };
+        
+        // Initialize available days for new row (all except this one)
+        for (let i = 0; i < totalDays; i++) {
+          if (i !== dayIndex) {
+            occupationMap[newRowIndex].availableDays.add(i);
+          }
+        }
+        
+        positionedEvents.push({
+          event,
+          position: { row: newRowIndex, dayIndex }
+        });
+      }
+    });
+  });
+  
+  return positionedEvents;
+};
+
+/**
+ * Calculate optimized event layout with efficient space usage
+ * This is the main function that replaces separate multi-day and single-day positioning
+ */
+export const calculateOptimizedEventLayout = (
+  allEvents: CalendarEvent[],
+  weekStart: Date,
+  weekEnd: Date
+): OptimizedEventLayout => {
+  // Separate multi-day and single-day all-day events
+  const multiDayEvents = allEvents.filter(event => 
+    event.isAllDay && event.isMultiDay && event.displayStart && event.displayEnd &&
+    event.displayStart <= weekEnd && event.displayEnd >= weekStart
+  );
+  
+  const singleDayEvents = allEvents.filter(event => 
+    event.isAllDay && !event.isMultiDay
+  );
+  
+  // Step 1: Position multi-day events and create occupation map
+  const multiDayLayout = calculateMultiDayEventPositions(multiDayEvents, weekStart, weekEnd);
+  const occupationMap = createOccupationMap(multiDayLayout, weekStart, weekEnd);
+  
+  // Step 2: Fit single-day events into available spaces
+  const singleDayLayout = fitSingleDayEvents(singleDayEvents, occupationMap, weekStart, weekEnd);
+  
+  // Step 3: Calculate total rows needed
+  const existingRowIndices = Object.keys(occupationMap).map(Number);
+  const totalRows = existingRowIndices.length > 0 ? Math.max(...existingRowIndices) + 1 : 1;
+  
+  return {
+    multiDayEvents: multiDayLayout.events,
+    singleDayEvents: singleDayLayout,
+    totalRows,
+    occupationMap
   };
 };

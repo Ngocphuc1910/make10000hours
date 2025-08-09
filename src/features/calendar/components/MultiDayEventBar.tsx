@@ -1,6 +1,7 @@
 import React from 'react';
 import { CalendarEvent } from '../types';
-import { differenceInDays, startOfWeek, endOfWeek, startOfDay, endOfDay } from 'date-fns';
+import { startOfDay, endOfDay } from 'date-fns';
+import { DraggableEvent } from './DraggableEvent';
 
 interface MultiDayEventBarProps {
   event: CalendarEvent;
@@ -38,14 +39,18 @@ export const MultiDayEventBar: React.FC<MultiDayEventBarProps> = ({
   };
   
   return (
-    <div
+    <DraggableEvent
+      event={event}
+      onClick={onClick}
+      sourceView={sourceView}
       className={`
-        absolute flex items-center px-2 py-1 text-xs text-white cursor-pointer
+        absolute flex items-center px-2 py-1 text-xs text-white cursor-grab
         transition-all hover:z-20 hover:shadow-lg hover:opacity-90
-        select-none
+        select-none font-medium
         ${extendsLeft ? 'rounded-l-none pl-1' : 'rounded-l'}
         ${extendsRight ? 'rounded-r-none pr-1' : 'rounded-r'}
-        ${event.isCompleted ? 'opacity-60 line-through' : ''}
+        ${event.isCompleted ? 'calendar-event-completed' : ''}
+        ${event.isTask ? 'border-l-2 border-white border-opacity-50' : ''}
       `}
       style={{
         left: `${left * DAY_WIDTH + 4}px`,
@@ -53,13 +58,14 @@ export const MultiDayEventBar: React.FC<MultiDayEventBarProps> = ({
         top: `${row * 28 + 4}px`,
         height: '24px',
         backgroundColor: event.color,
-        zIndex: 10 - row, // Higher rows have lower z-index
+        zIndex: 20 + row, // Multi-day events base z-index, single-day events use 30+ to appear on top
+        minWidth: `${width * DAY_WIDTH - 8}px`, // Prevent shrinking
+        maxWidth: `${width * DAY_WIDTH - 8}px`, // Prevent expanding
       }}
-      onClick={handleClick}
-      title={`${event.title}${event.description ? '\\n' + event.description : ''}${
-        event.project ? '\\nProject: ' + event.project : ''
+      title={`${event.title}${event.description ? '\n' + event.description : ''}${
+        event.project ? '\nProject: ' + event.project : ''
       }${
-        event.daySpan && event.daySpan > 1 ? `\\nDuration: ${event.daySpan} days` : ''
+        event.daySpan && event.daySpan > 1 ? `\nDuration: ${event.daySpan} days` : ''
       }`}
     >
       {/* Left extension indicator */}
@@ -70,7 +76,7 @@ export const MultiDayEventBar: React.FC<MultiDayEventBarProps> = ({
       )}
       
       {/* Event title with truncation */}
-      <span className="truncate flex-1 font-medium">
+      <span className={`truncate flex-1 ${event.isCompleted ? 'line-through' : ''}`}>
         {event.title}
       </span>
       
@@ -81,13 +87,7 @@ export const MultiDayEventBar: React.FC<MultiDayEventBarProps> = ({
         </span>
       )}
       
-      {/* Completion indicator */}
-      {event.isCompleted && (
-        <span className="text-white text-xs ml-1 flex-shrink-0" aria-label="Completed">
-          ✓
-        </span>
-      )}
-    </div>
+    </DraggableEvent>
   );
 };
 
