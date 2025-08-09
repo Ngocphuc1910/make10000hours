@@ -826,7 +826,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                 <button
                   ref={calendarInputRef}
                   id="datePickerBtn"
-                  className="flex items-center gap-1.5 px-2.5 py-1 bg-background-secondary border border-border hover:border-text-secondary rounded text-xs text-text-secondary hover:bg-background-primary min-w-0 flex-shrink-0"
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-background-secondary border border-border hover:border-text-secondary rounded text-xs text-text-secondary hover:bg-background-primary min-w-0 flex-shrink-0 focus:outline-none"
                   onClick={handleCalendarClick}
                   onMouseEnter={() => setIsHoveringDate(true)}
                   onMouseLeave={() => setIsHoveringDate(false)}
@@ -848,7 +848,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
                   </div>
                   <span className="whitespace-nowrap">
                     {calendarDate ? (
-                      isMultiDayEnabled() && calendarEndDate ? 
+                      isMultiDayEnabled() && calendarEndDate && !isSameDay(new Date(calendarDate), new Date(calendarEndDate)) ? 
                         `${format(new Date(calendarDate), 'MMM dd')} - ${format(new Date(calendarEndDate), 'MMM dd, yyyy')}${includeTime ? `, ${startTime} - ${endTime}` : ''}` :
                         `${format(new Date(calendarDate), 'MMM dd, yyyy')}${includeTime ? `, ${startTime} - ${endTime}` : ''}`
                     ) : 'Add to calendar'}
