@@ -3,10 +3,11 @@ import { addDays, startOfWeek, format, isSameDay, isToday, addWeeks } from 'date
 import { CalendarEvent, DragItem, DropResult } from './types';
 import { DraggableEvent } from './components/DraggableEvent';
 import { DroppableTimeSlot } from './components/DroppableTimeSlot';
+import { MultiDayEventBar } from './components/MultiDayEventBar';
 import { useTaskStore } from '../../store/taskStore';
 import { useUserStore } from '../../store/userStore';
 import { timezoneUtils } from '../../utils/timezoneUtils';
-import { getEventsForDay } from './utils';
+import { getEventsForDay, calculateMultiDayEventPositions, calculateOptimizedEventLayout } from './utils';
 
 interface ScrollableWeekViewProps {
   currentDate: Date;
@@ -101,18 +102,17 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
     addDays(dateRange.startDate, i)
   );
 
-  // Get all-day events for a specific day (including multi-day events that span this day)
-  const getAllDayEvents = useCallback((date: Date) => {
-    return getEventsForDay(events, date, true); // Only all-day events
-  }, [events]);
+  // Calculate optimized event layout with efficient space usage
+  const optimizedLayout = useMemo(() => {
+    const visibleStart = allDays[0];
+    const visibleEnd = allDays[allDays.length - 1];
+    return calculateOptimizedEventLayout(events, visibleStart, visibleEnd);
+  }, [events, allDays]);
 
-  // Calculate the maximum number of all-day events for row height
+  // Calculate the maximum number of all-day events for row height using optimized layout
   const maxAllDayEventsCount = useMemo(() => {
-    return Math.max(
-      ...allDays.map(day => getAllDayEvents(day).length),
-      1
-    );
-  }, [allDays, getAllDayEvents]);
+    return Math.max(1, optimizedLayout.totalRows);
+  }, [optimizedLayout.totalRows]);
 
   // Generate all days for the calendar view
 
@@ -379,7 +379,7 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
   // Calculate all-day row height based on max events
   const getAllDayRowHeight = () => {
     const maxEvents = getMaxAllDayEventsCount();
-    return Math.max(40, maxEvents * 22 + 12); // 20px per event + 2px gap + 12px padding
+    return Math.max(40, maxEvents * 28 + 12); // 24px per event + 4px gap + 12px padding
   };
 
   // Calculate event position and height
@@ -673,75 +673,96 @@ export const ScrollableWeekView = forwardRef<ScrollableWeekViewRef, ScrollableWe
             </div>
 
             {/* All Day Events Row - Sticky */}
-            <div className="flex bg-background-primary dark:bg-[#141414] border-b border-border sticky z-30" 
+            <div className="relative bg-background-primary dark:bg-[#141414] border-b border-border sticky z-30" 
                  style={{ 
                    height: `${getAllDayRowHeight()}px`,
                    top: '80px',
                    transform: 'translateZ(0)'
                  }}>
-              {/* All day label - Sticky */}
-              <div className="sticky left-0 z-40 border-r border-border flex items-center justify-center text-xs text-text-secondary bg-background-primary dark:bg-[#141414]" style={{ width: `${TIME_COLUMN_WIDTH}px`, transform: 'translateZ(0)' }}>
-                All day
-              </div>
               
-              {/* All day events */}
-              {allDays.map((day, dayIndex) => (
-                <div key={dayIndex} className="relative border-r border-border" style={{ minWidth: `${DAY_WIDTH}px`, width: `${DAY_WIDTH}px`, flexShrink: 0 }}>
-                  <DroppableTimeSlot
-                    date={day}
-                    isAllDay={true}
-                    onDrop={onEventDrop!}
-                    className="h-full cursor-pointer hover:bg-background-container transition-colors relative"
-                  >
-                    <div 
-                      className="w-full h-full flex flex-col items-center justify-start px-1 pt-1 pb-2 overflow-hidden"
-                      onClick={(e) => {
-                        if (e.target === e.currentTarget) {
-                          onAllDayClick?.(day);
-                        }
+              {/* Container with time column and day cells */}
+              <div className="flex">
+                {/* All day label - Sticky */}
+                <div className="sticky left-0 z-40 border-r border-border flex items-center justify-center text-xs text-text-secondary bg-background-primary dark:bg-[#141414]" style={{ width: `${TIME_COLUMN_WIDTH}px`, transform: 'translateZ(0)' }}>
+                  All day
+                </div>
+                
+                {/* Day cells container with relative positioning for multi-day events */}
+                <div className="relative" style={{ width: `${allDays.length * DAY_WIDTH}px`, height: `${getAllDayRowHeight()}px` }}>
+                  
+                  {/* Multi-day events layer - absolute positioned continuous bars */}
+                  {optimizedLayout.multiDayEvents.map(({ event, position }) => (
+                    <MultiDayEventBar
+                      key={`multi-day-${event.id}`}
+                      event={event}
+                      dayIndex={0} // Not used for absolute positioning
+                      weekStart={allDays[0]}
+                      weekEnd={allDays[allDays.length - 1]}
+                      position={position}
+                      onClick={onEventClick}
+                      sourceView="week"
+                    />
+                  ))}
+                  
+                  {/* Optimized single-day events - absolute positioned in available spaces */}
+                  {optimizedLayout.singleDayEvents.map(({ event, position }) => (
+                    <div
+                      key={`single-day-${event.id}-${position.dayIndex}-${position.row}`}
+                      className="absolute"
+                      style={{
+                        left: `${position.dayIndex * DAY_WIDTH + 4}px`,
+                        top: `${position.row * 28 + 4}px`,
+                        width: `${DAY_WIDTH - 8}px`,
+                        height: '24px',
+                        zIndex: 30 + position.row // Higher than multi-day events
                       }}
                     >
-                      {/* Render all-day events for this specific day only */}
-                      {getAllDayEvents(day).map((event, eventIndex) => (
-                        <div
-                          key={event.id}
-                          className="flex-shrink-0 relative w-full"
-                          style={{ 
-                            height: '20px', 
-                            marginBottom: '2px', 
-                            minWidth: 0,
-                            // Stack events vertically within this day cell only
-                            zIndex: 10 + eventIndex
-                          }}
-                        >
-                          <DraggableEvent
-                            event={event}
-                            onClick={onEventClick}
-                            sourceView="week"
-                            className={`block w-full cursor-grab rounded text-xs px-2 py-1 flex items-center flex-shrink-0 ${
-                              event.isTask ? 'border-l-2 border-white border-opacity-50' : ''
-                            } ${event.isCompleted ? 'calendar-event-completed' : ''}`}
-                            style={{
-                              backgroundColor: event.color,
-                              height: '20px',
-                              minHeight: '20px',
-                              maxHeight: '20px',
-                              width: '100%',
-                              maxWidth: '100%'
-                            }}
-                          >
-                            <div className={`font-medium truncate leading-tight w-full text-white ${
-                              event.isCompleted ? 'line-through' : ''
-                            }`}>
-                              {event.title}
-                            </div>
-                          </DraggableEvent>
+                      <DraggableEvent
+                        event={event}
+                        onClick={onEventClick}
+                        sourceView="week"
+                        className={`block w-full cursor-grab rounded text-xs px-2 py-1 flex items-center ${
+                          event.isTask ? 'border-l-2 border-white border-opacity-50' : ''
+                        } ${event.isCompleted ? 'calendar-event-completed' : ''}`}
+                        style={{
+                          backgroundColor: event.color,
+                          height: '24px',
+                          width: '100%'
+                        }}
+                      >
+                        <div className={`font-medium truncate leading-tight w-full text-white ${
+                          event.isCompleted ? 'line-through' : ''
+                        }`}>
+                          {event.title}
                         </div>
-                      ))}
+                      </DraggableEvent>
                     </div>
-                  </DroppableTimeSlot>
+                  ))}
+                  
+                  {/* Droppable day cells for all-day event creation */}
+                  <div className="flex absolute inset-0">
+                  {allDays.map((day, dayIndex) => (
+                    <div key={dayIndex} className="relative border-r border-border" style={{ minWidth: `${DAY_WIDTH}px`, width: `${DAY_WIDTH}px`, flexShrink: 0 }}>
+                      <DroppableTimeSlot
+                        date={day}
+                        isAllDay={true}
+                        onDrop={onEventDrop!}
+                        className="h-full cursor-pointer hover:bg-background-container hover:bg-opacity-30 transition-colors relative"
+                      >
+                        <div 
+                          className="w-full h-full flex flex-col items-center justify-start px-1 pt-1 pb-2 overflow-hidden"
+                          onClick={(e) => {
+                            if (e.target === e.currentTarget) {
+                              onAllDayClick?.(day);
+                            }
+                          }}
+                        />
+                      </DroppableTimeSlot>
+                    </div>
+                  ))}
+                  </div> {/* End droppable day cells */}
                 </div>
-              ))}
+              </div>
             </div>
 
             {/* Main Content Area with Time Column and Days */}
