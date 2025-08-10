@@ -54,6 +54,11 @@ interface TimerState {
   switchToNextPomodoroTask: (nextTask: Task) => Promise<void>;
   cleanupOrphanedSessions: () => Promise<void>;
   
+  // Retry functions for non-blocking operations
+  createSessionWithRetry: (attempt: number) => Promise<void>;
+  completeSessionWithRetry: (sessionId: string, attempt: number) => Promise<void>;
+  switchTaskWithRetry: (oldSession: any, newTask: Task, attempt: number) => Promise<void>;
+  
   // Persistence actions
   initializePersistence: (userId: string) => Promise<void>;
   saveToDatabase: () => Promise<void>;
@@ -118,18 +123,14 @@ export const useTimerStore = create<TimerState>((set, get) => {
     taskLoadError: null,
     
     // Actions
-    start: async () => {
+    start: () => {
       const state = get();
       if (!state.isActiveDevice) {
         // If not active device, take control
         set({ isActiveDevice: true });
       }
       
-      // Create active session if starting timer and we have a task
-      if (!state.isRunning && state.currentTask) {
-        await get().createActiveSession();
-      }
-      
+      // ✅ INSTANT UI UPDATE - No more blocking!
       set({ 
         isRunning: true,
         syncError: null 
@@ -140,20 +141,43 @@ export const useTimerStore = create<TimerState>((set, get) => {
         trackPomodoroStarted(state.currentTask.id, state.currentTask.timeEstimated || 0);
       }
       
+      // Create active session in background with retry
+      if (!state.isRunning && state.currentTask) {
+        get().createSessionWithRetry(1)
+          .then(() => {
+            console.log('✅ Session created successfully');
+          })
+          .catch(error => {
+            console.error('❌ All retries failed, stopping timer:', error);
+            set({ 
+              isRunning: false, 
+              syncError: 'Session creation failed - timer stopped'
+            });
+          });
+      }
+      
       // Save immediately when starting
       get().saveToDatabase();
       get().saveToLocalStorage();
     },
     
-    pause: async () => {
+    pause: () => {
       const state = get();
       
-      // Complete active session when pausing
-      if (state.activeSession) {
-        await get().completeActiveSession('paused');
-      }
-      
+      // ✅ INSTANT UI UPDATE - No more blocking!
       set({ isRunning: false });
+      
+      // Complete active session in background with retry
+      if (state.activeSession) {
+        get().completeSessionWithRetry(state.activeSession.sessionId, 1)
+          .then(() => {
+            console.log('✅ Session completed successfully');
+          })
+          .catch(error => {
+            console.error('❌ Session completion failed after retries (non-critical):', error);
+            // Don't restart timer - just log the failure
+          });
+      }
       
       // Save immediately when pausing to capture exact time
       get().saveToDatabase();
@@ -250,19 +274,23 @@ export const useTimerStore = create<TimerState>((set, get) => {
         
         if (lastCountedMinute !== null && lastCountedMinute !== currentMinute && currentMinute < lastCountedMinute) {
           // We've crossed a minute boundary (time decreased from one minute to the next)
-          console.log('Minute boundary crossed:', {
-            from: lastCountedMinute,
-            to: currentMinute,
+          console.log('🔄 Processing minute boundary:', {
+            currentMinute,
+            lastCountedMinute,
             sessionId: activeSession.sessionId,
             taskId: activeSession.taskId
           });
           
           // Update active session duration in database
-          get().updateActiveSession();
+          get().updateActiveSession().catch(error => {
+            console.error('❌ updateActiveSession FAILED:', error);
+          });
           
           // Increment task time spent locally
           if (activeSession.taskId) {
-            timeSpentIncrement(activeSession.taskId, 1);
+            timeSpentIncrement(activeSession.taskId, 1).catch(error => {
+              console.error('❌ timeSpentIncrement FAILED:', error);
+            });
           }
         }
         
@@ -305,25 +333,26 @@ export const useTimerStore = create<TimerState>((set, get) => {
       get().saveToLocalStorage();
     },
     
-    setCurrentTask: async (task: Task | null) => {
+    setCurrentTask: (task: Task | null) => {
       const state = get();
+      
+      // ✅ INSTANT UI UPDATE - No more blocking!
+      set({ currentTask: task });
       
       // If we're switching tasks while timer is running
       if (state.isRunning && state.activeSession && state.currentTask && task && state.currentTask.id !== task.id) {
-        // Switch current session (only update status, don't recalculate duration)
-        await get().switchActiveSession();
-        
-        // Set new task and clear session tracking for fresh start
-        set({ 
-          currentTask: task,
-          sessionStartTimerPosition: null, // Will be set when new session is created
-          lastCountedMinute: null // Reset minute tracking for new task
-        });
-        
-        // Create new active session for new task
-        await get().createActiveSession();
-      } else {
-        set({ currentTask: task });
+        // Handle task switching in background with retry
+        get().switchTaskWithRetry(state.activeSession, task, 1)
+          .then(() => {
+            console.log('✅ Task switch completed successfully');
+          })
+          .catch(error => {
+            console.error('❌ Task switch failed after retries, stopping timer:', error);
+            set({ 
+              isRunning: false,
+              syncError: 'Task switch failed - timer stopped'
+            });
+          });
       }
       
       get().saveToDatabase();
@@ -842,6 +871,75 @@ export const useTimerStore = create<TimerState>((set, get) => {
         console.log('✅ UTC monitoring reset from timer store');
       } catch (error) {
         console.error('❌ Failed to reset UTC monitoring:', error);
+      }
+    },
+
+    // Retry functions for non-blocking operations
+    createSessionWithRetry: async (attempt: number): Promise<void> => {
+      // Check if timer still running before retry
+      if (!get().isRunning) return;
+      
+      try {
+        await get().createActiveSession();
+        console.log(`✅ Session created on attempt ${attempt}`);
+      } catch (error) {
+        console.warn(`⚠️ Session creation attempt ${attempt} failed:`, error);
+        
+        if (attempt < 3 && get().isRunning) {
+          // Wait 5 seconds then retry
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          return get().createSessionWithRetry(attempt + 1);
+        } else {
+          throw error; // Final failure after 3 attempts
+        }
+      }
+    },
+    
+    completeSessionWithRetry: async (sessionId: string, attempt: number): Promise<void> => {
+      try {
+        await get().completeActiveSession('paused');
+        console.log(`✅ Session completed on attempt ${attempt}`);
+      } catch (error) {
+        console.warn(`⚠️ Session completion attempt ${attempt} failed:`, error);
+        
+        if (attempt < 3) {
+          // Wait 5 seconds then retry
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          return get().completeSessionWithRetry(sessionId, attempt + 1);
+        } else {
+          throw error; // Final failure after 3 attempts
+        }
+      }
+    },
+    
+    switchTaskWithRetry: async (oldSession: any, newTask: Task, attempt: number): Promise<void> => {
+      // Check if timer still running before retry
+      if (!get().isRunning) return;
+      
+      try {
+        // Switch current session (only update status, don't recalculate duration)
+        await get().switchActiveSession();
+        
+        // Set new task and clear session tracking for fresh start
+        set({ 
+          sessionStartTimerPosition: null, // Will be set when new session is created
+          lastCountedMinute: null // Reset minute tracking for new task
+        });
+        
+        // Create new active session for new task
+        await get().createActiveSession();
+        
+        console.log(`✅ Task switch completed on attempt ${attempt}`);
+      } catch (error) {
+        console.warn(`⚠️ Task switch attempt ${attempt} failed:`, error);
+        
+        if (attempt < 3 && get().isRunning) {
+          // Wait 5 seconds then retry
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          return get().switchTaskWithRetry(oldSession, newTask, attempt + 1);
+        } else {
+          throw error; // Final failure after 3 attempts
+        }
       }
     },
   };

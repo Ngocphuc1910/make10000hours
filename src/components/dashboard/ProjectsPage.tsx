@@ -167,7 +167,7 @@ export const ProjectsPage: React.FC = () => {
       </div>
       
           {/* Scrollable Content */}
-          <div className={`projects-scrollable-content flex-1 overflow-y-auto scrollbar-thin pr-4 ${!isLeftSidebarOpen ? 'ml-16' : ''}`}>
+          <div className={`projects-scrollable-content flex-1 overflow-auto scrollbar-thin pr-4 ${!isLeftSidebarOpen ? 'ml-16' : ''}`}>
             {viewType === 'status' ? (
               <TaskStatusBoard groupByProject={groupByProject} />
             ) : (

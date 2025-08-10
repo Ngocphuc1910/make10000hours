@@ -9,6 +9,7 @@ export interface Task {
   timeSpent: number; // in minutes
   timeEstimated: number; // in minutes
   order: number;
+  orderString?: string; // New fractional string position for efficient ordering
   hideFromPomodoro?: boolean;
   // Calendar/scheduling fields
   scheduledDate?: string; // YYYY-MM-DD format
