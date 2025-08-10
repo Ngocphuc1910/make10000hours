@@ -45,6 +45,7 @@ interface TaskState {
   cleanupOrphanedWorkSessions: () => Promise<{ deletedCount: number; orphanedSessions: { id: string; taskId: string; duration: number; date: string; }[]; }>;
   getNextPomodoroTask: (currentTaskId: string) => Task | null;
   hasSchedulingChanges: (currentTask: Task | undefined, updates: Partial<Task>) => boolean;
+  validateMultiDayTask: (taskData: Partial<Task>) => { isValid: boolean; errors: string[] };
   reorderColumns: (newOrder: Task['status'][]) => void;
   reorderProjectColumns: (newOrder: string[]) => void;
 }
@@ -125,21 +126,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         id: doc.id,
         ...doc.data(),
       })) as Task[];
-      console.log(`📡 Real-time subscription update: ${fetchedTasks.length} tasks for user ${user.uid}`);
       
-      // Debug: Log timeSpent changes for active tasks
-      const { tasks: currentTasks } = get();
-      fetchedTasks.forEach(newTask => {
-        const oldTask = currentTasks.find(t => t.id === newTask.id);
-        if (oldTask && oldTask.timeSpent !== newTask.timeSpent) {
-          console.log('🔄 Task timeSpent updated via subscription:', {
-            taskId: newTask.id,
-            taskTitle: newTask.title,
-            from: oldTask.timeSpent,
-            to: newTask.timeSpent
-          });
-        }
-      });
+      // Only log on initial load or significant changes
+      if (get().tasks.length === 0) {
+        console.log(`Initial load: Fetched ${fetchedTasks.length} tasks for user ${user.uid}`);
+      }
       
       set({ tasks: fetchedTasks });
     });
@@ -307,7 +298,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       };
       
       // Get user's timezone for UTC conversion
-      const userTimezone = user.settings?.timezone || timezoneUtils.getCurrentTimezone();
+      const userTimezone = typeof user.settings?.timezone === 'string' 
+        ? user.settings.timezone 
+        : user.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
       
       // Use TaskStorageService for proper UTC handling
       const docId = await TaskStorageService.createTask(taskDataWithOrder, userTimezone);
@@ -421,7 +414,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       );
 
       // Get user's timezone for UTC conversion
-      const userTimezone = user.settings?.timezone || timezoneUtils.getCurrentTimezone();
+      const userTimezone = typeof user.settings?.timezone === 'string' 
+        ? user.settings.timezone 
+        : user.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
 
       // Use TaskStorageService for proper UTC handling
       await TaskStorageService.updateTask(id, filteredUpdates, userTimezone);
@@ -538,7 +533,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
             if (timerState.isRunning) {
               await timerState.pause();
             }
-            await timerState.setCurrentTask(null);
+            timerState.setCurrentTask(null);
           }
         }
       }
@@ -645,7 +640,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         ...task,
         status: newStatus,
         completed,
-        hideFromPomodoro: newStatus === 'pomodoro' ? false : task.hideFromPomodoro
+        hideFromPomodoro: newStatus === 'pomodoro' ? false : (task.hideFromPomodoro ?? false)
       };
       
       // Remove the task from its current position
@@ -657,20 +652,18 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       // Insert at the adjusted target position
       updatedTasks.splice(adjustedTargetIndex, 0, movedTask);
       
-      // Optimized: Only update tasks that actually changed position or status
-      const tasksToUpdate = [];
+      // Use Firebase batch for atomic updates (more efficient)
+      const batch = writeBatch(db);
       
       // Always update the moved task (status + position change)
       const movedTaskRef = doc(db, 'tasks', taskId);
-      tasksToUpdate.push(
-        updateDoc(movedTaskRef, {
-          status: newStatus,
-          completed,
-          hideFromPomodoro: newStatus === 'pomodoro' ? false : task.hideFromPomodoro,
-          order: adjustedTargetIndex,
-          updatedAt: new Date()
-        })
-      );
+      batch.update(movedTaskRef, {
+        status: newStatus,
+        completed,
+        hideFromPomodoro: newStatus === 'pomodoro' ? false : (task.hideFromPomodoro ?? false),
+        order: adjustedTargetIndex,
+        updatedAt: new Date()
+      });
       
       // Only update tasks whose order actually changed
       const originalTasks = tasks;
@@ -684,16 +677,14 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         }
         
         const taskRef = doc(db, 'tasks', currentTask.id);
-        tasksToUpdate.push(
-          updateDoc(taskRef, {
-            order: i,
-            updatedAt: new Date()
-          })
-        );
+        batch.update(taskRef, {
+          order: i,
+          updatedAt: new Date()
+        });
       }
       
-      // Execute only necessary updates
-      await Promise.all(tasksToUpdate);
+      // Execute all updates atomically
+      await batch.commit();
     } catch (error) {
       console.error('Error moving task to status and position:', error);
       throw error;
