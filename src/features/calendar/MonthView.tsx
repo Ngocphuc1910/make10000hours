@@ -16,6 +16,7 @@ import { DraggableEvent } from './components/DraggableEvent';
 import { DroppableTimeSlot } from './components/DroppableTimeSlot';
 import { useUserStore } from '../../store/userStore';
 import { timezoneUtils } from '../../utils/timezoneUtils';
+import { calculateMonthCellLayout, MonthCellLayout, calculateMonthViewLayout, MonthGlobalLayout } from './utils';
 
 interface MonthViewProps {
   currentDate: Date;
@@ -35,7 +36,6 @@ export const MonthView: React.FC<MonthViewProps> = ({
   onDayViewClick
 }) => {
   const { user } = useUserStore();
-  const [overflowData, setOverflowData] = useState<Record<number, { isOverflowing: boolean; visibleEvents: number; hiddenCount: number }>>({});
   const gridRef = useRef<HTMLDivElement>(null);
   const cellRefs = useRef<(HTMLDivElement | null)[]>([]);
   const eventsContainerRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -46,114 +46,43 @@ export const MonthView: React.FC<MonthViewProps> = ({
     return eachDayOfInterval({ start, end });
   };
 
-  // Get events for a specific day, including multi-day events
-  const getEventsForDay = (date: Date) => {
-    return events.filter(event => {
-      // For multi-day events, check if the day falls within the event's date range
-      if (event.isMultiDay && event.displayStart && event.displayEnd) {
-        const dayStart = startOfDay(date);
-        const eventStart = startOfDay(event.displayStart);
-        const eventEnd = endOfDay(event.displayEnd);
-        return dayStart >= eventStart && dayStart <= eventEnd;
-      }
-      
-      // For single-day events, check if they occur on this day
-      return isSameDay(event.start, date);
-    }).sort((a, b) => {
-      // Sort all-day events first, then by start time
-      if (a.isAllDay && !b.isAllDay) return -1;
-      if (!a.isAllDay && b.isAllDay) return 1;
-      return a.start.getTime() - b.start.getTime();
-    });
-  };
-
-  // Get multi-day events that affect a specific day (for space reservation)
-  const getMultiDayEventsForDay = (date: Date) => {
-    return events.filter(event => {
-      if (!event.isMultiDay || !event.displayStart || !event.displayEnd) return false;
-      const dayStart = startOfDay(date);
-      const eventStart = startOfDay(event.displayStart);
-      const eventEnd = endOfDay(event.displayEnd);
-      return dayStart >= eventStart && dayStart <= eventEnd;
-    });
-  };
 
 
-  // Get color class for event dots
-  const getEventDotColor = (color: string) => {
-    const colorMap: { [key: string]: string } = {
-      '#3B82F6': 'bg-blue-500',
-      '#84CC16': 'bg-green-500', 
-      '#F59E0B': 'bg-yellow-500',
-      '#EF4444': 'bg-red-500',
-      '#EC4899': 'bg-pink-500',
-      '#BB5F5A': 'bg-red-500'
-    };
-    return colorMap[color] || 'bg-blue-500';
-  };
-
-  // Detect overflow accounting for multi-day events space
-  const detectOverflow = useCallback((cellIndex: number, eventsContainer: HTMLDivElement, multiDayEventCount: number) => {
-    if (!eventsContainer) {
-      return { isOverflowing: false, visibleEvents: 0, hiddenCount: 0 };
-    }
-
-    // Always look at ALL single-day events to get accurate count
-    const allEventElements = eventsContainer.querySelectorAll('.month-view-event');
-    const containerHeight = eventsContainer.clientHeight;
-    
-    if (containerHeight <= 0) {
-      return { isOverflowing: false, visibleEvents: 0, hiddenCount: 0 };
-    }
-    
-    if (allEventElements.length === 0) {
-      return { isOverflowing: false, visibleEvents: 0, hiddenCount: 0 };
-    }
-    
-    let visibleEvents = 0;
-    let totalHeight = 0;
-    
-    // Reserve space for multi-day events (22px each: 20px + 2px gap)
-    const multiDayReservedHeight = multiDayEventCount * 22;
-    
-    // Reserve space for "+X more" button (24px)
-    const moreButtonHeight = 24;
-    const availableHeight = containerHeight - multiDayReservedHeight - moreButtonHeight;
-    
-    // Calculate which events can fit - use fixed height for consistency
-    for (let i = 0; i < allEventElements.length; i++) {
-      const eventHeight = 22; // Fixed height: 20px event + 2px gap
-      
-      if (totalHeight + eventHeight <= availableHeight) {
-        visibleEvents++;
-        totalHeight += eventHeight;
-      } else {
-        break;
-      }
-    }
-    
-    // If all events fit without needing "+X more", check if we have extra space
-    if (visibleEvents === allEventElements.length) {
-      const totalHeightWithoutMore = visibleEvents * 22;
-      if (totalHeightWithoutMore + multiDayReservedHeight <= containerHeight) {
-        // All events fit without "+X more" button
-        return { isOverflowing: false, visibleEvents, hiddenCount: 0 };
-      }
-    }
-    
-    const totalEvents = allEventElements.length;
-    const hiddenCount = Math.max(0, totalEvents - visibleEvents);
-    const isOverflowing = hiddenCount > 0;
-    
-    return { isOverflowing, visibleEvents, hiddenCount };
-  }, []);
 
   const days = getDaysInMonth();
   
   // Calculate number of rows needed (5 or 6)
   const numberOfRows = Math.ceil(days.length / 7);
 
-  // Calculate multi-day event layout with proper row positioning
+  // Calculate optimized layout for all cells with global occupation tracking
+  const optimizedCellLayouts = useMemo(() => {
+    // First, calculate the global month layout
+    const globalLayout = calculateMonthViewLayout(days, events);
+    
+    // Then calculate individual cell layouts using the global occupation info
+    const cellLayouts: { [dayIndex: number]: MonthCellLayout } = {};
+    
+    days.forEach((day, idx) => {
+      // Only pass single-day events to avoid any interference
+      const singleDayEvents = events.filter(event => !event.isMultiDay);
+      
+      // Get occupied rows for this specific day from global layout
+      const dayKey = format(day, 'yyyy-MM-dd');
+      const occupiedRows = globalLayout.dayOccupationMap[dayKey] || new Set();
+      
+      // Pass occupied rows to cell layout function for proper gap-filling
+      const cellLayout = calculateMonthCellLayout(day, singleDayEvents, new Set(occupiedRows));
+      cellLayouts[idx] = cellLayout;
+    });
+    
+    return {
+      cellLayouts,
+      globalMultiDayLayout: globalLayout.multiDayLayout,
+      globalLayout
+    };
+  }, [events, days]);
+
+  // Keep track of multiday layout for compatibility with existing overlay rendering
   const multiDayEventLayout = useMemo(() => {
     const multiDayEvents = events.filter(event => event.isMultiDay && event.displayStart && event.displayEnd);
     
@@ -161,11 +90,10 @@ export const MonthView: React.FC<MonthViewProps> = ({
       return { eventsByWeek: {}, maxRowsByWeek: {} };
     }
 
-    // Group events by weeks they span
-    const eventsByWeek: Record<number, { event: CalendarEvent; startDay: number; endDay: number; row?: number }[]> = {};
+    // Group events by weeks they span, using our optimized row assignments
+    const eventsByWeek: Record<number, { event: CalendarEvent; startDay: number; endDay: number; row: number }[]> = {};
     const maxRowsByWeek: Record<number, number> = {};
 
-    // First pass: group events by week
     multiDayEvents.forEach(event => {
       if (!event.displayStart || !event.displayEnd) return;
 
@@ -177,6 +105,9 @@ export const MonthView: React.FC<MonthViewProps> = ({
       const endDay = eventEndDay === -1 ? days.length - 1 : eventEndDay;
       const startWeekRow = Math.floor(eventStartDay / 7);
       const endWeekRow = Math.floor(endDay / 7);
+      
+      // Get the row assignment from our optimized layout
+      const row = optimizedCellLayouts.globalMultiDayLayout[event.id] || 0;
 
       // Add event to each week it spans
       for (let weekRow = startWeekRow; weekRow <= endWeekRow; weekRow++) {
@@ -190,74 +121,18 @@ export const MonthView: React.FC<MonthViewProps> = ({
         eventsByWeek[weekRow].push({
           event,
           startDay: weekStartCol,
-          endDay: weekEndCol
+          endDay: weekEndCol,
+          row
         });
+        
+        // Update max row for this week
+        maxRowsByWeek[weekRow] = Math.max(maxRowsByWeek[weekRow] || 0, row);
       }
     });
 
-    // Second pass: assign rows within each week to avoid conflicts
-    Object.keys(eventsByWeek).forEach(weekRowStr => {
-      const weekRow = parseInt(weekRowStr);
-      const weekEvents = eventsByWeek[weekRow];
-      
-      // Sort by start date, then by duration (longer events get priority)
-      weekEvents.sort((a, b) => {
-        const startComparison = a.startDay - b.startDay;
-        if (startComparison !== 0) return startComparison;
-        
-        const aDuration = a.endDay - a.startDay;
-        const bDuration = b.endDay - b.startDay;
-        return bDuration - aDuration; // Longer duration first
-      });
-
-      // Assign rows using conflict detection
-      const rows: typeof weekEvents[][] = [];
-      
-      weekEvents.forEach(eventData => {
-        let assignedRow = -1;
-        
-        // Find the first row where this event doesn't conflict
-        for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
-          const hasConflict = rows[rowIndex].some(existingEvent => {
-            // Check if events overlap in terms of day span
-            return !(eventData.endDay < existingEvent.startDay || eventData.startDay > existingEvent.endDay);
-          });
-          
-          if (!hasConflict) {
-            assignedRow = rowIndex;
-            break;
-          }
-        }
-        
-        // If no existing row works, create a new one
-        if (assignedRow === -1) {
-          assignedRow = rows.length;
-          rows.push([]);
-        }
-        
-        // Assign the event to the row
-        eventData.row = assignedRow;
-        rows[assignedRow].push(eventData);
-      });
-      
-      maxRowsByWeek[weekRow] = Math.max(0, rows.length - 1);
-    });
-
     return { eventsByWeek, maxRowsByWeek };
-  }, [events, days]);
+  }, [events, days, optimizedCellLayouts]);
 
-  // Helper function to check if a day is the start, middle, or end of a multi-day event
-  const getMultiDayEventInfo = (event: CalendarEvent, day: Date) => {
-    if (!event.isMultiDay || !event.displayStart || !event.displayEnd) {
-      return null;
-    }
-    
-    const isStart = isSameDay(day, event.displayStart);
-    const isEnd = isSameDay(day, event.displayEnd);
-    const isContinuation = !isStart && !isEnd;
-    
-    return { isStart, isEnd, isContinuation };
-  };
 
   // Initialize refs arrays
   useEffect(() => {
@@ -265,93 +140,13 @@ export const MonthView: React.FC<MonthViewProps> = ({
     eventsContainerRefs.current = Array(days.length).fill(null);
   }, [days.length]);
 
-  // Overflow detection accounting for multi-day events in each cell
-  const debouncedOverflowDetection = useCallback(() => {
-    requestAnimationFrame(() => {
-      const newOverflowData: Record<number, { isOverflowing: boolean; visibleEvents: number; hiddenCount: number }> = {};
-      
-      eventsContainerRefs.current.forEach((container, index) => {
-        if (container) {
-          const weekIndex = Math.floor(index / 7);
-          const maxRow = multiDayEventLayout.maxRowsByWeek[weekIndex] || -1;
-          const multiDayRowCount = maxRow + 1;
-          const overflow = detectOverflow(index, container, multiDayRowCount);
-          newOverflowData[index] = overflow;
-        }
-      });
-      
-      setOverflowData(prev => {
-        // Only update if data has actually changed
-        const hasChanged = Object.keys(newOverflowData).some(key => {
-          const idx = parseInt(key);
-          const prevData = prev[idx];
-          const newData = newOverflowData[idx];
-          
-          return !prevData || 
-                 prevData.isOverflowing !== newData.isOverflowing ||
-                 prevData.visibleEvents !== newData.visibleEvents ||
-                 prevData.hiddenCount !== newData.hiddenCount;
-        });
-        
-        return hasChanged ? { ...prev, ...newOverflowData } : prev;
-      });
-    });
-  }, [detectOverflow, days, getMultiDayEventsForDay]);
-
-  // Simplified ResizeObserver - only measure containers with single-day events
-  useEffect(() => {
-    const resizeObserver = new ResizeObserver(() => {
-      // Simple debounced detection on any resize
-      debouncedOverflowDetection();
-    });
-
-    // Only observe containers that actually contain measurable single-day events
-    eventsContainerRefs.current.forEach((container, index) => {
-      if (container) {
-        container.dataset.cellIndex = index.toString();
-        resizeObserver.observe(container);
-      }
-    });
-
-    return () => resizeObserver.disconnect();
-  }, [debouncedOverflowDetection, days.length]);
-
-  // Simple window resize listener
-  useEffect(() => {
-    let resizeTimeout: NodeJS.Timeout;
-    
-    const handleWindowResize = () => {
-      if (resizeTimeout) clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => debouncedOverflowDetection(), 150);
-    };
-
-    window.addEventListener('resize', handleWindowResize);
-    return () => {
-      window.removeEventListener('resize', handleWindowResize);
-      if (resizeTimeout) clearTimeout(resizeTimeout);
-    };
-  }, [debouncedOverflowDetection]);
-
   const setCellRef = useCallback((element: HTMLDivElement | null, index: number) => {
     cellRefs.current[index] = element;
   }, []);
 
   const setEventsContainerRef = useCallback((element: HTMLDivElement | null, index: number) => {
     eventsContainerRefs.current[index] = element;
-    
-    if (element) {
-      element.dataset.cellIndex = index.toString();
-      
-      // Simple initial detection
-      setTimeout(() => debouncedOverflowDetection(), 50);
-    }
-  }, [debouncedOverflowDetection]);
-
-  // Simple component update detection
-  useEffect(() => {
-    const timer = setTimeout(() => debouncedOverflowDetection(), 100);
-    return () => clearTimeout(timer);
-  }, [events, debouncedOverflowDetection]);
+  }, []);
 
   return (
     <div className="w-full bg-background-primary h-full flex flex-col">
@@ -390,7 +185,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
             
             return weekEvents.map(({ event, row, startDay, endDay }) => {
               const left = (startDay / 7) * 100;
-              const width = ((endDay - startDay + 1) / 7) * 100;
+              const width = Math.min(((endDay - startDay + 1) / 7) * 100, (7 - startDay) / 7 * 100);
               const top = (weekIndex / numberOfRows) * 100;
               const rowOffset = 30 + (row * 22); // 30px for date numbers + 22px per row (20px + 2px gap)
               
@@ -416,7 +211,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                     height: '20px',
                     paddingLeft: '4px',
                     paddingRight: '4px',
-                    zIndex: 15 + row
+                    zIndex: 10 + row // Lower than cell events to avoid conflicts
                   }}
                 >
                   <DraggableEvent
@@ -448,7 +243,6 @@ export const MonthView: React.FC<MonthViewProps> = ({
         </div>
         
         {days.map((day, idx) => {
-          const dayEvents = getEventsForDay(day);
           const isCurrentMonth = isSameMonth(day, currentDate);
           
           // Use timezone-aware today check
@@ -456,13 +250,6 @@ export const MonthView: React.FC<MonthViewProps> = ({
           const todayInUserTimezone = timezoneUtils.formatDateInTimezone(new Date(), userTimezone, 'yyyy-MM-dd');
           const dayString = format(day, 'yyyy-MM-dd');
           const isCurrentDay = todayInUserTimezone === dayString;
-          
-          // Filter events for inline rendering (exclude multi-day events which are in overlay)
-          const singleDayAllDayEvents = dayEvents.filter(event => event.isAllDay && !event.isMultiDay);
-          const timedEvents = dayEvents.filter(event => !event.isAllDay);
-          
-          // Events for this cell (no multi-day since they're in overlay)
-          const cellEvents = [...singleDayAllDayEvents, ...timedEvents];
 
           return (
             <DroppableTimeSlot
@@ -503,104 +290,134 @@ export const MonthView: React.FC<MonthViewProps> = ({
                   )}
                 </div>
 
-                {/* Events container with flexible height and proper containment */}
+                {/* Events container with optimized layout */}
                 <div 
                   ref={(el) => setEventsContainerRef(el, idx)}
                   className="flex-1 min-h-0 h-full max-h-full relative overflow-hidden"
-                  style={{
-                    // Reserve space at top for multi-day events in overlay based on actual rows used
-                    paddingTop: `${(() => {
-                      const weekIndex = Math.floor(idx / 7);
-                      const maxRow = multiDayEventLayout.maxRowsByWeek[weekIndex] || -1;
-                      return (maxRow + 1) * 22; // Each row is 22px (20px + 2px gap)
-                    })()}px`
-                  }}
                 >
-                  <div className="flex flex-col gap-[2px] h-full relative">
-                    {/* Render cell events (single-day and timed events only) */}
-                    {cellEvents.map((event, eventIdx) => {
-                      const cellOverflow = overflowData[idx];
-                      const shouldHide = cellOverflow && eventIdx >= cellOverflow.visibleEvents;
+                  <div className="relative h-full">
+                    {/* Render events using optimized positioning */}
+                    {(() => {
+                      const cellLayout = optimizedCellLayouts.cellLayouts[idx];
+                      if (!cellLayout) return null;
                       
-                      // Render all-day events (single-day only, multi-day are in overlay)
-                      if (event.isAllDay) {
-                        return (
-                          <DraggableEvent
-                            key={event.id}
-                            event={event}
-                            onClick={onEventClick}
-                            sourceView="month"
-                            className={`month-view-event block w-full cursor-grab text-xs px-2 py-1 flex items-center flex-shrink-0 rounded single-day-event ${
-                              !isCurrentMonth ? 'opacity-60' : event.isCompleted ? 'calendar-event-completed' : ''
-                            } ${shouldHide ? 'hidden' : ''}`}
-                            style={{ 
-                              backgroundColor: event.color,
-                              height: '20px',
-                              minHeight: '20px',
-                              maxHeight: '20px'
-                            }}
-                          >
-                            <div 
-                              className={`font-medium truncate leading-tight w-full text-white ${
-                                event.isCompleted ? 'line-through' : ''
-                              }`}
-                              title={event.title}
-                            >
-                              {event.title}
-                            </div>
-                          </DraggableEvent>
-                        );
-                      }
+                      // Only use single-day events for cell-based rendering
+                      // Multi-day events are handled by the overlay system
+                      const eventsToRender = cellLayout.singleDayEvents;
                       
-                      // Render timed events
+                      // Sort by row position to ensure proper stacking
+                      eventsToRender.sort((a, b) => a.row - b.row);
+                      
+                      // Calculate overflow based on available space
+                      const totalAvailableRows = Math.floor((eventsContainerRefs.current[idx]?.clientHeight || 120) / 22);
+                      const visibleEventsCount = Math.max(0, totalAvailableRows - 1); // Reserve 1 row for "+X more" if needed
+                      const hasOverflow = eventsToRender.length > visibleEventsCount;
+                      const eventsToShow = hasOverflow ? eventsToRender.slice(0, visibleEventsCount) : eventsToRender;
+                      const hiddenCount = hasOverflow ? eventsToRender.length - visibleEventsCount : 0;
+                      
                       return (
-                      
-                        <DraggableEvent
-                          key={event.id}
-                          event={event}
-                          onClick={onEventClick}
-                          sourceView="month"
-                          className={`month-view-event timed-event block hover:bg-background-container rounded px-1 py-0.5 text-xs flex-shrink-0 ${
-                            !isCurrentMonth ? 'opacity-60' : event.isCompleted ? 'calendar-event-completed' : ''
-                          } ${shouldHide ? 'hidden' : ''}`}
-                          style={{ 
-                            backgroundColor: 'transparent',
-                            height: '20px',
-                            minHeight: '20px',
-                            maxHeight: '20px'
-                          }}
-                        >
-                          <div className={`flex items-center w-full leading-tight ${
-                            !isCurrentMonth ? 'text-text-secondary' : 'text-text-primary'
-                          }`}>
-                            <span 
-                              className="inline-block w-1.5 h-1.5 rounded-full mr-1 flex-shrink-0"
-                              style={{ backgroundColor: event.color }}
-                            ></span>
-                            <span className={`truncate ${event.isCompleted ? 'line-through' : ''}`} style={{
-                              textDecorationColor: event.isCompleted ? (!isCurrentMonth ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)') : undefined
-                            }}>
-                              {format(event.start, 'h:mm a')} {event.title}
-                            </span>
-                          </div>
-                        </DraggableEvent>
+                        <>
+                          {/* Render positioned events */}
+                          {eventsToShow.map(({ event, row }) => {
+                            const isTimedEvent = !event.isAllDay;
+                            
+                            return (
+                              <div
+                                key={event.id}
+                                className="absolute w-full"
+                                style={{
+                                  top: `${row * 22 + 30}px`, // 30px offset for date number + row * (20px + 2px gap)
+                                  height: '20px',
+                                  left: '4px',
+                                  right: '4px',
+                                  zIndex: 30 + row // Higher than multi-day overlay events
+                                }}
+                              >
+                                {isTimedEvent ? (
+                                  // Render timed events
+                                  <DraggableEvent
+                                    event={event}
+                                    onClick={onEventClick}
+                                    sourceView="month"
+                                    className={`month-view-event timed-event block hover:bg-background-container rounded px-1 py-0.5 text-xs ${
+                                      !isCurrentMonth ? 'opacity-60' : event.isCompleted ? 'calendar-event-completed' : ''
+                                    }`}
+                                    style={{ 
+                                      backgroundColor: 'transparent',
+                                      height: '20px',
+                                      width: '100%'
+                                    }}
+                                  >
+                                    <div className={`flex items-center w-full leading-tight ${
+                                      !isCurrentMonth ? 'text-text-secondary' : 'text-text-primary'
+                                    }`}>
+                                      <span 
+                                        className="inline-block w-1.5 h-1.5 rounded-full mr-1 flex-shrink-0"
+                                        style={{ backgroundColor: event.color }}
+                                      ></span>
+                                      <span className={`truncate ${event.isCompleted ? 'line-through' : ''}`} style={{
+                                        textDecorationColor: event.isCompleted ? (!isCurrentMonth ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)') : undefined
+                                      }}>
+                                        {format(event.start, 'h:mm a')} {event.title}
+                                      </span>
+                                    </div>
+                                  </DraggableEvent>
+                                ) : (
+                                  // Render single-day all-day events
+                                  <DraggableEvent
+                                    event={event}
+                                    onClick={onEventClick}
+                                    sourceView="month"
+                                    className={`month-view-event block w-full cursor-grab text-xs px-2 py-1 flex items-center rounded single-day-event ${
+                                      !isCurrentMonth ? 'opacity-60' : event.isCompleted ? 'calendar-event-completed' : ''
+                                    }`}
+                                    style={{ 
+                                      backgroundColor: event.color,
+                                      height: '20px',
+                                      width: '100%'
+                                    }}
+                                  >
+                                    <div 
+                                      className={`font-medium truncate leading-tight w-full text-white ${
+                                        event.isCompleted ? 'line-through' : ''
+                                      }`}
+                                      title={event.title}
+                                    >
+                                      {event.title}
+                                    </div>
+                                  </DraggableEvent>
+                                )}
+                              </div>
+                            );
+                          })}
+                          
+                          {/* Show "+X more" for overflow */}
+                          {hasOverflow && hiddenCount > 0 && (
+                            <div 
+                              className="absolute w-full"
+                              style={{
+                                top: `${eventsToShow.length * 22 + 30}px`,
+                                height: '20px',
+                                left: '4px',
+                                right: '4px'
+                              }}
+                            >
+                              <div 
+                                className={`text-xs cursor-pointer hover:text-primary px-1 py-0.5 ${
+                                  !isCurrentMonth ? 'text-gray-400 opacity-60' : 'text-gray-600'
+                                }`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDayViewClick?.(day);
+                                }}
+                              >
+                                +{hiddenCount} more
+                              </div>
+                            </div>
+                          )}
+                        </>
                       );
-                    })}
-                    
-                    {/* Show "+X more" based on overflow detection */}
-                    {overflowData[idx]?.isOverflowing && (
-                      <div 
-                        className={`text-xs cursor-pointer hover:text-primary px-1 py-0.5 flex-shrink-0 ${
-                          !isCurrentMonth ? 'text-gray-400 opacity-60' : 'text-gray-600'
-                        }`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDayViewClick?.(day);
-                        }}
-                      >
-                        +{overflowData[idx].hiddenCount} more
-                      </div>
-                    )}
+                    })()}
                   </div>
                 </div>
               </div>
