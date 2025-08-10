@@ -40,6 +40,8 @@ export const TaskListSorted: React.FC = () => {
   const draggedTaskId = useRef<string | null>(null);
   const draggedTaskIndex = useRef<number>(-1);
   const taskListRef = useRef<HTMLDivElement>(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
+  const [dropPosition, setDropPosition] = useState<'before' | 'after' | null>(null);
 
   useEffect(() => {
     if (currentTask && editingTaskId === currentTask.id) {
@@ -64,34 +66,61 @@ export const TaskListSorted: React.FC = () => {
     const taskIndex = sortedTasks.findIndex(t => t.id === taskId);
     draggedTaskIndex.current = taskIndex;
 
-    // Visual feedback
-    e.currentTarget.classList.add('opacity-70', 'border-dashed');
+    // Enhanced visual feedback - just opacity, no dashed border
+    e.currentTarget.classList.add('opacity-50');
+    e.currentTarget.style.transform = 'scale(1.02)';
+    e.currentTarget.style.transition = 'all 0.2s ease';
   };
 
   const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
-    e.currentTarget.classList.remove('opacity-70', 'border-dashed');
+    // Clean up visual feedback
+    e.currentTarget.classList.remove('opacity-50');
+    e.currentTarget.style.transform = '';
+    e.currentTarget.style.transition = '';
 
-    // Reset the dragged task ID
+    // Reset the dragged task ID and drop indicators
     draggedTaskId.current = null;
     draggedTaskIndex.current = -1;
+    setDragOverTaskId(null);
+    setDropPosition(null);
   };
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     e.preventDefault();
+    
+    if (!draggedTaskId.current || draggedTaskId.current === taskId) return;
+    
+    // Calculate drop position based on mouse position within the target element
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const position = e.clientY < midY ? 'before' : 'after';
+    
+    setDragOverTaskId(taskId);
+    setDropPosition(position);
   };
 
-  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     e.preventDefault();
-    e.currentTarget.classList.add('bg-gray-50');
+    // Remove the background color change, we'll use drop line indicator instead
   };
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    e.currentTarget.classList.remove('bg-gray-50');
+    // Only clear if we're actually leaving the task area
+    const rect = e.currentTarget.getBoundingClientRect();
+    const { clientX, clientY } = e;
+    
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+      setDragOverTaskId(null);
+      setDropPosition(null);
+    }
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, dropTargetId: string, sortedTasks: Task[]) => {
     e.preventDefault();
-    e.currentTarget.classList.remove('bg-gray-50');
+    
+    // Clear drop indicators
+    setDragOverTaskId(null);
+    setDropPosition(null);
 
     // If no task was dragged or dropping on itself, do nothing
     if (!draggedTaskId.current || draggedTaskId.current === dropTargetId) return;
@@ -176,41 +205,65 @@ export const TaskListSorted: React.FC = () => {
           };
           
           return (
-            <div
-              key={task.id}
-              draggable={true}
-              onDragStart={(e) => handleDragStart(e, task.id, sortedTasks)}
-              onDragEnd={handleDragEnd}
-              onDragOver={handleDragOver}
-              onDragEnter={handleDragEnter}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, task.id, sortedTasks)}
-            >
-              <TaskItem
-                task={task}
-                project={fallbackProject}
-                onEdit={handleEditTask}
-              />
+            <div key={task.id} className="relative">
+              {/* Drop indicator line - BEFORE */}
+              {dragOverTaskId === task.id && dropPosition === 'before' && (
+                <div className="absolute -top-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-lg z-10 animate-pulse" />
+              )}
+              
+              <div
+                draggable={true}
+                onDragStart={(e) => handleDragStart(e, task.id, sortedTasks)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => handleDragOver(e, task.id)}
+                onDragEnter={(e) => handleDragEnter(e, task.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, task.id, sortedTasks)}
+                className="transition-all duration-200 ease-in-out"
+              >
+                <TaskItem
+                  task={task}
+                  project={fallbackProject}
+                  onEdit={handleEditTask}
+                />
+              </div>
+              
+              {/* Drop indicator line - AFTER */}
+              {dragOverTaskId === task.id && dropPosition === 'after' && (
+                <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-lg z-10 animate-pulse" />
+              )}
             </div>
           );
         }
 
         return (
-          <div
-            key={task.id}
-            draggable={true}
-            onDragStart={(e) => handleDragStart(e, task.id, sortedTasks)}
-            onDragEnd={handleDragEnd}
-            onDragOver={handleDragOver}
-            onDragEnter={handleDragEnter}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, task.id, sortedTasks)}
-          >
-            <TaskItem
-              task={task}
-              project={project}
-              onEdit={handleEditTask}
-            />
+          <div key={task.id} className="relative">
+            {/* Drop indicator line - BEFORE */}
+            {dragOverTaskId === task.id && dropPosition === 'before' && (
+              <div className="absolute -top-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-lg z-10 animate-pulse" />
+            )}
+            
+            <div
+              draggable={true}
+              onDragStart={(e) => handleDragStart(e, task.id, sortedTasks)}
+              onDragEnd={handleDragEnd}
+              onDragOver={(e) => handleDragOver(e, task.id)}
+              onDragEnter={(e) => handleDragEnter(e, task.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, task.id, sortedTasks)}
+              className="transition-all duration-200 ease-in-out"
+            >
+              <TaskItem
+                task={task}
+                project={project}
+                onEdit={handleEditTask}
+              />
+            </div>
+            
+            {/* Drop indicator line - AFTER */}
+            {dragOverTaskId === task.id && dropPosition === 'after' && (
+              <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-lg z-10 animate-pulse" />
+            )}
           </div>
         );
       })}
