@@ -8,6 +8,12 @@ import { workSessionService } from '../api/workSessionService';
 import { transitionQueryService } from '../services/transitionService';
 import { TaskStorageService } from '../services/TaskStorageService';
 import { timezoneUtils } from '../utils/timezoneUtils';
+import { sortTasksByOrder, getTaskPosition } from '../utils/taskSorting';
+import { FractionalOrderingService } from '../services/FractionalOrderingService';
+import { TaskMigrationService } from '../services/TaskMigrationService';
+import { testFractionalIndexing } from '../utils/testFractionalIndexing';
+import { EmergencyMigration } from '../utils/emergencyMigration';
+import '../utils/fixMixedOrdering'; // Load debug utilities
 
 interface TaskState {
   tasks: Task[];
@@ -30,6 +36,7 @@ interface TaskState {
   toggleTaskCompletion: (taskId: string, context?: string) => Promise<Task | null>;
   updateTaskStatus: (taskId: string, status: Task['status']) => Promise<void>;
   reorderTasks: (taskId: string, newIndex: number) => Promise<void>;
+  reorderTasksGlobal: (taskId: string, newIndex: number, visibleTasks: Task[]) => Promise<void>;
   moveTaskToStatusAndPosition: (taskId: string, newStatus: Task['status'], targetIndex: number) => Promise<void>;
   setIsAddingTask: (isAdding: boolean) => void;
   setEditingTaskId: (taskId: string | null) => void;
@@ -102,6 +109,30 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
     set({ isLoading: true });
     
+    // Test fractional indexing in development
+    if (process.env.NODE_ENV === 'development') {
+      testFractionalIndexing();
+    }
+    
+    // CRITICAL: Force complete migration to fix mixed ordering issues like Notion
+    try {
+      console.log('🚨 Starting emergency complete ordering migration...');
+      await EmergencyMigration.forceCompleteOrdering(user.uid);
+      console.log('✅ Emergency migration completed - all tasks now use consistent fractional positions');
+    } catch (error) {
+      console.error('❌ Emergency migration failed:', error);
+      console.warn('⚠️ Drag & drop positioning may not work correctly');
+      
+      // Fallback to regular migration
+      try {
+        console.log('🔄 Falling back to regular migration...');
+        await TaskMigrationService.forceCompleteUserMigration(user.uid);
+        console.log('✅ Fallback migration completed');
+      } catch (fallbackError) {
+        console.error('❌ Fallback migration also failed:', fallbackError);
+      }
+    }
+    
     // Clean up existing listeners
     const { unsubscribe } = get();
     if (unsubscribe) {
@@ -109,10 +140,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
     
     // Set up real-time listeners for tasks and projects
+    // Note: No orderBy since we handle sorting in JavaScript with mixed integer/string ordering
     const tasksQuery = query(
       tasksCollection, 
-      where('userId', '==', user.uid),
-      orderBy('order', 'asc')
+      where('userId', '==', user.uid)
     );
 
     const projectsQuery = query(
@@ -596,95 +627,178 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
   },
   
-  reorderTasks: async (taskId, newIndex) => {
+  // Global reordering for task list views (like pomodoro timer) where all visible tasks can be reordered together
+  reorderTasksGlobal: async (taskId: string, newIndex: number, visibleTasks: Task[]) => {
     try {
       const { tasks } = get();
-      const taskIndex = tasks.findIndex(t => t.id === taskId);
+      const currentTask = tasks.find(t => t.id === taskId);
+      if (!currentTask) return;
       
-      if (taskIndex === -1) return;
+      // Get the visible tasks excluding the current task being moved
+      const otherVisibleTasks = visibleTasks.filter(t => t.id !== taskId);
       
-      const updatedTasks = [...tasks];
-      const [movedTask] = updatedTasks.splice(taskIndex, 1);
-      updatedTasks.splice(newIndex, 0, movedTask);
+      // Sort the visible tasks to match UI display order
+      const sortedVisibleTasks = sortTasksByOrder(otherVisibleTasks);
       
-      // Update order property for all tasks in Firestore
-      const updatePromises = updatedTasks.map(async (task, index) => {
-        const taskRef = doc(db, 'tasks', task.id);
-        return updateDoc(taskRef, {
-          order: index,
-          updatedAt: task.id === taskId ? new Date() : task.updatedAt
-        });
+      // CRITICAL: Clamp the newIndex to valid bounds to prevent out-of-bounds errors
+      const clampedIndex = Math.max(0, Math.min(newIndex, sortedVisibleTasks.length));
+      
+      // Get adjacent positions for fractional indexing
+      const beforeTask = clampedIndex > 0 ? sortedVisibleTasks[clampedIndex - 1] : null;
+      const afterTask = clampedIndex < sortedVisibleTasks.length ? sortedVisibleTasks[clampedIndex] : null;
+      
+      const beforePos = beforeTask ? getTaskPosition(beforeTask) : null;
+      const afterPos = afterTask ? getTaskPosition(afterTask) : null;
+      
+      // Generate new fractional position
+      const newOrderString = FractionalOrderingService.generatePosition(beforePos, afterPos);
+      
+      console.log(`🎯 GLOBAL REORDER ${currentTask.title} (${currentTask.status}):`, {
+        requestedIndex: newIndex,
+        clampedIndex,
+        visibleTasksCount: sortedVisibleTasks.length,
+        beforeTask: beforeTask?.title || 'START',
+        afterTask: afterTask?.title || 'END', 
+        beforePos: beforePos || 'null',
+        afterPos: afterPos || 'null',
+        newOrderString
       });
       
-      await Promise.all(updatePromises);
+      // Update only the moved task - no other tasks need updating!
+      const taskRef = doc(db, 'tasks', taskId);
+      await updateDoc(taskRef, {
+        orderString: newOrderString,
+        updatedAt: new Date()
+      });
+      
+      // Optimistic update for immediate UI response
+      const updatedTasks = tasks.map(task => 
+        task.id === taskId 
+          ? { ...task, orderString: newOrderString }
+          : task
+      );
+      set({ tasks: updatedTasks });
+      
     } catch (error) {
-      console.error('Error reordering tasks:', error);
+      console.error('Error reordering task globally:', error);
       throw error;
     }
   },
 
-  moveTaskToStatusAndPosition: async (taskId, newStatus, targetIndex) => {
+  reorderTasks: async (taskId: string, newIndex: number) => {
     try {
       const { tasks } = get();
-      const taskIndex = tasks.findIndex(t => t.id === taskId);
+      const currentTask = tasks.find(t => t.id === taskId);
+      if (!currentTask) return;
       
-      if (taskIndex === -1) return;
+      // CRITICAL: Get tasks in same status, sorted EXACTLY like the UI displays them
+      const statusTasks = sortTasksByOrder(
+        tasks.filter(t => t.status === currentTask.status && t.id !== taskId)
+      );
       
-      const task = tasks[taskIndex];
-      const completed = newStatus === 'completed' ? true : 
-                       (task.status === 'completed' ? false : task.completed);
+      // CRITICAL: Clamp the newIndex to valid bounds to prevent out-of-bounds errors
+      const clampedIndex = Math.max(0, Math.min(newIndex, statusTasks.length));
       
-      // Create a copy of tasks and update the task with new status
-      const updatedTasks = [...tasks];
-      updatedTasks[taskIndex] = {
-        ...task,
-        status: newStatus,
-        completed,
-        hideFromPomodoro: newStatus === 'pomodoro' ? false : (task.hideFromPomodoro ?? false)
-      };
+      // Get adjacent positions for fractional indexing
+      const beforeTask = clampedIndex > 0 ? statusTasks[clampedIndex - 1] : null;
+      const afterTask = clampedIndex < statusTasks.length ? statusTasks[clampedIndex] : null;
       
-      // Remove the task from its current position
-      const [movedTask] = updatedTasks.splice(taskIndex, 1);
+      const beforePos = beforeTask ? getTaskPosition(beforeTask) : null;
+      const afterPos = afterTask ? getTaskPosition(afterTask) : null;
       
-      // Adjust target index if the moved task was before the target position
-      const adjustedTargetIndex = taskIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      // Generate new fractional position
+      const newOrderString = FractionalOrderingService.generatePosition(beforePos, afterPos);
       
-      // Insert at the adjusted target position
-      updatedTasks.splice(adjustedTargetIndex, 0, movedTask);
+      console.log(`🎯 REORDER ${currentTask.title} in ${currentTask.status}:`, {
+        requestedIndex: newIndex,
+        clampedIndex,
+        statusTasksCount: statusTasks.length,
+        beforeTask: beforeTask?.title || 'START',
+        afterTask: afterTask?.title || 'END', 
+        beforePos: beforePos || 'null',
+        afterPos: afterPos || 'null',
+        newOrderString
+      });
       
-      // Use Firebase batch for atomic updates (more efficient)
-      const batch = writeBatch(db);
-      
-      // Always update the moved task (status + position change)
-      const movedTaskRef = doc(db, 'tasks', taskId);
-      batch.update(movedTaskRef, {
-        status: newStatus,
-        completed,
-        hideFromPomodoro: newStatus === 'pomodoro' ? false : (task.hideFromPomodoro ?? false),
-        order: adjustedTargetIndex,
+      // Update only the moved task - no other tasks need updating!
+      const taskRef = doc(db, 'tasks', taskId);
+      await updateDoc(taskRef, {
+        orderString: newOrderString,
         updatedAt: new Date()
       });
       
-      // Only update tasks whose order actually changed
-      const originalTasks = tasks;
-      for (let i = 0; i < updatedTasks.length; i++) {
-        const currentTask = updatedTasks[i];
-        const originalTask = originalTasks.find(t => t.id === currentTask.id);
-        
-        // Skip the moved task (already handled above) and tasks with unchanged order
-        if (currentTask.id === taskId || !originalTask || originalTask.order === i) {
-          continue;
-        }
-        
-        const taskRef = doc(db, 'tasks', currentTask.id);
-        batch.update(taskRef, {
-          order: i,
-          updatedAt: new Date()
-        });
-      }
+      // Optimistic update for immediate UI response
+      const updatedTasks = tasks.map(task => 
+        task.id === taskId 
+          ? { ...task, orderString: newOrderString }
+          : task
+      );
+      set({ tasks: updatedTasks });
       
-      // Execute all updates atomically
-      await batch.commit();
+    } catch (error) {
+      console.error('Error reordering task:', error);
+      throw error;
+    }
+  },
+
+  moveTaskToStatusAndPosition: async (taskId: string, newStatus: string, targetIndex: number) => {
+    try {
+      const { tasks } = get();
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) throw new Error('Task not found');
+      
+      // CRITICAL: Get tasks in destination status, sorted EXACTLY like the UI displays them
+      const statusTasks = sortTasksByOrder(
+        tasks.filter(t => t.status === newStatus && t.id !== taskId)
+      );
+      
+      // CRITICAL: Clamp the targetIndex to valid bounds
+      const clampedIndex = Math.max(0, Math.min(targetIndex, statusTasks.length));
+      
+      // Calculate new fractional position
+      const beforeTask = clampedIndex > 0 ? statusTasks[clampedIndex - 1] : null;
+      const afterTask = clampedIndex < statusTasks.length ? statusTasks[clampedIndex] : null;
+      
+      const beforePos = beforeTask ? getTaskPosition(beforeTask) : null;
+      const afterPos = afterTask ? getTaskPosition(afterTask) : null;
+      
+      const newOrderString = FractionalOrderingService.generatePosition(beforePos, afterPos);
+      
+      console.log(`🏆 MOVE ${task.title} to ${newStatus}:`, {
+        requestedIndex: targetIndex,
+        clampedIndex,
+        destinationTasksCount: statusTasks.length,
+        beforeTask: beforeTask?.title || 'START',
+        afterTask: afterTask?.title || 'END',
+        beforePos: beforePos || 'null',
+        afterPos: afterPos || 'null', 
+        newOrderString
+      });
+      
+      // Single document update - much more efficient!
+      const taskRef = doc(db, 'tasks', taskId);
+      await updateDoc(taskRef, {
+        status: newStatus,
+        completed: newStatus === 'completed' ? true : (task.status === 'completed' ? false : task.completed),
+        hideFromPomodoro: newStatus === 'pomodoro' ? false : (task.hideFromPomodoro ?? false),
+        orderString: newOrderString,
+        updatedAt: new Date()
+      });
+      
+      // Optimistic update
+      const updatedTasks = tasks.map(t => 
+        t.id === taskId 
+          ? { 
+              ...t, 
+              status: newStatus, 
+              completed: newStatus === 'completed' ? true : (task.status === 'completed' ? false : task.completed),
+              hideFromPomodoro: newStatus === 'pomodoro' ? false : (task.hideFromPomodoro ?? false),
+              orderString: newOrderString 
+            }
+          : t
+      );
+      set({ tasks: updatedTasks });
+      
     } catch (error) {
       console.error('Error moving task to status and position:', error);
       throw error;
@@ -761,21 +875,60 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   
   handleMoveCompletedDown: async () => {
     try {
-      const { tasks } = get();
-      const completedTasks = tasks.filter(t => t.completed);
-      const incompleteTasks = tasks.filter(t => !t.completed);
+      const { tasks, taskListViewMode } = get();
       
-      // Update order of tasks
-      const updatedTasks = [...incompleteTasks, ...completedTasks];
+      // Get tasks visible in the current view mode (matching TaskListSorted filtering logic)
+      const visibleTasks = tasks.filter(task => {
+        // Don't show archived tasks (hidden from pomodoro)
+        if (task.hideFromPomodoro) return false;
+        
+        // Apply view mode filtering
+        if (taskListViewMode === 'pomodoro') {
+          // For pomodoro view: show all tasks not hidden from pomodoro
+          return true;
+        } else {
+          // For today view: show today's tasks (simplified - would need timezone logic)
+          return true;
+        }
+      });
+      
+      // Sort tasks to match UI display order
+      const sortedVisibleTasks = sortTasksByOrder(visibleTasks);
+      const completedTasks = sortedVisibleTasks.filter(t => t.completed);
+      const incompleteTasks = sortedVisibleTasks.filter(t => !t.completed);
+      
+      if (completedTasks.length === 0) {
+        console.log('No completed tasks to move down');
+        set({ showDetailsMenu: false });
+        return;
+      }
+      
+      console.log(`🔄 Moving ${completedTasks.length} completed tasks down in ${taskListViewMode} view`);
+      
+      // Create new order: incomplete tasks first, then completed tasks
+      const reorderedTasks = [...incompleteTasks, ...completedTasks];
+      
+      // Generate new fractional positions for the reordered sequence
+      const newPositions = FractionalOrderingService.generateSequence(reorderedTasks.length);
+      
       const batch = writeBatch(db);
       
-      // Update order for each task
-      updatedTasks.forEach((task, index) => {
-        const taskRef = doc(db, 'tasks', task.id);
-        batch.update(taskRef, { order: index });
+      // Update orderString for each task that needs repositioning
+      reorderedTasks.forEach((task, index) => {
+        const newOrderString = newPositions[index];
+        // Only update tasks that actually changed position
+        if (task.orderString !== newOrderString) {
+          const taskRef = doc(db, 'tasks', task.id);
+          batch.update(taskRef, { 
+            orderString: newOrderString,
+            updatedAt: new Date()
+          });
+          console.log(`📍 ${task.title} -> ${newOrderString}`);
+        }
       });
       
       await batch.commit();
+      console.log('✅ Successfully moved completed tasks down');
       set({ showDetailsMenu: false });
     } catch (error) {
       console.error('Error moving completed tasks:', error);
@@ -865,9 +1018,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     const { tasks } = get();
     
     // Get all pomodoro tasks after the current task (by order)
-    const pomodoroTasks = tasks
-      .filter(task => task.status === 'pomodoro' && !task.completed && !task.hideFromPomodoro)
-      .sort((a, b) => a.order - b.order);
+    const pomodoroTasks = sortTasksByOrder(
+      tasks.filter(task => task.status === 'pomodoro' && !task.completed && !task.hideFromPomodoro)
+    );
     
     console.log('Finding next Pomodoro task:', {
       currentTaskId,
