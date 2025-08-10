@@ -8,6 +8,7 @@ import { formatMinutesToHoursAndMinutes } from '../../utils/timeUtils';
 import TaskListSorted from './TaskListSorted';
 import { TaskFilteringService } from '../../services/TaskFilteringService';
 import { useUserStore } from '../../store/userStore';
+import { sortTasksByOrder } from '../../utils/taskSorting';
 
 export const TimeSpent: React.FC = () => {
   const {
@@ -18,11 +19,12 @@ export const TimeSpent: React.FC = () => {
   const { user } = useUserStore();
 
   // Filter and sort tasks using TaskFilteringService with timezone awareness
-  const sortedTasks = TaskFilteringService.filterTasksByViewMode(
+  const filteredTasks = TaskFilteringService.filterTasksByViewMode(
     tasks.filter(task => !task.hideFromPomodoro), // Don't show archived tasks
     taskListViewMode,
     user?.settings?.timezone?.current
-  ).sort((a, b) => a.order - b.order);
+  );
+  const sortedTasks = sortTasksByOrder(filteredTasks);
 
   // Calculate total time statistics using stored task.timeSpent for consistency with TaskItem display
   const totalTimeSpent = sortedTasks.reduce((sum, task) => {
