@@ -142,6 +142,23 @@ export function calculateNewEventTime(
     let start: Date;
     let end: Date;
     
+    // Special handling for multi-day events
+    if (event.isMultiDay && event.displayStart && event.displayEnd) {
+      // Use pre-calculated daySpan if available, otherwise calculate it correctly
+      const daySpan = event.daySpan || Math.floor((event.displayEnd.getTime() - startOfDay(event.displayStart).getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      
+      // Set new start date to the drop target
+      start = new Date(dropResult.targetDate);
+      start.setHours(0, 0, 0, 0);
+      
+      // Calculate new end date by adding the correct number of days
+      end = new Date(start);
+      end.setDate(end.getDate() + daySpan - 1);  // Subtract 1 for inclusive range
+      end.setHours(23, 59, 59, 999);
+      
+      return { start, end };
+    }
+    
     if (dropResult.isAllDay) {
       // For all-day drops, move to target date as all-day
       start = new Date(dropResult.targetDate);
@@ -649,5 +666,148 @@ export const calculateOptimizedEventLayout = (
     singleDayEvents: singleDayLayout,
     totalRows,
     occupationMap
+  };
+};
+
+/**
+ * Month-specific cell layout for optimized positioning
+ * NOTE: Only handles single-day events - multi-day events are rendered in overlay
+ */
+export interface MonthCellLayout {
+  singleDayEvents: { event: CalendarEvent; row: number }[];
+  totalRows: number;
+}
+
+/**
+ * Global month layout tracking for optimal space usage
+ */
+export interface MonthGlobalLayout {
+  multiDayLayout: { [eventId: string]: number };
+  dayOccupationMap: { [dayKey: string]: Set<number> }; // tracks which rows are occupied for each day
+  maxRow: number;
+}
+
+/**
+ * Calculate optimal layout for entire month view with proper gap-filling
+ */
+export const calculateMonthViewLayout = (
+  days: Date[],
+  events: CalendarEvent[]
+): MonthGlobalLayout => {
+  const multiDayLayout: { [eventId: string]: number } = {};
+  const dayOccupationMap: { [dayKey: string]: Set<number> } = {};
+  
+  // Initialize occupation map for all days
+  days.forEach(day => {
+    const dayKey = format(day, 'yyyy-MM-dd');
+    dayOccupationMap[dayKey] = new Set<number>();
+  });
+  
+  // Step 1: Position multi-day events
+  const multiDayEvents = events.filter(event => 
+    event.isMultiDay && event.displayStart && event.displayEnd && event.isAllDay
+  );
+  
+  multiDayEvents.forEach(event => {
+    if (!event.displayStart || !event.displayEnd) return;
+    
+    // Find which days this event spans
+    const spannedDays = days.filter(day => {
+      const dayStart = startOfDay(day);
+      const eventStart = startOfDay(event.displayStart!);
+      const eventEnd = endOfDay(event.displayEnd!);
+      return dayStart >= eventStart && dayStart <= eventEnd;
+    });
+    
+    if (spannedDays.length === 0) return;
+    
+    // Find the first row that's available for all spanned days
+    let row = 0;
+    let foundAvailableRow = false;
+    
+    while (!foundAvailableRow) {
+      foundAvailableRow = true;
+      
+      for (const day of spannedDays) {
+        const dayKey = format(day, 'yyyy-MM-dd');
+        if (dayOccupationMap[dayKey].has(row)) {
+          foundAvailableRow = false;
+          break;
+        }
+      }
+      
+      if (!foundAvailableRow) {
+        row++;
+      }
+    }
+    
+    // Assign this row to the event and mark days as occupied
+    multiDayLayout[event.id] = row;
+    spannedDays.forEach(day => {
+      const dayKey = format(day, 'yyyy-MM-dd');
+      dayOccupationMap[dayKey].add(row);
+    });
+  });
+  
+  // Calculate max row
+  let maxRow = -1;
+  Object.values(dayOccupationMap).forEach(occupiedRows => {
+    if (occupiedRows.size > 0) {
+      const dayMax = Math.max(...occupiedRows);
+      if (dayMax > maxRow) maxRow = dayMax;
+    }
+  });
+  
+  return {
+    multiDayLayout,
+    dayOccupationMap,
+    maxRow
+  };
+};
+
+/**
+ * Calculate optimal layout for a single month calendar cell
+ * IMPORTANT: Only handles single-day events - multi-day events are rendered in overlay
+ */
+export const calculateMonthCellLayout = (
+  day: Date,
+  allEvents: CalendarEvent[],
+  occupiedRows: Set<number> = new Set() // NEW: Accept pre-occupied rows
+): MonthCellLayout => {
+  // Find ONLY single-day events for this day (both all-day and timed)
+  const singleDayEventsForDay = allEvents.filter(event => 
+    !event.isMultiDay && isSameDay(event.start, day)
+  );
+  
+  // Sort single-day events: all-day events first, then timed events by start time
+  const sortedSingleDayEvents = [...singleDayEventsForDay].sort((a, b) => {
+    if (a.isAllDay && !b.isAllDay) return -1;
+    if (!a.isAllDay && b.isAllDay) return 1;
+    if (!a.isAllDay && !b.isAllDay) {
+      return a.start.getTime() - b.start.getTime();
+    }
+    return 0;
+  });
+  
+  // Position single-day events efficiently, skipping occupied rows
+  const positionedSingleDayEvents: { event: CalendarEvent; row: number }[] = [];
+  
+  sortedSingleDayEvents.forEach((event) => {
+    // Find first available row that's not occupied by multi-day events
+    let row = 0;
+    while (occupiedRows.has(row)) {
+      row++;
+    }
+    
+    // Mark this row as used (for next events in same cell)
+    occupiedRows.add(row);
+    positionedSingleDayEvents.push({ event, row });
+  });
+  
+  const totalRows = positionedSingleDayEvents.length + occupiedRows.size;
+  
+  return {
+    singleDayEvents: positionedSingleDayEvents,
+    totalRows
   };
 };
