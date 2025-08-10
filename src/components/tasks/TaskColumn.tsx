@@ -21,6 +21,7 @@ interface TaskColumnProps {
   onToggleProject?: (projectId: string | null) => void;
   allTasks?: Task[];
   hideHeader?: boolean;
+  projectId?: string; // Add projectId prop for by-project view
 }
 
 const TaskColumn: React.FC<TaskColumnProps> = ({
@@ -35,7 +36,8 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
   projects = [],
   onToggleProject,
   allTasks = [],
-  hideHeader = false
+  hideHeader = false,
+  projectId
 }) => {
   const [isAddingTask, setIsAddingTask] = useState(false);
   const reorderTasks = useTaskStore(state => state.reorderTasks);
@@ -54,20 +56,27 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
       return;
     }
 
-    // Calculate new index based on where we're dropping
-    const allTasks = useTaskStore.getState().tasks;
-    const targetIndex = allTasks.findIndex(t => t.id === targetTaskId);
+    // CRITICAL FIX: Use the SORTED tasks array that was passed as props, not raw store data
+    const targetIndex = tasks.findIndex(t => t.id === targetTaskId);
     const newIndex = insertAfter ? targetIndex + 1 : targetIndex;
     
+    console.log(`🔄 Reordering within ${status}: ${draggedTaskId} to position ${newIndex} (from ${tasks.length} sorted tasks)`);
     reorderTasks(draggedTaskId, newIndex);
   };
 
   // Handle cross-column moves with positioning
   const handleCrossColumnMove = async (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter: boolean = false) => {
-    // Calculate the target position in the destination column
+    // CRITICAL FIX: For cross-column moves, we need to get the destination column's SORTED tasks
+    // We can't use the current 'tasks' prop since that's the source column
+    // But we need to ensure we use the same sorting logic that the destination column uses
     const allTasks = useTaskStore.getState().tasks;
-    const targetIndex = allTasks.findIndex(t => t.id === targetTaskId);
+    const { sortTasksByOrder } = await import('../../utils/taskSorting');
+    const destinationStatusTasks = sortTasksByOrder(allTasks.filter(t => t.status === newStatus));
+    
+    const targetIndex = destinationStatusTasks.findIndex(t => t.id === targetTaskId);
     const finalIndex = insertAfter ? targetIndex + 1 : targetIndex;
+    
+    console.log(`🔄 Cross-column move: ${draggedTaskId} to ${newStatus} position ${finalIndex} (destination has ${destinationStatusTasks.length} sorted tasks)`);
     
     // Use the atomic method to move task with status and position in one operation
     // Note: This method is now optimized to only update tasks that actually changed
@@ -272,6 +281,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
                             ) : (
                               <TaskForm 
                                 status={status} 
+                                initialProjectId={projectId}
                                 onCancel={() => setIsAddingTask(false)} 
                               />
                             )}
@@ -367,6 +377,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
             ) : (
               <TaskForm 
                 status={status} 
+                initialProjectId={projectId} 
                 onCancel={() => setIsAddingTask(false)} 
               />
             )}
