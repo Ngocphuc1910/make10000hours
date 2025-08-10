@@ -79,6 +79,8 @@ export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project)
     // Set display dates for rendering
     calendarEvent.displayStart = startDate;
     calendarEvent.displayEnd = endDate;
+    
+
   }
 
   return calendarEvent;
@@ -711,15 +713,19 @@ export const calculateMonthViewLayout = (
   multiDayEvents.forEach(event => {
     if (!event.displayStart || !event.displayEnd) return;
     
-    // Find which days this event spans
+    // CRITICAL FIX: Use consistent date comparison for month view
+    const eventStart = startOfDay(event.displayStart);
+    const eventEnd = startOfDay(event.displayEnd);
+    
+    // Find which days this event spans in the calendar grid
     const spannedDays = days.filter(day => {
       const dayStart = startOfDay(day);
-      const eventStart = startOfDay(event.displayStart!);
-      const eventEnd = endOfDay(event.displayEnd!);
       return dayStart >= eventStart && dayStart <= eventEnd;
     });
     
-    if (spannedDays.length === 0) return;
+    if (spannedDays.length === 0) {
+      return;
+    }
     
     // Find the first row that's available for all spanned days
     let row = 0;
@@ -811,5 +817,347 @@ export const calculateMonthCellLayout = (
   return {
     singleDayEvents: positionedSingleDayEvents,
     totalRows
+  };
+};
+
+/**
+ * Unified Month Layout System - Based on Proven Week View Pattern
+ * 
+ * This system adapts the successful `calculateOptimizedEventLayout` algorithm
+ * from week view for month view usage, eliminating the gap-filling issues
+ * present in the legacy lane-based approach.
+ * 
+ * Key improvements:
+ * - Uses RowOccupationMap for sophisticated gap detection
+ * - Groups events by day for optimal placement decisions
+ * - Maintains compatibility with existing rendering system
+ * - Achieves space utilization comparable to week view
+ */
+
+/**
+ * Unified month layout result using occupation map pattern (same as week view)
+ * 
+ * Output format maintains compatibility with existing MonthView rendering
+ * while providing the improved gap-filling capabilities of the week view algorithm.
+ */
+export interface UnifiedMonthLayout {
+  multiDayEvents: { event: CalendarEvent; position: { row: number; startDay: number; endDay: number; weekSpans: { week: number; startCol: number; endCol: number }[] } }[];
+  singleDayEvents: { event: CalendarEvent; position: { row: number; dayIndex: number } }[];
+  totalRows: number;
+  occupationMap: RowOccupationMap;
+  dayOccupationMap: { [dayIndex: number]: Set<number> }; // Compatibility layer for existing code
+}
+
+/**
+ * Calculate unified month layout using proven occupation map pattern
+ * 
+ * This function adapts the successful `calculateOptimizedEventLayout` algorithm
+ * for month view, eliminating gap-filling issues present in the lane-based approach.
+ * 
+ * Algorithm Overview:
+ * 1. Treats the 42-day month grid as a single extended "week" for the proven algorithm
+ * 2. Uses RowOccupationMap to track available spaces with sophisticated gap detection
+ * 3. Groups single-day events by day for optimal placement decisions (like week view)
+ * 4. Calculates week spans for multi-day events to support month-specific rendering
+ * 5. Creates compatibility layer to maintain existing rendering system integration
+ * 
+ * Key Improvements vs Lane-Based:
+ * - Superior gap-filling: Uses availableDays sets to find optimal placement
+ * - Consistent behavior: Same algorithm pattern as working week view
+ * - Efficient processing: Groups events by day before placement decisions
+ * - Proven reliability: Based on algorithm that eliminates gaps in week view
+ * 
+ * Performance: O(n log n) for sorting + O(n*d) for placement where n=events, d=days
+ * 
+ * @param days Array of 42 Date objects representing the month grid (6 weeks)
+ * @param events Array of CalendarEvent objects to be positioned
+ * @returns UnifiedMonthLayout with optimized event positions and compatibility data
+ */
+export const calculateUnifiedMonthLayout = (
+  days: Date[],
+  events: CalendarEvent[]
+): UnifiedMonthLayout => {
+  // Treat the entire month as a single "week" for the occupation map algorithm
+  const monthStart = days[0];
+  const monthEnd = days[days.length - 1];
+  
+  // Step 1: Use the proven week view algorithm as foundation
+  const baseLayout = calculateOptimizedEventLayout(events, monthStart, monthEnd);
+  
+  // Step 2: Calculate week spans for multi-day events (month-specific rendering needs)
+  const multiDayEventsWithSpans = baseLayout.multiDayEvents.map(({ event, position }) => {
+    const { row, left, width } = position;
+    
+    // Find the actual day indices for this event
+    const startDayIndex = left;
+    const endDayIndex = Math.min(left + width - 1, days.length - 1);
+    
+    // Calculate week spans for rendering across multiple calendar rows
+    const weekSpans: { week: number; startCol: number; endCol: number }[] = [];
+    let currentWeek = Math.floor(startDayIndex / 7);
+    let segmentStart = startDayIndex;
+    
+    while (segmentStart <= endDayIndex) {
+      const weekEnd = (currentWeek + 1) * 7 - 1;
+      const segmentEnd = Math.min(endDayIndex, weekEnd);
+      
+      weekSpans.push({
+        week: currentWeek,
+        startCol: segmentStart % 7,
+        endCol: segmentEnd % 7
+      });
+      
+      segmentStart = segmentEnd + 1;
+      currentWeek++;
+    }
+    
+    return {
+      event,
+      position: {
+        row,
+        startDay: startDayIndex,
+        endDay: endDayIndex,
+        weekSpans
+      }
+    };
+  });
+  
+  // Step 3: Create compatibility layer for existing rendering system
+  const dayOccupationMap: { [dayIndex: number]: Set<number> } = {};
+  for (let i = 0; i < days.length; i++) {
+    dayOccupationMap[i] = new Set();
+  }
+  
+  // Populate day occupation map from the occupation map data
+  Object.entries(baseLayout.occupationMap).forEach(([rowStr, rowData]) => {
+    const rowIndex = parseInt(rowStr);
+    rowData.occupiedDays.forEach(dayIndex => {
+      if (dayIndex < days.length) {
+        dayOccupationMap[dayIndex].add(rowIndex);
+      }
+    });
+    
+    // Also add single-day events to occupation map
+    Object.entries(rowData.singleDayEvents).forEach(([dayIndexStr, eventsInDay]) => {
+      const dayIndex = parseInt(dayIndexStr);
+      if (dayIndex < days.length && eventsInDay.length > 0) {
+        dayOccupationMap[dayIndex].add(rowIndex);
+      }
+    });
+  });
+  
+  return {
+    multiDayEvents: multiDayEventsWithSpans,
+    singleDayEvents: baseLayout.singleDayEvents,
+    totalRows: baseLayout.totalRows,
+    occupationMap: baseLayout.occupationMap,
+    dayOccupationMap
+  };
+};
+
+/**
+ * Lane-Based Month Layout System (Legacy)
+ */
+interface Lane {
+  id: number;
+  occupiedDays: Set<number>; // Day indices (0-based from month start)
+  events: CalendarEvent[];
+}
+
+export interface MonthLaneLayout {
+  multiDayEvents: { event: CalendarEvent; lane: number; startDay: number; endDay: number; weekSpan: { week: number; startCol: number; endCol: number }[] }[];
+  singleDayEvents: { event: CalendarEvent; lane: number; dayIndex: number }[];
+  totalLanes: number;
+  dayOccupationMap: { [dayIndex: number]: Set<number> }; // Which lanes are occupied for each day
+}
+
+/**
+ * DEPRECATED: Calculate month-optimized layout using lane-based greedy algorithm
+ * 
+ * ⚠️  This algorithm has known gap-filling issues where single-day events
+ * fail to find available gaps left by multi-day events, resulting in
+ * inefficient space utilization and visual gaps in the calendar.
+ * 
+ * 🔄 MIGRATION: Use calculateUnifiedMonthLayout() instead, which adapts
+ * the proven week view algorithm for month layouts and eliminates gap issues.
+ * 
+ * 📅 This function is kept for backwards compatibility during transition
+ * but will be removed in a future version.
+ */
+export const calculateMonthOptimizedLayout = (
+  days: Date[],
+  events: CalendarEvent[]
+): MonthLaneLayout => {
+  // Initialize day occupation map
+  const dayOccupationMap: { [dayIndex: number]: Set<number> } = {};
+  for (let i = 0; i < days.length; i++) {
+    dayOccupationMap[i] = new Set();
+  }
+  
+  // Separate and sort events for optimal placement
+  const multiDayEvents = events.filter(event => 
+    event.isMultiDay && event.displayStart && event.displayEnd && event.isAllDay
+  );
+  
+  const singleDayEvents = events.filter(event => 
+    !event.isMultiDay // Include both all-day AND timed single-day events
+  );
+  
+  // Sort multi-day events: earlier start first, then longer duration first
+  const sortedMultiDayEvents = multiDayEvents.sort((a, b) => {
+    if (!a.displayStart || !b.displayStart) return 0;
+    const startComparison = a.displayStart.getTime() - b.displayStart.getTime();
+    if (startComparison !== 0) return startComparison;
+    
+    // For same start date, prioritize longer events
+    const aDuration = a.daySpan || 1;
+    const bDuration = b.daySpan || 1;
+    return bDuration - aDuration;
+  });
+  
+  // Sort single-day events by date, then prioritize all-day events over timed events
+  const sortedSingleDayEvents = singleDayEvents.sort((a, b) => {
+    const dateComparison = a.start.getTime() - b.start.getTime();
+    if (dateComparison !== 0) return dateComparison;
+    
+    // For same date, prioritize all-day events first, then timed events
+    if (a.isAllDay && !b.isAllDay) return -1;
+    if (!a.isAllDay && b.isAllDay) return 1;
+    
+    // For timed events on same date, sort by start time
+    if (!a.isAllDay && !b.isAllDay) {
+      return a.start.getTime() - b.start.getTime();
+    }
+    
+    return 0;
+  });
+  
+  const lanes: Lane[] = [];
+  const multiDayPlacements: { event: CalendarEvent; lane: number; startDay: number; endDay: number; weekSpan: { week: number; startCol: number; endCol: number }[] }[] = [];
+  const singleDayPlacements: { event: CalendarEvent; lane: number; dayIndex: number }[] = [];
+  
+  // Phase 1: Place multi-day events using lane-based greedy algorithm
+  for (const event of sortedMultiDayEvents) {
+    if (!event.displayStart || !event.displayEnd) continue;
+    
+    // Find which days this event spans in the month
+    const eventStartDay = startOfDay(event.displayStart);
+    const eventEndDay = startOfDay(event.displayEnd);
+    
+    const startDayIndex = days.findIndex(day => isSameDay(startOfDay(day), eventStartDay));
+    const endDayIndex = days.findIndex(day => isSameDay(startOfDay(day), eventEndDay));
+    
+    if (startDayIndex === -1) continue; // Event not in this month's range
+    
+    const actualEndDayIndex = endDayIndex === -1 ? days.length - 1 : endDayIndex;
+    const spannedDayIndices = [];
+    for (let i = startDayIndex; i <= actualEndDayIndex; i++) {
+      spannedDayIndices.push(i);
+    }
+    
+    // Find the first lane where this event can fit (greedy algorithm)
+    let targetLane = -1;
+    for (let laneIndex = 0; laneIndex < lanes.length; laneIndex++) {
+      const lane = lanes[laneIndex];
+      const hasConflict = spannedDayIndices.some(dayIndex => lane.occupiedDays.has(dayIndex));
+      
+      if (!hasConflict) {
+        targetLane = laneIndex;
+        break;
+      }
+    }
+    
+    // If no existing lane can accommodate this event, create a new lane
+    if (targetLane === -1) {
+      targetLane = lanes.length;
+      lanes.push({
+        id: targetLane,
+        occupiedDays: new Set(),
+        events: []
+      });
+    }
+    
+    // Place the event in the target lane
+    const lane = lanes[targetLane];
+    spannedDayIndices.forEach(dayIndex => {
+      lane.occupiedDays.add(dayIndex);
+      dayOccupationMap[dayIndex].add(targetLane);
+    });
+    lane.events.push(event);
+    
+    // Calculate week spans for rendering
+    const weekSpans: { week: number; startCol: number; endCol: number }[] = [];
+    let currentWeek = Math.floor(startDayIndex / 7);
+    let segmentStart = startDayIndex;
+    
+    while (segmentStart <= actualEndDayIndex) {
+      const weekEnd = (currentWeek + 1) * 7 - 1;
+      const segmentEnd = Math.min(actualEndDayIndex, weekEnd);
+      
+      weekSpans.push({
+        week: currentWeek,
+        startCol: segmentStart % 7,
+        endCol: segmentEnd % 7
+      });
+      
+      segmentStart = segmentEnd + 1;
+      currentWeek++;
+    }
+    
+    multiDayPlacements.push({
+      event,
+      lane: targetLane,
+      startDay: startDayIndex,
+      endDay: actualEndDayIndex,
+      weekSpan: weekSpans
+    });
+  }
+  
+  // Phase 2: Place single-day events using gap-filling algorithm
+  for (const event of sortedSingleDayEvents) {
+    const eventDayIndex = days.findIndex(day => isSameDay(startOfDay(day), startOfDay(event.start)));
+    
+    if (eventDayIndex === -1) continue; // Event not in this month's range
+    
+    // Find the first available lane for this day (gap-filling)
+    let targetLane = -1;
+    const occupiedLanes = dayOccupationMap[eventDayIndex];
+    
+    // Try to place in existing lanes first (gap-filling)
+    for (let laneIndex = 0; laneIndex < lanes.length; laneIndex++) {
+      if (!occupiedLanes.has(laneIndex)) {
+        targetLane = laneIndex;
+        break;
+      }
+    }
+    
+    // If no gap found, create a new lane
+    if (targetLane === -1) {
+      targetLane = lanes.length;
+      lanes.push({
+        id: targetLane,
+        occupiedDays: new Set(),
+        events: []
+      });
+    }
+    
+    // Place the event
+    const lane = lanes[targetLane];
+    lane.occupiedDays.add(eventDayIndex);
+    dayOccupationMap[eventDayIndex].add(targetLane);
+    lane.events.push(event);
+    
+    singleDayPlacements.push({
+      event,
+      lane: targetLane,
+      dayIndex: eventDayIndex
+    });
+  }
+  
+  return {
+    multiDayEvents: multiDayPlacements,
+    singleDayEvents: singleDayPlacements,
+    totalLanes: lanes.length,
+    dayOccupationMap
   };
 };
