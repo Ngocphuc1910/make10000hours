@@ -759,7 +759,7 @@ const App: React.FC = () => {
           <GlobalKeyboardShortcuts key="global-shortcuts" />
           <AnalyticsWrapper>
             <Routes>
-              <Route path="/" element={<PomodoroPageWithLayout />} />
+              <Route path="/" element={<Navigate to="/pomodoro" replace />} />
               <Route path="pomodoro" element={<PomodoroPageWithLayout />} />
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="dashboard" element={<DashboardPage />} />
