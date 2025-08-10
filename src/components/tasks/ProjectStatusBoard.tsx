@@ -327,6 +327,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                       onToggleProject={() => {}}
                       allTasks={tasks}
                       hideHeader={true}
+                      projectId={id === 'no-project' ? undefined : id} // Pass project ID for task creation
                     />
                   );
                 })}

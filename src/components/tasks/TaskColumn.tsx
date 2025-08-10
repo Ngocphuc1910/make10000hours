@@ -21,6 +21,7 @@ interface TaskColumnProps {
   onToggleProject?: (projectId: string | null) => void;
   allTasks?: Task[];
   hideHeader?: boolean;
+  projectId?: string; // Add projectId prop for by-project view
 }
 
 const TaskColumn: React.FC<TaskColumnProps> = ({
@@ -35,7 +36,8 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
   projects = [],
   onToggleProject,
   allTasks = [],
-  hideHeader = false
+  hideHeader = false,
+  projectId
 }) => {
   const [isAddingTask, setIsAddingTask] = useState(false);
   const reorderTasks = useTaskStore(state => state.reorderTasks);
@@ -272,6 +274,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
                             ) : (
                               <TaskForm 
                                 status={status} 
+                                initialProjectId={projectId}
                                 onCancel={() => setIsAddingTask(false)} 
                               />
                             )}
@@ -367,6 +370,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
             ) : (
               <TaskForm 
                 status={status} 
+                initialProjectId={projectId} 
                 onCancel={() => setIsAddingTask(false)} 
               />
             )}
