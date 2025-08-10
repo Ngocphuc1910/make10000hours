@@ -44,12 +44,18 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
     e.dataTransfer.setData('application/x-task-status', task.status);
     if (cardRef.current) {
       cardRef.current.classList.add('dragging');
+      // Enhanced visual feedback - opacity and scale
+      cardRef.current.classList.add('opacity-50');
+      cardRef.current.style.transform = 'scale(1.02)';
+      cardRef.current.style.transition = 'all 0.2s ease';
     }
   };
 
   const handleDragEnd = () => {
     if (cardRef.current) {
-      cardRef.current.classList.remove('dragging');
+      cardRef.current.classList.remove('dragging', 'opacity-50');
+      cardRef.current.style.transform = '';
+      cardRef.current.style.transition = '';
     }
     setIsDragOver(false);
     setDragPosition(null);
@@ -178,12 +184,12 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
 
   return (
     <div className="relative">
-      {/* Drop indicator lines */}
+      {/* Seamless Drop indicator lines */}
       {isDragOver && dragPosition === 'top' && (
-        <div className="absolute -top-1 left-0 right-0 h-0.5 border-t-2 border-dashed border-red-500 z-10"></div>
+        <div className="absolute -top-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-lg z-10 animate-pulse"></div>
       )}
       {isDragOver && dragPosition === 'bottom' && (
-        <div className="absolute -bottom-1 left-0 right-0 h-0.5 border-b-2 border-dashed border-red-500 z-10"></div>
+        <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-lg z-10 animate-pulse"></div>
       )}
       
       <div
@@ -191,7 +197,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
         className={`task-card flex items-start p-3 border ${getTaskCardClasses()}
         ${task.completed ? 'opacity-70 text-text-secondary' : ''}
         ${isDragOver ? 'drag-over' : ''}
-        rounded-md hover:shadow-sm cursor-pointer transition-all duration-200`}
+        rounded-md hover:shadow-sm cursor-pointer transition-all duration-200 ease-in-out`}
         draggable
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}

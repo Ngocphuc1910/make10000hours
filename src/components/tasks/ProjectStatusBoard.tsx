@@ -1,15 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useTaskStore } from '../../store/taskStore';
 import { useUIStore } from '../../store/uiStore';
+import { useUserStore } from '../../store/userStore';
 import type { Task, Project } from '../../types/models';
 import { TaskColumn } from './';
 import { ToastNotification } from './';
 import TaskCard from './TaskCard';
+import TaskForm from './TaskForm';
 import { ProjectLayoutProvider } from '../../contexts/ProjectLayoutContext';
 import StatusGroupRow from './StatusGroupRow';
 import DraggableColumnHeader from './DraggableColumnHeader';
+import { Icon } from '../ui/Icon';
+import { triggerAuthenticationFlow } from '../../utils/authGuard';
 
 interface ProjectStatusBoardProps {
   className?: string;
@@ -30,8 +34,14 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
   const projectColumnOrder = useTaskStore(state => state.projectColumnOrder);
   const reorderProjectColumns = useTaskStore(state => state.reorderProjectColumns);
   const { isLeftSidebarOpen } = useUIStore();
+  const isAuthenticated = useUserStore(state => state.isAuthenticated);
+  const authStatus = useMemo(() => ({ 
+    isAuthenticated, 
+    shouldShowAuth: true 
+  }), [isAuthenticated]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [expandedStatuses, setExpandedStatuses] = useState<Set<string>>(new Set());
+  const [isAddingTask, setIsAddingTask] = useState<{ [key: string]: boolean }>({});
 
   // Get all projects with tasks, including "No Project"
   const projectsWithTasks = React.useMemo(() => {
@@ -106,10 +116,10 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
   }, [projectsWithTasks, projectColumnOrder]);
 
   // Filter tasks by project
-  const getProjectTasks = (projectId: string) => {
+  const getProjectTasks = useCallback((projectId: string) => {
     const actualProjectId = projectId === 'no-project' ? null : projectId;
     return tasks.filter(task => (task.projectId || null) === actualProjectId);
-  };
+  }, [tasks]);
 
   // Column configurations for projects
   const columnConfigs = React.useMemo(() => {
@@ -125,7 +135,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
     });
     
     return configs;
-  }, [orderedProjects]);
+  }, [orderedProjects, getProjectTasks]);
 
   // Handle task status change
   const handleTaskStatusChange = (taskId: string, newStatus: Task['status']) => {
@@ -166,6 +176,12 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
+
+  // Handle adding task toggle for grouped view
+  const handleAddTaskToggle = useCallback((status: Task['status'], projectId: string, adding: boolean) => {
+    const key = `${status}-${projectId}`;
+    setIsAddingTask(prev => ({ ...prev, [key]: adding }));
+  }, []);
 
   // Toggle status expansion
   const toggleStatusExpansion = (status: Task['status']) => {
@@ -213,7 +229,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
         }
       };
     });
-  }, [orderedProjects, groupByStatus]);
+  }, [orderedProjects, groupByStatus, getProjectTasks]);
 
   return (
     <ProjectLayoutProvider>
@@ -249,10 +265,10 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
           </SortableContext>
 
           {/* Scrollable Content Row */}
-          <div className="flex flex-col flex-1">
+          <div className="flex flex-col flex-1 overflow-hidden">
             {groupByStatus ? (
               /* Status Group Rows spanning all projects */
-              <div className={`flex-1 pr-6 pb-6 pt-4 ${isLeftSidebarOpen ? 'pl-6' : 'pl-2'}`}>
+              <div className={`flex-1 pr-6 pb-6 pt-4 ${isLeftSidebarOpen ? 'pl-6' : 'pl-2'} overflow-x-auto`}>
                 {['pomodoro', 'todo', 'completed'].map((status: Task['status']) => (
                   <div key={status} className="mb-6">
                     {/* Status Chip spanning all columns */}
@@ -286,19 +302,49 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                       <div className={`grid gap-6 mb-4`} style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}>
                         {orderedProjects.map(({ project, id }) => {
                           const projectTasks = getProjectTasks(id).filter(t => t.status === status);
+                          const addTaskKey = `${status}-${id}`;
                           return (
-                            <div key={`${status}-${id}`} className="flex flex-col space-y-3">
-                              {projectTasks.map(task => (
-                                <TaskCard 
-                                  key={task.id} 
-                                  task={task}
-                                  onStatusChange={handleTaskStatusChange}
-                                  onReorder={() => {}}
-                                  onCrossColumnMove={() => {}}
-                                  columnStatus={status}
-                                  context="task-management"
-                                />
-                              ))}
+                            <div key={`${status}-${id}`} className="flex flex-col">
+                              <div className="space-y-3">
+                                {projectTasks.map(task => (
+                                  <TaskCard 
+                                    key={task.id} 
+                                    task={task}
+                                    onStatusChange={handleTaskStatusChange}
+                                    onReorder={() => {}}
+                                    onCrossColumnMove={() => {}}
+                                    columnStatus={status}
+                                    context="task-management"
+                                  />
+                                ))}
+                              </div>
+                              
+                              {/* New Task button for this status in this project */}
+                              <div className="mt-2">
+                                {!isAddingTask[addTaskKey] ? (
+                                  <button
+                                    className="flex items-center text-text-secondary hover:text-text-primary bg-background-primary hover:bg-background-container transition-colors duration-200 py-2 px-2 rounded focus:outline-none w-full"
+                                    onClick={() => {
+                                      if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+                                        triggerAuthenticationFlow();
+                                        return;
+                                      }
+                                      handleAddTaskToggle(status, id, true);
+                                    }}
+                                  >
+                                    <div className="w-4 h-4 flex items-center justify-center mr-2">
+                                      <Icon name="add-line" />
+                                    </div>
+                                    <span className="text-sm">New Task</span>
+                                  </button>
+                                ) : (
+                                  <TaskForm 
+                                    status={status} 
+                                    initialProjectId={id === 'no-project' ? undefined : id}
+                                    onCancel={() => handleAddTaskToggle(status, id, false)} 
+                                  />
+                                )}
+                              </div>
                             </div>
                           );
                         })}
@@ -309,7 +355,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
               </div>
             ) : (
               /* Traditional Project Column Layout */
-              <div className="grid gap-6 flex-1 pl-2" style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}>
+              <div className="grid gap-6 flex-1 pl-2 overflow-x-auto" style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}>
                 {orderedProjects.map(({ project, id }, index) => {
                   const config = columnConfigs[id];
                   return (
@@ -327,6 +373,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                       onToggleProject={() => {}}
                       allTasks={tasks}
                       hideHeader={true}
+                      projectId={id === 'no-project' ? undefined : id} // Pass project ID for task creation
                     />
                   );
                 })}
