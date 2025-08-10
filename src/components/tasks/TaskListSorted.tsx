@@ -6,6 +6,7 @@ import type { Task } from '../../types/models';
 import { useTimerStore } from '../../store/timerStore';
 import { TaskFilteringService } from '../../services/TaskFilteringService';
 import { useUserStore } from '../../store/userStore';
+import { sortTasksByOrder } from '../../utils/taskSorting';
 
 export const TaskListSorted: React.FC = () => {
   const {
@@ -16,6 +17,7 @@ export const TaskListSorted: React.FC = () => {
     setIsAddingTask,
     setEditingTaskId,
     reorderTasks,
+    reorderTasksGlobal,
   } = useTaskStore();
   const {
     isRunning,
@@ -54,12 +56,12 @@ export const TaskListSorted: React.FC = () => {
     }
   }, [editingTaskId]);
 
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string, sortedTasks: Task[]) => {
     // Store the dragged task ID
     draggedTaskId.current = taskId;
 
-    // Find the task index
-    const taskIndex = tasks.findIndex(t => t.id === taskId);
+    // CRITICAL FIX: Find the task index in the SORTED tasks that are actually displayed
+    const taskIndex = sortedTasks.findIndex(t => t.id === taskId);
     draggedTaskIndex.current = taskIndex;
 
     // Visual feedback
@@ -87,21 +89,25 @@ export const TaskListSorted: React.FC = () => {
     e.currentTarget.classList.remove('bg-gray-50');
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>, dropTargetId: string) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, dropTargetId: string, sortedTasks: Task[]) => {
     e.preventDefault();
     e.currentTarget.classList.remove('bg-gray-50');
 
     // If no task was dragged or dropping on itself, do nothing
     if (!draggedTaskId.current || draggedTaskId.current === dropTargetId) return;
 
-    const draggedTask = tasks.find(t => t.id === draggedTaskId.current);
-    const dropTarget = tasks.find(t => t.id === dropTargetId);
+    const draggedTask = sortedTasks.find(t => t.id === draggedTaskId.current);
+    const dropTarget = sortedTasks.find(t => t.id === dropTargetId);
 
     if (!draggedTask || !dropTarget) return;
 
-    // Just reorder the tasks, don't change completion status
-    const dropIndex = tasks.findIndex(t => t.id === dropTargetId);
-    reorderTasks(draggedTaskId.current, dropIndex);
+    // CRITICAL FIX: Use the drop index from SORTED tasks that are actually displayed
+    const dropIndex = sortedTasks.findIndex(t => t.id === dropTargetId);
+    
+    console.log(`🎯 TaskListSorted drag & drop: ${draggedTask.title} -> position ${dropIndex} in sorted list of ${sortedTasks.length} tasks`);
+    
+    // Use global reordering to allow dragging completed tasks between incomplete ones
+    reorderTasksGlobal(draggedTaskId.current, dropIndex, sortedTasks);
   };
 
   const handleEditTask = (taskId: string) => {
@@ -127,7 +133,7 @@ export const TaskListSorted: React.FC = () => {
   };
 
   // Filter and sort tasks using TaskFilteringService with timezone awareness
-  const sortedTasks = [...tasks]
+  const filteredTasks = [...tasks]
     .filter(task => {
       // Don't show archived tasks
       if (task.hideFromPomodoro) return false;
@@ -140,8 +146,9 @@ export const TaskListSorted: React.FC = () => {
       } else {
         return TaskFilteringService.getTodaysTasks([task], userTimezone).length > 0;
       }
-    })
-    .sort((a, b) => a.order - b.order);
+    });
+
+  const sortedTasks = sortTasksByOrder(filteredTasks);
 
 
   return (
@@ -172,12 +179,12 @@ export const TaskListSorted: React.FC = () => {
             <div
               key={task.id}
               draggable={true}
-              onDragStart={(e) => handleDragStart(e, task.id)}
+              onDragStart={(e) => handleDragStart(e, task.id, sortedTasks)}
               onDragEnd={handleDragEnd}
               onDragOver={handleDragOver}
               onDragEnter={handleDragEnter}
               onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, task.id)}
+              onDrop={(e) => handleDrop(e, task.id, sortedTasks)}
             >
               <TaskItem
                 task={task}
@@ -192,12 +199,12 @@ export const TaskListSorted: React.FC = () => {
           <div
             key={task.id}
             draggable={true}
-            onDragStart={(e) => handleDragStart(e, task.id)}
+            onDragStart={(e) => handleDragStart(e, task.id, sortedTasks)}
             onDragEnd={handleDragEnd}
             onDragOver={handleDragOver}
             onDragEnter={handleDragEnter}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, task.id)}
+            onDrop={(e) => handleDrop(e, task.id, sortedTasks)}
           >
             <TaskItem
               task={task}
