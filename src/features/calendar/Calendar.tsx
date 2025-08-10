@@ -32,6 +32,7 @@ interface UndoRedoState {
   taskId: string;
   beforeState: {
     scheduledDate: string | null;
+    scheduledEndDate: string | null;
     scheduledStartTime: string | null;
     scheduledEndTime: string | null;
     includeTime: boolean;
@@ -39,6 +40,7 @@ interface UndoRedoState {
   };
   afterState: {
     scheduledDate: string | null;
+    scheduledEndDate: string | null;
     scheduledStartTime: string | null;
     scheduledEndTime: string | null;
     includeTime: boolean;
@@ -248,6 +250,7 @@ export const Calendar: React.FC = () => {
     const updateData = {
       ...beforeState,
       scheduledDate: beforeState.scheduledDate === null ? undefined : beforeState.scheduledDate,
+      scheduledEndDate: beforeState.scheduledEndDate === null ? undefined : beforeState.scheduledEndDate,
       scheduledStartTime: beforeState.scheduledStartTime === null ? undefined : beforeState.scheduledStartTime,
       scheduledEndTime: beforeState.scheduledEndTime === null ? undefined : beforeState.scheduledEndTime,
     };
@@ -285,6 +288,7 @@ export const Calendar: React.FC = () => {
     const updateData = {
       ...afterState,
       scheduledDate: afterState.scheduledDate === null ? undefined : afterState.scheduledDate,
+      scheduledEndDate: afterState.scheduledEndDate === null ? undefined : afterState.scheduledEndDate,
       scheduledStartTime: afterState.scheduledStartTime === null ? undefined : afterState.scheduledStartTime,
       scheduledEndTime: afterState.scheduledEndTime === null ? undefined : afterState.scheduledEndTime,
     };
@@ -563,6 +567,16 @@ export const Calendar: React.FC = () => {
             timeSpent: 0
           };
 
+          // CRITICAL FIX: For multidate task duplication, preserve the duration by setting scheduledEndDate
+          const isOriginalMultiDayForDupe = task.scheduledEndDate && task.scheduledEndDate !== task.scheduledDate;
+          if (isOriginalMultiDayForDupe) {
+            const duplicateEndDate = shouldBeAllDay 
+              ? format(end, 'yyyy-MM-dd') 
+              : `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+            
+            (duplicateTaskData as any).scheduledEndDate = duplicateEndDate;
+          }
+
           if (!shouldBeAllDay) {
             // Add time fields only if not all-day
             duplicateTaskData.scheduledStartTime = start.toTimeString().substring(0, 5); // HH:MM format
@@ -591,6 +605,7 @@ export const Calendar: React.FC = () => {
               taskId: newTaskId,
               beforeState: {
                 scheduledDate: null,
+                scheduledEndDate: null,
                 scheduledStartTime: null,
                 scheduledEndTime: null,
                 includeTime: false,
@@ -598,6 +613,7 @@ export const Calendar: React.FC = () => {
               },
               afterState: {
                 scheduledDate: duplicateTaskData.scheduledDate || null,
+                scheduledEndDate: (duplicateTaskData as any).scheduledEndDate || null,
                 scheduledStartTime: duplicateTaskData.scheduledStartTime || null,
                 scheduledEndTime: duplicateTaskData.scheduledEndTime || null,
                 includeTime: Boolean(duplicateTaskData.includeTime),
@@ -624,6 +640,7 @@ export const Calendar: React.FC = () => {
         // Capture the before state for undo/redo
         const beforeState = {
           scheduledDate: task.scheduledDate || null,
+          scheduledEndDate: task.scheduledEndDate || null,
           scheduledStartTime: task.scheduledStartTime || null,
           scheduledEndTime: task.scheduledEndTime || null,
           includeTime: task.includeTime || false,
@@ -641,6 +658,17 @@ export const Calendar: React.FC = () => {
           scheduledDate,
           includeTime: !shouldBeAllDay
         };
+
+        // CRITICAL FIX: Update scheduledEndDate for multidate tasks to preserve duration
+        const isOriginalMultiDay = task.scheduledEndDate && task.scheduledEndDate !== task.scheduledDate;
+        if (isOriginalMultiDay) {
+          // Calculate new end date to preserve the task's duration
+          const scheduledEndDate = shouldBeAllDay 
+            ? format(end, 'yyyy-MM-dd') // Use calculated end date for all-day events
+            : `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+          
+          taskUpdateData.scheduledEndDate = scheduledEndDate;
+        }
 
         // Add time fields only if not all-day
         if (!shouldBeAllDay) {
@@ -668,6 +696,7 @@ export const Calendar: React.FC = () => {
         // Capture the after state for undo/redo
         const afterState = {
           scheduledDate: taskUpdateData.scheduledDate,
+          scheduledEndDate: taskUpdateData.scheduledEndDate || task.scheduledEndDate || null,
           scheduledStartTime: taskUpdateData.scheduledStartTime,
           scheduledEndTime: taskUpdateData.scheduledEndTime,
           includeTime: taskUpdateData.includeTime,
@@ -766,6 +795,7 @@ export const Calendar: React.FC = () => {
     // Capture the before state for undo/redo
     const beforeState = {
       scheduledDate: task.scheduledDate || null,
+      scheduledEndDate: task.scheduledEndDate || null,
       scheduledStartTime: task.scheduledStartTime || null,
       scheduledEndTime: task.scheduledEndTime || null,
       includeTime: task.includeTime || false,
