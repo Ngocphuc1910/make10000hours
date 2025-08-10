@@ -9,6 +9,7 @@ import { ToastNotification } from './';
 import { ProjectLayoutProvider } from '../../contexts/ProjectLayoutContext';
 import ProjectGroupRow from './ProjectGroupRow';
 import DraggableColumnHeader from './DraggableColumnHeader';
+import { sortTasksByOrder } from '../../utils/taskSorting';
 
 interface TaskStatusBoardProps {
   className?: string;
@@ -33,10 +34,10 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
 
 
-  // Filter tasks by status
-  const pomodoroTasks = tasks.filter(task => task.status === 'pomodoro');
-  const todoTasks = tasks.filter(task => task.status === 'todo');
-  const completedTasks = tasks.filter(task => task.status === 'completed');
+  // Filter AND SORT tasks by status using fractional positions
+  const pomodoroTasks = sortTasksByOrder(tasks.filter(task => task.status === 'pomodoro'));
+  const todoTasks = sortTasksByOrder(tasks.filter(task => task.status === 'todo'));
+  const completedTasks = sortTasksByOrder(tasks.filter(task => task.status === 'completed'));
 
   // Column configurations
   const columnConfigs = {
@@ -166,9 +167,9 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
       return {
         project,
         projectTasks: {
-          pomodoro: projectTasks.filter(t => t.status === 'pomodoro'),
-          todo: projectTasks.filter(t => t.status === 'todo'),
-          completed: projectTasks.filter(t => t.status === 'completed')
+          pomodoro: sortTasksByOrder(projectTasks.filter(t => t.status === 'pomodoro')),
+          todo: sortTasksByOrder(projectTasks.filter(t => t.status === 'todo')),
+          completed: sortTasksByOrder(projectTasks.filter(t => t.status === 'completed'))
         }
       };
     });
