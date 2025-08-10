@@ -250,19 +250,23 @@ export const useTimerStore = create<TimerState>((set, get) => {
         
         if (lastCountedMinute !== null && lastCountedMinute !== currentMinute && currentMinute < lastCountedMinute) {
           // We've crossed a minute boundary (time decreased from one minute to the next)
-          console.log('Minute boundary crossed:', {
-            from: lastCountedMinute,
-            to: currentMinute,
+          console.log('🔄 Processing minute boundary:', {
+            currentMinute,
+            lastCountedMinute,
             sessionId: activeSession.sessionId,
             taskId: activeSession.taskId
           });
           
           // Update active session duration in database
-          get().updateActiveSession();
+          get().updateActiveSession().catch(error => {
+            console.error('❌ updateActiveSession FAILED:', error);
+          });
           
           // Increment task time spent locally
           if (activeSession.taskId) {
-            timeSpentIncrement(activeSession.taskId, 1);
+            timeSpentIncrement(activeSession.taskId, 1).catch(error => {
+              console.error('❌ timeSpentIncrement FAILED:', error);
+            });
           }
         }
         

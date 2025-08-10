@@ -125,7 +125,22 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         id: doc.id,
         ...doc.data(),
       })) as Task[];
-      console.log(`Fetched ${fetchedTasks.length} tasks for user ${user.uid}`);
+      console.log(`📡 Real-time subscription update: ${fetchedTasks.length} tasks for user ${user.uid}`);
+      
+      // Debug: Log timeSpent changes for active tasks
+      const { tasks: currentTasks } = get();
+      fetchedTasks.forEach(newTask => {
+        const oldTask = currentTasks.find(t => t.id === newTask.id);
+        if (oldTask && oldTask.timeSpent !== newTask.timeSpent) {
+          console.log('🔄 Task timeSpent updated via subscription:', {
+            taskId: newTask.id,
+            taskTitle: newTask.title,
+            from: oldTask.timeSpent,
+            to: newTask.timeSpent
+          });
+        }
+      });
+      
       set({ tasks: fetchedTasks });
     });
     
@@ -696,20 +711,30 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       console.error('Task not found:', id);
       throw new Error('Task not found');
     }
+    const oldTimeSpent = task.timeSpent;
     const newTimeSpent = task.timeSpent + increment;
     if (newTimeSpent < 0) {
       console.error('Time spent cannot be negative');
       throw new Error('Time spent cannot be negative');
     }
     try {
+      console.log('💾 Writing timeSpent to Firebase:', { 
+        taskId: id, 
+        from: oldTimeSpent, 
+        to: newTimeSpent, 
+        increment 
+      });
+      
       // Update the main task timeSpent field
       const taskRef = doc(db, 'tasks', id);
       await updateDoc(taskRef, {
         timeSpent: newTimeSpent,
         updatedAt: new Date()
       });
+      
+      console.log('✅ Firebase write completed for task:', id);
     } catch (error) {
-      console.error('Error incrementing time spent:', error);
+      console.error('❌ Error incrementing time spent:', error);
       throw error;
     }
   },
