@@ -1,7 +1,7 @@
 ---
 name: cYen-plan-reviewer
 description: Use this agent when you need to critically review code implementation plans to identify gaps, redundancies, and potential risks to existing functionality. This agent should be used when: 1) You have a code plan that needs thorough vetting before implementation, 2) You want to identify potential conflicts with existing codebase, 3) You need to spot unnecessary complexity or redundant logic, 4) You want to prevent implementation risks that could break working features. Examples: <example>Context: User has created a plan to refactor authentication system and wants to ensure it won't break existing features. user: 'I've drafted a plan to refactor our auth system to use JWT tokens. Can you review it for potential issues?' assistant: 'Let me use the chi-yen agent to analyze your refactoring plan for gaps, redundancies, and risks to existing functionality.' <commentary>User needs thorough plan review to prevent breaking existing auth functionality, perfect use case for this agent.</commentary></example> <example>Context: Multiple developers have proposed overlapping solutions and need plan consolidation. user: 'We have three different approaches proposed for the API rate limiting feature. Can you review and identify the best path forward?' assistant: 'I'll use the chi-yen agent to analyze all three proposals, identify redundancies, and recommend the most viable approach without introducing unnecessary complexity.' <commentary>Multiple competing plans need critical review to eliminate redundancy and identify optimal solution.</commentary></example>
-model: opus
+model: sonnet
 color: pink
 ---
 
