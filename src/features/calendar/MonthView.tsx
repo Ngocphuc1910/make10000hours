@@ -70,8 +70,9 @@ export const MonthView: React.FC<MonthViewProps> = ({
       const dayKey = format(day, 'yyyy-MM-dd');
       const occupiedRows = globalLayout.dayOccupationMap[dayKey] || new Set();
       
-      // Pass occupied rows to cell layout function for proper gap-filling
-      const cellLayout = calculateMonthCellLayout(day, singleDayEvents, new Set(occupiedRows));
+      // FIXED: Pass the original set to preserve occupation tracking across multiple events in same cell
+      // Creating a new Set() was breaking the gap-filling logic
+    const cellLayout = calculateMonthCellLayout(day, singleDayEvents, occupiedRows);
       cellLayouts[idx] = cellLayout;
     });
     
@@ -184,10 +185,24 @@ export const MonthView: React.FC<MonthViewProps> = ({
             const weekIndex = parseInt(weekIndexStr);
             
             return weekEvents.map(({ event, row, startDay, endDay }) => {
-              const left = (startDay / 7) * 100;
-              const width = Math.min(((endDay - startDay + 1) / 7) * 100, (7 - startDay) / 7 * 100);
-              const top = (weekIndex / numberOfRows) * 100;
-              const rowOffset = 30 + (row * 22); // 30px for date numbers + 22px per row (20px + 2px gap)
+              // FIX: Use consistent pixel positioning for both axes to match single-day events
+              // Calculate cell dimensions consistently
+              const gridWidth = gridRef.current ? gridRef.current.offsetWidth : 1400; // fallback to reasonable width
+              const cellWidth = gridWidth / 7;
+              const cellPadding = 4; // Match single-day event padding
+              
+              // Pixel-based left positioning
+              const leftPixels = (startDay * cellWidth) + cellPadding;
+              const widthPixels = Math.min(
+                ((endDay - startDay + 1) * cellWidth) - (cellPadding * 2), 
+                ((7 - startDay) * cellWidth) - cellPadding
+              );
+              
+              // CRITICAL FIX: Account for which week (grid row) this event is in
+              // Multi-day events must be positioned relative to their grid week, not just their event row
+              const weekOffsetPixels = weekIndex * 140; // 140px = minimum cell height from CSS grid
+              const rowOffsetWithinCell = 30 + (row * 22); // 30px for date numbers + 22px per row (20px + 2px gap)
+              const totalTopOffset = weekOffsetPixels + rowOffsetWithinCell; // Combine week position + event row position
               
               // Determine rounding style
               const eventStartDay = days.findIndex(day => event.displayStart && isSameDay(day, event.displayStart));
@@ -205,12 +220,10 @@ export const MonthView: React.FC<MonthViewProps> = ({
                   key={`${event.id}-week-${weekIndex}`}
                   className="absolute pointer-events-auto"
                   style={{
-                    left: `${left}%`,
-                    width: `${width}%`,
-                    top: `calc(${top}% + ${rowOffset}px)`,
+                    left: `${leftPixels}px`,
+                    width: `${widthPixels}px`,
+                    top: `${totalTopOffset}px`, // FIXED: Account for grid week position + event row
                     height: '20px',
-                    paddingLeft: '4px',
-                    paddingRight: '4px',
                     zIndex: 10 + row // Lower than cell events to avoid conflicts
                   }}
                 >
@@ -329,7 +342,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                                   top: `${row * 22 + 30}px`, // 30px offset for date number + row * (20px + 2px gap)
                                   height: '20px',
                                   left: '4px',
-                                  right: '4px',
+                                  right: '4px', // FIX: Use explicit padding matching multi-day events
                                   zIndex: 30 + row // Higher than multi-day overlay events
                                 }}
                               >

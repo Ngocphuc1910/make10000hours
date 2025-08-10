@@ -804,7 +804,9 @@ export const calculateMonthCellLayout = (
     positionedSingleDayEvents.push({ event, row });
   });
   
-  const totalRows = positionedSingleDayEvents.length + occupiedRows.size;
+  // Calculate total rows as the highest row index + 1
+  const allRowIndices = [...occupiedRows, ...positionedSingleDayEvents.map(p => p.row)];
+  const totalRows = allRowIndices.length > 0 ? Math.max(...allRowIndices) + 1 : 0;
   
   return {
     singleDayEvents: positionedSingleDayEvents,
