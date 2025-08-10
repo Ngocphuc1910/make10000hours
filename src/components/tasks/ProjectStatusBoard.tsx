@@ -265,10 +265,10 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
           </SortableContext>
 
           {/* Scrollable Content Row */}
-          <div className="flex flex-col flex-1">
+          <div className="flex flex-col flex-1 overflow-hidden">
             {groupByStatus ? (
               /* Status Group Rows spanning all projects */
-              <div className={`flex-1 pr-6 pb-6 pt-4 ${isLeftSidebarOpen ? 'pl-6' : 'pl-2'}`}>
+              <div className={`flex-1 pr-6 pb-6 pt-4 ${isLeftSidebarOpen ? 'pl-6' : 'pl-2'} overflow-x-auto`}>
                 {['pomodoro', 'todo', 'completed'].map((status: Task['status']) => (
                   <div key={status} className="mb-6">
                     {/* Status Chip spanning all columns */}
@@ -355,7 +355,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
               </div>
             ) : (
               /* Traditional Project Column Layout */
-              <div className="grid gap-6 flex-1 pl-2" style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}>
+              <div className="grid gap-6 flex-1 pl-2 overflow-x-auto" style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}>
                 {orderedProjects.map(({ project, id }, index) => {
                   const config = columnConfigs[id];
                   return (
