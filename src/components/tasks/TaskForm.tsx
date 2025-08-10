@@ -33,7 +33,11 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
   const { user } = useUserStore();
   
   const [title, setTitle] = useState(task?.title || '');
-  const [projectId, setProjectId] = useState(task?.projectId || '');
+  const [projectId, setProjectId] = useState(() => {
+    if (task?.projectId) return task.projectId;
+    if (initialProjectId) return initialProjectId;
+    return localStorage.getItem('lastUsedProjectId') || 'no-project';
+  });
   const [timeSpent, setTimeSpent] = useState(task?.timeSpent?.toString() || '0');
   const [timeEstimated, setTimeEstimated] = useState(() => {
     if (task?.timeEstimated) return task.timeEstimated.toString();
@@ -129,10 +133,6 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
 
   // Set initial project selection
   useEffect(() => {
-    if (!task?.projectId) { // Only set if not editing existing task
-      setProjectId(getLastUsedProjectId());
-    }
-
     if (!noProject && user && !task) { // Only for new tasks
       useTaskStore.getState().addProject({
         name: 'No Project',
