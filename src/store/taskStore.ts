@@ -125,7 +125,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         id: doc.id,
         ...doc.data(),
       })) as Task[];
-      console.log(`Fetched ${fetchedTasks.length} tasks for user ${user.uid}`);
+      // Only log on initial load or significant changes
+      if (get().tasks.length === 0) {
+        console.log(`Initial load: Fetched ${fetchedTasks.length} tasks for user ${user.uid}`);
+      }
       set({ tasks: fetchedTasks });
     });
     
@@ -630,7 +633,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         ...task,
         status: newStatus,
         completed,
-        hideFromPomodoro: newStatus === 'pomodoro' ? false : task.hideFromPomodoro
+        hideFromPomodoro: newStatus === 'pomodoro' ? false : (task.hideFromPomodoro ?? false)
       };
       
       // Remove the task from its current position
@@ -642,20 +645,18 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       // Insert at the adjusted target position
       updatedTasks.splice(adjustedTargetIndex, 0, movedTask);
       
-      // Optimized: Only update tasks that actually changed position or status
-      const tasksToUpdate = [];
+      // Use Firebase batch for atomic updates (more efficient)
+      const batch = writeBatch(db);
       
       // Always update the moved task (status + position change)
       const movedTaskRef = doc(db, 'tasks', taskId);
-      tasksToUpdate.push(
-        updateDoc(movedTaskRef, {
-          status: newStatus,
-          completed,
-          hideFromPomodoro: newStatus === 'pomodoro' ? false : task.hideFromPomodoro,
-          order: adjustedTargetIndex,
-          updatedAt: new Date()
-        })
-      );
+      batch.update(movedTaskRef, {
+        status: newStatus,
+        completed,
+        hideFromPomodoro: newStatus === 'pomodoro' ? false : (task.hideFromPomodoro ?? false),
+        order: adjustedTargetIndex,
+        updatedAt: new Date()
+      });
       
       // Only update tasks whose order actually changed
       const originalTasks = tasks;
@@ -669,16 +670,14 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         }
         
         const taskRef = doc(db, 'tasks', currentTask.id);
-        tasksToUpdate.push(
-          updateDoc(taskRef, {
-            order: i,
-            updatedAt: new Date()
-          })
-        );
+        batch.update(taskRef, {
+          order: i,
+          updatedAt: new Date()
+        });
       }
       
-      // Execute only necessary updates
-      await Promise.all(tasksToUpdate);
+      // Execute all updates atomically
+      await batch.commit();
     } catch (error) {
       console.error('Error moving task to status and position:', error);
       throw error;
