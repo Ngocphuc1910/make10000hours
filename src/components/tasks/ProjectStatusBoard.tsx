@@ -329,7 +329,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
         <div className={`flex flex-col bg-background-primary ${className}`}>
           {/* Fixed Headers Row */}
           <SortableContext items={projectColumnOrder} strategy={horizontalListSortingStrategy}>
-            <div className="grid gap-6 bg-background-primary sticky top-0 z-30 pl-2" style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}>
+            <div className="grid gap-6 bg-background-primary sticky top-0 z-30 pl-2 pt-4" style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}>
               {orderedProjects.map(({ project, id }) => {
                 const config = columnConfigs[id];
                 return (
@@ -360,11 +360,11 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
           <div className="flex flex-col flex-1 overflow-hidden">
             {groupByStatus ? (
               /* Status Group Rows spanning all projects */
-              <div className={`flex-1 pr-6 pb-6 pt-4 ${isLeftSidebarOpen ? 'pl-6' : 'pl-2'} overflow-x-auto`}>
+              <div className={`flex-1 pr-6 pb-6 ${isLeftSidebarOpen ? 'pl-6' : 'pl-2'} overflow-y-auto`}>
                 {['pomodoro', 'todo', 'completed'].map((status: Task['status']) => (
                   <div key={status} className="mb-6">
                     {/* Status Chip spanning all columns */}
-                    <div className={`sticky bg-background-primary backdrop-blur-sm mb-4 ${expandedStatuses.has(status) ? 'top-[56px] z-10' : 'top-[56px] z-10'}`}>
+                    <div className="sticky bg-background-primary backdrop-blur-sm mb-4 top-0 z-20">
                       <div className="flex items-center gap-2 pr-2 py-2 rounded-lg cursor-pointer" onClick={() => toggleStatusExpansion(status)}>
                         <div className={`flex items-center justify-center w-4 h-4 transition-transform duration-200 ${
                           expandedStatuses.has(status) ? 'rotate-90' : 'rotate-0'
@@ -447,7 +447,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
               </div>
             ) : (
               /* Traditional Project Column Layout */
-              <div className="grid gap-6 flex-1 pl-2 overflow-x-auto" style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}>
+              <div className="grid gap-6 flex-1 pl-2 pt-4 overflow-x-auto" style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}>
                 {orderedProjects.map(({ project, id }, index) => {
                   const config = columnConfigs[id];
                   return (
