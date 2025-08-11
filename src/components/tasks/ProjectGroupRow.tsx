@@ -18,7 +18,7 @@ interface ProjectGroupRowProps {
   onToggleProject: (projectId: string | null) => void;
   onStatusChange: (taskId: string, status: Task['status']) => void;
   onTaskReorder: (draggedTaskId: string, targetTaskId: string, insertAfter?: boolean) => void;
-  onCrossColumnMove: (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter?: boolean) => void;
+  onCrossColumnMove: (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter?: boolean, targetProjectId?: string) => void;
   authStatus: any;
   allTasks: Task[];
   columnOrder: Task['status'][];
@@ -49,8 +49,9 @@ const ProjectGroupRow: React.FC<ProjectGroupRowProps> = ({
       <div className="grid grid-cols-3 gap-6">
         {columnOrder.map((status, index) => (
           <div key={status} className="flex flex-col">
-            {/* Sticky Project Chip or Invisible Spacer */}
-            <div className="sticky top-[56px] z-20 bg-background-primary backdrop-blur-sm mb-4">
+            {/* Sticky Project Chip or Invisible Spacer - FIX: Ensure no pointer interference */}
+            <div className="sticky top-[56px] z-20 bg-background-primary backdrop-blur-sm mb-4 pointer-events-none">
+              <div className="pointer-events-auto">
               {index === 0 ? (
                 <ProjectChip
                   project={project}
@@ -66,6 +67,7 @@ const ProjectGroupRow: React.FC<ProjectGroupRowProps> = ({
                   <div className="px-2 py-0.5 rounded-full text-xs">0</div>
                 </div>
               )}
+              </div>
             </div>
             
             {/* Tasks for this column when expanded */}
@@ -78,9 +80,25 @@ const ProjectGroupRow: React.FC<ProjectGroupRowProps> = ({
                       task={task}
                       onStatusChange={onStatusChange}
                       onReorder={onTaskReorder}
-                      onCrossColumnMove={onCrossColumnMove}
+                      onCrossColumnMove={(draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter?: boolean, targetProjectId?: string) => {
+                        console.log(`🔧 ENHANCED ProjectGroupRow passing cross-column move:`, {
+                          draggedTaskId,
+                          targetTaskId, 
+                          newStatus,
+                          insertAfter,
+                          targetProjectId: targetProjectId || 'undefined',
+                          currentProject: projectId,
+                          projectName: project?.name || 'No Project',
+                          finalTargetProject: targetProjectId !== undefined ? targetProjectId : projectId
+                        });
+                        // CRITICAL: Pass the current project as the target project context
+                        // If targetProjectId is explicitly provided, use it; otherwise use current project context
+                        const finalTargetProjectId = targetProjectId !== undefined ? targetProjectId : projectId;
+                        onCrossColumnMove(draggedTaskId, targetTaskId, newStatus, insertAfter, finalTargetProjectId);
+                      }}
                       columnStatus={status}
                       context="task-management"
+                      targetProject={project}
                     />
                   ))}
                 </div>
