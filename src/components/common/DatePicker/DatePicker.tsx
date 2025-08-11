@@ -157,26 +157,18 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   });
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
   
-  // Smart positioning with callback ref
+  const datePickerRef = useRef<HTMLDivElement>(null);
+
+  // Smart positioning
   const position = useSmartPosition({
-    isOpen: true, // Always enable positioning calculations when DatePicker is rendered
+    isOpen,
     triggerRef: triggerRef || { current: null },
+    contentRef: datePickerRef,
     preferredPlacement: 'bottom',
     offset: 8,
     viewportPadding: 12,
     modalThreshold: 9999
   });
-  
-  // Force recalculation after mount to ensure positioning
-  useEffect(() => {
-    if (isOpen) {
-      // Recalculate position on next frame to ensure it's visible
-      const timer = setTimeout(() => {
-        position.recalculate();
-      }, 10);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen, position.recalculate]);
 
   // Calendar calculations
   const monthStart = startOfMonth(currentMonth);
@@ -205,10 +197,9 @@ export const DatePicker: React.FC<DatePickerProps> = ({
 
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-      const datePickerElement = document.querySelector('[data-datepicker]') as HTMLElement;
       
       if (
-        datePickerElement && !datePickerElement.contains(target) &&
+        datePickerRef.current && !datePickerRef.current.contains(target) &&
         triggerRef?.current && !triggerRef.current.contains(target)
       ) {
         onClose();
@@ -290,16 +281,19 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   };
 
   // Don't render if not open
-  if (!isOpen) {
-    console.log('🚷 DatePicker not rendering - isOpen is false');
-    return null;
-  }
-  
-  console.log('✅ DatePicker will render - isOpen is true');
+  if (!isOpen) return null;
 
-  // Simplified classes - no more invisible/visible flickering
+  // Dynamic classes for positioning - Fixed to prevent visible repositioning
   const getPlacementClasses = () => {
-    return 'bg-background-secondary rounded-lg shadow-lg border border-border w-[300px] fixed z-[1001]';
+    const baseClasses = 'bg-background-secondary rounded-lg shadow-lg border border-border w-[300px] fixed z-50';
+    
+    // Use visibility instead of opacity to completely hide during positioning
+    if (!position.isReady) {
+      return `${baseClasses} invisible`;
+    }
+    
+    // Once positioned, show immediately without animation to prevent repositioning flash
+    return `${baseClasses} visible`;
   };
 
   const isRangeMode = isDateRangeEnabled && isMultiDayEnabled;
@@ -311,25 +305,9 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   const previewEndDate = isSelectingRange && hoverDate && hoverDate >= selectedDate ? hoverDate : null;
   const hasHoverRange = selectedDate && previewEndDate && previewEndDate > selectedDate;
 
-  // Debug logging for DatePicker render
-  console.log('📅 DatePicker rendering:', {
-    isOpen,
-    selectedDate,
-    position: {
-      top: position.top,
-      left: position.left,
-      transformOrigin: position.transformOrigin,
-      placement: position.placement
-    },
-    triggerRef: {
-      hasCurrent: !!triggerRef?.current,
-      tagName: triggerRef?.current?.tagName
-    }
-  });
-
   return (
     <div 
-      ref={position.setContentRef}
+      ref={datePickerRef}
       className={`${getPlacementClasses()} ${className}`}
       style={{
         top: `${position.top}px`,
@@ -337,7 +315,6 @@ export const DatePicker: React.FC<DatePickerProps> = ({
         transformOrigin: position.transformOrigin,
       }}
       data-datepicker
-      onLoad={() => console.log('🏁 DatePicker DOM loaded')}
     >
       <div className="p-3">
         {/* Selected Date Display */}
