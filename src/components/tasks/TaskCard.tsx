@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Task } from '../../types/models';
 import { useTaskStore } from '../../store/taskStore';
 import { Icon } from '../ui/Icon';
@@ -16,10 +16,14 @@ interface TaskCardProps {
   dragContext?: 'status' | 'project';
 }
 
+// Global state to track which task is currently being dragged
+let currentDraggedTaskId: string | null = null;
+
 const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, onCrossColumnMove, columnStatus, context = 'default', targetProject, dragContext = 'status' }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragPosition, setDragPosition] = useState<'top' | 'bottom' | null>(null);
+  const [isBeingDragged, setIsBeingDragged] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const toggleTaskCompletion = useTaskStore(state => state.toggleTaskCompletion);
   const projects = useTaskStore(state => state.projects);
@@ -29,6 +33,28 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
   const isEditing = editingTaskId === task.id;
 
   const project = projects.find(p => p.id === task.projectId);
+
+  // Listen for global drag events to show original position styling
+  useEffect(() => {
+    const handleTaskDragStart = (event: CustomEvent) => {
+      const draggedTaskId = event.detail?.taskId;
+      if (draggedTaskId === task.id) {
+        setIsBeingDragged(true);
+      }
+    };
+
+    const handleTaskDragEnd = () => {
+      setIsBeingDragged(false);
+    };
+
+    window.addEventListener('taskDragStart', handleTaskDragStart as EventListener);
+    window.addEventListener('taskDragEnd', handleTaskDragEnd);
+
+    return () => {
+      window.removeEventListener('taskDragStart', handleTaskDragStart as EventListener);
+      window.removeEventListener('taskDragEnd', handleTaskDragEnd);
+    };
+  }, [task.id]);
 
   // Project color indicator styles
   const getStatusIndicator = () => {
@@ -71,6 +97,13 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
         columnStatus: columnStatus
       });
       
+      // Track this task as being dragged globally
+      currentDraggedTaskId = task.id;
+      setIsBeingDragged(true);
+      
+      // Trigger re-render of all TaskCard instances to show original position styling
+      window.dispatchEvent(new CustomEvent('taskDragStart', { detail: { taskId: task.id } }));
+      
       if (cardRef.current) {
         cardRef.current.classList.add('dragging');
         // Enhanced visual feedback - opacity and scale
@@ -86,6 +119,14 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
 
   const handleDragEnd = () => {
     console.log(`🏁 TaskCard drag end: ${task.id}`);
+    
+    // Clear global drag state
+    currentDraggedTaskId = null;
+    setIsBeingDragged(false);
+    
+    // Notify all TaskCard instances that drag ended
+    window.dispatchEvent(new CustomEvent('taskDragEnd'));
+    
     if (cardRef.current) {
       cardRef.current.classList.remove('dragging', 'opacity-50');
       cardRef.current.style.transform = '';
@@ -283,19 +324,19 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
 
   return (
     <div className="relative">
-      {/* Seamless Drop indicator lines */}
-      {isDragOver && dragPosition === 'top' && (
-        <div className="absolute -top-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-lg z-10 animate-pulse"></div>
+      {/* Subtle Drop indicator lines - only show on actual drop targets, not original position */}
+      {isDragOver && !isBeingDragged && dragPosition === 'top' && (
+        <div className="absolute -top-0.5 left-2 right-2 h-0.5 bg-blue-400 rounded-full z-10 opacity-80"></div>
       )}
-      {isDragOver && dragPosition === 'bottom' && (
-        <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-lg z-10 animate-pulse"></div>
+      {isDragOver && !isBeingDragged && dragPosition === 'bottom' && (
+        <div className="absolute -bottom-0.5 left-2 right-2 h-0.5 bg-blue-400 rounded-full z-10 opacity-80"></div>
       )}
       
       <div
         ref={cardRef}
         className={`task-card flex items-start p-3 border ${getTaskCardClasses()}
         ${task.completed ? 'opacity-70 text-text-secondary' : ''}
-        ${isDragOver ? 'drag-over' : ''}
+        ${isDragOver || isBeingDragged ? 'drag-over' : ''}
         rounded-md hover:shadow-sm cursor-pointer transition-all duration-200 ease-in-out`}
         draggable
         onDragStart={handleDragStart}
