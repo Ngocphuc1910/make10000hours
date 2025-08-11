@@ -433,8 +433,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       const { tasks } = get();
       const currentTask = tasks.find(t => t.id === id);
       
-      // Check if projectId is being updated
-      const isProjectIdChanging = updates.projectId && currentTask && updates.projectId !== currentTask.projectId;
+      // Check if projectId is being updated (including null values)
+      const isProjectIdChanging = updates.hasOwnProperty('projectId') && currentTask && updates.projectId !== currentTask.projectId;
+      
+      console.log(`🗺️ TaskStore updateTask for ${id}:`, {
+        currentProjectId: currentTask?.projectId || 'no-project',
+        newProjectId: updates.projectId || 'no-project',
+        isProjectIdChanging,
+        updates: Object.keys(updates)
+      });
       
       // Check if scheduling-related fields are being updated
       const hasSchedulingChanges = get().hasSchedulingChanges(currentTask, updates);
