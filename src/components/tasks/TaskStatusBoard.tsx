@@ -29,6 +29,9 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
   const updateTaskStatus = useTaskStore(state => state.updateTaskStatus);
   const columnOrder = useTaskStore(state => state.columnOrder);
   const reorderColumns = useTaskStore(state => state.reorderColumns);
+  const reorderTasks = useTaskStore(state => state.reorderTasks);
+  const moveTaskToStatusAndPosition = useTaskStore(state => state.moveTaskToStatusAndPosition);
+  const updateTask = useTaskStore(state => state.updateTask);
   const { isLeftSidebarOpen } = useUIStore();
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
@@ -156,6 +159,118 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
     return projectsWithTasks.sort((a, b) => b.taskCount - a.taskCount);
   }, [tasks, projects]);
 
+  // Handle task reordering within the same column in project view
+  const handleTaskReorder = (draggedTaskId: string, targetTaskId: string, insertAfter: boolean = false) => {
+    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    const targetTask = tasks.find(t => t.id === targetTaskId);
+    
+    if (!draggedTask || !targetTask || draggedTask.status !== targetTask.status) {
+      return;
+    }
+
+    // Get the sorted tasks for this status to find the correct target index
+    const statusTasks = sortTasksByOrder(tasks.filter(t => t.status === targetTask.status));
+    const targetIndex = statusTasks.findIndex(t => t.id === targetTaskId);
+    const newIndex = insertAfter ? targetIndex + 1 : targetIndex;
+    
+    console.log(`🔄 Project view reordering within ${targetTask.status}: ${draggedTaskId} to position ${newIndex} (from ${statusTasks.length} sorted tasks)`);
+    reorderTasks(draggedTaskId, newIndex);
+  };
+
+  // Handle cross-column moves with positioning in project view
+  const handleCrossColumnMove = async (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter: boolean = false, targetProjectId?: string) => {
+    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    if (!draggedTask) {
+      console.error('❌ Task not found:', draggedTaskId);
+      return;
+    }
+
+    const currentProjectId = draggedTask.projectId || null;
+    const finalProjectId = targetProjectId !== undefined ? targetProjectId : null;
+    const isProjectChange = currentProjectId !== finalProjectId;
+    
+    console.log(`🚀 TaskStatusBoard handleCrossColumnMove ENHANCED:`, {
+      draggedTaskId,
+      draggedTaskTitle: draggedTask.title,
+      currentProjectId: currentProjectId || 'no-project',
+      finalProjectId: finalProjectId || 'no-project',
+      targetProjectId: targetProjectId || 'no-project',
+      newStatus,
+      insertAfter,
+      isProjectChange,
+      statusChange: draggedTask.status !== newStatus
+    });
+    
+    // For project changes, filter destination tasks by the target project
+    const destinationStatusTasks = isProjectChange 
+      ? sortTasksByOrder(tasks.filter(t => t.status === newStatus && (t.projectId || null) === finalProjectId))
+      : sortTasksByOrder(tasks.filter(t => t.status === newStatus && t.id !== draggedTaskId));
+    
+    const targetIndex = destinationStatusTasks.findIndex(t => t.id === targetTaskId);
+    const finalIndex = insertAfter ? targetIndex + 1 : Math.max(0, targetIndex);
+    
+    console.log(`🔄 ENHANCED Cross-column/project move details:
+      - Task: ${draggedTaskId} ("${draggedTask.title}")
+      - Status: ${draggedTask.status} → ${newStatus}
+      - Project: ${currentProjectId || 'no-project'} → ${finalProjectId || 'no-project'}
+      - Target Index: ${targetIndex}, Insert After: ${insertAfter}, Final Index: ${finalIndex}
+      - Destination Tasks: ${destinationStatusTasks.length}
+      - Project changed: ${isProjectChange}`);
+    
+    if (isProjectChange) {
+      // CRITICAL FIX: Handle cross-project moves with atomic update
+      // Use moveTaskToStatusAndPosition which can handle both project and status changes
+      try {
+        console.log(`🔄 CROSS-PROJECT: Updating task with project and status change`);
+        
+        // First update the projectId
+        await updateTask(draggedTaskId, {
+          projectId: finalProjectId
+        });
+        
+        console.log(`✅ Successfully updated task project: ${currentProjectId || 'no-project'} → ${finalProjectId || 'no-project'}`);
+        
+        // Then handle the status/position change
+        if (draggedTask.status !== newStatus) {
+          // Small delay to ensure project update is processed
+          setTimeout(async () => {
+            console.log(`🗺️ Now updating status and position: ${newStatus}, index ${finalIndex}`);
+            await moveTaskToStatusAndPosition(draggedTaskId, newStatus as Task['status'], finalIndex);
+          }, 100);
+        } else {
+          // Same status, just repositioning within the new project
+          console.log(`🗺️ Same status, repositioning within new project to index ${finalIndex}`);
+          setTimeout(async () => {
+            await reorderTasks(draggedTaskId, finalIndex);
+          }, 100);
+        }
+        
+        // Add toast notification for project change
+        const projectName = finalProjectId ? projects.find(p => p.id === finalProjectId)?.name || 'Unknown Project' : 'No Project';
+        const statusName = newStatus === 'pomodoro' ? 'In Pomodoro' : newStatus === 'todo' ? 'To Do List' : 'Completed';
+        addToast(`Task moved to ${projectName} - ${statusName}`);
+        
+      } catch (error) {
+        console.error('❌ Failed to update task for cross-project move:', error);
+        addToast('Failed to move task - please try again');
+      }
+    } else {
+      // Only status/position change
+      console.log(`🗺️ Moving task to status and position: ${newStatus}, index ${finalIndex}`);
+      try {
+        await moveTaskToStatusAndPosition(draggedTaskId, newStatus as Task['status'], finalIndex);
+        
+        // Add toast for status change
+        const statusName = newStatus === 'pomodoro' ? 'In Pomodoro' : newStatus === 'todo' ? 'To Do List' : 'Completed';
+        addToast(`Task moved to ${statusName}`);
+        
+      } catch (error) {
+        console.error('❌ Failed to move task:', error);
+        addToast('Failed to move task - please try again');
+      }
+    }
+  };
+
   // Group tasks by project for row-based rendering when grouping is enabled
   const projectGroups = React.useMemo(() => {
     if (!groupByProject) return null;
@@ -177,9 +292,9 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
 
   return (
     <ProjectLayoutProvider>
-      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <div className={`flex flex-col bg-background-primary ${className}`}>
-          {/* Fixed Headers Row */}
+      <div className={`flex flex-col bg-background-primary ${className}`}>
+        {/* Fixed Headers Row - DndContext only for column reordering */}
+        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
             <div className="grid gap-6 bg-background-primary sticky top-0 z-30 pl-2" style={{ gridTemplateColumns: `repeat(${columnOrder.length}, minmax(320px, 1fr))` }}>
               {columnOrder.map((status) => {
@@ -207,70 +322,78 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
               })}
             </div>
           </SortableContext>
+        </DndContext>
 
-      {/* Scrollable Content Row */}
-      <div className="flex flex-col flex-1">
-        {groupByProject && projectGroups ? (
-          /* Project Group Rows - Notion-inspired approach */
-          <div className={`flex-1 pr-6 pb-6 pt-4 ${isLeftSidebarOpen ? 'pl-6' : 'pl-2'}`}>
-            {projectGroups.map(({ project, projectTasks }) => (
-              <ProjectGroupRow
-                key={project?.id || 'no-project'}
-                project={project}
-                projectTasks={projectTasks}
-                isExpanded={expandedProjects.has(project?.id || 'no-project')}
-                expandedProjects={expandedProjects}
-                onToggleProject={toggleProjectExpansion}
-                onStatusChange={handleTaskStatusChange}
-                onTaskReorder={() => {}} // TODO: Implement reordering
-                onCrossColumnMove={() => {}} // TODO: Implement cross-column moves
-                authStatus={{ isAuthenticated: true, shouldShowAuth: false }} // TODO: Get actual auth status
-                allTasks={tasks}
-                columnOrder={columnOrder}
-              />
-            ))}
-          </div>
-        ) : (
-          /* Traditional Column Layout */
-          <div className="grid gap-6 flex-1 pl-2" style={{ gridTemplateColumns: `repeat(${columnOrder.length}, minmax(320px, 1fr))` }}>
-            {columnOrder.map((status, index) => {
-              const config = columnConfigs[status];
-              return (
-                <TaskColumn
-                  key={status}
-                  title={config.title}
-                  tasks={config.tasks}
-                  status={status}
-                  badgeColor={status === 'pomodoro' ? 'bg-red-500' : status === 'todo' ? 'bg-blue-500' : 'bg-green-500'}
-                  onStatusChange={handleTaskStatusChange}
-                  groupByProject={groupByProject}
+        {/* Scrollable Content Row - Outside DndContext to allow native HTML5 drag and drop */}
+        <div className="flex flex-col flex-1">
+          {groupByProject && projectGroups ? (
+            /* Project Group Rows - Notion-inspired approach */
+            <div className={`flex-1 pr-6 pb-6 pt-4 ${isLeftSidebarOpen ? 'pl-6' : 'pl-2'}`}>
+              {projectGroups.map(({ project, projectTasks }) => (
+                <ProjectGroupRow
+                  key={project?.id || 'no-project'}
+                  project={project}
+                  projectTasks={projectTasks}
+                  isExpanded={expandedProjects.has(project?.id || 'no-project')}
                   expandedProjects={expandedProjects}
-                  isFirstColumn={index === 0}
-                  projects={getProjectsWithTasks}
                   onToggleProject={toggleProjectExpansion}
+                  onStatusChange={handleTaskStatusChange}
+                  onTaskReorder={handleTaskReorder}
+                  onCrossColumnMove={(draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter?: boolean, targetProjectId?: string) => {
+                    console.log(`🔧 TaskStatusBoard receiving cross-column move:`, {
+                      draggedTaskId,
+                      targetTaskId,
+                      newStatus,
+                      insertAfter,
+                      targetProjectId
+                    });
+                    handleCrossColumnMove(draggedTaskId, targetTaskId, newStatus, insertAfter, targetProjectId);
+                  }}
+                  authStatus={{ isAuthenticated: true, shouldShowAuth: false }} // TODO: Get actual auth status
                   allTasks={tasks}
-                  hideHeader={true}
+                  columnOrder={columnOrder}
                 />
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      
-      {/* Toast Notifications */}
-      <div className="fixed bottom-4 right-4 z-50">
-        {toasts.map(toast => (
-          <ToastNotification 
-            key={toast.id}
-            message={toast.message}
-            onClose={() => removeToast(toast.id)}
-            onUndo={toast.undoAction}
-          />
-        ))}
-      </div>
+              ))}
+            </div>
+          ) : (
+            /* Traditional Column Layout */
+            <div className="grid gap-6 flex-1 pl-2" style={{ gridTemplateColumns: `repeat(${columnOrder.length}, minmax(320px, 1fr))` }}>
+              {columnOrder.map((status, index) => {
+                const config = columnConfigs[status];
+                return (
+                  <TaskColumn
+                    key={status}
+                    title={config.title}
+                    tasks={config.tasks}
+                    status={status}
+                    badgeColor={status === 'pomodoro' ? 'bg-red-500' : status === 'todo' ? 'bg-blue-500' : 'bg-green-500'}
+                    onStatusChange={handleTaskStatusChange}
+                    groupByProject={groupByProject}
+                    expandedProjects={expandedProjects}
+                    isFirstColumn={index === 0}
+                    projects={getProjectsWithTasks}
+                    onToggleProject={toggleProjectExpansion}
+                    allTasks={tasks}
+                    hideHeader={true}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
-      </DndContext>
+
+        {/* Toast Notifications */}
+        <div className="fixed bottom-4 right-4 z-50">
+          {toasts.map(toast => (
+            <ToastNotification 
+              key={toast.id}
+              message={toast.message}
+              onClose={() => removeToast(toast.id)}
+              onUndo={toast.undoAction}
+            />
+          ))}
+        </div>
+      </div>
     </ProjectLayoutProvider>
   );
 };
