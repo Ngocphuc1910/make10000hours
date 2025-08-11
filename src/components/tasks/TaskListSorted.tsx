@@ -44,6 +44,15 @@ export const TaskListSorted: React.FC = () => {
   const [dropPosition, setDropPosition] = useState<'before' | 'after' | null>(null);
   const [currentlyDraggedTaskId, setCurrentlyDraggedTaskId] = useState<string | null>(null);
 
+  // Cleanup function to reset all drag states
+  const clearDragState = () => {
+    setCurrentlyDraggedTaskId(null);
+    setDragOverTaskId(null);
+    setDropPosition(null);
+    draggedTaskId.current = null;
+    draggedTaskIndex.current = -1;
+  };
+
   useEffect(() => {
     if (currentTask && editingTaskId === currentTask.id) {
       // If editing the current task, disable the start/pause button
@@ -58,6 +67,33 @@ export const TaskListSorted: React.FC = () => {
       setEnableStartPauseBtn(true);
     }
   }, [editingTaskId]);
+
+  // Cleanup effect for drag state - safety fallback
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      // Clear drag state when mouse is released anywhere
+      // This serves as a safety net for edge cases
+      if (currentlyDraggedTaskId || dragOverTaskId || dropPosition) {
+        clearDragState();
+      }
+    };
+
+    const handleGlobalDragEnd = () => {
+      // Additional cleanup when any drag operation ends
+      clearDragState();
+    };
+
+    // Add global event listeners
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+    document.addEventListener('dragend', handleGlobalDragEnd);
+    
+    // Cleanup on component unmount
+    return () => {
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+      document.removeEventListener('dragend', handleGlobalDragEnd);
+      clearDragState();
+    };
+  }, [currentlyDraggedTaskId, dragOverTaskId, dropPosition]);
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string, sortedTasks: Task[]) => {
     // Store the dragged task ID
@@ -81,12 +117,8 @@ export const TaskListSorted: React.FC = () => {
     e.currentTarget.style.transform = '';
     e.currentTarget.style.transition = '';
 
-    // Reset the dragged task ID and drop indicators
-    draggedTaskId.current = null;
-    draggedTaskIndex.current = -1;
-    setCurrentlyDraggedTaskId(null);
-    setDragOverTaskId(null);
-    setDropPosition(null);
+    // Use centralized cleanup function
+    clearDragState();
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
@@ -99,32 +131,42 @@ export const TaskListSorted: React.FC = () => {
     const midY = rect.top + rect.height / 2;
     const position = e.clientY < midY ? 'before' : 'after';
     
-    setDragOverTaskId(taskId);
-    setDropPosition(position);
+    // Only update if the target task or position has actually changed
+    // This prevents unnecessary re-renders and ensures clean state transitions
+    if (dragOverTaskId !== taskId || dropPosition !== position) {
+      setDragOverTaskId(taskId);
+      setDropPosition(position);
+    }
   };
 
   const handleDragEnter = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     e.preventDefault();
-    // Remove the background color change, we'll use drop line indicator instead
+    
+    if (!draggedTaskId.current || draggedTaskId.current === taskId) return;
+    
+    // Immediately set the new drag target to clear any previous indicators
+    // This ensures only one drop indicator is active at a time
+    setDragOverTaskId(taskId);
+    
+    // Calculate initial position
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const position = e.clientY < midY ? 'before' : 'after';
+    setDropPosition(position);
   };
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    // Only clear if we're actually leaving the task area
-    const rect = e.currentTarget.getBoundingClientRect();
-    const { clientX, clientY } = e;
-    
-    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
-      setDragOverTaskId(null);
-      setDropPosition(null);
-    }
+    // More aggressive cleanup - clear drop indicators immediately on leave
+    // This prevents stuck visual feedback in edge cases
+    setDragOverTaskId(null);
+    setDropPosition(null);
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, dropTargetId: string, sortedTasks: Task[]) => {
     e.preventDefault();
     
-    // Clear drop indicators
-    setDragOverTaskId(null);
-    setDropPosition(null);
+    // Use centralized cleanup function
+    clearDragState();
 
     // If no task was dragged or dropping on itself, do nothing
     if (!draggedTaskId.current || draggedTaskId.current === dropTargetId) return;
