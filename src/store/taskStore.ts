@@ -701,6 +701,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   timeSpentIncrement: async (id, increment = 1) => {
+    // Check if any form is active to prevent timeSpent updates during editing
+    const { useFormEditStore } = await import('./formEditStore');
+    const { isAnyFormActive } = useFormEditStore.getState();
+    
+    if (isAnyFormActive()) {
+      console.log('🛡️ timeSpent increment blocked - TaskForm is active');
+      return;
+    }
+    
     if (increment <= 0) {
       console.warn('Increment must be a positive number');
       return;
