@@ -6,6 +6,7 @@ import { useUIStore } from '../../store/uiStore';
 import { useUserStore } from '../../store/userStore';
 import type { Task, Project } from '../../types/models';
 import { TaskColumn } from './';
+import ProjectColumn from './ProjectColumn';
 import { ToastNotification } from './';
 import TaskCard from './TaskCard';
 import TaskForm from './TaskForm';
@@ -14,6 +15,7 @@ import StatusGroupRow from './StatusGroupRow';
 import DraggableColumnHeader from './DraggableColumnHeader';
 import { Icon } from '../ui/Icon';
 import { triggerAuthenticationFlow } from '../../utils/authGuard';
+import { sortTasksByOrder } from '../../utils/taskSorting';
 
 interface ProjectStatusBoardProps {
   className?: string;
@@ -31,6 +33,9 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
   const tasks = useTaskStore(state => state.tasks);
   const projects = useTaskStore(state => state.projects);
   const updateTaskStatus = useTaskStore(state => state.updateTaskStatus);
+  const updateTask = useTaskStore(state => state.updateTask);
+  const moveTaskToProject = useTaskStore(state => state.moveTaskToProject);
+  const reorderTasks = useTaskStore(state => state.reorderTasks);
   const projectColumnOrder = useTaskStore(state => state.projectColumnOrder);
   const reorderProjectColumns = useTaskStore(state => state.reorderProjectColumns);
   const { isLeftSidebarOpen } = useUIStore();
@@ -115,10 +120,11 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
     return orderedList;
   }, [projectsWithTasks, projectColumnOrder]);
 
-  // Filter tasks by project
+  // Filter tasks by project and sort them by order
   const getProjectTasks = useCallback((projectId: string) => {
     const actualProjectId = projectId === 'no-project' ? null : projectId;
-    return tasks.filter(task => (task.projectId || null) === actualProjectId);
+    const projectTasks = tasks.filter(task => (task.projectId || null) === actualProjectId);
+    return sortTasksByOrder(projectTasks);
   }, [tasks]);
 
   // Column configurations for projects
@@ -159,6 +165,92 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
     addToast(message, taskId, () => {
       updateTaskStatus(taskId, oldStatus);
     });
+  };
+
+  // Handle task project change
+  const handleTaskProjectChange = async (taskId: string, newProjectId: string | null, targetIndex?: number) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const oldProjectId = task.projectId || null;
+    
+    try {
+      await moveTaskToProject(taskId, newProjectId, targetIndex);
+
+      // Create toast message
+      const oldProject = oldProjectId ? projects.find(p => p.id === oldProjectId)?.name : 'No Project';
+      const newProject = newProjectId ? projects.find(p => p.id === newProjectId)?.name : 'No Project';
+      const message = `Task moved from ${oldProject} to ${newProject}`;
+
+      // Add toast with undo action
+      addToast(message, taskId, () => {
+        moveTaskToProject(taskId, oldProjectId);
+      });
+    } catch (error) {
+      console.error('Failed to move task to project:', error);
+      addToast('Failed to move task between projects');
+    }
+  };
+
+  // Handle task reordering within same project
+  const handleTaskReorder = async (draggedTaskId: string, targetTaskId: string, insertAfter: boolean) => {
+    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    const targetTask = tasks.find(t => t.id === targetTaskId);
+    
+    if (!draggedTask || !targetTask) return;
+
+    console.log(`🔄 PROJECT REORDER: ${draggedTask.title} relative to ${targetTask.title} (insertAfter: ${insertAfter})`);
+
+    try {
+      // Import necessary utilities
+      const { sortTasksByOrder } = await import('../../utils/taskSorting');
+      const { FractionalOrderingService } = await import('../../services/FractionalOrderingService');
+      const { getTaskPosition } = await import('../../utils/taskSorting');
+      
+      // FIXED: Get tasks in same PROJECT, not same status
+      const projectTasks = sortTasksByOrder(
+        tasks.filter(t => 
+          (t.projectId || null) === (draggedTask.projectId || null) && 
+          t.id !== draggedTaskId
+        )
+      );
+      
+      const targetIndex = projectTasks.findIndex(t => t.id === targetTaskId);
+      const finalIndex = insertAfter ? targetIndex + 1 : Math.max(0, targetIndex);
+      const clampedIndex = Math.max(0, Math.min(finalIndex, projectTasks.length));
+      
+      // Get adjacent positions for fractional indexing
+      const beforeTask = clampedIndex > 0 ? projectTasks[clampedIndex - 1] : null;
+      const afterTask = clampedIndex < projectTasks.length ? projectTasks[clampedIndex] : null;
+      
+      const beforePos = beforeTask ? getTaskPosition(beforeTask) : null;
+      const afterPos = afterTask ? getTaskPosition(afterTask) : null;
+      
+      // Generate new fractional position
+      const newOrderString = FractionalOrderingService.generatePosition(beforePos, afterPos);
+      
+      console.log(`🎯 PROJECT REORDER CALCULATION:`, {
+        draggedTask: draggedTask.title,
+        targetTask: targetTask.title,
+        projectTasksCount: projectTasks.length,
+        targetIndex,
+        finalIndex,
+        clampedIndex,
+        beforeTask: beforeTask?.title || 'START',
+        afterTask: afterTask?.title || 'END',
+        newOrderString
+      });
+      
+      // Update the task with new position
+      await updateTask(draggedTaskId, {
+        orderString: newOrderString
+      });
+      
+      addToast('Task reordered successfully');
+    } catch (error) {
+      console.error('Failed to reorder tasks:', error);
+      addToast('Failed to reorder task');
+    }
   };
 
   // Add toast notification
@@ -359,21 +451,16 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                 {orderedProjects.map(({ project, id }, index) => {
                   const config = columnConfigs[id];
                   return (
-                    <TaskColumn
+                    <ProjectColumn
                       key={id}
-                      title={config.title}
+                      project={project}
                       tasks={config.tasks}
-                      status={'todo' as Task['status']} // Default status for new tasks in this project
-                      badgeColor="bg-gray-500" // Use project color somehow
+                      onProjectChange={handleTaskProjectChange}
                       onStatusChange={handleTaskStatusChange}
-                      groupByProject={false} // We're already grouping by project
-                      expandedProjects={new Set()}
-                      isFirstColumn={index === 0}
-                      projects={[]}
-                      onToggleProject={() => {}}
-                      allTasks={tasks}
-                      hideHeader={true}
-                      projectId={id === 'no-project' ? undefined : id} // Pass project ID for task creation
+                      onTaskReorder={handleTaskReorder}
+                      title={config.title}
+                      taskCount={config.tasks.length}
+                      color={config.color}
                     />
                   );
                 })}

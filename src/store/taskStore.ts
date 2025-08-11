@@ -38,6 +38,7 @@ interface TaskState {
   reorderTasks: (taskId: string, newIndex: number) => Promise<void>;
   reorderTasksGlobal: (taskId: string, newIndex: number, visibleTasks: Task[]) => Promise<void>;
   moveTaskToStatusAndPosition: (taskId: string, newStatus: Task['status'], targetIndex: number) => Promise<void>;
+  moveTaskToProject: (taskId: string, newProjectId: string | null, targetIndex?: number) => Promise<void>;
   setIsAddingTask: (isAdding: boolean) => void;
   setEditingTaskId: (taskId: string | null) => void;
   setShowDetailsMenu: (show: boolean) => void;
@@ -433,8 +434,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       const { tasks } = get();
       const currentTask = tasks.find(t => t.id === id);
       
-      // Check if projectId is being updated
-      const isProjectIdChanging = updates.projectId && currentTask && updates.projectId !== currentTask.projectId;
+      // Check if projectId is being updated (including null values)
+      const isProjectIdChanging = updates.hasOwnProperty('projectId') && currentTask && updates.projectId !== currentTask.projectId;
+      
+      console.log(`🗺️ TaskStore updateTask for ${id}:`, {
+        currentProjectId: currentTask?.projectId || 'no-project',
+        newProjectId: updates.projectId || 'no-project',
+        isProjectIdChanging,
+        updates: Object.keys(updates)
+      });
       
       // Check if scheduling-related fields are being updated
       const hasSchedulingChanges = get().hasSchedulingChanges(currentTask, updates);
@@ -801,6 +809,119 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       
     } catch (error) {
       console.error('Error moving task to status and position:', error);
+      throw error;
+    }
+  },
+
+  moveTaskToProject: async (taskId: string, newProjectId: string | null, targetIndex?: number) => {
+    try {
+      const { tasks } = get();
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) throw new Error('Task not found');
+      
+      // Normalize project IDs for comparison
+      const currentProjectId = task.projectId || null;
+      const finalProjectId = newProjectId === 'no-project' ? null : newProjectId;
+      
+      // If project hasn't changed, just do a reorder within the project
+      if (currentProjectId === finalProjectId) {
+        if (targetIndex !== undefined) {
+          console.log(`🔄 Reordering task within same project: ${taskId}`);
+          await get().reorderTasks(taskId, targetIndex);
+        }
+        return;
+      }
+      
+      console.log(`🗺️ Moving task ${taskId} from project ${currentProjectId || 'no-project'} to ${finalProjectId || 'no-project'}`);
+      
+      // Get tasks in the target project for positioning
+      const targetProjectTasks = sortTasksByOrder(
+        tasks.filter(t => (t.projectId || null) === finalProjectId && t.id !== taskId)
+      );
+      
+      let newOrderString: string;
+      
+      if (targetIndex !== undefined && targetIndex >= 0) {
+        // Position at specific index within target project
+        const clampedIndex = Math.max(0, Math.min(targetIndex, targetProjectTasks.length));
+        
+        const beforeTask = clampedIndex > 0 ? targetProjectTasks[clampedIndex - 1] : null;
+        const afterTask = clampedIndex < targetProjectTasks.length ? targetProjectTasks[clampedIndex] : null;
+        
+        const beforePos = beforeTask ? getTaskPosition(beforeTask) : null;
+        const afterPos = afterTask ? getTaskPosition(afterTask) : null;
+        
+        newOrderString = FractionalOrderingService.generatePosition(beforePos, afterPos);
+        
+        console.log(`🎯 PROJECT MOVE with positioning:`, {
+          taskId,
+          currentProject: currentProjectId || 'no-project',
+          newProject: finalProjectId || 'no-project', 
+          requestedIndex: targetIndex,
+          clampedIndex,
+          targetProjectTasksCount: targetProjectTasks.length,
+          beforeTask: beforeTask?.title || 'START',
+          afterTask: afterTask?.title || 'END',
+          newOrderString
+        });
+      } else {
+        // Add to end of target project
+        const lastTask = targetProjectTasks[targetProjectTasks.length - 1];
+        const lastPos = lastTask ? getTaskPosition(lastTask) : null;
+        newOrderString = FractionalOrderingService.generatePosition(lastPos, null);
+        
+        console.log(`🎯 PROJECT MOVE to end:`, {
+          taskId,
+          currentProject: currentProjectId || 'no-project',
+          newProject: finalProjectId || 'no-project',
+          targetProjectTasksCount: targetProjectTasks.length,
+          newOrderString
+        });
+      }
+      
+      // Update task with new project ID and position, preserving status
+      const taskRef = doc(db, 'tasks', taskId);
+      await updateDoc(taskRef, {
+        projectId: finalProjectId,
+        orderString: newOrderString,
+        updatedAt: new Date()
+      });
+      
+      // Optimistic update
+      const updatedTasks = tasks.map(t => 
+        t.id === taskId 
+          ? { 
+              ...t, 
+              projectId: finalProjectId,
+              orderString: newOrderString 
+            }
+          : t
+      );
+      set({ tasks: updatedTasks });
+      
+      // If moving to a new project, update all related work sessions
+      if (finalProjectId) {
+        try {
+          const { user } = useUserStore.getState();
+          if (user) {
+            const updatedCount = await workSessionService.updateWorkSessionsProjectId(
+              user.uid,
+              taskId,
+              finalProjectId
+            );
+            
+            if (updatedCount > 0) {
+              console.log(`🔄 Updated ${updatedCount} work sessions for task ${taskId} to project ${finalProjectId}`);
+            }
+          }
+        } catch (error) {
+          console.error('❌ Failed to update work sessions project ID:', error);
+          // Don't throw here - the task update succeeded, this is just cleanup
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error moving task to project:', error);
       throw error;
     }
   },
