@@ -9,12 +9,14 @@ interface TaskCardProps {
   task: Task;
   onStatusChange: (taskId: string, status: Task['status']) => void;
   onReorder?: (draggedTaskId: string, targetTaskId: string, insertAfter?: boolean) => void;
-  onCrossColumnMove?: (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter?: boolean) => void;
+  onCrossColumnMove?: (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter?: boolean, targetProjectId?: string) => void;
   columnStatus?: Task['status'];
   context?: 'task-management' | 'pomodoro' | 'default';
+  targetProject?: { id: string; name: string; color: string } | null;
+  dragContext?: 'status' | 'project';
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, onCrossColumnMove, columnStatus, context = 'default' }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, onCrossColumnMove, columnStatus, context = 'default', targetProject, dragContext = 'status' }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragPosition, setDragPosition] = useState<'top' | 'bottom' | null>(null);
@@ -40,18 +42,50 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
   };
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
-    e.dataTransfer.setData('text/plain', task.id);
-    e.dataTransfer.setData('application/x-task-status', task.status);
-    if (cardRef.current) {
-      cardRef.current.classList.add('dragging');
-      // Enhanced visual feedback - opacity and scale
-      cardRef.current.classList.add('opacity-50');
-      cardRef.current.style.transform = 'scale(1.02)';
-      cardRef.current.style.transition = 'all 0.2s ease';
+    console.log(`🚀 ENHANCED TaskCard drag start: ${task.id} (${task.title}) - Context: ${context}, Column: ${columnStatus}, Project: ${task.projectId || 'no-project'}, DragContext: ${dragContext}`);
+    
+    // Validate drag start conditions
+    if (!task.id || !task.title) {
+      console.error('❌ Invalid task data for drag start:', task);
+      e.preventDefault();
+      return;
+    }
+    
+    try {
+      // Set comprehensive drag data
+      e.dataTransfer.setData('text/plain', task.id);
+      e.dataTransfer.setData('application/x-task-status', task.status);
+      e.dataTransfer.setData('application/x-task-project', task.projectId || 'no-project');
+      e.dataTransfer.setData('application/x-task-title', task.title); // Add title for debugging
+      e.dataTransfer.setData('application/x-drag-context', dragContext); // Add drag context
+      e.dataTransfer.effectAllowed = 'move';
+      
+      console.log('📦 ENHANCED Drag data set successfully:', {
+        taskId: task.id,
+        taskTitle: task.title,
+        taskStatus: task.status,
+        taskProject: task.projectId || 'no-project',
+        targetProject: targetProject?.id || 'no-project',
+        targetProjectName: targetProject?.name || 'No Project',
+        context: context,
+        columnStatus: columnStatus
+      });
+      
+      if (cardRef.current) {
+        cardRef.current.classList.add('dragging');
+        // Enhanced visual feedback - opacity and scale
+        cardRef.current.classList.add('opacity-50');
+        cardRef.current.style.transform = 'scale(1.02)';
+        cardRef.current.style.transition = 'all 0.2s ease';
+      }
+    } catch (error) {
+      console.error('❌ Error setting drag data:', error);
+      e.preventDefault();
     }
   };
 
   const handleDragEnd = () => {
+    console.log(`🏁 TaskCard drag end: ${task.id}`);
     if (cardRef.current) {
       cardRef.current.classList.remove('dragging', 'opacity-50');
       cardRef.current.style.transform = '';
@@ -65,6 +99,14 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
     e.preventDefault();
     e.stopPropagation();
     
+    // Check if we can accept this drop
+    const draggedTaskId = e.dataTransfer.types.includes('text/plain');
+    if (!draggedTaskId) {
+      console.log('🚫 DragOver rejected: No task data');
+      return;
+    }
+    
+    // Visual feedback for drop position
     const rect = cardRef.current?.getBoundingClientRect();
     if (rect) {
       const y = e.clientY - rect.top;
@@ -98,6 +140,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    console.log(`🎯 TaskCard drop on: ${task.id} (${task.title}) - Project: ${targetProject?.name || 'No Project'}`);
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
@@ -105,14 +148,70 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
     
     const draggedTaskId = e.dataTransfer.getData('text/plain');
     const draggedTaskStatus = e.dataTransfer.getData('application/x-task-status');
+    const draggedTaskProject = e.dataTransfer.getData('application/x-task-project');
+    const draggedDragContext = e.dataTransfer.getData('application/x-drag-context') || 'status';
     
-    if (draggedTaskId && draggedTaskId !== task.id) {
-      if (draggedTaskStatus === task.status && onReorder) {
-        // Same column reordering
-        onReorder(draggedTaskId, task.id, dragPosition === 'bottom');
-      } else if (draggedTaskStatus !== task.status && onCrossColumnMove) {
-        // Cross column move with positioning
-        onCrossColumnMove(draggedTaskId, task.id, task.status, dragPosition === 'bottom');
+    // CRITICAL FIX: Ensure we use the correct target project context
+    // The target project is the project context this TaskCard exists in
+    // Handle 'dashboard' special case
+    const targetProjectId = targetProject?.id === 'dashboard' ? 'dashboard' : (targetProject?.id || null);
+    const draggedProjectNormalized = draggedTaskProject === 'no-project' ? null : draggedTaskProject;
+    const isProjectChange = draggedProjectNormalized !== targetProjectId;
+    
+    console.log(`🔍 DETAILED PROJECT DEBUG:
+      - targetProject FULL object: ${JSON.stringify(targetProject, null, 2)}
+      - targetProject type: ${typeof targetProject}
+      - targetProject null check: ${targetProject === null}
+      - targetProject undefined check: ${targetProject === undefined}
+      - targetProjectId: ${targetProjectId}
+      - draggedTaskProject: ${draggedTaskProject}
+      - draggedProjectNormalized: ${draggedProjectNormalized}`);
+    const isStatusChange = draggedTaskStatus !== task.status;
+    
+    console.log(`🎯 ENHANCED Drop analysis:
+      - Dragged Task: ${draggedTaskId} 
+      - From Project: ${draggedTaskProject} (normalized: ${draggedProjectNormalized})
+      - To Project: ${targetProjectId}
+      - Target Project Name: ${targetProject?.name || 'No Project'}
+      - This Task's Project: ${task.projectId || 'no-project'}
+      - From Status: ${draggedTaskStatus} 
+      - To Status: ${task.status}
+      - Drag Context: ${draggedDragContext} -> ${dragContext}
+      - Project Change: ${isProjectChange}
+      - Status Change: ${isStatusChange}
+      - Insert Position: ${dragPosition}`);
+    
+    if (!draggedTaskId) {
+      console.warn('⚠️ Drop rejected: No dragged task ID');
+      return;
+    }
+    
+    if (draggedTaskId === task.id) {
+      console.log('🚫 Drop ignored: Cannot drop task on itself');
+      return;
+    }
+    
+    // Enhanced validation with better error messages
+    if (!isStatusChange && !isProjectChange) {
+      if (!onReorder) {
+        console.warn('⚠️ Drop rejected: Same column reorder but no onReorder handler');
+        return;
+      }
+      // Same column, same project reordering
+      console.log('🔄 Executing same column reordering (no project/status change)');
+      onReorder(draggedTaskId, task.id, dragPosition === 'bottom');
+    } else {
+      if (!onCrossColumnMove) {
+        console.warn('⚠️ Drop rejected: Cross-column/project move but no onCrossColumnMove handler');
+        return;
+      }
+      // Cross column or cross project move
+      console.log(`🔄 Executing cross column/project move: ${isProjectChange ? 'Project Change' : 'Status Change'}`);
+      try {
+        // CRITICAL: Pass the target project ID explicitly
+        onCrossColumnMove(draggedTaskId, task.id, task.status, dragPosition === 'bottom', targetProjectId);
+      } catch (error) {
+        console.error('❌ Error executing cross column/project move:', error);
       }
     }
   };

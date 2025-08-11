@@ -10,6 +10,7 @@ import { ProjectLayoutProvider } from '../../contexts/ProjectLayoutContext';
 import ProjectGroupRow from './ProjectGroupRow';
 import DraggableColumnHeader from './DraggableColumnHeader';
 import { sortTasksByOrder } from '../../utils/taskSorting';
+import { FractionalOrderingService } from '../../services/FractionalOrderingService';
 
 interface TaskStatusBoardProps {
   className?: string;
@@ -29,6 +30,9 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
   const updateTaskStatus = useTaskStore(state => state.updateTaskStatus);
   const columnOrder = useTaskStore(state => state.columnOrder);
   const reorderColumns = useTaskStore(state => state.reorderColumns);
+  const reorderTasks = useTaskStore(state => state.reorderTasks);
+  const moveTaskToStatusAndPosition = useTaskStore(state => state.moveTaskToStatusAndPosition);
+  const updateTask = useTaskStore(state => state.updateTask);
   const { isLeftSidebarOpen } = useUIStore();
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
@@ -156,6 +160,285 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
     return projectsWithTasks.sort((a, b) => b.taskCount - a.taskCount);
   }, [tasks, projects]);
 
+  // Handle task reordering within the same column in project view
+  const handleTaskReorder = (draggedTaskId: string, targetTaskId: string, insertAfter: boolean = false) => {
+    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    const targetTask = tasks.find(t => t.id === targetTaskId);
+    
+    if (!draggedTask || !targetTask || draggedTask.status !== targetTask.status) {
+      return;
+    }
+
+    if (groupByProject) {
+      // CRITICAL FIX: In project view, only reorder within the same project context
+      handleProjectSpecificReorder(draggedTaskId, targetTaskId, insertAfter);
+    } else {
+      // By Status view: use global reordering
+      const statusTasks = sortTasksByOrder(tasks.filter(t => t.status === targetTask.status));
+      const targetIndex = statusTasks.findIndex(t => t.id === targetTaskId);
+      const newIndex = insertAfter ? targetIndex + 1 : targetIndex;
+      
+      console.log(`🔄 Status view reordering within ${targetTask.status}: ${draggedTaskId} to position ${newIndex}`);
+      reorderTasks(draggedTaskId, newIndex);
+    }
+  };
+
+  // NEW: Project-specific reordering that doesn't affect global task order
+  const handleProjectSpecificReorder = async (draggedTaskId: string, targetTaskId: string, insertAfter: boolean = false) => {
+    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    const targetTask = tasks.find(t => t.id === targetTaskId);
+    
+    if (!draggedTask || !targetTask) return;
+    
+    // CRITICAL: Only reorder within the same project AND status
+    if (draggedTask.status !== targetTask.status || 
+        (draggedTask.projectId || null) !== (targetTask.projectId || null)) {
+      console.log(`🚫 Project reorder rejected: Different project or status`);
+      return;
+    }
+
+    const projectId = targetTask.projectId || null;
+    const status = targetTask.status;
+
+    // Get tasks in the same project and status, sorted by display order
+    const projectStatusTasks = sortTasksByOrder(
+      tasks.filter(t => 
+        t.status === status && 
+        (t.projectId || null) === projectId && 
+        t.id !== draggedTaskId
+      )
+    );
+
+    const targetIndex = projectStatusTasks.findIndex(t => t.id === targetTaskId);
+    const newIndex = insertAfter ? targetIndex + 1 : Math.max(0, targetIndex);
+    const clampedIndex = Math.max(0, Math.min(newIndex, projectStatusTasks.length));
+
+    console.log(`🎯 PROJECT-SPECIFIC REORDER:`, {
+      draggedTask: draggedTask.title,
+      targetTask: targetTask.title,
+      project: projectId || 'Dashboard',
+      status,
+      projectStatusTasksCount: projectStatusTasks.length,
+      targetIndex,
+      newIndex,
+      clampedIndex
+    });
+
+    // Use the existing reorderTasks logic but with project context
+    try {
+      const beforeTask = clampedIndex > 0 ? projectStatusTasks[clampedIndex - 1] : null;
+      const afterTask = clampedIndex < projectStatusTasks.length ? projectStatusTasks[clampedIndex] : null;
+      
+      const beforePos = beforeTask ? (beforeTask.orderString || beforeTask.order?.toString() || 'a0') : null;
+      const afterPos = afterTask ? (afterTask.orderString || afterTask.order?.toString() || 'z0') : null;
+      
+      // Generate new fractional position using the existing service
+      const newOrderString = FractionalOrderingService.generatePosition(beforePos, afterPos);
+      
+      // Update the task with the new position
+      await updateTask(draggedTaskId, {
+        orderString: newOrderString
+      });
+      
+      console.log(`✅ PROJECT REORDER SUCCESS: ${draggedTask.title} -> ${newOrderString}`);
+      
+    } catch (error) {
+      console.error('❌ Project-specific reorder failed:', error);
+    }
+  };
+
+  // Handle cross-column moves with positioning in project view
+  const handleCrossColumnMove = async (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter: boolean = false, targetProjectId?: string) => {
+    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    if (!draggedTask) {
+      console.error('❌ Task not found:', draggedTaskId);
+      return;
+    }
+
+    if (groupByProject) {
+      // CRITICAL FIX: In project view, handle cross-column moves independently
+      await handleProjectCrossColumnMove(draggedTaskId, targetTaskId, newStatus, insertAfter, targetProjectId);
+    } else {
+      // By Status view: use existing cross-column logic
+      await handleStatusCrossColumnMove(draggedTaskId, targetTaskId, newStatus, insertAfter, targetProjectId);
+    }
+  };
+
+  // NEW: Project-specific cross-column moves that don't affect By Status view ordering
+  const handleProjectCrossColumnMove = async (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter: boolean = false, targetProjectId?: string) => {
+    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    if (!draggedTask) return;
+
+    const currentProjectId = draggedTask.projectId || null;
+    // Handle 'dashboard' special case - convert back to null for database storage
+    const finalProjectId = targetProjectId === 'dashboard' ? null : (targetProjectId !== undefined ? targetProjectId : null);
+    
+    // FIXED: Normalize both values for proper comparison
+    const normalizedCurrentProject = currentProjectId === null ? 'dashboard' : currentProjectId;
+    const normalizedTargetProject = finalProjectId === null ? 'dashboard' : finalProjectId;
+    const isProjectChange = normalizedCurrentProject !== normalizedTargetProject;
+    const isStatusChange = draggedTask.status !== newStatus;
+    
+    console.log(`🚀 PROJECT CROSS-COLUMN MOVE:`, {
+      draggedTask: draggedTask.title,
+      currentProject: currentProjectId || 'Dashboard',
+      targetProject: finalProjectId || 'Dashboard',
+      normalizedCurrentProject,
+      normalizedTargetProject,
+      originalTargetProjectId: targetProjectId,
+      currentStatus: draggedTask.status,
+      newStatus,
+      isProjectChange,
+      isStatusChange,
+      insertAfter
+    });
+
+    try {
+      // CRITICAL FIX: Make atomic update to prevent race conditions
+      // Calculate position first if status is changing
+      let updates: Partial<Task> = {};
+      
+      if (isProjectChange) {
+        updates.projectId = finalProjectId;
+      }
+      
+      if (isStatusChange) {
+        // Filter destination tasks by the target project (important for project view)
+        const projectStatusTasks = sortTasksByOrder(
+          tasks.filter(t => 
+            t.status === newStatus && 
+            (t.projectId || null) === finalProjectId &&
+            t.id !== draggedTaskId
+          )
+        );
+
+        const targetIndex = projectStatusTasks.findIndex(t => t.id === targetTaskId);
+        const finalIndex = insertAfter ? targetIndex + 1 : Math.max(0, targetIndex);
+        const clampedIndex = Math.max(0, Math.min(finalIndex, projectStatusTasks.length));
+
+        // Calculate new position within the target project and status
+        const beforeTask = clampedIndex > 0 ? projectStatusTasks[clampedIndex - 1] : null;
+        const afterTask = clampedIndex < projectStatusTasks.length ? projectStatusTasks[clampedIndex] : null;
+
+        const beforePos = beforeTask ? (beforeTask.orderString || beforeTask.order?.toString() || 'a0') : null;
+        const afterPos = afterTask ? (afterTask.orderString || afterTask.order?.toString() || 'z0') : null;
+
+        // Generate new fractional position
+        const newOrderString = FractionalOrderingService.generatePosition(beforePos, afterPos);
+
+        // Add status-related updates
+        updates.status = newStatus;
+        updates.completed = newStatus === 'completed' ? true : (draggedTask.status === 'completed' ? false : draggedTask.completed);
+        updates.hideFromPomodoro = newStatus === 'pomodoro' ? false : (draggedTask.hideFromPomodoro ?? false);
+        updates.orderString = newOrderString;
+      }
+      
+      // Single atomic update for all changes
+      await updateTask(draggedTaskId, updates);
+      
+      console.log(`✅ ATOMIC PROJECT MOVE: ${draggedTask.title}`, {
+        projectChange: isProjectChange ? `${currentProjectId || 'Dashboard'} → ${finalProjectId || 'Dashboard'}` : 'none',
+        statusChange: isStatusChange ? `${draggedTask.status} → ${newStatus}` : 'none',
+        orderString: updates.orderString || 'unchanged'
+      });
+
+      // Add toast notification
+      const projectName = finalProjectId ? projects.find(p => p.id === finalProjectId)?.name || 'Unknown Project' : 'Dashboard';
+      const statusName = newStatus === 'pomodoro' ? 'In Pomodoro' : newStatus === 'todo' ? 'To Do List' : 'Completed';
+      
+      if (isProjectChange && isStatusChange) {
+        addToast(`Task moved to ${projectName} - ${statusName}`);
+      } else if (isProjectChange) {
+        addToast(`Task moved to ${projectName}`);
+      } else if (isStatusChange) {
+        addToast(`Task moved to ${statusName}`);
+      }
+
+    } catch (error) {
+      console.error('❌ Project cross-column move failed:', error);
+      addToast('Failed to move task - please try again');
+    }
+  };
+
+  // EXISTING: Status view cross-column logic (unchanged)
+  const handleStatusCrossColumnMove = async (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter: boolean = false, targetProjectId?: string) => {
+    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    if (!draggedTask) return;
+
+    const currentProjectId = draggedTask.projectId || null;
+    const finalProjectId = targetProjectId !== undefined ? targetProjectId : null;
+    const isProjectChange = currentProjectId !== finalProjectId;
+    
+    console.log(`🚀 STATUS CROSS-COLUMN MOVE:`, {
+      draggedTask: draggedTask.title,
+      currentProject: currentProjectId || 'no-project',
+      finalProject: finalProjectId || 'no-project',
+      newStatus,
+      isProjectChange,
+      statusChange: draggedTask.status !== newStatus
+    });
+    
+    // For project changes, filter destination tasks by the target project
+    const destinationStatusTasks = isProjectChange 
+      ? sortTasksByOrder(tasks.filter(t => t.status === newStatus && (t.projectId || null) === finalProjectId))
+      : sortTasksByOrder(tasks.filter(t => t.status === newStatus && t.id !== draggedTaskId));
+    
+    const targetIndex = destinationStatusTasks.findIndex(t => t.id === targetTaskId);
+    const finalIndex = insertAfter ? targetIndex + 1 : Math.max(0, targetIndex);
+    
+    if (isProjectChange) {
+      // Handle cross-project moves with atomic update
+      try {
+        console.log(`🔄 CROSS-PROJECT: Updating task with project and status change`);
+        
+        // First update the projectId
+        await updateTask(draggedTaskId, {
+          projectId: finalProjectId
+        });
+        
+        console.log(`✅ Successfully updated task project: ${currentProjectId || 'no-project'} → ${finalProjectId || 'no-project'}`);
+        
+        // Then handle the status/position change
+        if (draggedTask.status !== newStatus) {
+          // Small delay to ensure project update is processed
+          setTimeout(async () => {
+            console.log(`🗺️ Now updating status and position: ${newStatus}, index ${finalIndex}`);
+            await moveTaskToStatusAndPosition(draggedTaskId, newStatus as Task['status'], finalIndex);
+          }, 100);
+        } else {
+          // Same status, just repositioning within the new project
+          console.log(`🗺️ Same status, repositioning within new project to index ${finalIndex}`);
+          setTimeout(async () => {
+            await reorderTasks(draggedTaskId, finalIndex);
+          }, 100);
+        }
+        
+        // Add toast notification for project change
+        const projectName = finalProjectId ? projects.find(p => p.id === finalProjectId)?.name || 'Unknown Project' : 'No Project';
+        const statusName = newStatus === 'pomodoro' ? 'In Pomodoro' : newStatus === 'todo' ? 'To Do List' : 'Completed';
+        addToast(`Task moved to ${projectName} - ${statusName}`);
+        
+      } catch (error) {
+        console.error('❌ Failed to update task for cross-project move:', error);
+        addToast('Failed to move task - please try again');
+      }
+    } else {
+      // Only status/position change
+      console.log(`🗺️ Moving task to status and position: ${newStatus}, index ${finalIndex}`);
+      try {
+        await moveTaskToStatusAndPosition(draggedTaskId, newStatus as Task['status'], finalIndex);
+        
+        // Add toast for status change
+        const statusName = newStatus === 'pomodoro' ? 'In Pomodoro' : newStatus === 'todo' ? 'To Do List' : 'Completed';
+        addToast(`Task moved to ${statusName}`);
+        
+      } catch (error) {
+        console.error('❌ Failed to move task:', error);
+        addToast('Failed to move task - please try again');
+      }
+    }
+  };
+
   // Group tasks by project for row-based rendering when grouping is enabled
   const projectGroups = React.useMemo(() => {
     if (!groupByProject) return null;
@@ -164,8 +447,16 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
       const projectId = project?.id || 'no-project';
       const projectTasks = tasks.filter(task => (task.projectId || 'no-project') === projectId);
       
+      // CRITICAL FIX: Create a proper targetProject object for Dashboard/No Project
+      const targetProjectObject = project || {
+        id: 'dashboard', // Use 'dashboard' as a special identifier instead of null
+        name: 'Dashboard',
+        color: '#6B7280', // Gray color for Dashboard
+        userId: '' // Will be set properly when needed
+      };
+      
       return {
-        project,
+        project: targetProjectObject, // Always provide a complete project object
         projectTasks: {
           pomodoro: sortTasksByOrder(projectTasks.filter(t => t.status === 'pomodoro')),
           todo: sortTasksByOrder(projectTasks.filter(t => t.status === 'todo')),
@@ -177,9 +468,9 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
 
   return (
     <ProjectLayoutProvider>
-      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <div className={`flex flex-col bg-background-primary ${className}`}>
-          {/* Fixed Headers Row */}
+      <div className={`flex flex-col bg-background-primary ${className}`}>
+        {/* Fixed Headers Row - DndContext only for column reordering */}
+        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
             <div className="grid gap-6 bg-background-primary sticky top-0 z-30 pl-2" style={{ gridTemplateColumns: `repeat(${columnOrder.length}, minmax(320px, 1fr))` }}>
               {columnOrder.map((status) => {
@@ -207,70 +498,78 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
               })}
             </div>
           </SortableContext>
+        </DndContext>
 
-      {/* Scrollable Content Row */}
-      <div className="flex flex-col flex-1">
-        {groupByProject && projectGroups ? (
-          /* Project Group Rows - Notion-inspired approach */
-          <div className={`flex-1 pr-6 pb-6 pt-4 ${isLeftSidebarOpen ? 'pl-6' : 'pl-2'}`}>
-            {projectGroups.map(({ project, projectTasks }) => (
-              <ProjectGroupRow
-                key={project?.id || 'no-project'}
-                project={project}
-                projectTasks={projectTasks}
-                isExpanded={expandedProjects.has(project?.id || 'no-project')}
-                expandedProjects={expandedProjects}
-                onToggleProject={toggleProjectExpansion}
-                onStatusChange={handleTaskStatusChange}
-                onTaskReorder={() => {}} // TODO: Implement reordering
-                onCrossColumnMove={() => {}} // TODO: Implement cross-column moves
-                authStatus={{ isAuthenticated: true, shouldShowAuth: false }} // TODO: Get actual auth status
-                allTasks={tasks}
-                columnOrder={columnOrder}
-              />
-            ))}
-          </div>
-        ) : (
-          /* Traditional Column Layout */
-          <div className="grid gap-6 flex-1 pl-2" style={{ gridTemplateColumns: `repeat(${columnOrder.length}, minmax(320px, 1fr))` }}>
-            {columnOrder.map((status, index) => {
-              const config = columnConfigs[status];
-              return (
-                <TaskColumn
-                  key={status}
-                  title={config.title}
-                  tasks={config.tasks}
-                  status={status}
-                  badgeColor={status === 'pomodoro' ? 'bg-red-500' : status === 'todo' ? 'bg-blue-500' : 'bg-green-500'}
-                  onStatusChange={handleTaskStatusChange}
-                  groupByProject={groupByProject}
+        {/* Scrollable Content Row - Outside DndContext to allow native HTML5 drag and drop */}
+        <div className="flex flex-col flex-1">
+          {groupByProject && projectGroups ? (
+            /* Project Group Rows - Notion-inspired approach */
+            <div className={`flex-1 pr-6 pb-6 pt-4 ${isLeftSidebarOpen ? 'pl-6' : 'pl-2'}`}>
+              {projectGroups.map(({ project, projectTasks }) => (
+                <ProjectGroupRow
+                  key={project?.id || 'no-project'}
+                  project={project}
+                  projectTasks={projectTasks}
+                  isExpanded={expandedProjects.has(project?.id || 'no-project')}
                   expandedProjects={expandedProjects}
-                  isFirstColumn={index === 0}
-                  projects={getProjectsWithTasks}
                   onToggleProject={toggleProjectExpansion}
+                  onStatusChange={handleTaskStatusChange}
+                  onTaskReorder={handleTaskReorder}
+                  onCrossColumnMove={(draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter?: boolean, targetProjectId?: string) => {
+                    console.log(`🔧 TaskStatusBoard receiving cross-column move:`, {
+                      draggedTaskId,
+                      targetTaskId,
+                      newStatus,
+                      insertAfter,
+                      targetProjectId
+                    });
+                    handleCrossColumnMove(draggedTaskId, targetTaskId, newStatus, insertAfter, targetProjectId);
+                  }}
+                  authStatus={{ isAuthenticated: true, shouldShowAuth: false }} // TODO: Get actual auth status
                   allTasks={tasks}
-                  hideHeader={true}
+                  columnOrder={columnOrder}
                 />
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      
-      {/* Toast Notifications */}
-      <div className="fixed bottom-4 right-4 z-50">
-        {toasts.map(toast => (
-          <ToastNotification 
-            key={toast.id}
-            message={toast.message}
-            onClose={() => removeToast(toast.id)}
-            onUndo={toast.undoAction}
-          />
-        ))}
-      </div>
+              ))}
+            </div>
+          ) : (
+            /* Traditional Column Layout */
+            <div className="grid gap-6 flex-1 pl-2" style={{ gridTemplateColumns: `repeat(${columnOrder.length}, minmax(320px, 1fr))` }}>
+              {columnOrder.map((status, index) => {
+                const config = columnConfigs[status];
+                return (
+                  <TaskColumn
+                    key={status}
+                    title={config.title}
+                    tasks={config.tasks}
+                    status={status}
+                    badgeColor={status === 'pomodoro' ? 'bg-red-500' : status === 'todo' ? 'bg-blue-500' : 'bg-green-500'}
+                    onStatusChange={handleTaskStatusChange}
+                    groupByProject={groupByProject}
+                    expandedProjects={expandedProjects}
+                    isFirstColumn={index === 0}
+                    projects={getProjectsWithTasks}
+                    onToggleProject={toggleProjectExpansion}
+                    allTasks={tasks}
+                    hideHeader={true}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
-      </DndContext>
+
+        {/* Toast Notifications */}
+        <div className="fixed bottom-4 right-4 z-50">
+          {toasts.map(toast => (
+            <ToastNotification 
+              key={toast.id}
+              message={toast.message}
+              onClose={() => removeToast(toast.id)}
+              onUndo={toast.undoAction}
+            />
+          ))}
+        </div>
+      </div>
     </ProjectLayoutProvider>
   );
 };
