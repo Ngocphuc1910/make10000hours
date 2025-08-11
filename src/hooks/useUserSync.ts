@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useUserStore } from '../store/userStore';
 import { useDeepFocusStore } from '../store/deepFocusStore';
-import { useFormEditStore } from '../store/formEditStore';
+// Removed useFormEditStore import to prevent subscription
 
 // Helper function to clear storage when user changes
 const clearPreviousUserStorage = () => {
@@ -32,7 +32,7 @@ let lastUserId: string | null = null;
 export const useUserSync = () => {
   const { user } = useUserStore();
   const { loadBlockedSites } = useDeepFocusStore();
-  const { isAnyFormActive } = useFormEditStore();
+  // Don't subscribe to formEditStore - check state only when needed
 
   useEffect(() => {
     const syncUserWithExtension = async () => {
@@ -42,6 +42,8 @@ export const useUserSync = () => {
       }
       
       // Skip sync if any form is currently active to prevent TaskForm rerenders
+      const { useFormEditStore } = await import('../store/formEditStore');
+      const { isAnyFormActive } = useFormEditStore.getState();
       if (isAnyFormActive()) {
         console.log('🛡️ Extension sync blocked - TaskForm is active');
         return;
