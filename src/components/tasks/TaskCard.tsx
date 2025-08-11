@@ -13,9 +13,10 @@ interface TaskCardProps {
   columnStatus?: Task['status'];
   context?: 'task-management' | 'pomodoro' | 'default';
   targetProject?: { id: string; name: string; color: string } | null;
+  dragContext?: 'status' | 'project';
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, onCrossColumnMove, columnStatus, context = 'default', targetProject }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, onCrossColumnMove, columnStatus, context = 'default', targetProject, dragContext = 'status' }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragPosition, setDragPosition] = useState<'top' | 'bottom' | null>(null);
@@ -41,7 +42,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
   };
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
-    console.log(`🚀 ENHANCED TaskCard drag start: ${task.id} (${task.title}) - Context: ${context}, Column: ${columnStatus}, Project: ${task.projectId || 'no-project'}`);
+    console.log(`🚀 ENHANCED TaskCard drag start: ${task.id} (${task.title}) - Context: ${context}, Column: ${columnStatus}, Project: ${task.projectId || 'no-project'}, DragContext: ${dragContext}`);
     
     // Validate drag start conditions
     if (!task.id || !task.title) {
@@ -56,6 +57,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
       e.dataTransfer.setData('application/x-task-status', task.status);
       e.dataTransfer.setData('application/x-task-project', task.projectId || 'no-project');
       e.dataTransfer.setData('application/x-task-title', task.title); // Add title for debugging
+      e.dataTransfer.setData('application/x-drag-context', dragContext); // Add drag context
       e.dataTransfer.effectAllowed = 'move';
       
       console.log('📦 ENHANCED Drag data set successfully:', {
@@ -147,12 +149,23 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
     const draggedTaskId = e.dataTransfer.getData('text/plain');
     const draggedTaskStatus = e.dataTransfer.getData('application/x-task-status');
     const draggedTaskProject = e.dataTransfer.getData('application/x-task-project');
+    const draggedDragContext = e.dataTransfer.getData('application/x-drag-context') || 'status';
     
     // CRITICAL FIX: Ensure we use the correct target project context
     // The target project is the project context this TaskCard exists in
-    const targetProjectId = targetProject?.id || null;
+    // Handle 'dashboard' special case
+    const targetProjectId = targetProject?.id === 'dashboard' ? 'dashboard' : (targetProject?.id || null);
     const draggedProjectNormalized = draggedTaskProject === 'no-project' ? null : draggedTaskProject;
     const isProjectChange = draggedProjectNormalized !== targetProjectId;
+    
+    console.log(`🔍 DETAILED PROJECT DEBUG:
+      - targetProject FULL object: ${JSON.stringify(targetProject, null, 2)}
+      - targetProject type: ${typeof targetProject}
+      - targetProject null check: ${targetProject === null}
+      - targetProject undefined check: ${targetProject === undefined}
+      - targetProjectId: ${targetProjectId}
+      - draggedTaskProject: ${draggedTaskProject}
+      - draggedProjectNormalized: ${draggedProjectNormalized}`);
     const isStatusChange = draggedTaskStatus !== task.status;
     
     console.log(`🎯 ENHANCED Drop analysis:
@@ -163,6 +176,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
       - This Task's Project: ${task.projectId || 'no-project'}
       - From Status: ${draggedTaskStatus} 
       - To Status: ${task.status}
+      - Drag Context: ${draggedDragContext} -> ${dragContext}
       - Project Change: ${isProjectChange}
       - Status Change: ${isStatusChange}
       - Insert Position: ${dragPosition}`);

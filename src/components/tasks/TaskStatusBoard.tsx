@@ -10,6 +10,7 @@ import { ProjectLayoutProvider } from '../../contexts/ProjectLayoutContext';
 import ProjectGroupRow from './ProjectGroupRow';
 import DraggableColumnHeader from './DraggableColumnHeader';
 import { sortTasksByOrder } from '../../utils/taskSorting';
+import { FractionalOrderingService } from '../../services/FractionalOrderingService';
 
 interface TaskStatusBoardProps {
   className?: string;
@@ -168,13 +169,82 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
       return;
     }
 
-    // Get the sorted tasks for this status to find the correct target index
-    const statusTasks = sortTasksByOrder(tasks.filter(t => t.status === targetTask.status));
-    const targetIndex = statusTasks.findIndex(t => t.id === targetTaskId);
-    const newIndex = insertAfter ? targetIndex + 1 : targetIndex;
+    if (groupByProject) {
+      // CRITICAL FIX: In project view, only reorder within the same project context
+      handleProjectSpecificReorder(draggedTaskId, targetTaskId, insertAfter);
+    } else {
+      // By Status view: use global reordering
+      const statusTasks = sortTasksByOrder(tasks.filter(t => t.status === targetTask.status));
+      const targetIndex = statusTasks.findIndex(t => t.id === targetTaskId);
+      const newIndex = insertAfter ? targetIndex + 1 : targetIndex;
+      
+      console.log(`🔄 Status view reordering within ${targetTask.status}: ${draggedTaskId} to position ${newIndex}`);
+      reorderTasks(draggedTaskId, newIndex);
+    }
+  };
+
+  // NEW: Project-specific reordering that doesn't affect global task order
+  const handleProjectSpecificReorder = async (draggedTaskId: string, targetTaskId: string, insertAfter: boolean = false) => {
+    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    const targetTask = tasks.find(t => t.id === targetTaskId);
     
-    console.log(`🔄 Project view reordering within ${targetTask.status}: ${draggedTaskId} to position ${newIndex} (from ${statusTasks.length} sorted tasks)`);
-    reorderTasks(draggedTaskId, newIndex);
+    if (!draggedTask || !targetTask) return;
+    
+    // CRITICAL: Only reorder within the same project AND status
+    if (draggedTask.status !== targetTask.status || 
+        (draggedTask.projectId || null) !== (targetTask.projectId || null)) {
+      console.log(`🚫 Project reorder rejected: Different project or status`);
+      return;
+    }
+
+    const projectId = targetTask.projectId || null;
+    const status = targetTask.status;
+
+    // Get tasks in the same project and status, sorted by display order
+    const projectStatusTasks = sortTasksByOrder(
+      tasks.filter(t => 
+        t.status === status && 
+        (t.projectId || null) === projectId && 
+        t.id !== draggedTaskId
+      )
+    );
+
+    const targetIndex = projectStatusTasks.findIndex(t => t.id === targetTaskId);
+    const newIndex = insertAfter ? targetIndex + 1 : Math.max(0, targetIndex);
+    const clampedIndex = Math.max(0, Math.min(newIndex, projectStatusTasks.length));
+
+    console.log(`🎯 PROJECT-SPECIFIC REORDER:`, {
+      draggedTask: draggedTask.title,
+      targetTask: targetTask.title,
+      project: projectId || 'Dashboard',
+      status,
+      projectStatusTasksCount: projectStatusTasks.length,
+      targetIndex,
+      newIndex,
+      clampedIndex
+    });
+
+    // Use the existing reorderTasks logic but with project context
+    try {
+      const beforeTask = clampedIndex > 0 ? projectStatusTasks[clampedIndex - 1] : null;
+      const afterTask = clampedIndex < projectStatusTasks.length ? projectStatusTasks[clampedIndex] : null;
+      
+      const beforePos = beforeTask ? (beforeTask.orderString || beforeTask.order?.toString() || 'a0') : null;
+      const afterPos = afterTask ? (afterTask.orderString || afterTask.order?.toString() || 'z0') : null;
+      
+      // Generate new fractional position using the existing service
+      const newOrderString = FractionalOrderingService.generatePosition(beforePos, afterPos);
+      
+      // Update the task with the new position
+      await updateTask(draggedTaskId, {
+        orderString: newOrderString
+      });
+      
+      console.log(`✅ PROJECT REORDER SUCCESS: ${draggedTask.title} -> ${newOrderString}`);
+      
+    } catch (error) {
+      console.error('❌ Project-specific reorder failed:', error);
+    }
   };
 
   // Handle cross-column moves with positioning in project view
@@ -185,18 +255,125 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
       return;
     }
 
+    if (groupByProject) {
+      // CRITICAL FIX: In project view, handle cross-column moves independently
+      await handleProjectCrossColumnMove(draggedTaskId, targetTaskId, newStatus, insertAfter, targetProjectId);
+    } else {
+      // By Status view: use existing cross-column logic
+      await handleStatusCrossColumnMove(draggedTaskId, targetTaskId, newStatus, insertAfter, targetProjectId);
+    }
+  };
+
+  // NEW: Project-specific cross-column moves that don't affect By Status view ordering
+  const handleProjectCrossColumnMove = async (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter: boolean = false, targetProjectId?: string) => {
+    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    if (!draggedTask) return;
+
+    const currentProjectId = draggedTask.projectId || null;
+    // Handle 'dashboard' special case - convert back to null for database storage
+    const finalProjectId = targetProjectId === 'dashboard' ? null : (targetProjectId !== undefined ? targetProjectId : null);
+    
+    // FIXED: Normalize both values for proper comparison
+    const normalizedCurrentProject = currentProjectId === null ? 'dashboard' : currentProjectId;
+    const normalizedTargetProject = finalProjectId === null ? 'dashboard' : finalProjectId;
+    const isProjectChange = normalizedCurrentProject !== normalizedTargetProject;
+    const isStatusChange = draggedTask.status !== newStatus;
+    
+    console.log(`🚀 PROJECT CROSS-COLUMN MOVE:`, {
+      draggedTask: draggedTask.title,
+      currentProject: currentProjectId || 'Dashboard',
+      targetProject: finalProjectId || 'Dashboard',
+      normalizedCurrentProject,
+      normalizedTargetProject,
+      originalTargetProjectId: targetProjectId,
+      currentStatus: draggedTask.status,
+      newStatus,
+      isProjectChange,
+      isStatusChange,
+      insertAfter
+    });
+
+    try {
+      // CRITICAL FIX: Make atomic update to prevent race conditions
+      // Calculate position first if status is changing
+      let updates: Partial<Task> = {};
+      
+      if (isProjectChange) {
+        updates.projectId = finalProjectId;
+      }
+      
+      if (isStatusChange) {
+        // Filter destination tasks by the target project (important for project view)
+        const projectStatusTasks = sortTasksByOrder(
+          tasks.filter(t => 
+            t.status === newStatus && 
+            (t.projectId || null) === finalProjectId &&
+            t.id !== draggedTaskId
+          )
+        );
+
+        const targetIndex = projectStatusTasks.findIndex(t => t.id === targetTaskId);
+        const finalIndex = insertAfter ? targetIndex + 1 : Math.max(0, targetIndex);
+        const clampedIndex = Math.max(0, Math.min(finalIndex, projectStatusTasks.length));
+
+        // Calculate new position within the target project and status
+        const beforeTask = clampedIndex > 0 ? projectStatusTasks[clampedIndex - 1] : null;
+        const afterTask = clampedIndex < projectStatusTasks.length ? projectStatusTasks[clampedIndex] : null;
+
+        const beforePos = beforeTask ? (beforeTask.orderString || beforeTask.order?.toString() || 'a0') : null;
+        const afterPos = afterTask ? (afterTask.orderString || afterTask.order?.toString() || 'z0') : null;
+
+        // Generate new fractional position
+        const newOrderString = FractionalOrderingService.generatePosition(beforePos, afterPos);
+
+        // Add status-related updates
+        updates.status = newStatus;
+        updates.completed = newStatus === 'completed' ? true : (draggedTask.status === 'completed' ? false : draggedTask.completed);
+        updates.hideFromPomodoro = newStatus === 'pomodoro' ? false : (draggedTask.hideFromPomodoro ?? false);
+        updates.orderString = newOrderString;
+      }
+      
+      // Single atomic update for all changes
+      await updateTask(draggedTaskId, updates);
+      
+      console.log(`✅ ATOMIC PROJECT MOVE: ${draggedTask.title}`, {
+        projectChange: isProjectChange ? `${currentProjectId || 'Dashboard'} → ${finalProjectId || 'Dashboard'}` : 'none',
+        statusChange: isStatusChange ? `${draggedTask.status} → ${newStatus}` : 'none',
+        orderString: updates.orderString || 'unchanged'
+      });
+
+      // Add toast notification
+      const projectName = finalProjectId ? projects.find(p => p.id === finalProjectId)?.name || 'Unknown Project' : 'Dashboard';
+      const statusName = newStatus === 'pomodoro' ? 'In Pomodoro' : newStatus === 'todo' ? 'To Do List' : 'Completed';
+      
+      if (isProjectChange && isStatusChange) {
+        addToast(`Task moved to ${projectName} - ${statusName}`);
+      } else if (isProjectChange) {
+        addToast(`Task moved to ${projectName}`);
+      } else if (isStatusChange) {
+        addToast(`Task moved to ${statusName}`);
+      }
+
+    } catch (error) {
+      console.error('❌ Project cross-column move failed:', error);
+      addToast('Failed to move task - please try again');
+    }
+  };
+
+  // EXISTING: Status view cross-column logic (unchanged)
+  const handleStatusCrossColumnMove = async (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter: boolean = false, targetProjectId?: string) => {
+    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    if (!draggedTask) return;
+
     const currentProjectId = draggedTask.projectId || null;
     const finalProjectId = targetProjectId !== undefined ? targetProjectId : null;
     const isProjectChange = currentProjectId !== finalProjectId;
     
-    console.log(`🚀 TaskStatusBoard handleCrossColumnMove ENHANCED:`, {
-      draggedTaskId,
-      draggedTaskTitle: draggedTask.title,
-      currentProjectId: currentProjectId || 'no-project',
-      finalProjectId: finalProjectId || 'no-project',
-      targetProjectId: targetProjectId || 'no-project',
+    console.log(`🚀 STATUS CROSS-COLUMN MOVE:`, {
+      draggedTask: draggedTask.title,
+      currentProject: currentProjectId || 'no-project',
+      finalProject: finalProjectId || 'no-project',
       newStatus,
-      insertAfter,
       isProjectChange,
       statusChange: draggedTask.status !== newStatus
     });
@@ -209,17 +386,8 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
     const targetIndex = destinationStatusTasks.findIndex(t => t.id === targetTaskId);
     const finalIndex = insertAfter ? targetIndex + 1 : Math.max(0, targetIndex);
     
-    console.log(`🔄 ENHANCED Cross-column/project move details:
-      - Task: ${draggedTaskId} ("${draggedTask.title}")
-      - Status: ${draggedTask.status} → ${newStatus}
-      - Project: ${currentProjectId || 'no-project'} → ${finalProjectId || 'no-project'}
-      - Target Index: ${targetIndex}, Insert After: ${insertAfter}, Final Index: ${finalIndex}
-      - Destination Tasks: ${destinationStatusTasks.length}
-      - Project changed: ${isProjectChange}`);
-    
     if (isProjectChange) {
-      // CRITICAL FIX: Handle cross-project moves with atomic update
-      // Use moveTaskToStatusAndPosition which can handle both project and status changes
+      // Handle cross-project moves with atomic update
       try {
         console.log(`🔄 CROSS-PROJECT: Updating task with project and status change`);
         
@@ -279,8 +447,16 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
       const projectId = project?.id || 'no-project';
       const projectTasks = tasks.filter(task => (task.projectId || 'no-project') === projectId);
       
+      // CRITICAL FIX: Create a proper targetProject object for Dashboard/No Project
+      const targetProjectObject = project || {
+        id: 'dashboard', // Use 'dashboard' as a special identifier instead of null
+        name: 'Dashboard',
+        color: '#6B7280', // Gray color for Dashboard
+        userId: '' // Will be set properly when needed
+      };
+      
       return {
-        project,
+        project: targetProjectObject, // Always provide a complete project object
         projectTasks: {
           pomodoro: sortTasksByOrder(projectTasks.filter(t => t.status === 'pomodoro')),
           todo: sortTasksByOrder(projectTasks.filter(t => t.status === 'todo')),
