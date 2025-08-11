@@ -29,15 +29,7 @@ export const DeepFocusSwitch: React.FC<DeepFocusSwitchProps> = ({
   const [showExtensionPopup, setShowExtensionPopup] = useState(false);
   const [isProcessingToggle, setIsProcessingToggle] = useState(false);
 
-  // Debug state changes
-  useEffect(() => {
-    console.log('🐛 showExtensionPopup state changed to:', showExtensionPopup);
-  }, [showExtensionPopup]);
-
-  // Debug Deep Focus state changes
-  useEffect(() => {
-    console.log('🔥 DeepFocusSwitch: isDeepFocusActive changed to:', isDeepFocusActive, 'Page:', pageTitle);
-  }, [isDeepFocusActive, pageTitle]);
+  // Debug logging removed to reduce console noise
 
   // Size configurations
   const sizeConfig = {
