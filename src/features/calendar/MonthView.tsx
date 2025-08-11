@@ -16,7 +16,7 @@ import { DraggableEvent } from './components/DraggableEvent';
 import { DroppableTimeSlot } from './components/DroppableTimeSlot';
 import { useUserStore } from '../../store/userStore';
 import { timezoneUtils } from '../../utils/timezoneUtils';
-import { calculateMonthCellLayout, MonthCellLayout, calculateMonthViewLayout, MonthGlobalLayout } from './utils';
+import { calculateMonthCellLayout, MonthCellLayout, calculateMonthViewLayout, MonthGlobalLayout, calculateOptimizedEventLayout, calculateMonthOptimizedLayout, calculateUnifiedMonthLayout, UnifiedMonthLayout } from './utils';
 
 interface MonthViewProps {
   currentDate: Date;
@@ -54,84 +54,93 @@ export const MonthView: React.FC<MonthViewProps> = ({
   // Calculate number of rows needed (5 or 6)
   const numberOfRows = Math.ceil(days.length / 7);
 
-  // Calculate optimized layout for all cells with global occupation tracking
+  // Calculate optimized layout using unified algorithm based on proven week view pattern
+  const unifiedLayout = useMemo(() => {
+    // Performance monitoring for algorithm execution
+    const startTime = performance.now();
+    const result = calculateUnifiedMonthLayout(days, events);
+    const executionTime = performance.now() - startTime;
+    
+    // Log performance metrics for monitoring (only in development)
+    if (process.env.NODE_ENV === 'development' && events.length > 0) {
+      console.log(`🎯 Unified algorithm performance:`, {
+        executionTime: `${executionTime.toFixed(2)}ms`,
+        events: events.length,
+        days: days.length,
+        totalRows: result.totalRows,
+        multiDayEvents: result.multiDayEvents.length,
+        singleDayEvents: result.singleDayEvents.length,
+        efficiency: `${((result.multiDayEvents.length + result.singleDayEvents.length) / result.totalRows * 100).toFixed(1)}% space utilization`,
+        algorithm: 'unified (week-view pattern)'
+      });
+    }
+    
+    return result;
+  }, [events, days]);
+  
+  // Convert unified layout to compatible format for existing rendering system
   const optimizedCellLayouts = useMemo(() => {
-    // First, calculate the global month layout
-    const globalLayout = calculateMonthViewLayout(days, events);
-    
-    // Then calculate individual cell layouts using the global occupation info
+    // Create cell layouts compatible with existing rendering system
     const cellLayouts: { [dayIndex: number]: MonthCellLayout } = {};
+    const globalMultiDayLayout: { [eventId: string]: number } = {};
     
+    // Map multi-day events to their rows (compatible with existing row-based system)
+    unifiedLayout.multiDayEvents.forEach(({ event, position }) => {
+      globalMultiDayLayout[event.id] = position.row;
+    });
+    
+    // Create cell layouts for each day
     days.forEach((day, idx) => {
-      // Only pass single-day events to avoid any interference
-      const singleDayEvents = events.filter(event => !event.isMultiDay);
+      // Get single-day events for this specific day
+      const singleDayEventsForDay = unifiedLayout.singleDayEvents
+        .filter(({ position }) => position.dayIndex === idx)
+        .map(({ event, position }) => ({ event, row: position.row }));
       
-      // Get occupied rows for this specific day from global layout
-      const dayKey = format(day, 'yyyy-MM-dd');
-      const occupiedRows = globalLayout.dayOccupationMap[dayKey] || new Set();
-      
-      // Pass occupied rows to cell layout function for proper gap-filling
-      const cellLayout = calculateMonthCellLayout(day, singleDayEvents, new Set(occupiedRows));
-      cellLayouts[idx] = cellLayout;
+      cellLayouts[idx] = {
+        singleDayEvents: singleDayEventsForDay,
+        totalRows: Math.max(1, unifiedLayout.totalRows)
+      };
     });
     
     return {
       cellLayouts,
-      globalMultiDayLayout: globalLayout.multiDayLayout,
-      globalLayout
+      globalMultiDayLayout,
+      totalRows: unifiedLayout.totalRows,
+      unifiedLayout: unifiedLayout
     };
-  }, [events, days]);
+  }, [unifiedLayout, days]);
 
-  // Keep track of multiday layout for compatibility with existing overlay rendering
+  // Convert unified layout to week-based format for existing overlay rendering
   const multiDayEventLayout = useMemo(() => {
-    const multiDayEvents = events.filter(event => event.isMultiDay && event.displayStart && event.displayEnd);
-    
-    if (multiDayEvents.length === 0) {
+    if (unifiedLayout.multiDayEvents.length === 0) {
       return { eventsByWeek: {}, maxRowsByWeek: {} };
     }
 
-    // Group events by weeks they span, using our optimized row assignments
+    // Convert unified multi-day events to week-based format
     const eventsByWeek: Record<number, { event: CalendarEvent; startDay: number; endDay: number; row: number }[]> = {};
     const maxRowsByWeek: Record<number, number> = {};
 
-    multiDayEvents.forEach(event => {
-      if (!event.displayStart || !event.displayEnd) return;
-
-      const eventStartDay = days.findIndex(day => isSameDay(day, event.displayStart!));
-      const eventEndDay = days.findIndex(day => isSameDay(day, event.displayEnd!));
-      
-      if (eventStartDay === -1) return;
-      
-      const endDay = eventEndDay === -1 ? days.length - 1 : eventEndDay;
-      const startWeekRow = Math.floor(eventStartDay / 7);
-      const endWeekRow = Math.floor(endDay / 7);
-      
-      // Get the row assignment from our optimized layout
-      const row = optimizedCellLayouts.globalMultiDayLayout[event.id] || 0;
-
-      // Add event to each week it spans
-      for (let weekRow = startWeekRow; weekRow <= endWeekRow; weekRow++) {
-        if (!eventsByWeek[weekRow]) {
-          eventsByWeek[weekRow] = [];
+    unifiedLayout.multiDayEvents.forEach(({ event, position }) => {
+      // Use the pre-calculated week spans from our unified algorithm
+      position.weekSpans.forEach(({ week, startCol, endCol }) => {
+        if (!eventsByWeek[week]) {
+          eventsByWeek[week] = [];
         }
         
-        const weekStartCol = weekRow === startWeekRow ? (eventStartDay % 7) : 0;
-        const weekEndCol = weekRow === endWeekRow ? (endDay % 7) : 6;
-        
-        eventsByWeek[weekRow].push({
+        eventsByWeek[week].push({
           event,
-          startDay: weekStartCol,
-          endDay: weekEndCol,
-          row
+          startDay: startCol,
+          endDay: endCol,
+          row: position.row // Use row from unified layout for compatibility
         });
         
         // Update max row for this week
-        maxRowsByWeek[weekRow] = Math.max(maxRowsByWeek[weekRow] || 0, row);
-      }
+        maxRowsByWeek[week] = Math.max(maxRowsByWeek[week] || 0, position.row);
+      });
     });
 
     return { eventsByWeek, maxRowsByWeek };
-  }, [events, days, optimizedCellLayouts]);
+  }, [unifiedLayout]);
 
 
   // Initialize refs arrays
@@ -184,10 +193,13 @@ export const MonthView: React.FC<MonthViewProps> = ({
             const weekIndex = parseInt(weekIndexStr);
             
             return weekEvents.map(({ event, row, startDay, endDay }) => {
+              // SIMPLIFIED FIX: Use CSS percentage positioning for consistency
               const left = (startDay / 7) * 100;
-              const width = Math.min(((endDay - startDay + 1) / 7) * 100, (7 - startDay) / 7 * 100);
+              const width = ((endDay - startDay + 1) / 7) * 100;
+              
+              // Calculate vertical position: week offset + row offset within cell
               const top = (weekIndex / numberOfRows) * 100;
-              const rowOffset = 30 + (row * 22); // 30px for date numbers + 22px per row (20px + 2px gap)
+              const rowOffset = 30 + (row * 22); // 30px for date numbers + 22px per row
               
               // Determine rounding style
               const eventStartDay = days.findIndex(day => event.displayStart && isSameDay(day, event.displayStart));
@@ -211,7 +223,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                     height: '20px',
                     paddingLeft: '4px',
                     paddingRight: '4px',
-                    zIndex: 10 + row // Lower than cell events to avoid conflicts
+                    zIndex: 10 + row
                   }}
                 >
                   <DraggableEvent
@@ -329,7 +341,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                                   top: `${row * 22 + 30}px`, // 30px offset for date number + row * (20px + 2px gap)
                                   height: '20px',
                                   left: '4px',
-                                  right: '4px',
+                                  right: '4px', // FIX: Use explicit padding matching multi-day events
                                   zIndex: 30 + row // Higher than multi-day overlay events
                                 }}
                               >
