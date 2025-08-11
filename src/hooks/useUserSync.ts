@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useUserStore } from '../store/userStore';
 import { useDeepFocusStore } from '../store/deepFocusStore';
+import { useFormEditStore } from '../store/formEditStore';
 
 // Helper function to clear storage when user changes
 const clearPreviousUserStorage = () => {
@@ -31,11 +32,18 @@ let lastUserId: string | null = null;
 export const useUserSync = () => {
   const { user } = useUserStore();
   const { loadBlockedSites } = useDeepFocusStore();
+  const { isAnyFormActive } = useFormEditStore();
 
   useEffect(() => {
     const syncUserWithExtension = async () => {
       if (!user?.uid) {
         console.log('🔄 No user authenticated, skipping extension sync');
+        return;
+      }
+      
+      // Skip sync if any form is currently active to prevent TaskForm rerenders
+      if (isAnyFormActive()) {
+        console.log('🛡️ Extension sync blocked - TaskForm is active');
         return;
       }
 

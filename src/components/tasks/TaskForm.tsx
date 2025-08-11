@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { Task } from '../../types/models';
 import { useTaskStore } from '../../store/taskStore';
 import { useTaskStoreWithSync } from '../../store/syncStore';
+// Remove problematic selective hook
 import { Icon } from '../ui/Icon';
 import { useUserStore } from '../../store/userStore';
 import { workSessionService } from '../../api/workSessionService';
@@ -28,6 +29,8 @@ interface TaskFormProps {
 const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, initialStartTime, initialEndTime, isAllDay, onCancel, onSave, isCalendarContext = false }) => {
   const taskStoreWithSync = useTaskStoreWithSync();
   const { addTask, updateTask, deleteTask } = taskStoreWithSync;
+  
+  // Get projects directly without problematic subscription
   const projects = useTaskStore(state => state.projects);
   const addProject = useTaskStore(state => state.addProject);
   const { user } = useUserStore();
@@ -171,6 +174,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       document.removeEventListener('keydown', handleEscapeKey);
     };
   }, [onCancel]);
+  
+  // Form protection removed - using selective subscriptions instead
 
   // Close date picker when clicking outside - handled by DatePicker component itself
 
