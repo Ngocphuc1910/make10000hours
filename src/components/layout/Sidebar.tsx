@@ -30,10 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const { openModal } = usePricingStore();
   const { openSettings } = useSettings();
   
-  // Debug logging to verify theme state
-  useEffect(() => {
-    console.log('🎨 Sidebar theme state:', { isDark, expectedColor: isDark ? '#0d1117' : '#F9F9F9' });
-  }, [isDark]);
+  // Theme state tracking removed to reduce console noise
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
