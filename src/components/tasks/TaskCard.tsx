@@ -18,6 +18,8 @@ interface TaskCardProps {
 
 // Global state to track which task is currently being dragged
 let currentDraggedTaskId: string | null = null;
+// Global state to track the current drop target to prevent multiple indicators
+let currentDropTargetId: string | null = null;
 
 const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, onCrossColumnMove, columnStatus, context = 'default', targetProject, dragContext = 'status' }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -47,12 +49,30 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
       setIsBeingDragged(false);
     };
 
+    const handleClearDropIndicators = (event: CustomEvent) => {
+      const exceptTaskId = event.detail?.exceptTaskId;
+      // Clear drop indicators for all cards except the specified one
+      if (!exceptTaskId || exceptTaskId !== task.id) {
+        setIsDragOver(false);
+        setDragPosition(null);
+      }
+    };
+
+    const handleClearAllDropIndicators = () => {
+      setIsDragOver(false);
+      setDragPosition(null);
+    };
+
     window.addEventListener('taskDragStart', handleTaskDragStart as EventListener);
     window.addEventListener('taskDragEnd', handleTaskDragEnd);
+    window.addEventListener('clearDropIndicators', handleClearDropIndicators as EventListener);
+    window.addEventListener('clearAllDropIndicators', handleClearAllDropIndicators);
 
     return () => {
       window.removeEventListener('taskDragStart', handleTaskDragStart as EventListener);
       window.removeEventListener('taskDragEnd', handleTaskDragEnd);
+      window.removeEventListener('clearDropIndicators', handleClearDropIndicators as EventListener);
+      window.removeEventListener('clearAllDropIndicators', handleClearAllDropIndicators);
     };
   }, [task.id]);
 
@@ -122,10 +142,12 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
     
     // Clear global drag state
     currentDraggedTaskId = null;
+    currentDropTargetId = null;
     setIsBeingDragged(false);
     
     // Notify all TaskCard instances that drag ended
     window.dispatchEvent(new CustomEvent('taskDragEnd'));
+    window.dispatchEvent(new CustomEvent('clearAllDropIndicators'));
     
     if (cardRef.current) {
       cardRef.current.classList.remove('dragging', 'opacity-50');
@@ -161,6 +183,12 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
   const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // Clear previous drop target and set this as the new drop target
+    if (currentDropTargetId && currentDropTargetId !== task.id) {
+      window.dispatchEvent(new CustomEvent('clearDropIndicators', { detail: { exceptTaskId: task.id } }));
+    }
+    currentDropTargetId = task.id;
     setIsDragOver(true);
   };
 
@@ -184,8 +212,14 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
     console.log(`🎯 TaskCard drop on: ${task.id} (${task.title}) - Project: ${targetProject?.name || 'No Project'}`);
     e.preventDefault();
     e.stopPropagation();
+    
+    // Clear global drop target state
+    currentDropTargetId = null;
     setIsDragOver(false);
     setDragPosition(null);
+    
+    // Clear all other drop indicators
+    window.dispatchEvent(new CustomEvent('clearAllDropIndicators'));
     
     const draggedTaskId = e.dataTransfer.getData('text/plain');
     const draggedTaskStatus = e.dataTransfer.getData('application/x-task-status');
