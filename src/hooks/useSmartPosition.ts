@@ -10,7 +10,6 @@ interface Position {
 interface UseSmartPositionProps {
   isOpen: boolean;
   triggerRef: React.RefObject<HTMLElement | null>;
-  contentRef: React.RefObject<HTMLElement | null>;
   preferredPlacement?: 'top' | 'bottom';
   offset?: number;
   viewportPadding?: number;
@@ -20,29 +19,91 @@ interface UseSmartPositionProps {
 export const useSmartPosition = ({
   isOpen,
   triggerRef,
-  contentRef,
   preferredPlacement = 'bottom',
   offset = 4,
   viewportPadding = 8,
   modalThreshold = 200
-}: UseSmartPositionProps): Position & { isReady: boolean, recalculate: () => void } => {
+}: UseSmartPositionProps): Position & { setContentRef: (element: HTMLElement | null) => void, recalculate: () => void } => {
   const [position, setPosition] = useState<Position>({
-    top: 0,
-    left: 0,
+    top: -9999, // Start off-screen to prevent flickering at (0,0)
+    left: -9999,
     transformOrigin: 'top left',
     placement: 'bottom'
   });
 
-  const [isReady, setIsReady] = useState(false);
+  const [contentElement, setContentElement] = useState<HTMLElement | null>(null);
   const currentPositionRef = useRef<Position>(position);
 
   const calculatePosition = useCallback(() => {
-    if (!triggerRef.current || !contentRef.current || !isOpen) return;
+    const calcTimestamp = performance.now();
+    console.log('🎯 calculatePosition called at', calcTimestamp.toFixed(2), ':', {
+      hasTrigger: !!triggerRef.current,
+      hasContent: !!contentElement,
+      isOpen,
+      triggerElement: triggerRef.current?.tagName,
+      contentElement: contentElement?.tagName
+    });
+    
+    if (!triggerRef.current || !contentElement || !isOpen) {
+      console.log('❌ calculatePosition early return - missing dependencies:', {
+        triggerRef: !!triggerRef.current,
+        contentElement: !!contentElement,
+        isOpen
+      });
+      return;
+    }
 
     const trigger = triggerRef.current;
-    const content = contentRef.current;
+    const content = contentElement;
     const triggerRect = trigger.getBoundingClientRect();
-    const contentRect = content.getBoundingClientRect();
+    let contentRect = content.getBoundingClientRect();
+    
+    console.log('📐 Initial dimensions:', {
+      triggerRect: {
+        width: triggerRect.width,
+        height: triggerRect.height,
+        top: triggerRect.top,
+        left: triggerRect.left,
+        bottom: triggerRect.bottom,
+        right: triggerRect.right
+      },
+      contentRect: {
+        width: contentRect.width,
+        height: contentRect.height,
+        offsetWidth: content.offsetWidth,
+        offsetHeight: content.offsetHeight
+      }
+    });
+    
+    // Handle invisible element getBoundingClientRect issues
+    // Some browsers return all zeros for invisible elements
+    if (contentRect.width === 0 && contentRect.height === 0) {
+      console.log('⚠️ Zero dimensions detected, using fallback:', {
+        originalRect: contentRect,
+        offsetWidth: content.offsetWidth,
+        offsetHeight: content.offsetHeight,
+        computedStyle: window.getComputedStyle(content),
+        isVisible: content.offsetParent !== null,
+        display: window.getComputedStyle(content).display,
+        visibility: window.getComputedStyle(content).visibility
+      });
+      
+      // Fallback to offsetWidth/offsetHeight for invisible elements
+      contentRect = {
+        ...contentRect,
+        width: content.offsetWidth || 300, // DatePicker default width
+        height: content.offsetHeight || 400 // Reasonable default height
+      };
+      
+      console.log('🔧 Using fallback dimensions:', contentRect);
+    } else {
+      console.log('✅ Valid dimensions found:', {
+        width: contentRect.width,
+        height: contentRect.height,
+        offsetWidth: content.offsetWidth,
+        offsetHeight: content.offsetHeight
+      });
+    }
     
     const viewport = {
       width: window.innerWidth,
@@ -124,62 +185,177 @@ export const useSmartPosition = ({
       }
     }
 
-    // Determine horizontal placement - prioritize stability
+    // Determine horizontal placement with proper bounds checking
     let left: number;
     let transformOriginX = 'left';
 
-    // Always try to align with trigger's left edge first for stability
+    // Start by trying to align with trigger's left edge
     left = triggerRect.left + viewport.scrollX;
 
-    // Only adjust horizontally if it would go significantly off-screen
-    if (left + contentRect.width > viewport.width - viewportPadding) {
-      // Try to fit by moving left, but stay close to trigger
-      left = viewport.width - contentRect.width - viewportPadding + viewport.scrollX;
+    // Check if DatePicker would extend beyond right edge of viewport
+    if (left + contentRect.width > viewport.width - viewportPadding + viewport.scrollX) {
+      // Try aligning to trigger's right edge instead
+      const rightAlignedLeft = triggerRect.right - contentRect.width + viewport.scrollX;
       
-      // If trigger is still visible in this position, align to its right edge instead
-      if (left <= triggerRect.right + viewport.scrollX) {
-        left = triggerRect.right - contentRect.width + viewport.scrollX;
+      // Only use right alignment if it keeps DatePicker within left boundary
+      if (rightAlignedLeft >= viewportPadding + viewport.scrollX) {
+        left = rightAlignedLeft;
+        transformOriginX = 'right';
+      } else {
+        // Force fit within viewport - align to right edge with padding
+        left = viewport.width - contentRect.width - viewportPadding + viewport.scrollX;
         transformOriginX = 'right';
       }
     }
 
-    // Final fallback - ensure minimum left margin
+    // Ensure minimum left margin (final safety check)
     left = Math.max(viewportPadding + viewport.scrollX, left);
+    
+    // Ensure doesn't extend beyond right edge (comprehensive bounds check)
+    if (left + contentRect.width > viewport.width - viewportPadding + viewport.scrollX) {
+      left = viewport.width - contentRect.width - viewportPadding + viewport.scrollX;
+    }
+
+    // Final bounds validation - safety net to ensure DatePicker is always visible
+    const finalTop = Math.max(
+      viewport.scrollY + viewportPadding,
+      Math.min(top, viewport.height + viewport.scrollY - contentRect.height - viewportPadding)
+    );
+    
+    const finalLeft = Math.max(
+      viewport.scrollX + viewportPadding,
+      Math.min(left, viewport.width + viewport.scrollX - contentRect.width - viewportPadding)
+    );
 
     const newPosition = {
-      top,
-      left,
+      top: finalTop,
+      left: finalLeft,
       transformOrigin: `${transformOriginY} ${transformOriginX}`,
       placement
     };
     
+    // Debug logging in development mode
+    if (process.env.NODE_ENV === 'development') {
+      const isVisible = (
+        finalTop >= viewport.scrollY &&
+        finalTop + contentRect.height <= viewport.scrollY + viewport.height &&
+        finalLeft >= viewport.scrollX &&
+        finalLeft + contentRect.width <= viewport.scrollX + viewport.width
+      );
+      
+      const calculationEndTime = performance.now();
+      
+      console.log('🎯 Position calculation complete at', calculationEndTime.toFixed(2), ':', {
+        isVisible,
+        newPosition,
+        viewport,
+        contentDimensions: { width: contentRect.width, height: contentRect.height },
+        triggerRect: {
+          top: triggerRect.top,
+          left: triggerRect.left,
+          width: triggerRect.width,
+          height: triggerRect.height
+        },
+        placement,
+        transformOrigin: newPosition.transformOrigin,
+        calculationTime: (calculationEndTime - calcTimestamp).toFixed(2) + 'ms'
+      });
+      
+      // Additional visibility checks
+      console.log('🔍 Visibility analysis:', {
+        isVisible,
+        topInBounds: finalTop >= viewport.scrollY,
+        bottomInBounds: finalTop + contentRect.height <= viewport.scrollY + viewport.height,
+        leftInBounds: finalLeft >= viewport.scrollX,
+        rightInBounds: finalLeft + contentRect.width <= viewport.scrollX + viewport.width,
+        elementBounds: {
+          top: finalTop,
+          bottom: finalTop + contentRect.height,
+          left: finalLeft,
+          right: finalLeft + contentRect.width
+        },
+        viewportBounds: {
+          top: viewport.scrollY,
+          bottom: viewport.scrollY + viewport.height,
+          left: viewport.scrollX,
+          right: viewport.scrollX + viewport.width
+        }
+      });
+      
+      if (!isVisible) {
+        console.warn('🚨 DatePicker positioned outside viewport!');
+        // Check if position is at (0,0) which might indicate a calculation failure
+        if (finalTop === 0 && finalLeft === 0) {
+          console.error('💥 CRITICAL: DatePicker positioned at (0,0) - likely calculation failure!');
+        }
+      } else {
+        console.log('✅ DatePicker positioned within viewport');
+      }
+    }
+    
     currentPositionRef.current = newPosition;
     setPosition(newPosition);
-    setIsReady(true);
-  }, [isOpen, triggerRef, contentRef, preferredPlacement, offset, viewportPadding, modalThreshold, isReady]);
+  }, [isOpen, triggerRef, contentElement, preferredPlacement, offset, viewportPadding, modalThreshold]);
 
   // Sync ref with state
   useEffect(() => {
     currentPositionRef.current = position;
   }, [position]);
 
-  // Calculate initial position when opening - Optimized to reduce flash
-  useEffect(() => {
-    if (isOpen) {
-      setIsReady(false);
-      // Use requestAnimationFrame for immediate positioning without setTimeout delay
+  // Set up callback ref that calculates position immediately when content DOM is ready
+  const setContentRef = useCallback((element: HTMLElement | null) => {
+    const timestamp = performance.now();
+    console.log('🔗 setContentRef called:', {
+      timestamp: timestamp.toFixed(2),
+      hasElement: !!element,
+      isOpen,
+      elementTag: element?.tagName,
+      elementDimensions: element ? {
+        offsetWidth: element.offsetWidth,
+        offsetHeight: element.offsetHeight,
+        clientWidth: element.clientWidth,
+        clientHeight: element.clientHeight,
+        scrollWidth: element.scrollWidth,
+        scrollHeight: element.scrollHeight,
+        boundingRect: element.getBoundingClientRect()
+      } : null
+    });
+    
+    setContentElement(element);
+    if (element && isOpen) {
+      console.log('🚀 Position calculation triggered from setContentRef at', timestamp.toFixed(2));
+      
+      // Double RAF approach - industry standard for DevTools-dependent timing issues
+      // First RAF: ensures element is added to DOM
+      // Second RAF: ensures element is fully painted and layout is complete
       requestAnimationFrame(() => {
-        calculatePosition();
+        const firstRafTimestamp = performance.now();
+        console.log('🎨 First RAF at', firstRafTimestamp.toFixed(2), 'delta:', (firstRafTimestamp - timestamp).toFixed(2) + 'ms');
+        
+        requestAnimationFrame(() => {
+          const secondRafTimestamp = performance.now();
+          console.log('🎯 Second RAF executing position calculation at', secondRafTimestamp.toFixed(2), 'total delta:', (secondRafTimestamp - timestamp).toFixed(2) + 'ms');
+          
+          if (element && isOpen) { // Double-check state is still valid
+            // Add additional dimension check right before calculation
+            const finalRect = element.getBoundingClientRect();
+            console.log('🔍 Pre-calculation element state:', {
+              isConnected: element.isConnected,
+              offsetParent: !!element.offsetParent,
+              boundingRect: finalRect,
+              hasValidDimensions: finalRect.width > 0 && finalRect.height > 0
+            });
+            calculatePosition();
+          } else {
+            console.log('❌ Double RAF callback aborted - element or isOpen changed');
+          }
+        });
       });
     }
   }, [isOpen, calculatePosition]);
 
-  // Reset ready state when closing
-  useEffect(() => {
-    if (!isOpen) {
-      setIsReady(false);
-    }
-  }, [isOpen]);
+  // Note: Removed redundant useEffect that was racing with double RAF approach
+  // The callback ref with double RAF is now the primary positioning mechanism
 
   // Recalculate on window events
   useEffect(() => {
@@ -204,8 +380,8 @@ export const useSmartPosition = ({
       window.removeEventListener('scroll', rafUpdate, true);
       window.removeEventListener('orientationchange', rafUpdate);
     };
-  }, [isOpen, calculatePosition, contentRef]);
+  }, [isOpen, calculatePosition]);
 
-  // Return the calculatePosition function so it can be called from outside
-  return { ...position, isReady, recalculate: calculatePosition };
+  // Return the setContentRef callback and calculatePosition function
+  return { ...position, setContentRef, recalculate: calculatePosition };
 };
