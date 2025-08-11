@@ -10,13 +10,30 @@ interface TaskItemProps {
   project: Project;
   onEdit: (taskId: string) => void;
   className?: string;
+  // Drag and drop props
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragEnd?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragEnter?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragLeave?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
+  context?: 'task-management' | 'pomodoro' | 'default';
 }
 
 export const TaskItem: React.FC<TaskItemProps> = ({ 
   task, 
   project,
   onEdit,
-  className = '' 
+  className = '',
+  draggable,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragEnter,
+  onDragLeave,
+  onDrop,
+  context = 'pomodoro'
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const location = useLocation();
@@ -88,20 +105,56 @@ export const TaskItem: React.FC<TaskItemProps> = ({
     e.stopPropagation();
     setIsExpanded(!isExpanded);
   };
+
+  // Get task card colors based on status - matches TaskCard component
+  const getTaskCardClasses = () => {
+    if (task.completed) {
+      return context === 'task-management' 
+        ? 'bg-task-completed-bg border-task-completed-border dark:border-transparent'
+        : 'bg-task-completed-bg border-task-completed-border';
+    }
+    
+    switch (task.status) {
+      case 'todo':
+        return context === 'task-management'
+          ? 'bg-task-todo-bg border-task-todo-border dark:border-transparent'
+          : 'bg-task-todo-bg border-task-todo-border';
+      case 'pomodoro':
+        return context === 'task-management'
+          ? 'bg-task-pomodoro-bg border-task-pomodoro-border dark:border-transparent'
+          : 'bg-task-pomodoro-bg border-task-pomodoro-border';
+      case 'completed':
+        return context === 'task-management'
+          ? 'bg-task-completed-bg border-task-completed-border dark:border-transparent'
+          : 'bg-task-completed-bg border-task-completed-border';
+      default:
+        return context === 'task-management'
+          ? 'bg-background-secondary border-border dark:border-transparent'
+          : 'bg-background-secondary border-border';
+    }
+  };
   
   return (
     <div 
-      className={`task-card flex items-start bg-task-todo-bg border 
-      ${isSelected ? 'border-primary' : 'border-task-todo-border'} 
+      className={`task-card flex items-start ${getTaskCardClasses()}
+      ${isSelected ? '!border-primary' : ''} 
       ${task.completed ? 'opacity-70 text-text-secondary' : ''}
-      rounded-md hover:shadow-sm cursor-pointer ${className}`}
+      rounded-md hover:shadow-sm ${draggable ? 'cursor-grab' : 'cursor-pointer'} ${className}`}
       onClick={handleTaskClick}
       style={{ 
         borderWidth: isSelected ? '2px' : '1px',
+        borderColor: isSelected ? '#BA4949' : undefined,
         padding: '10px'
       }}
       data-task-id={task.id}
       data-status={task.status}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
     >
       <div className="mr-3 mt-0.5">
         <CustomCheckbox
