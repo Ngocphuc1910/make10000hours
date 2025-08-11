@@ -272,7 +272,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
       if (activeSession && mode === 'pomodoro') {
         const currentMinute = Math.floor(currentTime / 60);
         
-        if (lastCountedMinute !== null && lastCountedMinute !== currentMinute && currentMinute < lastCountedMinute) {
+        if (lastCountedMinute !== null && currentMinute < lastCountedMinute) {
           // We've crossed a minute boundary (time decreased from one minute to the next)
           console.log('🔄 Processing minute boundary:', {
             currentMinute,

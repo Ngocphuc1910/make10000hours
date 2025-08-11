@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { Task } from '../../types/models';
 import { useTaskStore } from '../../store/taskStore';
 import { useTaskStoreWithSync } from '../../store/syncStore';
+import { useFormEditStore } from '../../store/formEditStore';
 import { Icon } from '../ui/Icon';
 import { useUserStore } from '../../store/userStore';
 import { workSessionService } from '../../api/workSessionService';
@@ -28,9 +29,15 @@ interface TaskFormProps {
 const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, initialStartTime, initialEndTime, isAllDay, onCancel, onSave, isCalendarContext = false }) => {
   const taskStoreWithSync = useTaskStoreWithSync();
   const { addTask, updateTask, deleteTask } = taskStoreWithSync;
+  
+  // Get projects directly without problematic subscription
   const projects = useTaskStore(state => state.projects);
   const addProject = useTaskStore(state => state.addProject);
   const { user } = useUserStore();
+  
+  // Form protection - register this form as active
+  const { setFormActive, setFormInactive } = useFormEditStore();
+  const formId = task?.id || 'new-task';
   
   const [title, setTitle] = useState(task?.title || '');
   const [projectId, setProjectId] = useState(() => {
@@ -171,6 +178,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       document.removeEventListener('keydown', handleEscapeKey);
     };
   }, [onCancel]);
+  
+  // Register form as active on mount, unregister on unmount
+  useEffect(() => {
+    setFormActive(formId);
+    return () => {
+      setFormInactive(formId);
+    };
+  }, []); // No dependencies to prevent rerun loops
 
   // Close date picker when clicking outside - handled by DatePicker component itself
 
