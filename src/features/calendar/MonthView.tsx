@@ -184,10 +184,18 @@ export const MonthView: React.FC<MonthViewProps> = ({
             const weekIndex = parseInt(weekIndexStr);
             
             return weekEvents.map(({ event, row, startDay, endDay }) => {
-              const left = (startDay / 7) * 100;
-              const width = Math.min(((endDay - startDay + 1) / 7) * 100, (7 - startDay) / 7 * 100);
-              const top = (weekIndex / numberOfRows) * 100;
-              const rowOffset = 30 + (row * 22); // 30px for date numbers + 22px per row (20px + 2px gap)
+              // SIMPLIFIED FIX: Use CSS percentage positioning with left offset to match single-day events
+              const left = (startDay / 7) * 100 + 0.05; // Ultra-fine-tuned offset for perfect left alignment
+              // FIXED WIDTH: Balanced margin for proper alignment with single-day events
+              const width = ((endDay - startDay + 1) / 7) * 100 - 0.5; // Reduced margin to bring closer to cell border
+              
+              // UNIFIED POSITIONING: Calculate absolute position from grid start
+              const cellHeight = 140; // minmax(140px, 1fr) from grid definition
+              const dateNumberHeight = 30; // Space reserved for date number
+              const eventHeight = 22; // 20px event + 2px gap
+              
+              const absoluteTop = (weekIndex * cellHeight) + dateNumberHeight + (row * eventHeight);
+              const topPercentage = (absoluteTop / (numberOfRows * cellHeight)) * 100;
               
               // Determine rounding style
               const eventStartDay = days.findIndex(day => event.displayStart && isSameDay(day, event.displayStart));
@@ -207,11 +215,11 @@ export const MonthView: React.FC<MonthViewProps> = ({
                   style={{
                     left: `${left}%`,
                     width: `${width}%`,
-                    top: `calc(${top}% + ${rowOffset}px)`,
+                    top: `${topPercentage}%`,
                     height: '20px',
-                    paddingLeft: '4px',
-                    paddingRight: '4px',
-                    zIndex: 10 + row // Lower than cell events to avoid conflicts
+                    paddingLeft: '4px', // Match single-day event left positioning
+                    paddingRight: '6px', // Match single-day event right margin
+                    zIndex: 10 + row
                   }}
                 >
                   <DraggableEvent
@@ -293,7 +301,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                 {/* Events container with optimized layout */}
                 <div 
                   ref={(el) => setEventsContainerRef(el, idx)}
-                  className="flex-1 min-h-0 h-full max-h-full relative overflow-hidden"
+                  className="flex-1 min-h-0 h-full max-h-full relative"
                 >
                   <div className="relative h-full">
                     {/* Render events using optimized positioning */}
@@ -308,10 +316,36 @@ export const MonthView: React.FC<MonthViewProps> = ({
                       // Sort by row position to ensure proper stacking
                       eventsToRender.sort((a, b) => a.row - b.row);
                       
-                      // Calculate overflow based on available space
-                      const totalAvailableRows = Math.floor((eventsContainerRefs.current[idx]?.clientHeight || 120) / 22);
-                      const visibleEventsCount = Math.max(0, totalAvailableRows - 1); // Reserve 1 row for "+X more" if needed
+                      // Calculate overflow based on available space, accounting for multi-day events
+                      const containerHeight = eventsContainerRefs.current[idx]?.clientHeight || 120;
+                      
+                      // FIXED: Industry-standard overflow calculation (Google Calendar/Notion pattern)
+                      // Multi-day events are overlay decoration - don't affect single-day event overflow
+                      const dateNumberSpace = 30; // Space taken by date number
+                      const availableEventSpace = containerHeight - dateNumberSpace;
+                      const maxSingleDayRows = Math.floor(availableEventSpace / 22);
+                      
+                      // Reserve space for "+X more" only when there's overflow
+                      let visibleEventsCount = maxSingleDayRows;
+                      if (eventsToRender.length > maxSingleDayRows) {
+                        visibleEventsCount = Math.max(1, maxSingleDayRows - 1); // Reserve 1 row for "+X more"
+                      }
+                      
                       const hasOverflow = eventsToRender.length > visibleEventsCount;
+                      
+                      // DEBUG: Log the calculation for cells with many events
+                      if (eventsToRender.length > 3 && process.env.NODE_ENV === 'development') {
+                        console.log(`📊 Cell ${idx} industry-standard overflow:`, {
+                          containerHeight,
+                          dateNumberSpace,
+                          availableEventSpace,
+                          maxSingleDayRows,
+                          visibleEventsCount,
+                          eventsToRender: eventsToRender.length,
+                          hasOverflow,
+                          approach: 'Google Calendar/Notion pattern'
+                        });
+                      }
                       const eventsToShow = hasOverflow ? eventsToRender.slice(0, visibleEventsCount) : eventsToRender;
                       const hiddenCount = hasOverflow ? eventsToRender.length - visibleEventsCount : 0;
                       
@@ -326,11 +360,11 @@ export const MonthView: React.FC<MonthViewProps> = ({
                                 key={event.id}
                                 className="absolute w-full"
                                 style={{
-                                  top: `${row * 22 + 30}px`, // 30px offset for date number + row * (20px + 2px gap)
+                                  top: `${row * 22 + 8}px`, // Simple offset - multi-day events are in separate overlay
                                   height: '20px',
                                   left: '4px',
-                                  right: '4px',
-                                  zIndex: 30 + row // Higher than multi-day overlay events
+                                  right: '6px', // Reduced margin since overflow-hidden removed
+                                  zIndex: 30 + row // Higher z-index to appear above multi-day events
                                 }}
                               >
                                 {isTimedEvent ? (
@@ -393,27 +427,45 @@ export const MonthView: React.FC<MonthViewProps> = ({
                           
                           {/* Show "+X more" for overflow */}
                           {hasOverflow && hiddenCount > 0 && (
-                            <div 
-                              className="absolute w-full"
-                              style={{
-                                top: `${eventsToShow.length * 22 + 30}px`,
-                                height: '20px',
-                                left: '4px',
-                                right: '4px'
-                              }}
-                            >
-                              <div 
-                                className={`text-xs cursor-pointer hover:text-primary px-1 py-0.5 ${
-                                  !isCurrentMonth ? 'text-gray-400 opacity-60' : 'text-gray-600'
-                                }`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onDayViewClick?.(day);
-                                }}
-                              >
-                                +{hiddenCount} more
-                              </div>
-                            </div>
+                            (() => {
+                              // FINAL FIX: Calculate multi-day events that visually occupy space in this cell
+                              const weekIndex = Math.floor(idx / 7);
+                              const dayInWeek = idx % 7;
+                              const multiDayEventsInCell = multiDayEventLayout.eventsByWeek[weekIndex]?.filter(({ startDay, endDay }) => 
+                                dayInWeek >= startDay && dayInWeek <= endDay
+                              ) || [];
+                              
+                              // Position "+X more" below BOTH multi-day events AND single-day events
+                              const multiDayOffset = multiDayEventsInCell.length * 22;
+                              const singleDayOffset = eventsToShow.length * 22;
+                              const totalOffset = multiDayOffset + singleDayOffset + 8;
+                              
+                              return (
+                                <div 
+                                  className="absolute w-full"
+                                  style={{
+                                    // Position after both multi-day and single-day events
+                                    top: `${totalOffset}px`,
+                                    height: '20px',
+                                    left: '4px',
+                                    right: '6px',
+                                    zIndex: 100 // Ensure "+X more" appears above all events
+                                  }}
+                                >
+                                  <div 
+                                    className={`text-xs cursor-pointer hover:text-primary px-1 py-0.5 ${
+                                      !isCurrentMonth ? 'text-gray-400 opacity-60' : 'text-gray-600'
+                                    }`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onDayViewClick?.(day);
+                                    }}
+                                  >
+                                    +{hiddenCount} more
+                                  </div>
+                                </div>
+                              );
+                            })()
                           )}
                         </>
                       );

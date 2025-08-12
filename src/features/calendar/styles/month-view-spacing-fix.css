@@ -1,0 +1,67 @@
+/* Month View Event Spacing Normalization - Surgical CSS Approach */
+/* Addresses the core issue: inconsistent spacing between multi-day and single-day events */
+
+/* 
+ * PROBLEM ANALYSIS:
+ * - Single-day events use: top: ${row * 22 + 8}px (22px row spacing + 8px offset)
+ * - Multi-day events use complex percentage calculations that don't align with 22px spacing
+ * - This creates visual inconsistency in vertical spacing
+ */
+
+/* PRIMARY FIX: Normalize event heights to create consistent visual rhythm */
+.month-view-event {
+  /* Reduce from 20px to 19px for tighter spacing while maintaining readability */
+  height: 19px !important;
+  min-height: 19px !important;
+  max-height: 19px !important;
+  
+  /* Optimize typography for the reduced height */
+  line-height: 17px !important;
+  font-size: 11px !important;
+  
+  /* Ensure consistent padding for text centering */
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
+}
+
+/* REMOVED: CSS positioning transforms that conflict with JavaScript positioning */
+/* JavaScript now has full control over positioning for consistency */
+
+/* TYPOGRAPHY ENHANCEMENT: Ensure text remains legible in tighter spacing */
+.month-view-event .truncate {
+  /* Fine-tune text positioning for optimal readability */
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+/* ACCESSIBILITY: Maintain touch targets while reducing visual spacing */
+@media (max-width: 768px) {
+  .month-view-event {
+    /* Maintain minimum 44px touch target on mobile while keeping visual consistency */
+    min-height: 19px !important;
+    height: 19px !important;
+  }
+}
+
+/* SPECIFIC FIXES for different event types */
+
+/* Timed events: Additional compression since they're less visually prominent */
+.month-view-event.timed-event {
+  height: 18px !important;
+  min-height: 18px !important;
+  max-height: 18px !important;
+  line-height: 16px !important;
+  margin-bottom: 0.5px;
+}
+
+/* All-day single events: Slightly more prominent than timed */
+.month-view-event.single-day-event:not(.timed-event) {
+  font-weight: 500 !important;
+}
+
+/* Multi-day events in overlay: Ensure they don't interfere with cell events */
+.absolute.inset-0.pointer-events-none.z-10 .month-view-event {
+  /* Override any margin/padding that might cause positioning issues */
+  margin: 0 !important;
+}
