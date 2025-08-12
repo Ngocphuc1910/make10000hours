@@ -310,7 +310,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                 {/* Events container with optimized layout */}
                 <div 
                   ref={(el) => setEventsContainerRef(el, idx)}
-                  className="flex-1 min-h-0 h-full max-h-full relative overflow-hidden"
+                  className="flex-1 min-h-0 h-full max-h-full relative"
                 >
                   <div className="relative h-full">
                     {/* Render events using optimized positioning */}
@@ -346,7 +346,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                                   top: `${row * 22 + 8}px`, // Simple offset - multi-day events are in separate overlay
                                   height: '20px',
                                   left: '4px',
-                                  right: '8px', // Increased right margin to prevent text clipping
+                                  right: '6px', // Reduced margin since overflow-hidden removed
                                   zIndex: 30 + row // Higher z-index to appear above multi-day events
                                 }}
                               >
@@ -416,7 +416,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                                 top: `${eventsToShow.length * 22 + 8}px`,
                                 height: '20px',
                                 left: '4px',
-                                right: '8px' // Increased right margin to match single-day events
+                                right: '6px' // Reduced margin since overflow-hidden removed
                               }}
                             >
                               <div 
