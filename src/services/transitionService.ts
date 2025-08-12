@@ -562,13 +562,6 @@ export class TransitionQueryService {
         let sessionStartTime: Date;
         let sessionEndTime: Date | undefined;
         
-        console.log('🔍 DEBUG convertLegacySessionsToUnified - Processing session:', {
-          sessionId: legacySession.id,
-          startTimeType: typeof legacySession.startTime,
-          startTimeValue: legacySession.startTime,
-          hasToDateMethod: legacySession.startTime && typeof legacySession.startTime.toDate === 'function',
-          isDateInstance: legacySession.startTime instanceof Date
-        });
         
         // Handle startTime with comprehensive Firebase Timestamp detection
         if (legacySession.startTime) {
@@ -577,8 +570,7 @@ export class TransitionQueryService {
             `startTime for session ${legacySession.id}`
           );
         } else {
-          // Reconstruct from date string
-          console.warn('No startTime found, reconstructing from date string:', legacySession.date);
+          // Reconstruct from date string (silent - this is expected for some legacy data)
           sessionStartTime = new Date(legacySession.date + 'T00:00:00');
         }
         
@@ -720,13 +712,11 @@ export class TransitionQueryService {
     try {
       // Case 1: Already a Date object
       if (timestamp instanceof Date) {
-        console.log(`✅ ${context}: Already a Date object`);
         return timestamp;
       }
       
       // Case 2: Firebase Timestamp with toDate() method
       if (timestamp && typeof timestamp === 'object' && typeof timestamp.toDate === 'function') {
-        console.log(`🔥 ${context}: Converting Firebase Timestamp using toDate()`);
         const dateResult = timestamp.toDate();
         if (dateResult instanceof Date && !isNaN(dateResult.getTime())) {
           return dateResult;
@@ -738,7 +728,6 @@ export class TransitionQueryService {
       // Case 3: Firebase Timestamp with seconds/nanoseconds properties
       if (timestamp && typeof timestamp === 'object' && 
           typeof timestamp.seconds === 'number') {
-        console.log(`🕐 ${context}: Converting Firebase Timestamp from seconds/nanoseconds`);
         const milliseconds = timestamp.seconds * 1000 + (timestamp.nanoseconds || 0) / 1000000;
         const dateResult = new Date(milliseconds);
         if (!isNaN(dateResult.getTime())) {
@@ -750,7 +739,6 @@ export class TransitionQueryService {
       
       // Case 4: String timestamp
       if (typeof timestamp === 'string') {
-        console.log(`📝 ${context}: Converting string timestamp`);
         const dateResult = new Date(timestamp);
         if (!isNaN(dateResult.getTime())) {
           return dateResult;
@@ -761,7 +749,6 @@ export class TransitionQueryService {
       
       // Case 5: Number timestamp (milliseconds)
       if (typeof timestamp === 'number') {
-        console.log(`🔢 ${context}: Converting number timestamp`);
         const dateResult = new Date(timestamp);
         if (!isNaN(dateResult.getTime())) {
           return dateResult;
