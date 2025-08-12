@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useTaskStore } from '../../store/taskStore';
@@ -53,6 +53,11 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
   const [showProjectDropdown, setShowProjectDropdown] = useState<{ [key: string]: boolean }>({});
   const [showColorPicker, setShowColorPicker] = useState<{ [key: string]: boolean }>({});
   const [tempProjectColors, setTempProjectColors] = useState<{ [key: string]: string }>({});
+  
+  // Refs for scroll synchronization
+  const headersRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const groupedContentRef = useRef<HTMLDivElement>(null);
 
   // Get all projects with tasks, including "No Project"
   const projectsWithTasks = React.useMemo(() => {
@@ -132,6 +137,41 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
     const projectTasks = tasks.filter(task => (task.projectId || null) === actualProjectId);
     return sortTasksByOrder(projectTasks);
   }, [tasks]);
+
+  // Scroll synchronization between headers and content
+  useEffect(() => {
+    const headersElement = headersRef.current;
+    const contentElement = groupByStatus ? groupedContentRef.current : contentRef.current;
+    
+    if (!headersElement || !contentElement) return;
+
+    let isHeaderScrolling = false;
+    let isContentScrolling = false;
+
+    const syncHeaderScroll = (e: Event) => {
+      if (isContentScrolling) return;
+      isHeaderScrolling = true;
+      const target = e.target as HTMLDivElement;
+      contentElement.scrollLeft = target.scrollLeft;
+      setTimeout(() => { isHeaderScrolling = false; }, 50);
+    };
+
+    const syncContentScroll = (e: Event) => {
+      if (isHeaderScrolling) return;
+      isContentScrolling = true;
+      const target = e.target as HTMLDivElement;
+      headersElement.scrollLeft = target.scrollLeft;
+      setTimeout(() => { isContentScrolling = false; }, 50);
+    };
+
+    headersElement.addEventListener('scroll', syncHeaderScroll);
+    contentElement.addEventListener('scroll', syncContentScroll);
+
+    return () => {
+      headersElement.removeEventListener('scroll', syncHeaderScroll);
+      contentElement.removeEventListener('scroll', syncContentScroll);
+    };
+  }, [groupByStatus, orderedProjects]);
 
   // Project dropdown handlers
   const handleProjectDropdownToggle = (projectId: string) => {
@@ -525,7 +565,11 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
         <div className={`flex flex-col bg-background-primary ${className}`}>
           {/* Fixed Headers Row */}
           <SortableContext items={projectColumnOrder} strategy={horizontalListSortingStrategy}>
-            <div className="grid gap-6 bg-background-primary sticky top-0 z-30 pl-2 pt-4" style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}>
+            <div 
+              className="grid gap-6 bg-background-primary sticky top-0 z-30 pl-2 pt-4 overflow-x-auto scrollbar-hide" 
+              style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}
+              ref={headersRef}
+            >
               {orderedProjects.map(({ project, id }) => {
                 const config = columnConfigs[id];
                 return (
@@ -603,38 +647,45 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
           <div className="flex flex-col flex-1 overflow-hidden">
             {groupByStatus ? (
               /* Status Group Rows spanning all projects */
-              <div className={`flex-1 pr-6 pb-6 ${isLeftSidebarOpen ? 'pl-6' : 'pl-2'} overflow-y-auto`}>
-                {['pomodoro', 'todo', 'completed'].map((status: Task['status']) => (
-                  <div key={status} className="mb-6">
-                    {/* Status Chip spanning all columns */}
-                    <div className="sticky bg-background-primary backdrop-blur-sm mb-4 top-0 z-20">
-                      <div className="flex items-center gap-2 pr-2 py-2 rounded-lg cursor-pointer" onClick={() => toggleStatusExpansion(status)}>
-                        <div className={`flex items-center justify-center w-4 h-4 transition-transform duration-200 ${
-                          expandedStatuses.has(status) ? 'rotate-90' : 'rotate-0'
-                        }`}>
-                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-text-secondary">
-                            <path 
-                              d="M4.5 3L7.5 6L4.5 9" 
-                              stroke="currentColor" 
-                              strokeWidth="1.5" 
-                              strokeLinecap="round" 
-                              strokeLinejoin="round"
-                            />
-                          </svg>
+              <div className={`flex-1 overflow-hidden`}>
+                <div 
+                  className={`pr-6 pb-6 ${isLeftSidebarOpen ? 'pl-6' : 'pl-2'} overflow-y-auto overflow-x-auto scrollbar-hide`}
+                  ref={groupedContentRef}
+                >
+                  {['pomodoro', 'todo', 'completed'].map((status: Task['status']) => (
+                    <div key={status} className="mb-6">
+                      {/* Status Chip spanning all columns */}
+                      <div className="sticky bg-background-primary backdrop-blur-sm mb-4 top-0 z-20">
+                        <div className="flex items-center gap-2 pr-2 py-2 rounded-lg cursor-pointer" onClick={() => toggleStatusExpansion(status)}>
+                          <div className={`flex items-center justify-center w-4 h-4 transition-transform duration-200 ${
+                            expandedStatuses.has(status) ? 'rotate-90' : 'rotate-0'
+                          }`}>
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-text-secondary">
+                              <path 
+                                d="M4.5 3L7.5 6L4.5 9" 
+                                stroke="currentColor" 
+                                strokeWidth="1.5" 
+                                strokeLinecap="round" 
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </div>
+                          <div 
+                            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: status === 'pomodoro' ? '#EF4444' : status === 'todo' ? '#3B82F6' : '#10B981' }}
+                          />
+                          <span className="text-sm font-medium text-text-primary flex-1">
+                            {status === 'pomodoro' ? 'In Pomodoro' : status === 'todo' ? 'To Do List' : 'Completed'}
+                          </span>
                         </div>
-                        <div 
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: status === 'pomodoro' ? '#EF4444' : status === 'todo' ? '#3B82F6' : '#10B981' }}
-                        />
-                        <span className="text-sm font-medium text-text-primary flex-1">
-                          {status === 'pomodoro' ? 'In Pomodoro' : status === 'todo' ? 'To Do List' : 'Completed'}
-                        </span>
                       </div>
-                    </div>
-                    
-                    {/* Tasks for this status distributed across project columns */}
-                    {expandedStatuses.has(status) && (
-                      <div className={`grid gap-6 mb-4`} style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}>
+                      
+                      {/* Tasks for this status distributed across project columns */}
+                      {expandedStatuses.has(status) && (
+                        <div 
+                          className={`grid gap-6 mb-4`} 
+                          style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}
+                        >
                         {orderedProjects.map(({ project, id }) => {
                           const projectTasks = getProjectTasks(id).filter(t => t.status === status);
                           const addTaskKey = `${status}-${id}`;
@@ -706,10 +757,15 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                     )}
                   </div>
                 ))}
+                </div>
               </div>
             ) : (
               /* Traditional Project Column Layout */
-              <div className="grid gap-6 flex-1 pl-2 pt-4 overflow-x-auto" style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}>
+              <div 
+                className="grid gap-6 flex-1 pl-2 pt-1 overflow-x-auto scrollbar-hide" 
+                style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}
+                ref={contentRef}
+              >
                 {orderedProjects.map(({ project, id }, index) => {
                   const config = columnConfigs[id];
                   return (
