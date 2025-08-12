@@ -122,8 +122,18 @@ export class TaskStorageService {
       updatedAt: timestamp
     };
     
-    // Update timezone context if scheduling changed
-    if (this.hasSchedulingData(updates)) {
+    // Check if user is removing scheduling information
+    const isRemovingScheduling = this.isRemovingScheduling(updates);
+    
+    if (isRemovingScheduling) {
+      // Clear all scheduling-related UTC fields when scheduling is removed
+      enhanced.scheduledTimeUTC = null;
+      enhanced.scheduledEndTimeUTC = null;
+      enhanced.scheduledTimezone = null;
+      enhanced.scheduledDuration = null;
+      enhanced.timezoneContext = null;
+    } else if (this.hasSchedulingData(updates)) {
+      // Update timezone context if scheduling changed
       enhanced.timezoneContext = timezoneUtils.createTimezoneContext(
         userTimezone, 
         'user_updated'
@@ -279,6 +289,28 @@ export class TaskStorageService {
       taskData.scheduledStartTime || 
       taskData.scheduledEndTime || 
       taskData.scheduledTimeUTC
+    );
+  }
+  
+  /**
+   * Check if the update is explicitly removing scheduling information
+   * This detects when user clears the scheduled date fields
+   */
+  private static isRemovingScheduling(updates: Partial<Task>): boolean {
+    // Check if key scheduling fields are being explicitly set to null/undefined/empty
+    const hasExplicitNullScheduling = (
+      'scheduledDate' in updates && (!updates.scheduledDate || updates.scheduledDate === '') ||
+      'scheduledStartTime' in updates && (!updates.scheduledStartTime || updates.scheduledStartTime === '') ||
+      'scheduledEndTime' in updates && (!updates.scheduledEndTime || updates.scheduledEndTime === '')
+    );
+    
+    // Also check if all scheduling fields are absent/empty in the update
+    const hasNoSchedulingData = !this.hasSchedulingData(updates);
+    
+    return hasExplicitNullScheduling || (
+      // If the update contains scheduling-related fields but they're all empty
+      ('scheduledDate' in updates || 'scheduledStartTime' in updates || 'scheduledEndTime' in updates) &&
+      hasNoSchedulingData
     );
   }
   
