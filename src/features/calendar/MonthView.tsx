@@ -193,10 +193,10 @@ export const MonthView: React.FC<MonthViewProps> = ({
             const weekIndex = parseInt(weekIndexStr);
             
             return weekEvents.map(({ event, row, startDay, endDay }) => {
-              // SIMPLIFIED FIX: Use CSS percentage positioning for consistency
-              const left = (startDay / 7) * 100;
-              // FIXED WIDTH: Subtract small margin to prevent clipping of rounded borders
-              const width = ((endDay - startDay + 1) / 7) * 100 - 0.3; // Small margin with padding handling alignment
+              // SIMPLIFIED FIX: Use CSS percentage positioning with left offset to match single-day events
+              const left = (startDay / 7) * 100 + 0.05; // Ultra-fine-tuned offset for perfect left alignment
+              // FIXED WIDTH: Balanced margin for proper alignment with single-day events
+              const width = ((endDay - startDay + 1) / 7) * 100 - 0.5; // Reduced margin to bring closer to cell border
               
               // UNIFIED POSITIONING: Calculate absolute position from grid start
               const cellHeight = 140; // minmax(140px, 1fr) from grid definition
@@ -226,7 +226,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                     width: `${width}%`,
                     top: `${topPercentage}%`,
                     height: '20px',
-                    paddingLeft: '4px',
+                    paddingLeft: '4px', // Match single-day event left positioning
                     paddingRight: '6px', // Match single-day event right margin
                     zIndex: 10 + row
                   }}
