@@ -1,4 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useTaskStore } from '../../store/taskStore';
 import TaskItem from './TaskItem';
 import TaskForm from './TaskForm';
@@ -7,6 +11,48 @@ import { useTimerStore } from '../../store/timerStore';
 import { TaskFilteringService } from '../../services/TaskFilteringService';
 import { useUserStore } from '../../store/userStore';
 import { sortTasksByOrder } from '../../utils/taskSorting';
+import DragDebugger from './DragDebugger';
+
+// Sortable Task Item Component using @dnd-kit
+interface SortableTaskItemProps {
+  task: Task;
+  project: any;
+  onEdit: (taskId: string) => void;
+}
+
+const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEdit }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={`${isDragging ? 'z-50' : ''}`}
+    >
+      <TaskItem
+        task={task}
+        project={project}
+        onEdit={onEdit}
+        className="pointer-events-auto"
+      />
+    </div>
+  );
+};
 
 export const TaskListSorted: React.FC = () => {
   const {
@@ -16,7 +62,6 @@ export const TaskListSorted: React.FC = () => {
     taskListViewMode,
     setIsAddingTask,
     setEditingTaskId,
-    reorderTasks,
     reorderTasksGlobal,
   } = useTaskStore();
   const {
@@ -29,29 +74,8 @@ export const TaskListSorted: React.FC = () => {
   
   const { user } = useUserStore();
 
-  // UI state
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-
   const [shouldAutoResume, setShouldAutoResume] = useState(false);
-
-  // For drag and drop
-  const draggedTaskId = useRef<string | null>(null);
-  const draggedTaskIndex = useRef<number>(-1);
   const taskListRef = useRef<HTMLDivElement>(null);
-  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
-  const [dropPosition, setDropPosition] = useState<'before' | 'after' | null>(null);
-  const [currentlyDraggedTaskId, setCurrentlyDraggedTaskId] = useState<string | null>(null);
-
-  // Cleanup function to reset all drag states
-  const clearDragState = () => {
-    setCurrentlyDraggedTaskId(null);
-    setDragOverTaskId(null);
-    setDropPosition(null);
-    draggedTaskId.current = null;
-    draggedTaskIndex.current = -1;
-  };
 
   useEffect(() => {
     if (currentTask && editingTaskId === currentTask.id) {
@@ -66,123 +90,27 @@ export const TaskListSorted: React.FC = () => {
       // Otherwise, enable the start/pause button
       setEnableStartPauseBtn(true);
     }
-  }, [editingTaskId]);
+  }, [editingTaskId, currentTask, isRunning, setEnableStartPauseBtn, pause]);
 
-  // Cleanup effect for drag state - safety fallback
-  useEffect(() => {
-    const handleGlobalMouseUp = () => {
-      // Clear drag state when mouse is released anywhere
-      // This serves as a safety net for edge cases
-      if (currentlyDraggedTaskId || dragOverTaskId || dropPosition) {
-        clearDragState();
+  // Handle drag end with @dnd-kit
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const draggedTaskId = active.id as string;
+      const targetTaskId = over.id as string;
+      
+      const draggedTaskIndex = sortedTasks.findIndex(t => t.id === draggedTaskId);
+      const targetTaskIndex = sortedTasks.findIndex(t => t.id === targetTaskId);
+      
+      if (draggedTaskIndex !== -1 && targetTaskIndex !== -1) {
+        try {
+          await reorderTasksGlobal(draggedTaskId, targetTaskIndex, sortedTasks);
+        } catch (error) {
+          console.error('❌ reorderTasksGlobal failed:', error);
+        }
       }
-    };
-
-    const handleGlobalDragEnd = () => {
-      // Additional cleanup when any drag operation ends
-      clearDragState();
-    };
-
-    // Add global event listeners
-    document.addEventListener('mouseup', handleGlobalMouseUp);
-    document.addEventListener('dragend', handleGlobalDragEnd);
-    
-    // Cleanup on component unmount
-    return () => {
-      document.removeEventListener('mouseup', handleGlobalMouseUp);
-      document.removeEventListener('dragend', handleGlobalDragEnd);
-      clearDragState();
-    };
-  }, [currentlyDraggedTaskId, dragOverTaskId, dropPosition]);
-
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string, sortedTasks: Task[]) => {
-    // Store the dragged task ID
-    draggedTaskId.current = taskId;
-    setCurrentlyDraggedTaskId(taskId);
-
-    // CRITICAL FIX: Find the task index in the SORTED tasks that are actually displayed
-    const taskIndex = sortedTasks.findIndex(t => t.id === taskId);
-    draggedTaskIndex.current = taskIndex;
-
-    // Enhanced visual feedback to match TaskCard behavior
-    e.currentTarget.classList.add('dragging');
-    e.currentTarget.classList.add('opacity-50');
-    e.currentTarget.style.transform = 'scale(1.02)';
-    e.currentTarget.style.transition = 'all 0.2s ease';
-  };
-
-  const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
-    // Clean up visual feedback to match TaskCard behavior
-    e.currentTarget.classList.remove('dragging', 'opacity-50');
-    e.currentTarget.style.transform = '';
-    e.currentTarget.style.transition = '';
-
-    // Use centralized cleanup function
-    clearDragState();
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
-    e.preventDefault();
-    
-    if (!draggedTaskId.current || draggedTaskId.current === taskId) return;
-    
-    // Calculate drop position based on mouse position within the target element
-    const rect = e.currentTarget.getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    const position = e.clientY < midY ? 'before' : 'after';
-    
-    // Only update if the target task or position has actually changed
-    // This prevents unnecessary re-renders and ensures clean state transitions
-    if (dragOverTaskId !== taskId || dropPosition !== position) {
-      setDragOverTaskId(taskId);
-      setDropPosition(position);
     }
-  };
-
-  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
-    e.preventDefault();
-    
-    if (!draggedTaskId.current || draggedTaskId.current === taskId) return;
-    
-    // Immediately set the new drag target to clear any previous indicators
-    // This ensures only one drop indicator is active at a time
-    setDragOverTaskId(taskId);
-    
-    // Calculate initial position
-    const rect = e.currentTarget.getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    const position = e.clientY < midY ? 'before' : 'after';
-    setDropPosition(position);
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    // More aggressive cleanup - clear drop indicators immediately on leave
-    // This prevents stuck visual feedback in edge cases
-    setDragOverTaskId(null);
-    setDropPosition(null);
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>, dropTargetId: string, sortedTasks: Task[]) => {
-    e.preventDefault();
-    
-    // Use centralized cleanup function
-    clearDragState();
-
-    // If no task was dragged or dropping on itself, do nothing
-    if (!draggedTaskId.current || draggedTaskId.current === dropTargetId) return;
-
-    const draggedTask = sortedTasks.find(t => t.id === draggedTaskId.current);
-    const dropTarget = sortedTasks.find(t => t.id === dropTargetId);
-
-    if (!draggedTask || !dropTarget) return;
-
-    // CRITICAL FIX: Use the drop index from SORTED tasks that are actually displayed
-    const dropIndex = sortedTasks.findIndex(t => t.id === dropTargetId);
-    
-    console.log(`🎯 TaskListSorted drag & drop: ${draggedTask.title} -> position ${dropIndex} in sorted list of ${sortedTasks.length} tasks`);
-    
-    // Use global reordering to allow dragging completed tasks between incomplete ones
-    reorderTasksGlobal(draggedTaskId.current, dropIndex, sortedTasks);
   };
 
   const handleEditTask = (taskId: string) => {
@@ -225,89 +153,62 @@ export const TaskListSorted: React.FC = () => {
 
   const sortedTasks = sortTasksByOrder(filteredTasks);
 
-
   return (
-    <div className="space-y-2.5" id="taskListSorted" ref={taskListRef}>
-      {sortedTasks.map((task: Task) => {
-        const project = projects.find(p => p.id === task.projectId);
+    <>
+      {process.env.NODE_ENV === 'development' && <DragDebugger enabled={false} />}
+      <DndContext 
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext 
+          items={sortedTasks.map(task => task.id)} 
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-2.5" id="taskListSorted" ref={taskListRef}>
+            {sortedTasks.map((task: Task) => {
+              const project = projects.find(p => p.id === task.projectId);
 
+              if (editingTaskId === task.id) {
+                return (
+                  <TaskForm
+                    key={task.id}
+                    task={task}
+                    onCancel={handleCancelForm}
+                  />
+                );
+              }
 
-        if (editingTaskId === task.id) {
-          return (
-            <TaskForm
-              key={task.id}
-              task={task}
-              onCancel={handleCancelForm}
-            />
-          );
-        }
+              if (!project) {
+                // Create a fallback project for tasks with missing projects
+                const fallbackProject = {
+                  id: task.projectId || 'unknown',
+                  name: 'Unknown Project',
+                  userId: task.userId
+                };
+                
+                return (
+                  <SortableTaskItem
+                    key={task.id}
+                    task={task}
+                    project={fallbackProject}
+                    onEdit={handleEditTask}
+                  />
+                );
+              }
 
-        if (!project) {
-          // Create a fallback project for tasks with missing projects
-          const fallbackProject = {
-            id: task.projectId || 'unknown',
-            name: 'Unknown Project',
-            userId: task.userId
-          };
-          
-          return (
-            <div key={task.id} className="relative">
-              {/* Drop indicator line - BEFORE */}
-              {dragOverTaskId === task.id && dropPosition === 'before' && (
-                <div className="absolute -top-0.5 left-2 right-2 h-0.5 bg-blue-400 rounded-full z-10 opacity-80" />
-              )}
-              
-              <TaskItem
-                task={task}
-                project={fallbackProject}
-                onEdit={handleEditTask}
-                className={`transition-all duration-200 ease-in-out ${(dragOverTaskId === task.id || currentlyDraggedTaskId === task.id) ? 'drag-over' : ''}`}
-                draggable={true}
-                onDragStart={(e) => handleDragStart(e, task.id, sortedTasks)}
-                onDragEnd={handleDragEnd}
-                onDragOver={(e) => handleDragOver(e, task.id)}
-                onDragEnter={(e) => handleDragEnter(e, task.id)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, task.id, sortedTasks)}
-              />
-              
-              {/* Drop indicator line - AFTER */}
-              {dragOverTaskId === task.id && dropPosition === 'after' && (
-                <div className="absolute -bottom-0.5 left-2 right-2 h-0.5 bg-blue-400 rounded-full z-10 opacity-80" />
-              )}
-            </div>
-          );
-        }
-
-        return (
-          <div key={task.id} className="relative">
-            {/* Drop indicator line - BEFORE */}
-            {dragOverTaskId === task.id && dropPosition === 'before' && (
-              <div className="absolute -top-0.5 left-2 right-2 h-0.5 bg-blue-400 rounded-full z-10 opacity-80" />
-            )}
-            
-            <TaskItem
-              task={task}
-              project={project}
-              onEdit={handleEditTask}
-              className={`transition-all duration-200 ease-in-out ${(dragOverTaskId === task.id || currentlyDraggedTaskId === task.id) ? 'drag-over' : ''}`}
-              draggable={true}
-              onDragStart={(e) => handleDragStart(e, task.id, sortedTasks)}
-              onDragEnd={handleDragEnd}
-              onDragOver={(e) => handleDragOver(e, task.id)}
-              onDragEnter={(e) => handleDragEnter(e, task.id)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, task.id, sortedTasks)}
-            />
-            
-            {/* Drop indicator line - AFTER */}
-            {dragOverTaskId === task.id && dropPosition === 'after' && (
-              <div className="absolute -bottom-0.5 left-2 right-2 h-0.5 bg-blue-400 rounded-full z-10 opacity-80" />
-            )}
+              return (
+                <SortableTaskItem
+                  key={task.id}
+                  task={task}
+                  project={project}
+                  onEdit={handleEditTask}
+                />
+              );
+            })}
           </div>
-        );
-      })}
-    </div>
+        </SortableContext>
+      </DndContext>
+    </>
   );
 };
 

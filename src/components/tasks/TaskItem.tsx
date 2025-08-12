@@ -10,14 +10,6 @@ interface TaskItemProps {
   project: Project;
   onEdit: (taskId: string) => void;
   className?: string;
-  // Drag and drop props
-  draggable?: boolean;
-  onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
-  onDragEnd?: (e: React.DragEvent<HTMLDivElement>) => void;
-  onDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
-  onDragEnter?: (e: React.DragEvent<HTMLDivElement>) => void;
-  onDragLeave?: (e: React.DragEvent<HTMLDivElement>) => void;
-  onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
   context?: 'task-management' | 'pomodoro' | 'default';
 }
 
@@ -26,13 +18,6 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   project,
   onEdit,
   className = '',
-  draggable,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  onDragEnter,
-  onDragLeave,
-  onDrop,
   context = 'pomodoro'
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -139,22 +124,17 @@ export const TaskItem: React.FC<TaskItemProps> = ({
       className={`task-card flex items-start ${getTaskCardClasses()}
       ${isSelected ? '!border-primary' : ''} 
       ${task.completed ? 'opacity-70 text-text-secondary' : ''}
-      rounded-md hover:shadow-sm ${draggable ? 'cursor-grab' : 'cursor-pointer'} ${className}`}
+      rounded-md hover:shadow-sm cursor-pointer ${className}`}
       onClick={handleTaskClick}
       style={{ 
         borderWidth: isSelected ? '2px' : '1px',
         borderColor: isSelected ? '#BA4949' : undefined,
-        padding: '10px'
+        padding: '10px',
+        pointerEvents: 'auto', // Explicitly ensure pointer events are enabled
+        userSelect: 'none' // Prevent text selection during drag
       }}
       data-task-id={task.id}
       data-status={task.status}
-      draggable={draggable}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onDragOver={onDragOver}
-      onDragEnter={onDragEnter}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
     >
       <div className="mr-3 mt-0.5">
         <CustomCheckbox
