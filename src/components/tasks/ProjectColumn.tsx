@@ -103,9 +103,21 @@ const ProjectColumn: React.FC<ProjectColumnProps> = ({
 
   return (
     <div className="project-column flex flex-col flex-1">
-      {/* Project Column Content */}
+      {/* Project Column Content - Make entire container a drop target */}
       <div 
-        className={`task-list-container pb-6 pt-4 flex-1 ${isLeftSidebarOpen ? 'pl-6' : ''}`}
+        className={`task-list-container pb-6 pt-4 flex-1 min-h-[300px] ${isLeftSidebarOpen ? 'pl-6' : ''}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          
+          const taskId = e.dataTransfer.getData('text/plain');
+          if (taskId) {
+            console.log(`📥 Project column drop: Moving task ${taskId} to project ${projectName}`);
+            handleCrossProjectMove(taskId, '', 'todo', false, projectId);
+          }
+        }}
       >
         {/* Project Tasks */}
         <div className="space-y-3">

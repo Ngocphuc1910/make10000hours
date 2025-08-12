@@ -174,9 +174,21 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
         </div>
       )}
       
-      {/* Task List Container */}
+      {/* Task List Container - Make entire container a drop target */}
       <div 
-        className={`task-list-container pb-6 ${hideHeader ? 'pt-4' : 'pt-4'} flex-1 ${isLeftSidebarOpen ? 'pl-6' : ''}`}
+        className={`task-list-container pb-6 ${hideHeader ? 'pt-4' : 'pt-4'} flex-1 min-h-[300px] ${isLeftSidebarOpen ? 'pl-6' : ''}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          
+          const taskId = e.dataTransfer.getData('text/plain');
+          if (taskId) {
+            console.log(`📥 Column drop: Moving task ${taskId} to ${status}`);
+            handleCrossColumnMove(taskId, '', status, false);
+          }
+        }}
       >
         {/* Project-based layout with uniform height blocks */}
         {groupByProject && projects.length > 0 && (
