@@ -34,6 +34,9 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEd
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    // Prevent horizontal overflow during drag
+    maxWidth: '100%',
+    overflow: 'hidden',
   };
 
   return (
@@ -42,7 +45,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEd
       style={style}
       {...attributes}
       {...listeners}
-      className={`${isDragging ? 'z-50' : ''}`}
+      className={`${isDragging ? 'z-50' : ''} w-full overflow-hidden`}
     >
       <TaskItem
         task={task}
@@ -164,7 +167,7 @@ export const TaskListSorted: React.FC = () => {
           items={sortedTasks.map(task => task.id)} 
           strategy={verticalListSortingStrategy}
         >
-          <div className="space-y-2.5" id="taskListSorted" ref={taskListRef}>
+          <div className="space-y-2.5 overflow-hidden" id="taskListSorted" ref={taskListRef}>
             {sortedTasks.map((task: Task) => {
               const project = projects.find(p => p.id === task.projectId);
 
