@@ -207,10 +207,11 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
       const { FractionalOrderingService } = await import('../../services/FractionalOrderingService');
       const { getTaskPosition } = await import('../../utils/taskSorting');
       
-      // FIXED: Get tasks in same PROJECT, not same status
+      // FIXED: Get tasks in same PROJECT AND SAME STATUS for grouped view
       const projectTasks = sortTasksByOrder(
         tasks.filter(t => 
           (t.projectId || null) === (draggedTask.projectId || null) && 
+          t.status === draggedTask.status && // Add status filter for grouped view
           t.id !== draggedTaskId
         )
       );
@@ -232,6 +233,8 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
       console.log(`🎯 PROJECT REORDER CALCULATION:`, {
         draggedTask: draggedTask.title,
         targetTask: targetTask.title,
+        project: draggedTask.projectId || 'Dashboard',
+        status: draggedTask.status,
         projectTasksCount: projectTasks.length,
         targetIndex,
         finalIndex,
@@ -250,6 +253,91 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
     } catch (error) {
       console.error('Failed to reorder tasks:', error);
       addToast('Failed to reorder task');
+    }
+  };
+
+  // Handle cross-column moves for grouped status view
+  const handleGroupedCrossColumnMove = async (draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], newProjectId: string, insertAfter: boolean = false) => {
+    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    if (!draggedTask) return;
+
+    const actualNewProjectId = newProjectId === 'no-project' ? null : newProjectId;
+    const currentProjectId = draggedTask.projectId || null;
+    const isProjectChange = currentProjectId !== actualNewProjectId;
+    const isStatusChange = draggedTask.status !== newStatus;
+
+    console.log(`🚀 GROUPED CROSS-COLUMN MOVE:`, {
+      draggedTask: draggedTask.title,
+      currentProject: currentProjectId || 'Dashboard',
+      newProject: actualNewProjectId || 'Dashboard',
+      currentStatus: draggedTask.status,
+      newStatus,
+      isProjectChange,
+      isStatusChange,
+      insertAfter
+    });
+
+    try {
+      // Calculate position in destination project+status combination
+      const destinationTasks = sortTasksByOrder(
+        tasks.filter(t => 
+          t.status === newStatus && 
+          (t.projectId || null) === actualNewProjectId &&
+          t.id !== draggedTaskId
+        )
+      );
+
+      const targetIndex = destinationTasks.findIndex(t => t.id === targetTaskId);
+      const finalIndex = insertAfter ? targetIndex + 1 : Math.max(0, targetIndex);
+      const clampedIndex = Math.max(0, Math.min(finalIndex, destinationTasks.length));
+
+      // Get adjacent positions for fractional indexing
+      const beforeTask = clampedIndex > 0 ? destinationTasks[clampedIndex - 1] : null;
+      const afterTask = clampedIndex < destinationTasks.length ? destinationTasks[clampedIndex] : null;
+      
+      const { getTaskPosition } = await import('../../utils/taskSorting');
+      const { FractionalOrderingService } = await import('../../services/FractionalOrderingService');
+      
+      const beforePos = beforeTask ? getTaskPosition(beforeTask) : null;
+      const afterPos = afterTask ? getTaskPosition(afterTask) : null;
+      const newOrderString = FractionalOrderingService.generatePosition(beforePos, afterPos);
+
+      // Prepare updates object
+      const updates: Partial<Task> = {
+        orderString: newOrderString,
+        ...(isProjectChange && { projectId: actualNewProjectId }),
+        ...(isStatusChange && {
+          status: newStatus,
+          completed: newStatus === 'completed' ? true : (draggedTask.status === 'completed' ? false : draggedTask.completed),
+          hideFromPomodoro: newStatus === 'pomodoro' ? false : (draggedTask.hideFromPomodoro ?? false)
+        })
+      };
+
+
+      // Single atomic update
+      await updateTask(draggedTaskId, updates);
+
+      console.log(`✅ GROUPED MOVE SUCCESS:`, {
+        projectChange: isProjectChange ? `${currentProjectId || 'Dashboard'} → ${actualNewProjectId || 'Dashboard'}` : 'none',
+        statusChange: isStatusChange ? `${draggedTask.status} → ${newStatus}` : 'none',
+        orderString: newOrderString
+      });
+
+      // Toast notification
+      const projectName = actualNewProjectId ? projects.find(p => p.id === actualNewProjectId)?.name || 'Unknown Project' : 'Dashboard';
+      const statusName = newStatus === 'pomodoro' ? 'In Pomodoro' : newStatus === 'todo' ? 'To Do List' : 'Completed';
+      
+      if (isProjectChange && isStatusChange) {
+        addToast(`Task moved to ${projectName} - ${statusName}`);
+      } else if (isProjectChange) {
+        addToast(`Task moved to ${projectName}`);
+      } else if (isStatusChange) {
+        addToast(`Task moved to ${statusName}`);
+      }
+
+    } catch (error) {
+      console.error('❌ Grouped cross-column move failed:', error);
+      addToast('Failed to move task - please try again');
     }
   };
 
@@ -403,8 +491,12 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                                     key={task.id} 
                                     task={task}
                                     onStatusChange={handleTaskStatusChange}
-                                    onReorder={() => {}}
-                                    onCrossColumnMove={() => {}}
+                                    onReorder={(draggedTaskId: string, targetTaskId: string, insertAfter: boolean) => 
+                                      handleTaskReorder(draggedTaskId, targetTaskId, insertAfter)
+                                    }
+                                    onCrossColumnMove={(draggedTaskId: string, targetTaskId: string, newStatus: Task['status'], insertAfter?: boolean) => 
+                                      handleGroupedCrossColumnMove(draggedTaskId, targetTaskId, newStatus, id, insertAfter || false)
+                                    }
                                     columnStatus={status}
                                     context="task-management"
                                   />
