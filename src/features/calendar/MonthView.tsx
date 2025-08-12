@@ -328,17 +328,10 @@ export const MonthView: React.FC<MonthViewProps> = ({
                       // Calculate overflow based on available space, accounting for multi-day events
                       const containerHeight = eventsContainerRefs.current[idx]?.clientHeight || 120;
                       
-                      // Count multi-day events that visually occupy space in this cell
-                      const weekIndex = Math.floor(idx / 7);
-                      const multiDayEventsInThisCell = multiDayEventLayout.eventsByWeek[weekIndex] || [];
-                      
-                      // FIXED: Correct overflow calculation that doesn't double-count multi-day events
+                      // FIXED: Industry-standard overflow calculation (Google Calendar/Notion pattern)
+                      // Multi-day events are overlay decoration - don't affect single-day event overflow
                       const dateNumberSpace = 30; // Space taken by date number
                       const availableEventSpace = containerHeight - dateNumberSpace;
-                      const multiDayEventCount = multiDayEventsInThisCell.length;
-                      
-                      // Multi-day events are in separate overlay, so only account for visual interference
-                      // They don't take up space in the cell's event container, just visually overlap
                       const maxSingleDayRows = Math.floor(availableEventSpace / 22);
                       
                       // Reserve space for "+X more" only when there's overflow
@@ -351,16 +344,15 @@ export const MonthView: React.FC<MonthViewProps> = ({
                       
                       // DEBUG: Log the calculation for cells with many events
                       if (eventsToRender.length > 3 && process.env.NODE_ENV === 'development') {
-                        console.log(`📊 Cell ${idx} overflow calculation:`, {
+                        console.log(`📊 Cell ${idx} industry-standard overflow:`, {
                           containerHeight,
                           dateNumberSpace,
                           availableEventSpace,
-                          multiDayEventCount,
                           maxSingleDayRows,
                           visibleEventsCount,
                           eventsToRender: eventsToRender.length,
                           hasOverflow,
-                          weekIndex
+                          approach: 'Google Calendar/Notion pattern'
                         });
                       }
                       const eventsToShow = hasOverflow ? eventsToRender.slice(0, visibleEventsCount) : eventsToRender;
@@ -444,36 +436,45 @@ export const MonthView: React.FC<MonthViewProps> = ({
                           
                           {/* Show "+X more" for overflow */}
                           {hasOverflow && hiddenCount > 0 && (
-                            <div 
-                              className="absolute w-full"
-                              style={{
-                                // FIXED: Visual-aware positioning - account for all visible content
-                                top: `${(() => {
-                                  // Calculate position based on actual visual layout
-                                  const multiDayVisualSpace = multiDayEventCount * 22; // Multi-day events appear first visually
-                                  const singleDayVisualSpace = eventsToShow.length * 22; // Single-day events appear after multi-day
-                                  const totalVisualContent = multiDayVisualSpace + singleDayVisualSpace;
-                                  
-                                  // Position "+X more" below all visible content with proper spacing
-                                  return totalVisualContent + 8; // 8px base offset from date number
-                                })()}px`,
-                                height: '20px',
-                                left: '4px',
-                                right: '6px' // Reduced margin since overflow-hidden removed
-                              }}
-                            >
-                              <div 
-                                className={`text-xs cursor-pointer hover:text-primary px-1 py-0.5 ${
-                                  !isCurrentMonth ? 'text-gray-400 opacity-60' : 'text-gray-600'
-                                }`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onDayViewClick?.(day);
-                                }}
-                              >
-                                +{hiddenCount} more
-                              </div>
-                            </div>
+                            (() => {
+                              // FINAL FIX: Calculate multi-day events that visually occupy space in this cell
+                              const weekIndex = Math.floor(idx / 7);
+                              const dayInWeek = idx % 7;
+                              const multiDayEventsInCell = multiDayEventLayout.eventsByWeek[weekIndex]?.filter(({ startDay, endDay }) => 
+                                dayInWeek >= startDay && dayInWeek <= endDay
+                              ) || [];
+                              
+                              // Position "+X more" below BOTH multi-day events AND single-day events
+                              const multiDayOffset = multiDayEventsInCell.length * 22;
+                              const singleDayOffset = eventsToShow.length * 22;
+                              const totalOffset = multiDayOffset + singleDayOffset + 8;
+                              
+                              return (
+                                <div 
+                                  className="absolute w-full"
+                                  style={{
+                                    // Position after both multi-day and single-day events
+                                    top: `${totalOffset}px`,
+                                    height: '20px',
+                                    left: '4px',
+                                    right: '6px',
+                                    zIndex: 100 // Ensure "+X more" appears above all events
+                                  }}
+                                >
+                                  <div 
+                                    className={`text-xs cursor-pointer hover:text-primary px-1 py-0.5 ${
+                                      !isCurrentMonth ? 'text-gray-400 opacity-60' : 'text-gray-600'
+                                    }`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onDayViewClick?.(day);
+                                    }}
+                                  >
+                                    +{hiddenCount} more
+                                  </div>
+                                </div>
+                              );
+                            })()
                           )}
                         </>
                       );
