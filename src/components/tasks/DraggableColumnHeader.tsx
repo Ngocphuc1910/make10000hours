@@ -40,7 +40,7 @@ const DraggableColumnHeader: React.FC<DraggableColumnHeaderProps> = ({
       ref={setNodeRef}
       style={{
         ...style,
-        pointerEvents: 'none' // Disable pointer events on the container
+        // Remove global pointer-events: 'none' to prevent interference with other drag systems
       }}
       className={`flex-1 py-3 bg-background-primary select-none ${
         isDragging 

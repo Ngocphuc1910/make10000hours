@@ -88,7 +88,6 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
   };
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
-    console.log(`🚀 ENHANCED TaskCard drag start: ${task.id} (${task.title}) - Context: ${context}, Column: ${columnStatus}, Project: ${task.projectId || 'no-project'}, DragContext: ${dragContext}`);
     
     // Validate drag start conditions
     if (!task.id || !task.title) {
@@ -106,16 +105,6 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
       e.dataTransfer.setData('application/x-drag-context', dragContext); // Add drag context
       e.dataTransfer.effectAllowed = 'move';
       
-      console.log('📦 ENHANCED Drag data set successfully:', {
-        taskId: task.id,
-        taskTitle: task.title,
-        taskStatus: task.status,
-        taskProject: task.projectId || 'no-project',
-        targetProject: targetProject?.id || 'no-project',
-        targetProjectName: targetProject?.name || 'No Project',
-        context: context,
-        columnStatus: columnStatus
-      });
       
       // Track this task as being dragged globally
       currentDraggedTaskId = task.id;
@@ -138,7 +127,6 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
   };
 
   const handleDragEnd = () => {
-    console.log(`🏁 TaskCard drag end: ${task.id}`);
     
     // Clear global drag state
     currentDraggedTaskId = null;
@@ -165,7 +153,6 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
     // Check if we can accept this drop
     const draggedTaskId = e.dataTransfer.types.includes('text/plain');
     if (!draggedTaskId) {
-      console.log('🚫 DragOver rejected: No task data');
       return;
     }
     
@@ -209,7 +196,6 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    console.log(`🎯 TaskCard drop on: ${task.id} (${task.title}) - Project: ${targetProject?.name || 'No Project'}`);
     e.preventDefault();
     e.stopPropagation();
     
@@ -233,28 +219,8 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
     const draggedProjectNormalized = draggedTaskProject === 'no-project' ? null : draggedTaskProject;
     const isProjectChange = draggedProjectNormalized !== targetProjectId;
     
-    console.log(`🔍 DETAILED PROJECT DEBUG:
-      - targetProject FULL object: ${JSON.stringify(targetProject, null, 2)}
-      - targetProject type: ${typeof targetProject}
-      - targetProject null check: ${targetProject === null}
-      - targetProject undefined check: ${targetProject === undefined}
-      - targetProjectId: ${targetProjectId}
-      - draggedTaskProject: ${draggedTaskProject}
-      - draggedProjectNormalized: ${draggedProjectNormalized}`);
     const isStatusChange = draggedTaskStatus !== task.status;
     
-    console.log(`🎯 ENHANCED Drop analysis:
-      - Dragged Task: ${draggedTaskId} 
-      - From Project: ${draggedTaskProject} (normalized: ${draggedProjectNormalized})
-      - To Project: ${targetProjectId}
-      - Target Project Name: ${targetProject?.name || 'No Project'}
-      - This Task's Project: ${task.projectId || 'no-project'}
-      - From Status: ${draggedTaskStatus} 
-      - To Status: ${task.status}
-      - Drag Context: ${draggedDragContext} -> ${dragContext}
-      - Project Change: ${isProjectChange}
-      - Status Change: ${isStatusChange}
-      - Insert Position: ${dragPosition}`);
     
     if (!draggedTaskId) {
       console.warn('⚠️ Drop rejected: No dragged task ID');
@@ -262,7 +228,6 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
     }
     
     if (draggedTaskId === task.id) {
-      console.log('🚫 Drop ignored: Cannot drop task on itself');
       return;
     }
     
@@ -273,7 +238,6 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
         return;
       }
       // Same column, same project reordering
-      console.log('🔄 Executing same column reordering (no project/status change)');
       onReorder(draggedTaskId, task.id, dragPosition === 'bottom');
     } else {
       if (!onCrossColumnMove) {
@@ -281,7 +245,6 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
         return;
       }
       // Cross column or cross project move
-      console.log(`🔄 Executing cross column/project move: ${isProjectChange ? 'Project Change' : 'Status Change'}`);
       try {
         // CRITICAL: Pass the target project ID explicitly
         onCrossColumnMove(draggedTaskId, task.id, task.status, dragPosition === 'bottom', targetProjectId);
