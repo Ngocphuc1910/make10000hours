@@ -5,6 +5,7 @@
 /* Import drag and drop styles */
 @import './features/calendar/styles/drag-improvements.css';
 @import './features/calendar/elegant-drag.css';
+@import './features/calendar/styles/month-view-spacing-fix.css';
 
 @tailwind base;
 @tailwind components;

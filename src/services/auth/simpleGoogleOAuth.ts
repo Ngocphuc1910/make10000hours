@@ -27,6 +27,8 @@ export class SimpleGoogleOAuthService {
   private scope: string = 'https://www.googleapis.com/auth/calendar';
   private redirectUri: string = 'postmessage'; // For web applications
   private codeClient: any = null;
+  private lastRefreshAttempt: number = 0;
+  private refreshCooldownMs: number = 30000; // 30 seconds cooldown between refresh attempts
 
   constructor() {
     // Try multiple ways to get the client ID for production compatibility
@@ -87,10 +89,18 @@ export class SimpleGoogleOAuthService {
 
       const tokenData = tokenDoc.data() as UserGoogleCalendarToken;
       
-      // Check if token expires within 5 minutes - proactive refresh
+      // Check if token expires within 5 minutes - proactive refresh with throttling
       const fiveMinutesFromNow = Date.now() + (5 * 60 * 1000);
       if (fiveMinutesFromNow >= tokenData.expiresAt) {
+        // THROTTLING: Prevent repeated refresh attempts
+        const timeSinceLastAttempt = Date.now() - this.lastRefreshAttempt;
+        if (timeSinceLastAttempt < this.refreshCooldownMs) {
+          // Still in cooldown period, return existing token without logging
+          return tokenData;
+        }
+        
         console.log('🔄 Token expiring soon...');
+        this.lastRefreshAttempt = Date.now(); // Update timestamp
         
         // For client-side apps without refresh tokens, we need to prompt re-authorization
         if (tokenData.refreshToken === OAUTH_STATUS.CLIENT_SIDE_FLOW || 

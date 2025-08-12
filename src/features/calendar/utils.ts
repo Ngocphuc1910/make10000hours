@@ -647,7 +647,7 @@ export const calculateOptimizedEventLayout = (
   );
   
   const singleDayEvents = allEvents.filter(event => 
-    event.isAllDay && !event.isMultiDay
+    !event.isMultiDay // Include both all-day AND timed single-day events for gap-filling
   );
   
   // Step 1: Position multi-day events and create occupation map
