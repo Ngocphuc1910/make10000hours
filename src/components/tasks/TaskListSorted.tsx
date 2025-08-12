@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
+import { DndContext, closestCenter, DragEndEvent, DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -18,9 +18,10 @@ interface SortableTaskItemProps {
   task: Task;
   project: any;
   onEdit: (taskId: string) => void;
+  isDragActive: boolean;
 }
 
-const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEdit }) => {
+const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEdit, isDragActive }) => {
   const {
     attributes,
     listeners,
@@ -39,40 +40,25 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEd
     overflow: 'hidden',
   };
 
-  // Create filtered listeners that don't interfere with interactive elements
-  const handlePointerDown = (event: React.PointerEvent) => {
-    // Check if the click is on an interactive element
-    const target = event.target as HTMLElement;
-    if (
-      target.closest('.edit-task-btn') ||
-      target.closest('button') ||
-      target.closest('input') ||
-      target.closest('[role="checkbox"]')
-    ) {
-      // Don't start drag if clicking on interactive elements
-      return;
-    }
-    
-    // Call the original listener for drag functionality
-    if (listeners?.onPointerDown) {
-      listeners.onPointerDown(event);
-    }
-  };
-
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={{
+        ...style,
+        pointerEvents: 'auto', // Allow both drag and click
+      }}
       {...attributes}
-      onPointerDown={handlePointerDown}
-      className={`${isDragging ? 'z-50' : ''} w-full overflow-hidden cursor-move`}
+      {...listeners}
+      className={`${isDragging ? 'z-50' : ''} w-full overflow-hidden ${isDragging ? 'cursor-grabbing' : 'cursor-pointer'}`}
     >
-      <TaskItem
-        task={task}
-        project={project}
-        onEdit={onEdit}
-        className="pointer-events-auto"
-      />
+      <div style={{ pointerEvents: isDragActive ? 'none' : 'auto' }}>
+        <TaskItem
+          task={task}
+          project={project}
+          onEdit={onEdit}
+          context="pomodoro"
+        />
+      </div>
     </div>
   );
 };
@@ -98,7 +84,18 @@ export const TaskListSorted: React.FC = () => {
   const { user } = useUserStore();
 
   const [shouldAutoResume, setShouldAutoResume] = useState(false);
+  const [isDragActive, setIsDragActive] = useState(false);
   const taskListRef = useRef<HTMLDivElement>(null);
+
+  // Configure drag sensors with delay
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        delay: 100, // 100ms delay before drag starts
+        tolerance: 5, // 5px tolerance for movement
+      },
+    })
+  );
 
   useEffect(() => {
     if (currentTask && editingTaskId === currentTask.id) {
@@ -115,8 +112,14 @@ export const TaskListSorted: React.FC = () => {
     }
   }, [editingTaskId, currentTask, isRunning, setEnableStartPauseBtn, pause]);
 
+  // Handle drag start
+  const handleDragStart = () => {
+    setIsDragActive(true);
+  };
+
   // Handle drag end with @dnd-kit
   const handleDragEnd = async (event: DragEndEvent) => {
+    setIsDragActive(false);
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
@@ -180,7 +183,9 @@ export const TaskListSorted: React.FC = () => {
     <>
       {process.env.NODE_ENV === 'development' && <DragDebugger enabled={false} />}
       <DndContext 
+        sensors={sensors}
         collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
         <SortableContext 
@@ -215,6 +220,7 @@ export const TaskListSorted: React.FC = () => {
                     task={task}
                     project={fallbackProject}
                     onEdit={handleEditTask}
+                    isDragActive={isDragActive}
                   />
                 );
               }
@@ -225,6 +231,7 @@ export const TaskListSorted: React.FC = () => {
                   task={task}
                   project={project}
                   onEdit={handleEditTask}
+                  isDragActive={isDragActive}
                 />
               );
             })}
