@@ -127,25 +127,15 @@ export class TaskFilteringService {
     dateRange: { startUTC: string; endUTC: string; localDate: string }
   ): Task[] {
     return normalizedTasks.filter(task => {
-      // Check if task is scheduled for today
-      if (this.isTaskScheduledInRange(task, dateRange)) {
-        return true;
+      // STRICT: Only include tasks that are explicitly scheduled for today
+      // No scheduling information = not shown in today view
+      if (!task.scheduledTimeUTC && !task.scheduledDate) {
+        return false;
       }
       
-      // For completed tasks, check both scheduling and completion
-      if (task.status === 'completed' && task.completed) {
-        // If scheduled for today, include it
-        if (this.isTaskScheduledInRange(task, dateRange)) {
-          return true;
-        }
-        
-        // If no scheduling but completed, use legacy logic
-        if (!task.scheduledTimeUTC && !task.scheduledDate) {
-          return true;
-        }
-      }
-      
-      return false;
+      // Check if the scheduled task is actually for today
+      const isScheduledToday = this.isTaskScheduledInRange(task, dateRange);
+      return isScheduledToday;
     });
   }
   
