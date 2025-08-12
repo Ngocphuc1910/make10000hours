@@ -14,6 +14,7 @@ import { ProjectLayoutProvider } from '../../contexts/ProjectLayoutContext';
 import StatusGroupRow from './StatusGroupRow';
 import DraggableColumnHeader from './DraggableColumnHeader';
 import { Icon } from '../ui/Icon';
+import ColorPicker from '../ui/ColorPicker';
 import { triggerAuthenticationFlow } from '../../utils/authGuard';
 import { sortTasksByOrder } from '../../utils/taskSorting';
 
@@ -38,6 +39,8 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
   const reorderTasks = useTaskStore(state => state.reorderTasks);
   const projectColumnOrder = useTaskStore(state => state.projectColumnOrder);
   const reorderProjectColumns = useTaskStore(state => state.reorderProjectColumns);
+  const updateProject = useTaskStore(state => state.updateProject);
+  const deleteProject = useTaskStore(state => state.deleteProject);
   const { isLeftSidebarOpen } = useUIStore();
   const isAuthenticated = useUserStore(state => state.isAuthenticated);
   const authStatus = useMemo(() => ({ 
@@ -47,6 +50,9 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [expandedStatuses, setExpandedStatuses] = useState<Set<string>>(new Set());
   const [isAddingTask, setIsAddingTask] = useState<{ [key: string]: boolean }>({});
+  const [showProjectDropdown, setShowProjectDropdown] = useState<{ [key: string]: boolean }>({});
+  const [showColorPicker, setShowColorPicker] = useState<{ [key: string]: boolean }>({});
+  const [tempProjectColors, setTempProjectColors] = useState<{ [key: string]: string }>({});
 
   // Get all projects with tasks, including "No Project"
   const projectsWithTasks = React.useMemo(() => {
@@ -126,6 +132,90 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
     const projectTasks = tasks.filter(task => (task.projectId || null) === actualProjectId);
     return sortTasksByOrder(projectTasks);
   }, [tasks]);
+
+  // Project dropdown handlers
+  const handleProjectDropdownToggle = (projectId: string) => {
+    setShowProjectDropdown(prev => ({ 
+      ...prev, 
+      [projectId]: !prev[projectId] 
+    }));
+  };
+
+  const handleEditProjectName = (projectId: string) => {
+    const project = projectId === 'no-project' ? null : projects.find(p => p.id === projectId);
+    if (project) {
+      const newName = prompt('Enter new project name:', project.name);
+      if (newName && newName.trim() && newName !== project.name) {
+        handleSaveProjectName(projectId, newName.trim());
+      }
+      setShowProjectDropdown(prev => ({ ...prev, [projectId]: false }));
+    }
+  };
+
+  const handleSaveProjectName = async (projectId: string, newName: string) => {
+    if (newName && newName.trim() && projectId !== 'no-project') {
+      try {
+        await updateProject(projectId, { name: newName.trim() });
+        addToast('Project name updated');
+      } catch (error) {
+        console.error('Failed to update project name:', error);
+        addToast('Failed to update project name');
+      }
+    }
+  };
+
+  const handleProjectColorChange = (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      setTempProjectColors(prev => ({ ...prev, [projectId]: project.color }));
+      setShowColorPicker(prev => ({ ...prev, [projectId]: true }));
+      setShowProjectDropdown(prev => ({ ...prev, [projectId]: false }));
+    }
+  };
+
+  const handleColorChange = (projectId: string, color: string) => {
+    setTempProjectColors(prev => ({ ...prev, [projectId]: color }));
+  };
+
+  const handleColorSave = async (projectId: string) => {
+    const newColor = tempProjectColors[projectId];
+    if (newColor && projectId !== 'no-project') {
+      try {
+        await updateProject(projectId, { color: newColor });
+        setShowColorPicker(prev => ({ ...prev, [projectId]: false }));
+        setTempProjectColors(prev => ({ ...prev, [projectId]: '' }));
+        addToast('Project color updated');
+      } catch (error) {
+        console.error('Failed to update project color:', error);
+        addToast('Failed to update project color');
+      }
+    }
+  };
+
+  const handleColorPickerClose = (projectId: string) => {
+    setShowColorPicker(prev => ({ ...prev, [projectId]: false }));
+    setTempProjectColors(prev => ({ ...prev, [projectId]: '' }));
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    if (projectId !== 'no-project') {
+      const project = projects.find(p => p.id === projectId);
+      const projectName = project?.name || 'this project';
+      
+      if (confirm(`Are you sure you want to delete "${projectName}"? This action cannot be undone.`)) {
+        try {
+          await deleteProject(projectId);
+          setShowProjectDropdown(prev => ({ ...prev, [projectId]: false }));
+          addToast('Project deleted');
+        } catch (error) {
+          console.error('Failed to delete project:', error);
+          addToast('Failed to delete project');
+        }
+      } else {
+        setShowProjectDropdown(prev => ({ ...prev, [projectId]: false }));
+      }
+    }
+  };
 
   // Column configurations for projects
   const columnConfigs = React.useMemo(() => {
@@ -376,6 +466,24 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
     });
   };
 
+  // Click outside handler to close dropdowns (but not ColorPicker modal)
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      
+      // Don't close if clicking inside project dropdown OR ColorPicker modal
+      if (!target.closest('.project-dropdown') && !target.closest('[data-color-picker-modal]')) {
+        setShowProjectDropdown({});
+        // Don't close ColorPicker here - it has its own click-outside handler
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   // Handle column drag end
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -429,15 +537,62 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                     taskCount={config.tasks.length}
                     color={config.color}
                   >
-                    <button className="p-2 rounded-full hover:bg-background-container group">
-                      <div className="w-4 h-4 flex items-center justify-center text-text-secondary group-hover:text-text-primary">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                          <circle cx="12" cy="5" r="2"/>
-                          <circle cx="12" cy="12" r="2"/>
-                          <circle cx="12" cy="19" r="2"/>
-                        </svg>
-                      </div>
-                    </button>
+                    <div className="relative project-dropdown">
+                      <button 
+                        className="p-2 rounded-full hover:bg-background-container group"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleProjectDropdownToggle(id);
+                        }}
+                      >
+                        <div className="w-4 h-4 flex items-center justify-center text-text-secondary group-hover:text-text-primary">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="5" r="2"/>
+                            <circle cx="12" cy="12" r="2"/>
+                            <circle cx="12" cy="19" r="2"/>
+                          </svg>
+                        </div>
+                      </button>
+                      
+                      {/* Project Dropdown Menu */}
+                      {showProjectDropdown[id] && id !== 'no-project' && (
+                        <div className="absolute right-0 mt-2 w-48 bg-background-secondary border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+                          <div className="py-1 px-2">
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleProjectColorChange(id);
+                              }}
+                              className="w-full px-3 py-2 text-sm text-text-primary hover:bg-background-container text-left flex items-center transition-colors duration-200 rounded-md"
+                            >
+                              <Icon name="palette-line" size={16} className="mr-2" />
+                              Edit project color
+                            </button>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditProjectName(id);
+                              }}
+                              className="w-full px-3 py-2 text-sm text-text-primary hover:bg-background-container text-left flex items-center transition-colors duration-200 rounded-md"
+                            >
+                              <Icon name="edit-line" size={16} className="mr-2" />
+                              Edit project name
+                            </button>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteProject(id);
+                              }}
+                              className="w-full px-3 py-2 text-sm text-red-600 hover:bg-red-500/10 text-left flex items-center transition-colors duration-200 rounded-md"
+                            >
+                              <Icon name="delete-bin-line" size={16} className="mr-2" />
+                              Delete project
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      
+                    </div>
                   </DraggableColumnHeader>
                 );
               })}
@@ -588,6 +743,23 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
           </div>
         </div>
       </DndContext>
+      
+      {/* Color Picker Modals */}
+      {Object.entries(showColorPicker).map(([projectId, isOpen]) => {
+        const project = projects.find(p => p.id === projectId);
+        if (!isOpen || !project || projectId === 'no-project') return null;
+        
+        return (
+          <ColorPicker
+            key={projectId}
+            isOpen={isOpen}
+            onClose={() => handleColorPickerClose(projectId)}
+            currentColor={tempProjectColors[projectId] || project.color}
+            onColorChange={(color) => handleColorChange(projectId, color)}
+            onSave={() => handleColorSave(projectId)}
+          />
+        );
+      })}
     </ProjectLayoutProvider>
   );
 };
