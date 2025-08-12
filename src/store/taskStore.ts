@@ -637,10 +637,25 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   
   // Global reordering for task list views (like pomodoro timer) where all visible tasks can be reordered together
   reorderTasksGlobal: async (taskId: string, newIndex: number, visibleTasks: Task[]) => {
+    console.log('🎯 GLOBAL REORDER FUNCTION CALLED:', {
+      taskId,
+      newIndex,
+      visibleTasksCount: visibleTasks.length
+    });
+    
     try {
       const { tasks } = get();
       const currentTask = tasks.find(t => t.id === taskId);
-      if (!currentTask) return;
+      if (!currentTask) {
+        console.error('❌ GLOBAL REORDER FAILED: currentTask not found', { taskId, tasksCount: tasks.length });
+        return;
+      }
+      
+      console.log('✅ Found currentTask:', { 
+        title: currentTask.title, 
+        currentOrderString: currentTask.orderString,
+        currentStatus: currentTask.status
+      });
       
       // Get the visible tasks excluding the current task being moved
       const otherVisibleTasks = visibleTasks.filter(t => t.id !== taskId);
@@ -657,6 +672,45 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       
       const beforePos = beforeTask ? getTaskPosition(beforeTask) : null;
       const afterPos = afterTask ? getTaskPosition(afterTask) : null;
+      
+      // EMERGENCY FIX: If adjacent tasks don't have valid positions, force emergency fix
+      if ((beforeTask && !beforePos) || (afterTask && !afterPos)) {
+        console.warn('⚠️ EMERGENCY: Adjacent tasks missing valid positions - attempting immediate fix');
+        
+        // Force regenerate positions for the visible tasks
+        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        for (let i = 0; i < sortedVisibleTasks.length; i++) {
+          const task = sortedVisibleTasks[i];
+          if (!task.orderString || !getTaskPosition(task)) {
+            const emergencyPos = alphabet[i] || `Z${i}`;
+            console.log(`🚨 Emergency fix: ${task.title} -> ${emergencyPos}`);
+            
+            try {
+              const taskRef = doc(db, 'tasks', task.id);
+              await updateDoc(taskRef, {
+                orderString: emergencyPos,
+                updatedAt: new Date()
+              });
+              
+              // Update local state immediately
+              task.orderString = emergencyPos;
+            } catch (error) {
+              console.error('Failed to emergency fix task:', task.title, error);
+            }
+          }
+        }
+        
+        // Recalculate positions after emergency fix
+        const fixedBeforePos = beforeTask ? getTaskPosition(beforeTask) : null;
+        const fixedAfterPos = afterTask ? getTaskPosition(afterTask) : null;
+        
+        console.log('🔄 After emergency fix:', { 
+          beforeTask: beforeTask?.title, 
+          fixedBeforePos, 
+          afterTask: afterTask?.title, 
+          fixedAfterPos 
+        });
+      }
       
       // Generate new fractional position
       const newOrderString = FractionalOrderingService.generatePosition(beforePos, afterPos);
