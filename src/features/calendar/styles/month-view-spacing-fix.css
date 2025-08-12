@@ -24,29 +24,8 @@
   padding-bottom: 1px !important;
 }
 
-/* SECONDARY FIX: Reduce effective row spacing to match visual expectations */
-.month-cell .relative.h-full > div[style*="top:"] {
-  /* 
-   * Transform single-day events to use 20px effective spacing instead of 22px
-   * This brings single-day events closer together to match multi-day visual density
-   */
-  transform: translateY(calc(-0.1 * var(--row-index, 0) * 1px - 1px));
-}
-
-/* TERTIARY FIX: Adjust multi-day overlay positioning for consistency */
-.absolute.inset-0.pointer-events-none.z-10 > div[style*="top:"] {
-  /* 
-   * Multi-day events: slight upward adjustment to reduce gaps
-   * This compensates for the dateNumberHeight + eventHeight calculation
-   */
-  transform: translateY(-2px);
-}
-
-/* QUATERNARY FIX: Improve "+X more" indicator positioning */
-.month-cell div:last-child[style*="top:"] {
-  /* Bring the overflow indicator closer to the actual events */
-  transform: translateY(-3px) !important;
-}
+/* REMOVED: CSS positioning transforms that conflict with JavaScript positioning */
+/* JavaScript now has full control over positioning for consistency */
 
 /* TYPOGRAPHY ENHANCEMENT: Ensure text remains legible in tighter spacing */
 .month-view-event .truncate {
