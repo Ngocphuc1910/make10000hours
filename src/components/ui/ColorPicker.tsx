@@ -98,7 +98,7 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" data-color-picker-modal>
       <div 
         ref={modalRef}
         className="bg-background-secondary rounded-lg shadow-lg p-6 w-96 max-w-[90vw]"
