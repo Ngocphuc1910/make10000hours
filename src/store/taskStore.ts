@@ -10,10 +10,6 @@ import { TaskStorageService } from '../services/TaskStorageService';
 import { timezoneUtils } from '../utils/timezoneUtils';
 import { sortTasksByOrder, getTaskPosition } from '../utils/taskSorting';
 import { FractionalOrderingService } from '../services/FractionalOrderingService';
-import { TaskMigrationService } from '../services/TaskMigrationService';
-import { testFractionalIndexing } from '../utils/testFractionalIndexing';
-import { EmergencyMigration } from '../utils/emergencyMigration';
-import '../utils/fixMixedOrdering'; // Load debug utilities
 
 interface TaskState {
   tasks: Task[];
@@ -108,30 +104,6 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
 
     set({ isLoading: true });
-    
-    // Test fractional indexing in development
-    if (process.env.NODE_ENV === 'development') {
-      testFractionalIndexing();
-    }
-    
-    // CRITICAL: Force complete migration to fix mixed ordering issues like Notion
-    try {
-      console.log('🚨 Starting emergency complete ordering migration...');
-      await EmergencyMigration.forceCompleteOrdering(user.uid);
-      console.log('✅ Emergency migration completed - all tasks now use consistent fractional positions');
-    } catch (error) {
-      console.error('❌ Emergency migration failed:', error);
-      console.warn('⚠️ Drag & drop positioning may not work correctly');
-      
-      // Fallback to regular migration
-      try {
-        console.log('🔄 Falling back to regular migration...');
-        await TaskMigrationService.forceCompleteUserMigration(user.uid);
-        console.log('✅ Fallback migration completed');
-      } catch (fallbackError) {
-        console.error('❌ Fallback migration also failed:', fallbackError);
-      }
-    }
     
     // Clean up existing listeners
     const { unsubscribe } = get();
@@ -320,12 +292,32 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       const { tasks } = get();
       console.log('Current tasks count:', tasks.length);
       
-      // Add task with next order number (find max order + 1)
+      // Generate proper fractional position for new task
+      // Place new tasks at the END of their status group (most common UX pattern)
+      const statusTasks = sortTasksByOrder(
+        tasks.filter(t => t.status === (taskData.status || 'todo'))
+      );
+      
+      // Generate position at the end of this status
+      const lastTask = statusTasks.length > 0 ? statusTasks[statusTasks.length - 1] : null;
+      const lastPosition = lastTask ? getTaskPosition(lastTask) : null;
+      const newOrderString = FractionalOrderingService.generatePosition(lastPosition, null);
+      
+      console.log(`📍 New task "${taskData.title}" positioning:`, {
+        status: taskData.status || 'todo',
+        statusTasksCount: statusTasks.length,
+        lastTask: lastTask?.title || 'none',
+        lastPosition: lastPosition || 'none',
+        newOrderString
+      });
+      
+      // Add task with proper fractional ordering (keep legacy order for compatibility)
       const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order || 0)) : -1;
       const taskDataWithOrder = {
         ...taskData,
         userId: user.uid,
-        order: maxOrder + 1
+        order: maxOrder + 1, // Keep for legacy compatibility
+        orderString: newOrderString // Primary ordering field
       };
       
       // Get user's timezone for UTC conversion
