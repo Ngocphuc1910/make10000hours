@@ -39,13 +39,33 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEd
     overflow: 'hidden',
   };
 
+  // Create filtered listeners that don't interfere with interactive elements
+  const handlePointerDown = (event: React.PointerEvent) => {
+    // Check if the click is on an interactive element
+    const target = event.target as HTMLElement;
+    if (
+      target.closest('.edit-task-btn') ||
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('[role="checkbox"]')
+    ) {
+      // Don't start drag if clicking on interactive elements
+      return;
+    }
+    
+    // Call the original listener for drag functionality
+    if (listeners?.onPointerDown) {
+      listeners.onPointerDown(event);
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...listeners}
-      className={`${isDragging ? 'z-50' : ''} w-full overflow-hidden`}
+      onPointerDown={handlePointerDown}
+      className={`${isDragging ? 'z-50' : ''} w-full overflow-hidden cursor-move`}
     >
       <TaskItem
         task={task}
