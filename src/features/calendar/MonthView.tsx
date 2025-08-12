@@ -325,10 +325,44 @@ export const MonthView: React.FC<MonthViewProps> = ({
                       // Sort by row position to ensure proper stacking
                       eventsToRender.sort((a, b) => a.row - b.row);
                       
-                      // Calculate overflow based on available space
-                      const totalAvailableRows = Math.floor((eventsContainerRefs.current[idx]?.clientHeight || 120) / 22);
-                      const visibleEventsCount = Math.max(0, totalAvailableRows - 1); // Reserve 1 row for "+X more" if needed
+                      // Calculate overflow based on available space, accounting for multi-day events
+                      const containerHeight = eventsContainerRefs.current[idx]?.clientHeight || 120;
+                      
+                      // Count multi-day events that visually occupy space in this cell
+                      const weekIndex = Math.floor(idx / 7);
+                      const multiDayEventsInThisCell = multiDayEventLayout.eventsByWeek[weekIndex] || [];
+                      
+                      // FIXED: Correct overflow calculation that doesn't double-count multi-day events
+                      const dateNumberSpace = 30; // Space taken by date number
+                      const availableEventSpace = containerHeight - dateNumberSpace;
+                      const multiDayEventCount = multiDayEventsInThisCell.length;
+                      
+                      // Multi-day events are in separate overlay, so only account for visual interference
+                      // They don't take up space in the cell's event container, just visually overlap
+                      const maxSingleDayRows = Math.floor(availableEventSpace / 22);
+                      
+                      // Reserve space for "+X more" only when there's overflow
+                      let visibleEventsCount = maxSingleDayRows;
+                      if (eventsToRender.length > maxSingleDayRows) {
+                        visibleEventsCount = Math.max(1, maxSingleDayRows - 1); // Reserve 1 row for "+X more"
+                      }
+                      
                       const hasOverflow = eventsToRender.length > visibleEventsCount;
+                      
+                      // DEBUG: Log the calculation for cells with many events
+                      if (eventsToRender.length > 3 && process.env.NODE_ENV === 'development') {
+                        console.log(`📊 Cell ${idx} overflow calculation:`, {
+                          containerHeight,
+                          dateNumberSpace,
+                          availableEventSpace,
+                          multiDayEventCount,
+                          maxSingleDayRows,
+                          visibleEventsCount,
+                          eventsToRender: eventsToRender.length,
+                          hasOverflow,
+                          weekIndex
+                        });
+                      }
                       const eventsToShow = hasOverflow ? eventsToRender.slice(0, visibleEventsCount) : eventsToRender;
                       const hiddenCount = hasOverflow ? eventsToRender.length - visibleEventsCount : 0;
                       
@@ -413,7 +447,16 @@ export const MonthView: React.FC<MonthViewProps> = ({
                             <div 
                               className="absolute w-full"
                               style={{
-                                top: `${eventsToShow.length * 22 + 8}px`,
+                                // FIXED: Visual-aware positioning - account for all visible content
+                                top: `${(() => {
+                                  // Calculate position based on actual visual layout
+                                  const multiDayVisualSpace = multiDayEventCount * 22; // Multi-day events appear first visually
+                                  const singleDayVisualSpace = eventsToShow.length * 22; // Single-day events appear after multi-day
+                                  const totalVisualContent = multiDayVisualSpace + singleDayVisualSpace;
+                                  
+                                  // Position "+X more" below all visible content with proper spacing
+                                  return totalVisualContent + 8; // 8px base offset from date number
+                                })()}px`,
                                 height: '20px',
                                 left: '4px',
                                 right: '6px' // Reduced margin since overflow-hidden removed
