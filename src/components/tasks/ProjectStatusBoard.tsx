@@ -484,7 +484,22 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                           const projectTasks = getProjectTasks(id).filter(t => t.status === status);
                           const addTaskKey = `${status}-${id}`;
                           return (
-                            <div key={`${status}-${id}`} className="flex flex-col">
+                            <div 
+                              key={`${status}-${id}`} 
+                              className="flex flex-col min-h-[120px]"
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                
+                                const taskId = e.dataTransfer.getData('text/plain');
+                                if (taskId) {
+                                  console.log(`📥 Grouped column drop: Moving task ${taskId} to ${status} in project ${id}`);
+                                  handleGroupedCrossColumnMove(taskId, '', status, id, false);
+                                }
+                              }}
+                            >
                               <div className="space-y-3">
                                 {projectTasks.map(task => (
                                   <TaskCard 
