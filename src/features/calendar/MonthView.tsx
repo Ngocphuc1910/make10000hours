@@ -195,11 +195,16 @@ export const MonthView: React.FC<MonthViewProps> = ({
             return weekEvents.map(({ event, row, startDay, endDay }) => {
               // SIMPLIFIED FIX: Use CSS percentage positioning for consistency
               const left = (startDay / 7) * 100;
-              const width = ((endDay - startDay + 1) / 7) * 100;
+              // FIXED WIDTH: Subtract margin to prevent clipping of rounded borders
+              const width = ((endDay - startDay + 1) / 7) * 100 - 1.0; // 1% margin to prevent border clipping
               
-              // Calculate vertical position: week offset + row offset within cell
-              const top = (weekIndex / numberOfRows) * 100;
-              const rowOffset = 30 + (row * 22); // 30px for date numbers + 22px per row
+              // UNIFIED POSITIONING: Calculate absolute position from grid start
+              const cellHeight = 140; // minmax(140px, 1fr) from grid definition
+              const dateNumberHeight = 30; // Space reserved for date number
+              const eventHeight = 22; // 20px event + 2px gap
+              
+              const absoluteTop = (weekIndex * cellHeight) + dateNumberHeight + (row * eventHeight);
+              const topPercentage = (absoluteTop / (numberOfRows * cellHeight)) * 100;
               
               // Determine rounding style
               const eventStartDay = days.findIndex(day => event.displayStart && isSameDay(day, event.displayStart));
@@ -219,7 +224,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                   style={{
                     left: `${left}%`,
                     width: `${width}%`,
-                    top: `calc(${top}% + ${rowOffset}px)`,
+                    top: `${topPercentage}%`,
                     height: '20px',
                     paddingLeft: '4px',
                     paddingRight: '4px',
@@ -338,11 +343,11 @@ export const MonthView: React.FC<MonthViewProps> = ({
                                 key={event.id}
                                 className="absolute w-full"
                                 style={{
-                                  top: `${row * 22 + 30}px`, // 30px offset for date number + row * (20px + 2px gap)
+                                  top: `${row * 22 + 8}px`, // Simple offset - multi-day events are in separate overlay
                                   height: '20px',
                                   left: '4px',
-                                  right: '4px', // FIX: Use explicit padding matching multi-day events
-                                  zIndex: 30 + row // Higher than multi-day overlay events
+                                  right: '8px', // Increased right margin to prevent text clipping
+                                  zIndex: 30 + row // Higher z-index to appear above multi-day events
                                 }}
                               >
                                 {isTimedEvent ? (
@@ -408,10 +413,10 @@ export const MonthView: React.FC<MonthViewProps> = ({
                             <div 
                               className="absolute w-full"
                               style={{
-                                top: `${eventsToShow.length * 22 + 30}px`,
+                                top: `${eventsToShow.length * 22 + 8}px`,
                                 height: '20px',
                                 left: '4px',
-                                right: '4px'
+                                right: '8px' // Increased right margin to match single-day events
                               }}
                             >
                               <div 
