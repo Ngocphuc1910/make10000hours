@@ -175,7 +175,7 @@ body {
 /* Header Top Section */
 .header-top {
   margin-bottom: var(--spacing-lg);
-  border-bottom: 1px solid var(--border-color);
+  /* border-bottom removed */
 }
 
 .title-focus-container {
@@ -210,10 +210,7 @@ body {
 
 /* Divider Component */
 .divider {
-  height: 1px;
-  background-color: var(--border-color);
-  width: 100%;
-  margin: 0;
+  display: none; /* Hide the divider component */
 }
 
 /* User Info Section */
