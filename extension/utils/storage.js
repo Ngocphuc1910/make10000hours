@@ -132,14 +132,34 @@ class StorageManager {
 
       console.log(`🔄 Migrating data from UTC date ${migrationInfo.utcDate} to local date ${migrationInfo.localDate}`);
       
-      // Migrate stats data
-      const storage = await chrome.storage.local.get(['stats']);
-      if (storage.stats?.[migrationInfo.utcDate]) {
-        if (!storage.stats[migrationInfo.localDate]) {
-          storage.stats[migrationInfo.localDate] = storage.stats[migrationInfo.utcDate];
-          console.log('📊 Migrated stats data to local date');
+      // Migrate site_usage_sessions data (NEW STRUCTURE)
+      const sessionsStorage = await chrome.storage.local.get(['site_usage_sessions']);
+      if (sessionsStorage.site_usage_sessions?.[migrationInfo.utcDate]) {
+        if (!sessionsStorage.site_usage_sessions[migrationInfo.localDate]) {
+          // Ensure site_usage_sessions object exists
+          if (!sessionsStorage.site_usage_sessions) {
+            sessionsStorage.site_usage_sessions = {};
+          }
+          
+          // Migrate sessions from UTC date to local date
+          sessionsStorage.site_usage_sessions[migrationInfo.localDate] = 
+            sessionsStorage.site_usage_sessions[migrationInfo.utcDate];
+          
+          // Save updated sessions
+          await chrome.storage.local.set({ 
+            site_usage_sessions: sessionsStorage.site_usage_sessions 
+          });
+          
+          console.log('📊 Migrated site_usage_sessions data to local date');
         }
         // Keep UTC data for now to avoid data loss
+      }
+
+      // Legacy stats migration (if old stats key still exists)
+      const legacyStorage = await chrome.storage.local.get(['stats']);
+      if (legacyStorage.stats?.[migrationInfo.utcDate]) {
+        console.log('⚠️ Found legacy stats data, but current system uses site_usage_sessions');
+        // Note: This is legacy code path - new system doesn't use 'stats' key
       }
 
       // Migrate daily stats data  

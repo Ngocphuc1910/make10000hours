@@ -546,33 +546,43 @@ class StorageManager {
     try {
       await chrome.storage.local.get(['test']);
       
-      // Ensure storage is initialized
-      const storage = await chrome.storage.local.get(['settings', 'stats']);
+      // Ensure storage is initialized with site_usage_sessions instead of stats
+      const storage = await chrome.storage.local.get(['settings', 'site_usage_sessions']);
       if (!storage.settings) {
         await this.saveSettings(this.getDefaultSettings());
       }
-      if (!storage.stats) {
-        const today = DateUtils.getLocalDateString();
+      if (!storage.site_usage_sessions) {
         await chrome.storage.local.set({ 
-          stats: {
-            [today]: {
-              totalTime: 0,
-              sitesVisited: 0,
-              productivityScore: 0,
-              sites: {}
-            }
-          }
+          site_usage_sessions: {}
         });
+        console.log('🆕 Initialized site_usage_sessions storage');
       }
       
+      // Migrate from old stats if needed
+      await this.migrateFromStatsToSessions();
+      
       this.initialized = true;
-      console.log('✅ Storage Manager initialized');
+      console.log('✅ Storage Manager initialized with site_usage_sessions');
+      
+      // ✅ NEW: Set up periodic sync to Firebase (every 5 minutes)
+      setInterval(() => {
+        this.syncSessionsToFirebase().catch(error => {
+          console.warn('⚠️ Periodic sync failed:', error);
+        });
+      }, 5 * 60 * 1000); // 5 minutes
+      
+      // ✅ NEW: Initial sync after 10 seconds
+      setTimeout(() => {
+        this.syncSessionsToFirebase().catch(error => {
+          console.warn('⚠️ Initial sync failed:', error);
+        });
+      }, 10000);
       
       // Sync with state manager if available
       if (this.stateManager?.isInitialized) {
         const state = this.stateManager.getState();
         if (state.todayStats) {
-          // Update state with storage stats
+          // Update state with session-based stats
           await this.stateManager.dispatch({
             type: 'UPDATE_STATS',
             payload: await this.getTodayStats()
@@ -594,41 +604,341 @@ class StorageManager {
     };
   }
 
-  async saveTimeEntry(domain, timeSpent, visits = 1) {
+  async saveTimeEntry(domain, incrementalTimeSpent, visits = 1) {
     try {
+      const now = new Date();
       const today = DateUtils.getLocalDateString();
-      const storage = await chrome.storage.local.get(['stats']);
       
-      // Initialize today's stats if not exists
-      if (!storage.stats || !storage.stats[today]) {
-        storage.stats = {
-          ...storage.stats,
-          [today]: {
-            totalTime: 0,
-            sitesVisited: 0,
-            productivityScore: 0,
-            sites: {}
+      // Get existing sessions
+      const storage = await chrome.storage.local.get(['site_usage_sessions']);
+      const sessions = storage.site_usage_sessions || {};
+      
+      if (!sessions[today]) {
+        sessions[today] = [];
+      }
+      
+      // Find active session for this domain or create new one
+      let activeSession = sessions[today].find(s => 
+        s.domain === domain && 
+        s.status === 'active'
+      );
+      
+      if (!activeSession) {
+        // Create new session
+        activeSession = {
+          id: this.generateSiteUsageSessionId(),
+          domain: domain,
+          userId: this.currentUserId || 'anonymous',
+          startTime: now,
+          endTime: null,
+          duration: 0,
+          status: 'active',
+          isActive: true,
+          visits: 0,
+          createdAt: now,
+          updatedAt: now,
+          startTimeUTC: now.toISOString(),
+          endTimeUTC: null,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          utcDate: now.toISOString().split('T')[0]
+        };
+        sessions[today].push(activeSession);
+        console.log('✨ Created new site usage session:', activeSession.id, 'for domain:', domain);
+      }
+      
+      // ✅ FIX: Add only INCREMENTAL time, not total time
+      const incrementalSeconds = Math.round(incrementalTimeSpent / 1000);
+      if (incrementalSeconds > 0) {
+        activeSession.duration += incrementalSeconds; // Only add the new time
+        activeSession.visits += visits;
+        activeSession.updatedAt = now;
+        
+        console.log('💾 Added incremental time:', incrementalSeconds, 'seconds to session:', activeSession.id, 'total now:', activeSession.duration, 'seconds');
+      } else {
+        console.log('⏭️ Skipping save - no incremental time to add');
+        return this.formatSessionAsStats(activeSession, sessions[today]);
+      }
+      
+      // Save updated sessions
+      await chrome.storage.local.set({
+        site_usage_sessions: sessions
+      });
+      
+      // Broadcast update
+      try {
+        await chrome.runtime.sendMessage({
+          type: 'SITE_USAGE_UPDATED',
+          payload: { domain, duration: activeSession.duration, sessionId: activeSession.id }
+        });
+      } catch (error) {
+        // Popup might not be open, ignore error
+      }
+      
+      return this.formatSessionAsStats(activeSession, sessions[today]);
+    } catch (error) {
+      console.error('❌ Error saving site usage session:', error);
+      throw error;
+    }
+  }
+
+  // Helper method to format session data as stats for compatibility
+  formatSessionAsStats(activeSession, allTodaySessions) {
+    return {
+      totalTime: activeSession.duration * 1000, // Convert back to ms for compatibility
+      sitesVisited: allTodaySessions.length,
+      productivityScore: Math.min(Math.round((activeSession.duration * 1000 / (6 * 60 * 60 * 1000)) * 100), 100),
+      sites: { [activeSession.domain]: { timeSpent: activeSession.duration * 1000, visits: activeSession.visits } }
+    };
+  }
+
+  /**
+   * Generate session ID for site usage sessions
+   */
+  generateSiteUsageSessionId() {
+    return `sus_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Complete a site usage session
+   */
+  async completeSiteUsageSession(domain) {
+    try {
+      const now = new Date();
+      const today = DateUtils.getLocalDateString();
+      
+      const storage = await chrome.storage.local.get(['site_usage_sessions']);
+      const sessions = storage.site_usage_sessions || {};
+      
+      if (sessions[today]) {
+        const activeSession = sessions[today].find(s => 
+          s.domain === domain && s.status === 'active'
+        );
+        
+        if (activeSession) {
+          activeSession.status = 'completed';
+          activeSession.isActive = false;
+          activeSession.endTime = now;
+          activeSession.endTimeUTC = now.toISOString();
+          activeSession.updatedAt = now;
+          
+          await chrome.storage.local.set({
+            site_usage_sessions: sessions
+          });
+          
+          console.log('✅ Completed site usage session:', activeSession.id, 'for domain:', domain, 'duration:', activeSession.duration, 'seconds');
+          
+          // ✅ NEW: Auto-sync completed sessions to Firebase (async)
+          setTimeout(() => {
+            this.syncSessionsToFirebase().catch(error => {
+              console.warn('⚠️ Auto-sync failed:', error);
+            });
+          }, 1000); // 1 second delay to avoid blocking
+          
+          return activeSession;
+        }
+      }
+      
+      console.log('⚠️ No active session found to complete for domain:', domain);
+      return null;
+    } catch (error) {
+      console.error('❌ Error completing site usage session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get site usage sessions for a specific date
+   */
+  async getSiteUsageSessionsForDate(date) {
+    try {
+      const dateStr = typeof date === 'string' ? date : DateUtils.getLocalDateStringFromDate(date);
+      const storage = await chrome.storage.local.get(['site_usage_sessions']);
+      const sessions = storage.site_usage_sessions || {};
+      
+      return sessions[dateStr] || [];
+    } catch (error) {
+      console.error('❌ Error getting site usage sessions for date:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Migrate old stats data cleanup
+   */
+  async migrateFromStatsToSessions() {
+    try {
+      const storage = await chrome.storage.local.get(['stats', 'site_usage_sessions']);
+      
+      if (storage.stats) {
+        console.log('🔄 Cleaning up old stats data...');
+        await chrome.storage.local.remove(['stats']);
+        console.log('✅ Old stats data removed - now using site_usage_sessions exclusively');
+      }
+    } catch (error) {
+      console.error('❌ Error migrating from stats:', error);
+    }
+  }
+
+  /**
+   * Sync site usage sessions to Firebase for web app
+   */
+  async syncSessionsToFirebase() {
+    try {
+      console.log('🔄 Starting sync of site usage sessions to Firebase...');
+      
+      // Get user info
+      const { userInfo } = await chrome.storage.local.get(['userInfo']);
+      if (!userInfo?.userId) {
+        console.warn('⚠️ No user info available, cannot sync sessions to Firebase');
+        return;
+      }
+      
+      // Get all site usage sessions
+      const { site_usage_sessions } = await chrome.storage.local.get(['site_usage_sessions']);
+      if (!site_usage_sessions) {
+        console.log('ℹ️ No site usage sessions to sync');
+        return;
+      }
+      
+      // Collect all sessions from all dates
+      const allSessions = [];
+      Object.keys(site_usage_sessions).forEach(date => {
+        const daySessions = site_usage_sessions[date] || [];
+        daySessions.forEach(session => {
+          // Only sync completed sessions
+          if (session.status === 'completed' && session.duration > 0) {
+            allSessions.push({
+              ...session,
+              userId: userInfo.userId, // Ensure correct user ID
+              // Convert timestamps to proper Date objects
+              startTime: new Date(session.startTime),
+              endTime: session.endTime ? new Date(session.endTime) : null,
+              createdAt: new Date(session.createdAt),
+              updatedAt: new Date(session.updatedAt)
+            });
           }
-        };
+        });
+      });
+      
+      if (allSessions.length === 0) {
+        console.log('ℹ️ No completed sessions to sync');
+        return;
       }
-
-      const stats = storage.stats[today];
-
-      // Update domain stats
-      if (!stats.sites[domain]) {
-        stats.sites[domain] = {
-          timeSpent: 0,
-          visits: 0
-        };
+      
+      console.log(`📊 Found ${allSessions.length} sessions to sync to Firebase`);
+      
+      // Send sessions to web app for Firebase sync
+      try {
+        // Try to send message to web app content script
+        const tabs = await chrome.tabs.query({ url: '*://app.make10000hours.com/*' });
+        if (tabs.length > 0) {
+          console.log('📨 Sending sessions to web app via content script');
+          await chrome.tabs.sendMessage(tabs[0].id, {
+            type: 'EXTENSION_SITE_USAGE_SESSION_BATCH',
+            payload: { sessions: allSessions }
+          });
+        } else {
+          console.log('📨 No web app tab found, trying runtime message');
+          await chrome.runtime.sendMessage({
+            type: 'EXTENSION_SITE_USAGE_SESSION_BATCH',
+            payload: { sessions: allSessions }
+          });
+        }
+        
+        console.log('✅ Successfully sent sessions to web app for Firebase sync');
+      } catch (error) {
+        console.warn('⚠️ Could not send sessions to web app:', error);
+        
+        // Fallback: try postMessage to any web app window
+        try {
+          const tabs = await chrome.tabs.query({ url: '*://app.make10000hours.com/*' });
+          if (tabs.length > 0) {
+            await chrome.scripting.executeScript({
+              target: { tabId: tabs[0].id },
+              func: (sessions) => {
+                window.postMessage({
+                  type: 'EXTENSION_SITE_USAGE_SESSION_BATCH',
+                  payload: { sessions },
+                  source: 'extension'
+                }, '*');
+              },
+              args: [allSessions]
+            });
+            console.log('✅ Sent sessions via postMessage fallback');
+          }
+        } catch (postMessageError) {
+          console.error('❌ All sync methods failed:', postMessageError);
+        }
       }
+      
+    } catch (error) {
+      console.error('❌ Error syncing sessions to Firebase:', error);
+    }
+  }
 
-      stats.sites[domain].timeSpent += timeSpent;
-      stats.sites[domain].visits += visits;
-
-      // Update total stats
-      stats.totalTime = (stats.totalTime || 0) + timeSpent;
+  async getTodayStats() {
+    const today = DateUtils.getLocalDateString();
+    console.log('📅 Getting stats from sessions for date:', today);
+    
+    try {
+      const storage = await chrome.storage.local.get(['site_usage_sessions']);
+      const sessions = storage.site_usage_sessions?.[today] || [];
+      
+      // Aggregate sessions into stats format
+      const stats = {
+        totalTime: 0,
+        sitesVisited: 0,
+        productivityScore: 0,
+        sites: {}
+      };
+      
+      let validSessions = 0;
+      let corruptedSessions = 0;
+      
+      sessions.forEach((session, index) => {
+        // Validate session structure
+        if (!session || typeof session !== 'object') {
+          console.warn(`⚠️ Skipping invalid session at index ${index}:`, session);
+          corruptedSessions++;
+          return;
+        }
+        
+        const domain = session.domain;
+        
+        // Validate domain
+        if (!domain || typeof domain !== 'string') {
+          console.warn(`⚠️ Skipping session with invalid domain at index ${index}:`, session);
+          corruptedSessions++;
+          return;
+        }
+        
+        // Validate duration - this is the critical fix
+        const duration = session.duration;
+        if (typeof duration !== 'number' || isNaN(duration) || duration < 0) {
+          console.warn(`⚠️ Skipping session with invalid duration at index ${index}: ${duration} (${typeof duration})`, session);
+          corruptedSessions++;
+          return;
+        }
+        
+        // Initialize site stats if not exists
+        if (!stats.sites[domain]) {
+          stats.sites[domain] = {
+            timeSpent: 0,
+            visits: 0
+          };
+        }
+        
+        // Safely convert and add duration
+        const durationMs = duration * 1000; // Convert seconds to ms
+        stats.sites[domain].timeSpent += durationMs;
+        stats.sites[domain].visits += (typeof session.visits === 'number' && session.visits > 0) ? session.visits : 1;
+        stats.totalTime += durationMs;
+        
+        validSessions++;
+      });
+      
       stats.sitesVisited = Object.keys(stats.sites).length;
-
+      
       // Calculate productivity score
       const productiveTime = Object.values(stats.sites)
         .reduce((total, site) => total + (site.timeSpent || 0), 0);
@@ -636,50 +946,24 @@ class StorageManager {
         Math.round((productiveTime / (6 * 60 * 60 * 1000)) * 100),
         100
       );
-
-      // Save updated stats
-      await chrome.storage.local.set({
-        stats: {
-          ...storage.stats,
-          [today]: stats
-        }
+      
+      // Log diagnostic information
+      console.log(`📊 Today stats from sessions: ${validSessions} valid, ${corruptedSessions} corrupted, total: ${sessions.length}`);
+      console.log('📊 Final stats:', { 
+        totalTime: stats.totalTime, 
+        totalTimeFormatted: this.formatTime ? this.formatTime(stats.totalTime) : `${Math.round(stats.totalTime / 60000)}m`,
+        sitesVisited: stats.sitesVisited,
+        sitesCount: Object.keys(stats.sites).length 
       });
-
-      // Notify any open popups
-      try {
-        const message = {
-          type: 'STATS_UPDATED',
-          payload: stats
-        };
-        await chrome.runtime.sendMessage(message);
-      } catch (error) {
-        // Popup might not be open, ignore error
+      
+      // Alert if we have sites data but zero total time (should be impossible now)
+      if (stats.totalTime === 0 && Object.keys(stats.sites).length > 0) {
+        console.error('🚨 CRITICAL: totalTime is 0 but sites have data - this should not happen after validation fix!');
       }
-
+      
       return stats;
     } catch (error) {
-      console.error('Error saving time entry:', error);
-      throw error;
-    }
-  }
-
-  async getTodayStats() {
-    const today = DateUtils.getLocalDateString();
-    console.log('📅 Getting stats for date (local):', today);
-    
-    try {
-      const storage = await chrome.storage.local.get(['stats']);
-      const todayStats = storage.stats?.[today] || {
-        totalTime: 0,
-        sitesVisited: 0,
-        productivityScore: 0,
-        sites: {}
-      };
-      
-      console.log('📊 Today stats result:', todayStats);
-      return todayStats;
-    } catch (error) {
-      console.error('❌ Error in getTodayStats:', error);
+      console.error('❌ Error getting today stats from sessions:', error);
       return {
         totalTime: 0,
         sitesVisited: 0,
@@ -695,20 +979,50 @@ class StorageManager {
     }
     
     try {
-      const storage = await chrome.storage.local.get(['stats']);
-      const allStats = storage.stats || {};
+      const storage = await chrome.storage.local.get(['site_usage_sessions']);
+      const allSessions = storage.site_usage_sessions || {};
       const result = {};
       
-      // Filter stats by date range
-      Object.keys(allStats).forEach(date => {
+      // Filter sessions by date range
+      Object.keys(allSessions).forEach(date => {
         if (date >= startDate && date <= endDate) {
-          result[date] = allStats[date];
+          // Convert sessions to stats format for this date
+          const sessions = allSessions[date] || [];
+          const dayStats = {
+            totalTime: 0,
+            sitesVisited: 0,
+            productivityScore: 0,
+            sites: {}
+          };
+          
+          sessions.forEach(session => {
+            const domain = session.domain;
+            if (!dayStats.sites[domain]) {
+              dayStats.sites[domain] = { timeSpent: 0, visits: 0 };
+            }
+            dayStats.sites[domain].timeSpent += (session.duration * 1000); // Convert to ms
+            dayStats.sites[domain].visits += session.visits || 1;
+            dayStats.totalTime += (session.duration * 1000);
+          });
+          
+          dayStats.sitesVisited = Object.keys(dayStats.sites).length;
+          
+          // Calculate productivity score
+          const productiveTime = Object.values(dayStats.sites)
+            .reduce((total, site) => total + (site.timeSpent || 0), 0);
+          dayStats.productivityScore = Math.min(
+            Math.round((productiveTime / (6 * 60 * 60 * 1000)) * 100),
+            100
+          );
+          
+          result[date] = dayStats;
         }
       });
       
+      console.log('📈 Retrieved time data from sessions for date range:', startDate, 'to', endDate);
       return result;
     } catch (error) {
-      console.error('Failed to get time data:', error);
+      console.error('❌ Failed to get time data from sessions:', error);
       throw error;
     }
   }
@@ -754,47 +1068,97 @@ class StorageManager {
   async getRealTimeStatsWithSession() {
     console.log('🔍 DEBUG: getRealTimeStatsWithSession called');
     
-    const storedStats = await this.getTodayStats();
-    console.log('🔍 DEBUG: storedStats from getTodayStats:', storedStats);
-    
-    // Clone stored stats to avoid mutation
-    const realTimeStats = {
-      totalTime: storedStats?.totalTime || 0,
-      sitesVisited: storedStats?.sitesVisited || 0,
-      sites: { ...(storedStats?.sites || {}) }
-    };
-    
-    console.log('🔍 DEBUG: Initial realTimeStats:', realTimeStats);
-    console.log('🔍 DEBUG: focusTimeTracker reference:', !!this.focusTimeTracker);
-    
-    // Add current session time if actively tracking and we have tracker reference
-    if (this.focusTimeTracker && this.focusTimeTracker.currentSession) {
-      const currentSession = this.focusTimeTracker.currentSession;
-      console.log('🔍 DEBUG: Current session found:', currentSession);
+    try {
+      const storedStats = await this.getTodayStats();
+      console.log('🔍 DEBUG: storedStats from getTodayStats:', storedStats);
       
-      if (currentSession.isActive && currentSession.domain && currentSession.startTime) {
-        const currentTime = Date.now();
-        const sessionTime = currentTime - currentSession.startTime;
-        
-        console.log('🔍 DEBUG: Adding session time:', sessionTime, 'for domain:', currentSession.domain);
-        
-        // Update current domain stats
-        if (!realTimeStats.sites[currentSession.domain]) {
-          realTimeStats.sites[currentSession.domain] = {
-            timeSpent: 0,
-            visits: 0
-          };
-        }
-        
-        realTimeStats.sites[currentSession.domain].timeSpent += sessionTime;
-        realTimeStats.totalTime += sessionTime;
+      // Validate stored stats structure
+      if (!storedStats || typeof storedStats !== 'object') {
+        console.warn('⚠️ Invalid storedStats, using defaults');
+        storedStats = { totalTime: 0, sitesVisited: 0, sites: {} };
       }
-    } else {
-      console.log('🔍 DEBUG: No active session or focusTimeTracker not set');
+      
+      // Clone stored stats to avoid mutation with defensive programming
+      const realTimeStats = {
+        totalTime: (typeof storedStats.totalTime === 'number' && !isNaN(storedStats.totalTime)) ? storedStats.totalTime : 0,
+        sitesVisited: (typeof storedStats.sitesVisited === 'number' && !isNaN(storedStats.sitesVisited)) ? storedStats.sitesVisited : 0,
+        sites: (storedStats.sites && typeof storedStats.sites === 'object') ? { ...storedStats.sites } : {}
+      };
+      
+      console.log('🔍 DEBUG: Initial realTimeStats:', realTimeStats);
+      console.log('🔍 DEBUG: focusTimeTracker reference:', !!this.focusTimeTracker);
+      
+      // Add current session time if actively tracking and we have tracker reference
+      if (this.focusTimeTracker && this.focusTimeTracker.currentSession) {
+        const currentSession = this.focusTimeTracker.currentSession;
+        console.log('🔍 DEBUG: Current session found:', currentSession);
+        
+        // Validate current session data
+        if (currentSession.isActive && 
+            currentSession.domain && 
+            typeof currentSession.domain === 'string' &&
+            currentSession.startTime && 
+            typeof currentSession.startTime === 'number') {
+          
+          const currentTime = Date.now();
+          const sessionTime = currentTime - currentSession.startTime;
+          
+          // Validate calculated session time
+          if (sessionTime >= 0 && sessionTime < (24 * 60 * 60 * 1000)) { // Less than 24 hours
+            console.log('🔍 DEBUG: Adding session time:', sessionTime, 'for domain:', currentSession.domain);
+            
+            // Update current domain stats
+            if (!realTimeStats.sites[currentSession.domain]) {
+              realTimeStats.sites[currentSession.domain] = {
+                timeSpent: 0,
+                visits: 0
+              };
+            }
+            
+            realTimeStats.sites[currentSession.domain].timeSpent += sessionTime;
+            realTimeStats.totalTime += sessionTime;
+            
+            // Recalculate sites visited
+            realTimeStats.sitesVisited = Object.keys(realTimeStats.sites).length;
+          } else {
+            console.warn('⚠️ Invalid session time calculated:', sessionTime, 'ms');
+          }
+        } else {
+          console.log('🔍 DEBUG: Current session invalid or inactive:', {
+            isActive: currentSession.isActive,
+            hasDomain: !!currentSession.domain,
+            hasStartTime: !!currentSession.startTime
+          });
+        }
+      } else {
+        console.log('🔍 DEBUG: No active session or focusTimeTracker not set');
+      }
+      
+      // Final validation before returning
+      if (typeof realTimeStats.totalTime !== 'number' || isNaN(realTimeStats.totalTime)) {
+        console.warn('⚠️ Final totalTime is invalid, resetting to 0');
+        realTimeStats.totalTime = 0;
+      }
+      
+      console.log('🔍 DEBUG: Final realTimeStats:', {
+        totalTime: realTimeStats.totalTime,
+        totalTimeFormatted: this.formatTime ? this.formatTime(realTimeStats.totalTime) : `${Math.round(realTimeStats.totalTime / 60000)}m`,
+        sitesVisited: realTimeStats.sitesVisited,
+        sitesCount: Object.keys(realTimeStats.sites).length
+      });
+      
+      return realTimeStats;
+      
+    } catch (error) {
+      console.error('❌ Error in getRealTimeStatsWithSession:', error);
+      
+      // Return safe fallback
+      return {
+        totalTime: 0,
+        sitesVisited: 0,
+        sites: {}
+      };
     }
-    
-    console.log('🔍 DEBUG: Final realTimeStats:', realTimeStats);
-    return realTimeStats;
   }
 
   /**
@@ -2892,12 +3256,14 @@ class FocusTimeTracker {
       this.checkForSleep();
     }, 10000); // Check every 10 seconds
 
-    // Set up periodic save every 5 seconds
+    // ✅ IMPROVED: More frequent saves for better accuracy
     this.saveInterval = setInterval(() => {
       if (this.currentSession.isActive) {
         this.saveCurrentSession();
       }
-    }, 5000); // Save every 5 seconds for more frequent updates
+    }, 3000); // ✅ Save every 3 seconds instead of 5 for better tracking
+    
+    console.log('✅ Event listeners set up - save interval: 3 seconds, sleep detection: 10 seconds');
   }
 
   /**
@@ -3029,8 +3395,24 @@ class FocusTimeTracker {
           break;
 
         case 'GET_TODAY_STATS':
-          const stats = await this.storageManager.getTodayStats();
-          sendResponse({ success: true, data: stats });
+          try {
+            const stats = await this.storageManager.getTodayStats();
+            sendResponse({ success: true, data: stats });
+          } catch (error) {
+            console.error('Error getting today stats from sessions:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'FORCE_SYNC_SESSIONS':
+          try {
+            console.log('🔄 Received FORCE_SYNC_SESSIONS request from web app');
+            await this.storageManager.syncSessionsToFirebase();
+            sendResponse({ success: true, message: 'Sessions sync initiated' });
+          } catch (error) {
+            console.error('❌ Error syncing sessions:', error);
+            sendResponse({ success: false, error: error.message });
+          }
           break;
 
         case 'GET_REALTIME_STATS':
@@ -4006,6 +4388,7 @@ class FocusTimeTracker {
         console.log('🔄 Resuming paused session for domain:', domain);
         this.currentSession.tabId = tab.id;
         this.currentSession.startTime = now;
+        this.currentSession.lastSaveTime = now; // ✅ FIX: Initialize last save time
         this.currentSession.isActive = true;
         console.log(`▶️ Resumed tracking: ${domain}, Tab ID: ${tab.id}`);
         return;
@@ -4018,13 +4401,18 @@ class FocusTimeTracker {
 
       console.log('✨ Starting new tracking session for domain:', domain);
 
+      // ✅ FIX: Initialize session with proper timing fields
       this.currentSession = {
         tabId: tab.id,
         domain: domain,
         startTime: now,
+        lastSaveTime: now, // ✅ NEW: Track when we last saved incremental time
         savedTime: 0,
         isActive: true
       };
+
+      // ✅ FIX: Create the session in storage immediately when tracking starts
+      await this.storageManager.saveTimeEntry(domain, 0, 1); // Create session with 0 duration initially
 
       await this.stateManager.dispatch({
         type: 'START_TRACKING',
@@ -4034,7 +4422,7 @@ class FocusTimeTracker {
         }
       });
 
-      console.log(`✅ Started tracking: ${domain}, Tab ID: ${tab.id}`);
+      console.log(`✅ Started tracking: ${domain}, Tab ID: ${tab.id}, Session initialized in storage`);
     } catch (error) {
       console.error('❌ Error in startTracking:', error);
     }
@@ -4122,17 +4510,23 @@ class FocusTimeTracker {
       const timeSpent = now - this.currentSession.startTime;
       const domain = this.currentSession.domain;
 
-      // IMPROVEMENT #1: Reduce threshold from 1000ms to 500ms and improve rounding
-              if (timeSpent > 500 && domain) {
-          const roundedTime = Math.round(timeSpent / 1000) * 1000; // Round instead of floor for better accuracy
-          await this.storageManager.saveTimeEntry(domain, roundedTime, 1);
-          console.log(`Stopped tracking: ${domain}, Time: ${this.storageManager.formatTime(roundedTime)}`);
-        }
+      // Complete the site usage session first
+      if (domain) {
+        await this.storageManager.completeSiteUsageSession(domain);
+      }
+
+      // Save final session data if significant time spent
+      if (timeSpent > 500 && domain) {
+        const roundedTime = Math.round(timeSpent / 1000) * 1000; // Round for better accuracy
+        await this.storageManager.saveTimeEntry(domain, roundedTime, 1);
+        console.log(`✅ Stopped tracking and completed session: ${domain}, Time: ${this.storageManager.formatTime(roundedTime)}`);
+      }
 
       await this.stateManager.dispatch({
         type: 'STOP_TRACKING'
       });
       
+      // Reset current session
       this.currentSession = {
         tabId: null,
         domain: null,
@@ -4281,24 +4675,27 @@ class FocusTimeTracker {
       if (!this.lastHeartbeat) {
         console.warn('⚠️ lastHeartbeat undefined, initializing to current time');
         this.lastHeartbeat = now;
+        this.currentSession.lastSaveTime = now; // Initialize last save time
         return;
       }
       
       const timeSinceLastHeartbeat = now - this.lastHeartbeat;
-      let sessionDuration;
       
       // DEFENSIVE CHECK: Check for sleep BEFORE calculating session duration
       if (timeSinceLastHeartbeat > 300000) { // 5 minutes gap indicates sleep
         console.log('💤 Sleep detected during save - handling sleep condition');
-        // Calculate session duration up to last heartbeat (excludes sleep time)
-        sessionDuration = Math.max(0, this.lastHeartbeat - this.currentSession.startTime);
         
-        // Save time before sleep if any
-        if (sessionDuration >= 1000) { // At least 1 second of activity
-          await this.storageManager.saveTimeEntry(this.currentSession.domain, sessionDuration, 0);
-          console.log('💾 Saved time before sleep:', {
+        // ✅ FIX: Calculate incremental time up to last heartbeat
+        const lastSaveTime = this.currentSession.lastSaveTime || this.currentSession.startTime;
+        const incrementalDuration = Math.max(0, this.lastHeartbeat - lastSaveTime);
+        
+        // Save incremental time before sleep if any
+        if (incrementalDuration >= 1000) { // At least 1 second of activity
+          await this.storageManager.saveTimeEntry(this.currentSession.domain, incrementalDuration, 0);
+          this.currentSession.lastSaveTime = this.lastHeartbeat; // Update last save time
+          console.log('💾 Saved incremental time before sleep:', {
             domain: this.currentSession.domain,
-            duration: this.storageManager.formatTime(sessionDuration),
+            incrementalDuration: this.storageManager.formatTime(incrementalDuration),
             sleepGap: Math.round(timeSinceLastHeartbeat / 1000) + 's'
           });
         }
@@ -4309,30 +4706,34 @@ class FocusTimeTracker {
         } finally {
           this.isProcessingSleep = false;
         }
-        return; // Don't continue with normal save logic
-      }
-      
-      // Normal case: Calculate session duration from start to now (no sleep detected)
-      sessionDuration = now - this.currentSession.startTime;
-      
-      // Prevent saving if session duration is unreasonably long (backup safety check)
-      if (sessionDuration > 3600000) { // 1 hour max per save cycle
-        console.log('⚠️ Session duration too long, likely missed sleep detection. Resetting...');
-        this.currentSession.startTime = now;
         return;
       }
       
-      // IMPROVEMENT #1: Reduce periodic save threshold from 5 seconds to 2 seconds
-      if (sessionDuration >= 2000) {
-        await this.storageManager.saveTimeEntry(this.currentSession.domain, sessionDuration, 0);
+      // ✅ FIX: Calculate INCREMENTAL duration since last save, not total duration
+      const lastSaveTime = this.currentSession.lastSaveTime || this.currentSession.startTime;
+      const incrementalDuration = now - lastSaveTime;
+      
+      // Prevent saving if incremental duration is unreasonably long (backup safety check)
+      if (incrementalDuration > 3600000) { // 1 hour max per save cycle
+        console.log('⚠️ Incremental duration too long, likely missed sleep detection. Resetting last save time...');
+        this.currentSession.lastSaveTime = now;
+        return;
+      }
+      
+      // ✅ IMPROVEMENT: Only save if we have meaningful incremental time
+      if (incrementalDuration >= 2000) { // At least 2 seconds of new activity
+        await this.storageManager.saveTimeEntry(this.currentSession.domain, incrementalDuration, 0);
         
-        // Reset tracking for next interval
-        this.currentSession.startTime = now;
+        // ✅ FIX: Update last save time to current time (not start time!)
+        this.currentSession.lastSaveTime = now;
         
-        console.log('💾 Session saved:', {
+        console.log('💾 Session updated (incremental):', {
           domain: this.currentSession.domain,
-          duration: this.storageManager.formatTime(sessionDuration)
+          incrementalDuration: this.storageManager.formatTime(incrementalDuration),
+          totalSessionTime: this.storageManager.formatTime(now - this.currentSession.startTime)
         });
+      } else {
+        console.debug('⏭️ Skipping save - incremental duration too small:', incrementalDuration, 'ms');
       }
     } catch (error) {
       console.error('Error saving session:', error);
