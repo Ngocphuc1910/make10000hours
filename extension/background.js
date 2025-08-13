@@ -3422,6 +3422,41 @@ class FocusTimeTracker {
           sendResponse({ success: true, data: realTimeStats });
           break;
 
+        case 'GET_COMPLETE_STATS':
+          console.log('📊 Processing GET_COMPLETE_STATS request (single-call approach)...');
+          try {
+            const completeStats = await this.storageManager.getTodayStats();
+            console.log('📊 Retrieved complete stats:', {
+              totalTime: completeStats.totalTime,
+              sitesCount: Object.keys(completeStats.sites || {}).length,
+              sitesVisited: completeStats.sitesVisited
+            });
+            sendResponse({ 
+              success: true, 
+              data: {
+                totalTime: completeStats.totalTime,
+                sites: completeStats.sites,
+                sitesVisited: completeStats.sitesVisited,
+                productivityScore: completeStats.productivityScore,
+                timestamp: Date.now()
+              }
+            });
+          } catch (error) {
+            console.error('❌ Error getting complete stats:', error);
+            sendResponse({ 
+              success: false, 
+              error: error.message,
+              data: {
+                totalTime: 0,
+                sites: {},
+                sitesVisited: 0,
+                productivityScore: 0,
+                timestamp: Date.now()
+              }
+            });
+          }
+          break;
+
         case 'DEBUG_STORAGE':
           console.log('🔍 Debug storage request received');
           try {

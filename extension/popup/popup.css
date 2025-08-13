@@ -1340,4 +1340,38 @@ body {
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+/* Loading and Error States for Single-Call Data Loading */
+.loading-sites, .error-sites {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+  text-align: center;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+}
+
+.loading-sites {
+  color: #6B7280;
+  animation: pulse 2s infinite;
+}
+
+.error-sites {
+  color: #DC2626;
+  background: rgba(220, 38, 38, 0.05);
+  border-color: rgba(220, 38, 38, 0.2);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 } 
