@@ -255,7 +255,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Hello! I'm your AI Productivity Buddy</h3>
               <p className="text-gray-600 mb-8 max-w-md mx-auto">
-                Ask me anything about your productivity data, work patterns, or get insights about your progress.
+                Ask me anything about your works pattern, to do list, or get insights about your progress.
               </p>
               
               {/* Enhanced Sample Questions */}
