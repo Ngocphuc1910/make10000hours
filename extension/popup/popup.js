@@ -551,6 +551,214 @@ class PopupManager {
     return { success: false, type: 'stats' };
   }
 
+  // NEW: Single call to get all stats data reliably
+  async getCompleteStats() {
+    try {
+      console.log('🔄 Requesting complete stats (single call)...');
+      const result = await this.sendMessageWithRetry('GET_COMPLETE_STATS', {}, 2);
+      console.log('📥 Complete stats response:', result);
+      
+      if (result?.success) {
+        // Store in enhanced state for compatibility
+        this.enhancedState.todayStats = result.data;
+        console.log('✅ Complete stats loaded:', {
+          totalTime: result.data.totalTime,
+          sitesCount: Object.keys(result.data.sites || {}).length,
+          timestamp: new Date().toISOString()
+        });
+        return { success: true, data: result.data };
+      } else {
+        console.error('❌ Complete stats request failed:', result);
+        return { success: false, error: result?.error || 'Unknown error' };
+      }
+    } catch (error) {
+      console.error('❌ Error getting complete stats:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // NEW: Simplified initialization using single data call
+  async initializeWithSingleCall() {
+    try {
+      console.log('🚀 Starting simplified popup initialization...');
+      
+      // 1. Show immediate loading state
+      this.showDataLoadingState();
+      
+      // 2. Setup basic UI and event listeners first
+      this.updateCoreUI();
+      this.setupEventListeners();
+      
+      // 3. Get ALL data in one call
+      const statsResult = await this.getCompleteStats();
+      
+      if (statsResult.success) {
+        // 4. Update all UI elements at once with complete data
+        this.updateAllStatsUI(statsResult.data);
+        this.hideDataLoadingState();
+        console.log('✅ Popup initialization complete with data');
+      } else {
+        // 5. Show error state if data loading failed
+        this.showDataErrorState(statsResult.error);
+        console.error('❌ Popup initialization failed:', statsResult.error);
+      }
+      
+      // 6. Setup other non-critical features in background
+      this.setupBackgroundFeatures();
+      
+    } catch (error) {
+      console.error('❌ Critical popup initialization error:', error);
+      this.showDataErrorState(error.message);
+    }
+  }
+
+  // NEW: Show loading state for data elements
+  showDataLoadingState() {
+    console.log('⏳ Showing loading state...');
+    
+    // Show loading for total time
+    const totalTimeEl = document.getElementById('total-time');
+    if (totalTimeEl) {
+      totalTimeEl.textContent = '...';
+      totalTimeEl.style.color = '#999';
+    }
+    
+    // Show loading for sites list
+    const sitesContainer = document.querySelector('.sites-container');
+    if (sitesContainer) {
+      sitesContainer.innerHTML = '<div class="loading-sites">Loading usage data...</div>';
+    }
+  }
+
+  // NEW: Hide loading state
+  hideDataLoadingState() {
+    const totalTimeEl = document.getElementById('total-time');
+    if (totalTimeEl) {
+      totalTimeEl.style.color = ''; // Reset to default
+    }
+  }
+
+  // NEW: Show error state
+  showDataErrorState(error) {
+    console.log('❌ Showing error state:', error);
+    
+    const totalTimeEl = document.getElementById('total-time');
+    if (totalTimeEl) {
+      totalTimeEl.textContent = 'Error';
+      totalTimeEl.style.color = '#dc2626';
+    }
+    
+    const sitesContainer = document.querySelector('.sites-container');
+    if (sitesContainer) {
+      sitesContainer.innerHTML = `<div class="error-sites">Unable to load data: ${error}</div>`;
+    }
+  }
+
+  // NEW: Update all UI with complete data in single operation  
+  updateAllStatsUI(data) {
+    console.log('🔄 Updating all UI with complete stats:', data);
+    
+    // Update total screen time
+    const totalTimeEl = document.getElementById('total-time');
+    if (totalTimeEl) {
+      totalTimeEl.textContent = this.formatTime(data.totalTime || 0);
+      console.log('📊 Updated total time display:', data.totalTime, '→', this.formatTime(data.totalTime || 0));
+    }
+    
+    // Update sites list if we're on the site-usage tab
+    if (this.currentTab === 'site-usage' && data.sites) {
+      this.updateTopSitesFromData(data.sites);
+    }
+    
+    // Update other stats displays
+    this.updateLocalDeepFocusTime();
+    this.updateLocalOverrideTime();
+  }
+
+  // NEW: Update sites list from provided data
+  updateTopSitesFromData(sites) {
+    if (!sites || typeof sites !== 'object') {
+      console.warn('⚠️ Invalid sites data provided');
+      return;
+    }
+    
+    const sitesListEl = document.getElementById('top-sites-list');
+    if (!sitesListEl) {
+      console.warn('⚠️ top-sites-list element not found');
+      return;
+    }
+    
+    // Convert sites object to sorted array format
+    const sitesArray = Object.entries(sites).map(([domain, stats]) => ({
+      domain,
+      timeSpent: stats.timeSpent || 0,
+      visits: stats.visits || 0
+    }));
+    
+    // Sort by time spent
+    sitesArray.sort((a, b) => b.timeSpent - a.timeSpent);
+    
+    console.log('📊 Updating sites list with', sitesArray.length, 'sites');
+    
+    try {
+      // Clear existing content
+      while (sitesListEl.firstChild) {
+        sitesListEl.removeChild(sitesListEl.firstChild);
+      }
+      
+      if (sitesArray.length > 0) {
+        // Create site items using existing method
+        sitesArray.forEach(async (site) => {
+          const siteItem = await this.createSiteItem(site);
+          if (siteItem) {
+            sitesListEl.appendChild(siteItem);
+          }
+        });
+      } else {
+        // Show empty state
+        const emptyState = document.createElement('div');
+        emptyState.className = 'loading-state';
+        
+        const icon = document.createElement('div');
+        icon.style.fontSize = '2rem';
+        icon.style.marginBottom = '0.5rem';
+        icon.textContent = '📊';
+        
+        const text = document.createElement('div');
+        text.style.color = 'var(--text-muted)';
+        text.style.fontSize = '0.875rem';
+        text.textContent = 'No sites tracked today';
+        
+        emptyState.appendChild(icon);
+        emptyState.appendChild(text);
+        sitesListEl.appendChild(emptyState);
+      }
+      
+    } catch (error) {
+      console.error('Error updating sites from data:', error);
+    }
+  }
+
+  // NEW: Setup non-critical features in background
+  setupBackgroundFeatures() {
+    setTimeout(() => {
+      try {
+        // Load user info if needed
+        this.loadUserInfo().catch(console.warn);
+        
+        // Setup update system
+        this.setupUpdateSystem();
+        
+        // Initialize analytics if available
+        if (window.AnalyticsUI && !this.analyticsUI) {
+          this.analyticsUI = new window.AnalyticsUI();
+        }
+      } catch (error) {
+        console.warn('Background features setup failed:', error);
+      }
+    }, 100);
+  }
+
   /**
    * Load user info with retry
    */
@@ -632,7 +840,7 @@ class PopupManager {
     switch(type) {
       case 'stats':
         if (this.enhancedState.todayStats) {
-          this.updateStatsOverview();
+          // DISABLED: this.updateStatsOverview(); // This was overriding our new updateAllStatsUI method
           // Always update top sites when stats are loaded, regardless of container state
           if (this.currentTab === 'site-usage') {
             this.updateTopSites();
@@ -657,36 +865,21 @@ class PopupManager {
    */
   async initialize() {
     try {
+      console.log('🚀 Popup initialization started with single-call approach');
+      
       // FORCE IMMEDIATE UI DISPLAY - Remove any delays
       document.body.style.visibility = 'visible';
       document.body.style.opacity = '1';
       
-      // Show static UI elements immediately without waiting for data
-      this.updateCoreUI();
-      this.setupEventListeners();
-      
-      // Initialize core data loading WITHOUT blocking the UI (fire and forget)
-      this.initializeCore().then(coreSuccess => {
-        if (coreSuccess) {
-          // Update UI with real data when available
-          this.updateCoreUI();
-        }
-      }).catch(console.warn);
-      
-      // Load enhanced features in background (fire and forget)
-      this.initializeEnhanced().catch(console.warn);
-
-      // Set up update system in background (non-blocking)
-      setTimeout(() => {
-        this.setupUpdateSystem();
-      }, 50); // Reduced from 100ms to 50ms
+      // Use new simplified single-call initialization
+      await this.initializeWithSingleCall();
       
     } catch (error) {
-      console.error('Initialization error:', error);
+      console.error('❌ Popup initialization error:', error);
       // Show basic UI even if initialization fails
       document.body.style.visibility = 'visible';
       document.body.style.opacity = '1';
-      this.showError('Failed to initialize');
+      this.showDataErrorState(error.message || 'Initialization failed');
     }
   }
 
@@ -966,7 +1159,7 @@ class PopupManager {
     this.updateUserInfo();
     
     // Update stats overview (new 3-card layout)
-    this.updateStatsOverview();
+    // DISABLED: this.updateStatsOverview(); // This was overriding our new updateAllStatsUI method
     
     // Update focus mode switch state
     this.updateFocusModeSwitch();
