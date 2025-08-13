@@ -603,7 +603,20 @@ class PopupManager {
         console.error('❌ Popup initialization failed:', statsResult.error);
       }
       
-      // 6. Setup other non-critical features in background
+      // 6. Load user info immediately (not in background)
+      try {
+        const userResult = await this.loadUserInfo();
+        if (userResult?.success) {
+          console.log('✅ User info loaded during initialization:', userResult.data);
+          this.updateUserInfo();
+        } else {
+          console.log('ℹ️ No user info available, staying anonymous');
+        }
+      } catch (error) {
+        console.warn('User info loading failed:', error);
+      }
+      
+      // 7. Setup other non-critical features in background
       this.setupBackgroundFeatures();
       
     } catch (error) {
@@ -743,8 +756,15 @@ class PopupManager {
   setupBackgroundFeatures() {
     setTimeout(() => {
       try {
-        // Load user info if needed
-        this.loadUserInfo().catch(console.warn);
+        // Load user info and update UI immediately
+        this.loadUserInfo().then(result => {
+          if (result?.success) {
+            console.log('✅ User info loaded in background:', result.data);
+            this.updateUserInfo();
+          } else {
+            console.log('ℹ️ No user info available, staying anonymous');
+          }
+        }).catch(console.warn);
         
         // Setup update system
         this.setupUpdateSystem();
@@ -1222,6 +1242,14 @@ class PopupManager {
     const noUserInfoElement = document.getElementById('no-user-info');
     const userNameElement = document.getElementById('user-name');
 
+    console.log('🔍 updateUserInfo called with:', {
+      userInfo: this.enhancedState.userInfo,
+      hasUserId: this.enhancedState.userInfo?.userId,
+      userInfoElement: !!userInfoElement,
+      noUserInfoElement: !!noUserInfoElement,
+      userNameElement: !!userNameElement
+    });
+
     if (this.enhancedState.userInfo && this.enhancedState.userInfo.userId) {
       // Show user info
       if (userInfoElement) userInfoElement.classList.remove('hidden');
@@ -1232,13 +1260,17 @@ class PopupManager {
       const displayName = fullDisplayName.length > 14 ? fullDisplayName.substring(0, 14) + '...' : fullDisplayName;
       if (userNameElement) userNameElement.textContent = displayName;
 
-      console.log('👤 User info displayed:', { displayName });
+      console.log('👤 User info displayed:', { displayName, fullDisplayName });
     } else {
       // Show anonymous info
       if (userInfoElement) userInfoElement.classList.add('hidden');
       if (noUserInfoElement) noUserInfoElement.classList.remove('hidden');
 
-      console.log('👤 Anonymous user');
+      console.log('👤 Anonymous user - reason:', {
+        noUserInfo: !this.enhancedState.userInfo,
+        noUserId: !this.enhancedState.userInfo?.userId,
+        userInfo: this.enhancedState.userInfo
+      });
     }
   }
 
