@@ -761,7 +761,7 @@ class PopupManager {
   setupEventListeners() {
     // Listen for updates from background
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (message.type === 'STATS_UPDATED') {
+      if (message.type === 'SITE_USAGE_UPDATED') {
         this.enhancedState.todayStats = message.payload;
         this.updateEnhancedUI('stats');
       } else if (message.type === 'FOCUS_STATE_CHANGED') {
