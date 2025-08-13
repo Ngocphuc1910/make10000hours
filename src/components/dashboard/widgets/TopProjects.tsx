@@ -220,7 +220,7 @@ export const TopProjects: React.FC = React.memo(() => {
             <BarChart
               data={chartData}
               margin={{
-                top: 10,
+                top: 30,
                 right: 10,
                 left: 10,
                 bottom: 5
