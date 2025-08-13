@@ -253,7 +253,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
               >
                 <Sparkles className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Welcome to your AI Assistant!</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Hello! I'm your AI Productivity Buddy</h3>
               <p className="text-gray-600 mb-8 max-w-md mx-auto">
                 Ask me anything about your productivity data, work patterns, or get insights about your progress.
               </p>
