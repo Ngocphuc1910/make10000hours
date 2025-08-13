@@ -1,5 +1,39 @@
 /* Make10000hours Chrome Extension Popup Styles */
 
+/* Hide scrollbars while keeping scroll functionality */
+body {
+  overflow-x: hidden; /* Hide horizontal scrollbar */
+  overflow-y: auto;   /* Allow vertical scrolling but hide scrollbar */
+}
+
+/* Hide scrollbar for webkit browsers (Chrome, Safari, Edge) */
+body::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+
+body::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+/* Hide scrollbar for Firefox */
+body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* Also hide scrollbar for any popup containers */
+.popup-container {
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.popup-container::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+
 :root {
   /* Color Palette - Make10000hours Design System */
   --primary-color: #A74842;
@@ -62,7 +96,8 @@
   /* Popup Dimensions */
   --popup-width: 380px;
   --popup-max-width: 380px;
-  --popup-min-height: 480px;
+  --popup-min-height: 600px;
+  --popup-max-height: 600px;
 }
 
 /* Reset and Base Styles */
@@ -81,9 +116,8 @@ body {
   background: var(--bg-primary);
   width: var(--popup-width);
   max-width: var(--popup-max-width);
-  min-height: var(--popup-min-height);
-  overflow-x: hidden;
-  overflow-y: auto;
+  height: var(--popup-min-height);
+  overflow: hidden; /* Remove body scrolling */
   margin: 0;
   padding: 0;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -125,11 +159,11 @@ body {
 .popup-container {
   display: flex;
   flex-direction: column;
-  min-height: var(--popup-min-height);
+  height: var(--popup-min-height);
   width: 100%;
   max-width: var(--popup-max-width);
   box-sizing: border-box;
-  overflow: visible;
+  overflow: hidden; /* Prevent container overflow */
 }
 
 /* Header */
@@ -379,19 +413,45 @@ body {
 /* Tab Content */
 .tab-content {
   flex: 1;
+  overflow: hidden; /* Prevent tab content overflow */
+  display: flex;
+  flex-direction: column;
 }
 
 .tab-pane {
   display: none;
+  flex: 1;
+  overflow: hidden;
 }
 
 .tab-pane.active {
-  display: block;
+  display: flex;
+  flex-direction: column;
 }
 
 .tab-content-wrapper {
   padding: 16px;
   background: var(--bg-primary);
+  flex: 1;
+  overflow-y: auto; /* Make site usage list scrollable */
+  overflow-x: hidden;
+  /* Show visible scrollbar for site usage list */
+}
+
+.tab-content-wrapper::-webkit-scrollbar {
+  width: 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+.tab-content-wrapper::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.tab-content-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
 }
 
 /* Sites List */
