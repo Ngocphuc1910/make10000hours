@@ -51,21 +51,28 @@ const convertSessionsToDailySiteUsage = (sessions: SiteUsageSession[]): DailySit
       dayUsage.sitesVisited++;
     }
     
-    // Add session duration to total time and domain time
-    if (session.status === 'completed' && session.duration > 0) {
-      dayUsage.totalTime += session.duration;
-      dayUsage.sites[session.domain].timeSpent += session.duration;
+    // 🐛 FIX: Include sessions with any valid duration, not just 'completed' status
+    // This fixes the "On Screen Time: 0m" issue while bottom site usage shows data
+    if (session.duration && session.duration > 0) {
+      // Convert seconds to milliseconds since composeDeepFocusData expects totalTime in milliseconds
+      const durationMs = session.duration * 1000;
+      dayUsage.totalTime += durationMs;
+      dayUsage.sites[session.domain].timeSpent += durationMs;
       dayUsage.sites[session.domain].visits++;
       
       // Update last visit time if this session is more recent
       if (new Date(session.startTime) > new Date(dayUsage.sites[session.domain].lastVisit)) {
         dayUsage.sites[session.domain].lastVisit = session.startTime;
       }
+      
+      console.log(`✅ Processed session: ${session.domain}, duration: ${session.duration}s, status: ${session.status}`);
+    } else {
+      console.log(`⚠️ Skipped session: ${session.domain}, duration: ${session.duration}, status: ${session.status}`);
     }
   });
   
   return Array.from(dailyUsageMap.values());
-};
+};;;
 
 interface DeepFocusDashboardStore {
   timeMetrics: TimeMetrics;
