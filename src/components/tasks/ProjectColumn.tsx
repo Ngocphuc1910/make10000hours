@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Task, Project } from '../../types/models';
 import { useTaskStore } from '../../store/taskStore';
+import { useUserStore } from '../../store/userStore';
 import TaskCard from './TaskCard';
 import TaskForm from './TaskForm';
 import { Icon } from '../ui/Icon';
@@ -31,6 +32,7 @@ const ProjectColumn: React.FC<ProjectColumnProps> = ({
   const [isAddingTask, setIsAddingTask] = useState(false);
   const authStatus = useAuthGuard();
   const { isLeftSidebarOpen } = useUIStore();
+  const showTaskCheckboxes = useUserStore(state => state.user?.settings?.showTaskCheckboxes ?? false);
   
   const projectId = project?.id || null;
   const projectName = title || project?.name || 'No Project';
@@ -136,7 +138,7 @@ const ProjectColumn: React.FC<ProjectColumnProps> = ({
                 color: projectColor
               }}
               dragContext="project" // Indicate this is project-based drag context
-              hideCheckbox={true}
+              hideCheckbox={!showTaskCheckboxes}
             />
           ))}
         </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Project, Task } from '../../../types/models';
 import { useTaskStore } from '../../../store/taskStore';
+import { useUserStore } from '../../../store/userStore';
 import { Icon } from '../../ui/Icon';
 import TaskItem from '../../../components/dashboard/views/TaskItem';
 import ColorPicker from '../../ui/ColorPicker';
@@ -26,6 +27,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const reorderTasks = useTaskStore(state => state.reorderTasks);
   const moveTaskToStatusAndPosition = useTaskStore(state => state.moveTaskToStatusAndPosition);
   const authStatus = useAuthGuard();
+  const showTaskCheckboxes = useUserStore(state => state.user?.settings?.showTaskCheckboxes ?? false);
   const [projectName, setProjectName] = useState(project?.name || '');
   
   // Persist activeFilter state in localStorage per project to prevent automatic tab switching
@@ -648,7 +650,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                 key={task.id} 
                 task={task} 
                 projectColor={project.color}
-                hideCheckbox={true}
+                hideCheckbox={!showTaskCheckboxes}
                 onReorder={handleTaskReorder}
                 onCrossProjectMove={handleCrossProjectMove}
               />
