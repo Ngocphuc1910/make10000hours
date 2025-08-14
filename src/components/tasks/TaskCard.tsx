@@ -14,6 +14,7 @@ interface TaskCardProps {
   context?: 'task-management' | 'pomodoro' | 'default';
   targetProject?: { id: string; name: string; color: string } | null;
   dragContext?: 'status' | 'project';
+  hideCheckbox?: boolean;
 }
 
 // Global state to track which task is currently being dragged
@@ -21,7 +22,7 @@ let currentDraggedTaskId: string | null = null;
 // Global state to track the current drop target to prevent multiple indicators
 let currentDropTargetId: string | null = null;
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, onCrossColumnMove, columnStatus, context = 'default', targetProject, dragContext = 'status' }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, onCrossColumnMove, columnStatus, context = 'default', targetProject, dragContext = 'status', hideCheckbox = false }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragPosition, setDragPosition] = useState<'top' | 'bottom' | null>(null);
@@ -346,13 +347,15 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange, onReorder, on
         data-task-id={task.id}
         data-status={task.status}
       >
-      <div className="mr-3 mt-0.5">
-        <CustomCheckbox
-          id={`task-checkbox-${task.id}`}
-          checked={task.completed}
-          onChange={handleCheckboxChange}
-        />
-      </div>
+      {!hideCheckbox && (
+        <div className="mr-3 mt-0.5">
+          <CustomCheckbox
+            id={`task-checkbox-${task.id}`}
+            checked={task.completed}
+            onChange={handleCheckboxChange}
+          />
+        </div>
+      )}
 
       <div className="flex-1 min-w-0 text-left">
         <div className="flex items-start justify-between">
