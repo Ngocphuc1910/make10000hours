@@ -41,7 +41,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEd
   });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Translate.toString(transform),
     transition,
     opacity: isDragging ? 0.8 : 1,
     // Prevent horizontal overflow during drag
@@ -82,7 +82,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEd
       {...attributes}
       {...listeners}
       onClick={handleClick}
-      className={`w-full overflow-hidden ${isDragging ? 'cursor-grabbing shadow-lg scale-105' : 'cursor-pointer'}`}
+      className={`w-full overflow-hidden ${isDragging ? 'cursor-grabbing shadow-lg' : 'cursor-pointer'}`}
     >
       <div style={{ pointerEvents: isDragActive ? 'none' : 'auto' }}>
         <TaskItem
