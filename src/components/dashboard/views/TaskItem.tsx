@@ -11,6 +11,7 @@ interface TaskItemProps {
   projectId?: string;
   projectColor?: string;
   isNewTask?: boolean;
+  hideCheckbox?: boolean;
   onCancel?: () => void;
   onReorder?: (draggedTaskId: string, targetTaskId: string, insertAfter?: boolean) => void;
   onCrossProjectMove?: (draggedTaskId: string, targetTaskId: string, newProjectId: string, insertAfter?: boolean) => void;
@@ -21,6 +22,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
   projectId,
   projectColor = '#4f46e5',
   isNewTask = false,
+  hideCheckbox = false,
   onCancel,
   onReorder,
   onCrossProjectMove
@@ -211,13 +213,15 @@ const TaskItem: React.FC<TaskItemProps> = ({
         data-task-id={task.id}
         data-status={task.status}
       >
-      <div className="mr-3 mt-0.5">
-        <CustomCheckbox
-          id={`task-checkbox-${task.id}`}
-          checked={task.completed}
-          onChange={handleCheckboxChange}
-        />
-      </div>
+      {!hideCheckbox && (
+        <div className="mr-3 mt-0.5">
+          <CustomCheckbox
+            id={`task-checkbox-${task.id}`}
+            checked={task.completed}
+            onChange={handleCheckboxChange}
+          />
+        </div>
+      )}
 
       <div className="flex-1 min-w-0 text-left">
         <div className="flex items-start justify-between">
