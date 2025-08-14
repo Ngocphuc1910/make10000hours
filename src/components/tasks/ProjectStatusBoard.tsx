@@ -17,6 +17,8 @@ import { Icon } from '../ui/Icon';
 import ColorPicker from '../ui/ColorPicker';
 import { triggerAuthenticationFlow } from '../../utils/authGuard';
 import { sortTasksByOrder } from '../../utils/taskSorting';
+import ProjectCreationColumn from './ProjectCreationColumn';
+import ProjectCreationField from './ProjectCreationField';
 
 interface ProjectStatusBoardProps {
   className?: string;
@@ -61,14 +63,16 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
   const [showProjectDropdown, setShowProjectDropdown] = useState<{ [key: string]: boolean }>({});
   const [showColorPicker, setShowColorPicker] = useState<{ [key: string]: boolean }>({});
   const [tempProjectColors, setTempProjectColors] = useState<{ [key: string]: string }>({});
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
   
   // Refs for scroll synchronization
   const headersRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const groupedContentRef = useRef<HTMLDivElement>(null);
 
-  // Get all projects with tasks, including "No Project"
+  // Get all projects, including "No Project" and empty projects
   const projectsWithTasks = React.useMemo(() => {
+    console.log('ProjectStatusBoard: Calculating projectsWithTasks', { projectsCount: projects.length, tasksCount: tasks.length, projects });
     const projectTaskCounts = new Map<string, number>();
     
     // Count tasks for each project (including null/undefined as 'no-project')
@@ -80,31 +84,38 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
     const projectsWithTasksList: Array<{ project: Project | null; taskCount: number; id: string }> = [];
     const seenProjects = new Set<string>();
     
-    projectTaskCounts.forEach((taskCount, projectId) => {
-      if (projectId === 'no-project') {
-        if (!seenProjects.has('no-project')) {
-          projectsWithTasksList.push({
-            project: null,
-            taskCount,
-            id: 'no-project'
-          });
-          seenProjects.add('no-project');
-        }
-      } else {
-        const foundProject = projects.find(p => p.id === projectId);
-        if (foundProject && !seenProjects.has(projectId)) {
-          projectsWithTasksList.push({
-            project: foundProject,
-            taskCount,
-            id: projectId
-          });
-          seenProjects.add(projectId);
-        }
+    // Add "No Project" if there are tasks without a project
+    if (projectTaskCounts.has('no-project')) {
+      projectsWithTasksList.push({
+        project: null,
+        taskCount: projectTaskCounts.get('no-project') || 0,
+        id: 'no-project'
+      });
+      seenProjects.add('no-project');
+    }
+    
+    // Add ALL projects (even if they have 0 tasks)
+    projects.forEach(project => {
+      if (!seenProjects.has(project.id)) {
+        projectsWithTasksList.push({
+          project,
+          taskCount: projectTaskCounts.get(project.id) || 0,
+          id: project.id
+        });
+        seenProjects.add(project.id);
       }
     });
     
-    // Sort by task count (descending) as default
-    return projectsWithTasksList.sort((a, b) => b.taskCount - a.taskCount);
+    // Sort by task count (descending), then by creation time for empty projects
+    return projectsWithTasksList.sort((a, b) => {
+      if (a.taskCount !== b.taskCount) {
+        return b.taskCount - a.taskCount; // Higher task count first
+      }
+      // For projects with same task count, sort by order (newer projects first)
+      const aOrder = a.project?.order || 0;
+      const bOrder = b.project?.order || 0;
+      return bOrder - aOrder;
+    });
   }, [tasks, projects]);
 
   // Initialize project column order if empty
@@ -495,6 +506,25 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
 
+  // Handle project creation
+  const handleStartCreatingProject = async () => {
+    const authStatus = { isAuthenticated, shouldShowAuth: true };
+    if (!authStatus.isAuthenticated && authStatus.shouldShowAuth) {
+      triggerAuthenticationFlow();
+      return;
+    }
+    setIsCreatingProject(true);
+  };
+
+  const handleProjectCreated = (projectId: string) => {
+    setIsCreatingProject(false);
+    addToast('Project created successfully');
+  };
+
+  const handleCancelProjectCreation = () => {
+    setIsCreatingProject(false);
+  };
+
   // Handle adding task toggle for grouped view
   const handleAddTaskToggle = useCallback((status: Task['status'], projectId: string, adding: boolean) => {
     const key = `${status}-${projectId}`;
@@ -571,7 +601,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
           <SortableContext items={projectColumnOrder} strategy={horizontalListSortingStrategy}>
             <div 
               className="grid gap-6 bg-background-primary sticky top-0 z-30 pl-2 pt-4 overflow-x-auto scrollbar-hide" 
-              style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}
+              style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr)) minmax(320px, 1fr)` }}
               ref={headersRef}
             >
               {orderedProjects.map(({ project, id }) => {
@@ -643,7 +673,27 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                     </div>
                   </DraggableColumnHeader>
                 );
-              })}
+                })}
+                {/* Project Creation Column Header - Simple Button */}
+                <div className="px-4 pb-4 bg-background-secondary rounded-t-lg flex items-center justify-center">
+                  {!isCreatingProject ? (
+                    <button 
+                      onClick={handleStartCreatingProject}
+                      className="w-full p-3 border-2 border-dashed border-border rounded-lg text-text-secondary hover:border-text-secondary hover:text-text-primary transition-colors duration-200 flex items-center justify-center gap-2 bg-background-primary hover:bg-background-secondary"
+                    >
+                      <Icon name="add-line" size={16} />
+                      <span className="text-sm">Create new project</span>
+                    </button>
+                  ) : (
+                    <div className="w-full">
+                      <ProjectCreationField
+                        onProjectCreated={handleProjectCreated}
+                        onCancel={handleCancelProjectCreation}
+                        placeholder="Enter project name"
+                      />
+                    </div>
+                  )}
+                </div>
             </div>
           </SortableContext>
 
@@ -688,7 +738,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                       {expandedStatuses.has(status) && (
                         <div 
                           className={`grid gap-6 mb-4`} 
-                          style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}
+                          style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr)) minmax(320px, 1fr)` }}
                         >
                         {orderedProjects.map(({ project, id }) => {
                           const projectTasks = getProjectTasks(id).filter(t => t.status === status);
@@ -758,6 +808,12 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                             </div>
                           );
                         })}
+                        {/* Project Creation Column for this status */}
+                        <div className="flex flex-col min-h-[120px]">
+                          <div className="text-xs text-text-secondary text-center py-4">
+                            Create a project to organize tasks
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -768,7 +824,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
               /* Traditional Project Column Layout */
               <div 
                 className="grid gap-6 flex-1 pl-2 pt-1 overflow-x-auto scrollbar-hide" 
-                style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr))` }}
+                style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr)) minmax(320px, 1fr)` }}
                 ref={contentRef}
               >
                 {orderedProjects.map(({ project, id }, index) => {
@@ -787,6 +843,8 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                     />
                   );
                 })}
+                {/* Project Creation Column */}
+                <ProjectCreationColumn />
               </div>
             )}
           </div>
