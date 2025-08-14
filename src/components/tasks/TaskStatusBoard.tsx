@@ -3,6 +3,7 @@ import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useTaskStore } from '../../store/taskStore';
 import { useUIStore } from '../../store/uiStore';
+import { useUserStore } from '../../store/userStore';
 import type { Task, Project } from '../../types/models';
 import { TaskColumn } from './';
 import { ToastNotification } from './';
@@ -34,8 +35,15 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
   const moveTaskToStatusAndPosition = useTaskStore(state => state.moveTaskToStatusAndPosition);
   const updateTask = useTaskStore(state => state.updateTask);
   const { isLeftSidebarOpen } = useUIStore();
+  const user = useUserStore(state => state.user);
+  const toggleProjectInStatusView = useUserStore(state => state.toggleProjectInStatusView);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  
+  // Get expanded projects from user settings - memoized to prevent unnecessary re-renders
+  const expandedProjects = React.useMemo(() => {
+    const expandedProjectIds = user?.settings?.expandedProjectsInStatusView || [];
+    return new Set(expandedProjectIds);
+  }, [user?.settings?.expandedProjectsInStatusView]);
 
 
   // Filter AND SORT tasks by status using fractional positions
@@ -90,18 +98,14 @@ const TaskStatusBoard: React.FC<TaskStatusBoardProps> = ({ className = '', group
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
 
-  // Toggle project expansion
-  const toggleProjectExpansion = (projectId: string | null) => {
+  // Toggle project expansion using userStore
+  const toggleProjectExpansion = async (projectId: string | null) => {
     const id = projectId || 'no-project';
-    setExpandedProjects(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
+    try {
+      await toggleProjectInStatusView(id);
+    } catch (error) {
+      console.error('Failed to toggle project expansion:', error);
+    }
   };
 
   // Handle column drag end
