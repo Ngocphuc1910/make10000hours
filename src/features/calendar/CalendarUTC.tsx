@@ -340,6 +340,8 @@ export const CalendarUTC: React.FC = () => {
 
   // Enhanced event drop handler with UTC support
   const handleEventDrop = useCallback((draggedEvent: CalendarEvent, dropResult: DropResult) => {
+    // Debug: console.error('🚨 CALENDAR DRAG DROP DEBUG START 🚨', ...
+    
     if (!draggedEvent.isTask || !draggedEvent.taskId) {
       setCalendarEvents(prev => prev.map(event => {
         if (event.id === draggedEvent.id) {
@@ -354,27 +356,69 @@ export const CalendarUTC: React.FC = () => {
     }
 
     const task = tasks.find(t => t.id === draggedEvent.taskId);
-    if (!task) return;
+    if (!task) {
+      console.error('❌ Task not found:', draggedEvent.taskId);
+      return;
+    }
+
+    // Debug: console.error('🚨 Found task for drag:', ...);
 
     try {
       // Enhanced calculation with UTC support
       const calculation = useUTCCalendar 
         ? calculateNewEventTimeUTC(draggedEvent, dropResult, userTimezone)
         : (() => {
+            // Debug: Using legacy calculation with UTC patch
             const { start, end } = calculateNewEventTime(draggedEvent, dropResult);
+            
+            console.log('⏰ Legacy calculation results:', {
+              start: start.toISOString(),
+              end: end.toISOString(),
+              isAllDay: dropResult.isAllDay
+            });
+            
+            // Always set scheduledTimeUTC for Today view compatibility
+            let scheduledTimeUTC: string;
+            try {
+              if (dropResult.isAllDay) {
+                // For all-day tasks, set to 00:00 (midnight) in user's timezone
+                const allDayTime = new Date(start);
+                allDayTime.setHours(0, 0, 0, 0); // 00:00 (midnight)
+                scheduledTimeUTC = timezoneUtils.userTimeToUTC(allDayTime, userTimezone);
+                // Debug: All-day UTC conversion successful
+              } else {
+                // For timed tasks, use the actual scheduled time
+                scheduledTimeUTC = timezoneUtils.userTimeToUTC(start, userTimezone);
+                // Debug: Timed UTC conversion successful
+              }
+            } catch (conversionError) {
+              console.error('❌ UTC conversion failed in legacy handler:', conversionError);
+              // Fallback to ISO string
+              scheduledTimeUTC = start.toISOString();
+              console.log('⚠️ Using fallback UTC:', scheduledTimeUTC);
+            }
+            
+            const updateData = {
+              scheduledTimeUTC
+            };
+            
+            console.warn('✅ DRAG FIX: scheduledTimeUTC set to:', scheduledTimeUTC);
+            
             return {
               start,
               end,
-              updateData: {
-                scheduledDate: start.toISOString().split('T')[0],
-                includeTime: !dropResult.isAllDay,
-                scheduledStartTime: dropResult.isAllDay ? null : start.toTimeString().substring(0, 5),
-                scheduledEndTime: dropResult.isAllDay ? null : end.toTimeString().substring(0, 5)
-              }
+              updateData
             };
           })();
 
       const { start, end, updateData } = calculation;
+      
+      console.log('📋 Final calculation results:', {
+        start: start.toISOString(),
+        end: end.toISOString(),
+        updateData: JSON.stringify(updateData, null, 2),
+        useUTCCalendar
+      });
 
       // Create undo state with UTC fields
       const beforeState = {
@@ -410,29 +454,42 @@ export const CalendarUTC: React.FC = () => {
       setRedoStack([]);
 
       // Update task using appropriate service
+      console.error('🚨 CALENDAR updateData check:', {
+        scheduledTimeUTC: updateData.scheduledTimeUTC,
+        hasScheduledTimeUTC: 'scheduledTimeUTC' in updateData,
+        updateDataKeys: Object.keys(updateData),
+        fullUpdateData: JSON.stringify(updateData)
+      });
+      
       const updatePromise = useUTCCalendar 
         ? transitionQueryService.updateTask(task.id, updateData)
         : updateTask(task.id, updateData);
 
-      updatePromise.catch(error => {
-        console.error('Failed to update task scheduling:', error);
-        setUndoStack(prev => prev.slice(0, -1));
-        
-        if (error.message?.includes('timezone')) {
-          setTimezoneError(`Failed to update task: ${error.message}`);
-        }
-      });
+      updatePromise
+        .then(() => {
+          console.log('✅ Task update completed successfully');
+        })
+        .catch(error => {
+          console.error('❌ Failed to update task scheduling:', error);
+          setUndoStack(prev => prev.slice(0, -1));
+          
+          if (error.message?.includes('timezone')) {
+            setTimezoneError(`Failed to update task: ${error.message}`);
+          }
+        });
 
       utcMonitoring.trackOperation('calendar_task_drop', true);
 
     } catch (error) {
-      console.error('Failed to handle event drop:', error);
+      console.error('❌ Failed to handle event drop:', error);
       utcMonitoring.trackOperation('calendar_task_drop', false);
       
       if (error instanceof Error && error.message.includes('timezone')) {
         setTimezoneError(error.message);
       }
     }
+    
+    console.log('🎯 CALENDAR DRAG DROP DEBUG END');
   }, [tasks, updateTask, useUTCCalendar, userTimezone]);
 
   // Rest of the component remains similar but uses UTC utilities
