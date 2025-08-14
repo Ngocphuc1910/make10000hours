@@ -648,6 +648,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                 key={task.id} 
                 task={task} 
                 projectColor={project.color}
+                hideCheckbox={true}
                 onReorder={handleTaskReorder}
                 onCrossProjectMove={handleCrossProjectMove}
               />
