@@ -11,6 +11,7 @@ interface TaskItemProps {
   onEdit: (taskId: string) => void;
   className?: string;
   context?: 'task-management' | 'pomodoro' | 'default';
+  disableClick?: boolean;
 }
 
 export const TaskItem: React.FC<TaskItemProps> = ({ 
@@ -18,7 +19,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   project,
   onEdit,
   className = '',
-  context = 'pomodoro'
+  context = 'pomodoro',
+  disableClick = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const location = useLocation();
@@ -124,8 +126,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({
       className={`task-card flex items-start ${getTaskCardClasses()}
       ${isSelected ? '!border-primary' : ''} 
       ${task.completed ? 'opacity-70 text-text-secondary' : ''}
-      rounded-md hover:shadow-sm cursor-pointer ${className}`}
-      onClick={handleTaskClick}
+      rounded-md hover:shadow-sm ${disableClick ? 'cursor-default' : 'cursor-pointer'} ${className}`}
+      onClick={disableClick ? undefined : handleTaskClick}
       style={{ 
         borderWidth: isSelected ? '2px' : '1px',
         borderColor: isSelected ? '#BA4949' : undefined,
