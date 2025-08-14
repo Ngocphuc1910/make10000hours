@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { DndContext, closestCenter, DragEndEvent, DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, closestCenter, DragEndEvent, DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -22,6 +22,8 @@ interface SortableTaskItemProps {
 }
 
 const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEdit, isDragActive }) => {
+  const { setCurrentTask } = useTimerStore();
+
   const {
     attributes,
     listeners,
@@ -29,7 +31,14 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEd
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id });
+  } = useSortable({ 
+    id: task.id,
+    // Handle clicks within the drag system
+    data: {
+      type: 'task',
+      task: task,
+    }
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -40,15 +49,36 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEd
     overflow: 'hidden',
   };
 
+  // Handle click events for task selection with drag state safety check
+  const handleClick = (e: React.MouseEvent) => {
+    // Don't process clicks during active drag operations
+    if (isDragging) return;
+    
+    // Ignore clicks on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('input[type="checkbox"]') || 
+        target.closest('.edit-task-btn') ||
+        target.closest('.expand-button')) {
+      return;
+    }
+    
+    // Don't select completed tasks
+    if (task.completed) return;
+    
+    // Select the task
+    setCurrentTask(task);
+  };
+
   return (
     <div
       ref={setNodeRef}
       style={{
         ...style,
-        pointerEvents: 'auto', // Allow both drag and click
+        pointerEvents: 'auto',
       }}
       {...attributes}
       {...listeners}
+      onClick={handleClick}
       className={`${isDragging ? 'z-50' : ''} w-full overflow-hidden ${isDragging ? 'cursor-grabbing' : 'cursor-pointer'}`}
     >
       <div style={{ pointerEvents: isDragActive ? 'none' : 'auto' }}>
@@ -57,6 +87,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEd
           project={project}
           onEdit={onEdit}
           context="pomodoro"
+          disableClick={true} // Prevent TaskItem from handling clicks
         />
       </div>
     </div>
@@ -87,12 +118,16 @@ export const TaskListSorted: React.FC = () => {
   const [isDragActive, setIsDragActive] = useState(false);
   const taskListRef = useRef<HTMLDivElement>(null);
 
-  // Configure drag sensors with delay
+  // Configure drag sensors with distance-based activation for reliable click vs drag distinction
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
-        delay: 100, // 100ms delay before drag starts
-        tolerance: 5, // 5px tolerance for movement
+        distance: 8, // Require 8px movement before drag starts - prevents click interference
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        distance: 8, // Same distance threshold for touch devices
       },
     })
   );
