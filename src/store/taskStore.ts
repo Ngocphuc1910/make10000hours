@@ -1071,7 +1071,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           settings: {
             ...user.settings,
             taskListViewMode: mode
-          }
+          },
+          subscription: user.subscription
         };
         await updateUserData(userData);
       }
