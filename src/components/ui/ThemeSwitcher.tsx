@@ -1,9 +1,11 @@
 import React from 'react';
 import { useThemeStore, type ThemeMode } from '../../store/themeStore';
+import { useUserStore } from '../../store/userStore';
 import { Icon } from './Icon';
 
 export const ThemeSwitcher: React.FC = () => {
   const { mode, setMode } = useThemeStore();
+  const { user, updateUserData } = useUserStore();
 
   const themes: { mode: ThemeMode; icon: string; label: string }[] = [
     { mode: 'light', icon: 'sun-line', label: 'Light' },
@@ -18,7 +20,28 @@ export const ThemeSwitcher: React.FC = () => {
         {themes.map((theme) => (
           <button
             key={theme.mode}
-            onClick={() => setMode(theme.mode)}
+            onClick={() => {
+              console.log('🎨 ThemeSwitcher: Changing theme to:', theme.mode);
+              setMode(theme.mode);
+              
+              // Sync with Firebase user settings
+              if (user) {
+                console.log('🔄 ThemeSwitcher: Syncing to Firebase...');
+                updateUserData({
+                  uid: user.uid,
+                  userName: user.userName,
+                  settings: {
+                    ...user.settings,
+                    theme: theme.mode
+                  },
+                  subscription: user.subscription
+                }).then(() => {
+                  console.log('✅ ThemeSwitcher: Firebase sync complete');
+                }).catch((error) => {
+                  console.error('❌ ThemeSwitcher: Firebase sync failed:', error);
+                });
+              }
+            }}
             className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors focus:outline-none ${
               mode === theme.mode
                 ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
