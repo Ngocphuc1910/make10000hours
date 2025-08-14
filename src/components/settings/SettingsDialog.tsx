@@ -730,6 +730,10 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                           <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Open Deep Focus</span>
                           <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>F</div>
                         </div>
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Open Settings</span>
+                          <div className="px-2 py-1 rounded border text-xs font-mono" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>S</div>
+                        </div>
                           </div>
                         </div>
 
