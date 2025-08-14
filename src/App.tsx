@@ -41,7 +41,7 @@ import { DebugMarkdown } from './debug-markdown';
 import { usePricingStore } from './store/pricingStore';
 import { useDeepFocusStore } from './store/deepFocusStore';
 import { DeepFocusProvider, useDeepFocusContext } from './contexts/DeepFocusContext';
-import { SettingsProvider } from './contexts/SettingsContext';
+import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import SettingsDialogWrapper from './components/settings/SettingsDialogWrapper';
 import { testDeepFocusFixes } from './utils/testDeepFocusFix';
 import DeepFocusCleanup from './utils/deepFocusCleanup';
@@ -193,6 +193,7 @@ const GlobalKeyboardShortcuts: React.FC = React.memo(() => {
   const { toggleDeepFocus } = useDeepFocusContext();
   const { start, pause, isRunning } = useTimerStore();
   const enableStartPauseBtn = useTimerStore(state => state.enableStartPauseBtn);
+  const { openSettings } = useSettings();
 
   // Memoize navigation functions to prevent unnecessary re-renders
   const navigateToRoute = useCallback((route: string) => {
@@ -318,6 +319,13 @@ const GlobalKeyboardShortcuts: React.FC = React.memo(() => {
           console.log('🔑 F detected - navigating to Deep Focus');
           event.preventDefault();
           navigateToRoute('/deep-focus');
+        }
+        
+        // Check for S to open Settings
+        if ((event.key === 'S' || event.key === 's')) {
+          console.log('🔑 S detected - opening Settings');
+          event.preventDefault();
+          openSettings();
         }
         
         // Check for D to navigate to Calendar Day view
