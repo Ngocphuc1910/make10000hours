@@ -50,6 +50,10 @@ export interface UserState {
   
   // NEW: Task checkbox visibility management
   setShowTaskCheckboxes: (show: boolean) => Promise<void>;
+  
+  // NEW: Toggle state persistence methods
+  toggleProjectInStatusView: (projectId: string) => Promise<void>;
+  toggleStatusInProjectView: (statusType: string) => Promise<void>;
 }
 
 // Global flag to prevent double initialization in React.StrictMode
@@ -562,6 +566,69 @@ export const useUserStore = create<UserState>((set, get) => {
         console.log('✅ Task checkbox visibility updated:', show);
       } catch (error) {
         console.error('❌ Failed to update task checkbox visibility:', error);
+        throw error;
+      }
+    },
+
+    // NEW: Toggle state persistence methods
+    toggleProjectInStatusView: async (projectId: string) => {
+      const { user } = get();
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      try {
+        const currentExpanded = user.settings.expandedProjectsInStatusView || [];
+        const updatedExpanded = currentExpanded.includes(projectId)
+          ? currentExpanded.filter(id => id !== projectId)
+          : [...currentExpanded, projectId];
+
+        const updatedSettings = {
+          ...user.settings,
+          expandedProjectsInStatusView: updatedExpanded
+        };
+
+        const sanitizedUserData = {
+          uid: user.uid,
+          userName: user.userName,
+          settings: updatedSettings,
+          subscription: user.subscription
+        };
+
+        await get().updateUserData(sanitizedUserData);
+      } catch (error) {
+        console.error('❌ Failed to toggle project in status view:', error);
+        throw error;
+      }
+    },
+
+    toggleStatusInProjectView: async (statusType: string) => {
+      const { user } = get();
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      try {
+        const currentExpanded = user.settings.expandedStatusesInProjectView || [];
+        const updatedExpanded = currentExpanded.includes(statusType)
+          ? currentExpanded.filter(status => status !== statusType)
+          : [...currentExpanded, statusType];
+
+        const updatedSettings = {
+          ...user.settings,
+          expandedStatusesInProjectView: updatedExpanded
+        };
+
+        const sanitizedUserData = {
+          uid: user.uid,
+          userName: user.userName,
+          settings: updatedSettings,
+          subscription: user.subscription
+        };
+
+        await get().updateUserData(sanitizedUserData);
+      } catch (error) {
+        console.error('❌ Failed to toggle status in project view:', error);
         throw error;
       }
     },
