@@ -720,9 +720,12 @@ class PopupManager {
       }
       
       if (sitesArray.length > 0) {
+        // Calculate total time from current sites data to prevent race conditions
+        const totalTime = sitesArray.reduce((sum, site) => sum + site.timeSpent, 0);
+        
         // Create site items using existing method
         sitesArray.forEach(async (site) => {
-          const siteItem = await this.createSiteItem(site);
+          const siteItem = await this.createSiteItem(site, totalTime);
           if (siteItem) {
             sitesListEl.appendChild(siteItem);
           }
@@ -1453,9 +1456,12 @@ class PopupManager {
         const sitesToRender = Array.from(uniqueSites.values())
           .sort((a, b) => b.timeSpent - a.timeSpent);
         
+        // Calculate total time from current sites data to prevent race conditions
+        const totalTime = sitesToRender.reduce((sum, site) => sum + site.timeSpent, 0);
+        
         // Create site items
         for (const site of sitesToRender) {
-          const siteItem = await this.createSiteItem(site);
+          const siteItem = await this.createSiteItem(site, totalTime);
           if (siteItem) {
             sitesListEl.appendChild(siteItem);
           }
@@ -1684,7 +1690,7 @@ class PopupManager {
   /**
    * Create a site card element (new template format)
    */
-  async createSiteItem(site) {
+  async createSiteItem(site, totalTime = null) {
     const template = document.getElementById('site-item-template');
     if (!template) {
       console.error('Template element not found:', 'site-item-template');
@@ -1700,8 +1706,10 @@ class PopupManager {
     
     // Use Chrome extension safe favicon service  
     // Calculate percentage first to determine fallback colors like web app
-    const percentage = this.enhancedState.todayStats?.totalTime ? 
-      Math.round((site.timeSpent / this.enhancedState.todayStats.totalTime) * 100) : 0;
+    // Use passed totalTime parameter to prevent race conditions with enhancedState
+    const effectiveTotalTime = totalTime || this.enhancedState.todayStats?.totalTime || 0;
+    const percentage = effectiveTotalTime > 0 ? 
+      Math.round((site.timeSpent / effectiveTotalTime) * 100) : 0;
     
     try {
       const faviconUrl = await getSafeFavicon(site.domain, 32);
@@ -2452,8 +2460,14 @@ class PopupManager {
    * Show site details modal
    */
   showSiteDetails(site) {
-        const percentage = this.enhancedState.todayStats?.totalTime ?
-      Math.round((site.timeSpent / this.enhancedState.todayStats.totalTime) * 100) : 0;
+    // Calculate percentage using current sites data to prevent race conditions
+    let percentage = 0;
+    if (this.previousStats && this.previousStats.length > 0) {
+      const currentTotalTime = this.previousStats.reduce((sum, s) => sum + s.timeSpent, 0);
+      percentage = currentTotalTime > 0 ? Math.round((site.timeSpent / currentTotalTime) * 100) : 0;
+    } else if (this.enhancedState.todayStats?.totalTime) {
+      percentage = Math.round((site.timeSpent / this.enhancedState.todayStats.totalTime) * 100);
+    }
 
     const iconInfo = this.getSiteIconInfo(site.domain);
 

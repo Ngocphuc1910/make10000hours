@@ -1267,17 +1267,12 @@ const DeepFocusPage: React.FC = () => {
                   const fallbackColor = index < 5 ? defaultColors[index] : '#9CA3AF';
                   const progressBarColor = getProgressBarColor(domain, fallbackColor);
                   
-                  // Calculate percentage based on actual time data (same as pie chart)
-                  const totalTimeSpent = siteUsage.reduce((sum, s) => sum + s.timeSpent, 0);
-                  const calculatedPercentage = totalTimeSpent > 0 ? (site.timeSpent / totalTimeSpent) * 100 : 0;
-                  
                   return (
                     <SiteUsageCard
                       key={site.id}
                       site={site}
                       formatTime={formatMinutesToHours}
                       color={progressBarColor}
-                      percentage={calculatedPercentage}
                     />
                   );
                 })}
