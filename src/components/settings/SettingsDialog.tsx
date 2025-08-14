@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Select from '@radix-ui/react-select';
-import { X, Settings, Timer, Bell, Palette, ChevronDown, Keyboard, Check, Sun, Moon, Monitor, Globe, Clock } from 'lucide-react';
+import { X, Settings, Timer, Bell, Palette, ChevronDown, Keyboard, Check, Sun, Moon, Monitor, Globe, Clock, CheckSquare } from 'lucide-react';
 import { useUserStore } from '../../store/userStore';
 import { useThemeStore } from '../../store/themeStore';
 import { DEFAULT_SETTINGS, type AppSettings, type TimerSettings } from '../../types/models';
@@ -18,7 +18,7 @@ interface SettingsDialogProps {
 }
 
 const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initialSection }) => {
-  const { user, updateUserData, updateTimezone, autoDetectTimezone } = useUserStore();
+  const { user, updateUserData, updateTimezone, autoDetectTimezone, setShowTaskCheckboxes } = useUserStore();
   const { mode, setMode } = useThemeStore();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [originalSettings, setOriginalSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -161,6 +161,28 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
     handleAppSettingChange('theme', themeValue as 'light' | 'dark' | 'system');
   };
 
+  const handleTaskCheckboxToggle = async (show: boolean) => {
+    try {
+      setMessage(null);
+      await setShowTaskCheckboxes(show);
+      
+      // Update local settings state to reflect the change immediately
+      setSettings(prev => ({
+        ...prev,
+        showTaskCheckboxes: show
+      }));
+      
+      // Removed success message for cleaner UX
+    } catch (error) {
+      console.error('Failed to update task checkbox setting:', error);
+      setMessage({ 
+        type: 'error', 
+        text: 'Failed to update setting. Please try again.' 
+      });
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
   const handleSave = async () => {
     if (!user) return;
     
@@ -205,6 +227,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
   const sections = [
     { id: 'general', label: 'General', icon: Settings },
     { id: 'timer', label: 'Timer', icon: Timer },
+    { id: 'tasks', label: 'Task Management', icon: CheckSquare },
     // { id: 'notifications', label: 'Notifications', icon: Bell }, // Temporarily hidden
     { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
     // { id: 'appearance', label: 'Personalization', icon: Palette }, // Temporarily hidden
@@ -230,7 +253,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
               </button>
             </Dialog.Close>
             {/* Sidebar */}
-            <div className="w-48 border-r bg-gray-50/50"
+            <div className="w-56 border-r bg-gray-50/50"
             style={{
               backgroundColor: document.documentElement.classList.contains('dark') ? 'var(--bg-secondary)' : '#FCFCFD',
               borderColor: 'var(--border-color)'
@@ -588,6 +611,33 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                                 type="checkbox"
                                 checked={settings.timer.autoStartPomodoros}
                                 onChange={(e) => handleTimerSettingChange('autoStartPomodoros', e.target.checked)}
+                                className="sr-only peer focus:outline-none"
+                              />
+                              <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Task Management Section */}
+                {activeSection === 'tasks' && (
+                  <div className="space-y-0">
+                    <div>
+                      <div className="space-y-3">
+                        <div>
+                          <div className="flex items-center justify-between py-3">
+                            <div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Show task checkboxes</div>
+                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Display checkboxes in task management page</div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={settings.showTaskCheckboxes}
+                                onChange={(e) => handleTaskCheckboxToggle(e.target.checked)}
                                 className="sr-only peer focus:outline-none"
                               />
                               <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
