@@ -368,7 +368,7 @@ GlobalKeyboardShortcuts.displayName = 'GlobalKeyboardShortcuts';
 
 const App: React.FC = () => {
   const { initialize, user, isLoading, isInitialized } = useUserStore();
-  const { initializeTheme } = useThemeStore();
+  const { initializeTheme, setMode } = useThemeStore();
 
   // Global user sync with extension
   useUserSync();
@@ -421,6 +421,14 @@ const App: React.FC = () => {
       ChatIntegrationService.cleanup();
     };
   }, []); 
+
+  // Sync theme store when user settings change
+  useEffect(() => {
+    if (user?.settings?.theme) {
+      console.log('🔄 App: Syncing theme from user settings:', user.settings.theme);
+      setMode(user.settings.theme);
+    }
+  }, [user?.settings?.theme, setMode]);
 
   // Initialize user store on app start
   useEffect(() => {
