@@ -216,12 +216,15 @@ const GlobalKeyboardShortcuts: React.FC = React.memo(() => {
   }, [isRightSidebarOpen, toggleRightSidebar, setIsAddingTask]);
 
   const handleTimerToggle = useCallback(() => {
-    if (isRunning) {
+    // Get the current state directly from the store to avoid stale state issues
+    const currentState = useTimerStore.getState();
+    
+    if (currentState.isRunning) {
       pause();
     } else {
       start();
     }
-  }, [isRunning, pause, start]);
+  }, [pause, start]); // Removed isRunning from dependencies to avoid stale state
 
   useEffect(() => {
     if (isGlobalShortcutsInitialized) {
@@ -243,9 +246,9 @@ const GlobalKeyboardShortcuts: React.FC = React.memo(() => {
       if (event.code === 'Space' && !isTypingInFormElement) {
         // Only handle space if we're on the pomodoro page and start/pause is enabled
         const isPomodoroPage = location.pathname === '/pomodoro' || location.pathname === '/';
+        
         if (isPomodoroPage && enableStartPauseBtn) {
           event.preventDefault();
-          console.log('🔑 Space detected - toggling pomodoro timer');
           handleTimerToggle();
           return;
         }
@@ -385,7 +388,7 @@ const App: React.FC = () => {
     const manageInterval = () => {
       // Get the latest state directly from the store
       const { isRunning, isActiveDevice } = useTimerStore.getState();
-
+      
       if (intervalId) {
         clearInterval(intervalId);
         intervalId = null;
@@ -402,15 +405,13 @@ const App: React.FC = () => {
     // Initial setup of the interval based on the current store state
     manageInterval();
 
-    // Subscribe to changes in timer store state relevant to the interval
-    const unsubscribe = useTimerStore.subscribe(
-      (state, prevState) => {
-        // Only re-evaluate the interval if isRunning or isActiveDevice changes
-        if (state.isRunning !== prevState.isRunning || state.isActiveDevice !== prevState.isActiveDevice) {
-          manageInterval();
-        }
-      }
-    );
+    // Subscribe to ALL state changes, not just specific ones - this fixes the timing issue
+    const unsubscribe = useTimerStore.subscribe(() => {
+      // Use setTimeout to ensure the state change has been processed
+      setTimeout(() => {
+        manageInterval();
+      }, 0);
+    });
 
     // Cleanup function to clear interval and unsubscribe when App component unmounts
     return () => {
