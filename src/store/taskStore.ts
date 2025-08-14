@@ -173,9 +173,18 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         throw new Error('User not authenticated');
       }
       
+      const { projects } = get();
+      const currentTime = new Date();
+      
+      // Generate order for project positioning
+      const maxOrder = projects.length > 0 ? Math.max(...projects.map(p => p.order || 0)) : -1;
+      
       const newProject = {
         ...projectData,
-        userId: user.uid
+        userId: user.uid,
+        order: maxOrder + 1,
+        createdAt: currentTime,
+        updatedAt: currentTime
       };
       
       // If this is the "No Project" project, use a fixed ID
@@ -185,7 +194,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         return 'no-project';
       }
       
+      console.log('Creating project with data:', newProject);
       const docRef = await addDoc(projectsCollection, newProject);
+      console.log('Project created successfully with ID:', docRef.id);
       
       // Track project creation in Analytics
       trackProjectCreated(projectData.name);
