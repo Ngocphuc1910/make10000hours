@@ -136,6 +136,7 @@ const ProjectColumn: React.FC<ProjectColumnProps> = ({
                 color: projectColor
               }}
               dragContext="project" // Indicate this is project-based drag context
+              hideCheckbox={true}
             />
           ))}
         </div>
