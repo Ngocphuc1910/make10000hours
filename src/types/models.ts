@@ -36,6 +36,10 @@ export interface Project {
   name: string;
   userId: string;
   color?: string;
+  order?: number;
+  orderString?: string;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
 }
 
 // Legacy single-account token structure (for migration)
