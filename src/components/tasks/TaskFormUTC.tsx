@@ -208,43 +208,40 @@ const TaskFormUTC: React.FC<TaskFormUTCProps> = ({
       const scheduledDate = new Date(taskData.scheduledDate);
       
       if (taskData.includeTime && taskData.scheduledStartTime) {
+        // Timed task
         const [startHours, startMinutes] = taskData.scheduledStartTime.split(':').map(Number);
         const startDateTime = new Date(scheduledDate);
         startDateTime.setHours(startHours, startMinutes, 0, 0);
 
-        // Convert to UTC
-        const startTimeUTC = timezoneUtils.userTimeToUTC(startDateTime, userTimezone);
+        // Convert to UTC and set as scheduledTimeUTC
+        const scheduledTimeUTC = timezoneUtils.userTimeToUTC(startDateTime, userTimezone);
 
-        let endTimeUTC = null;
-        if (taskData.scheduledEndTime) {
-          const [endHours, endMinutes] = taskData.scheduledEndTime.split(':').map(Number);
-          const endDateTime = new Date(scheduledDate);
-          endDateTime.setHours(endHours, endMinutes, 0, 0);
-          endTimeUTC = timezoneUtils.userTimeToUTC(endDateTime, userTimezone);
-        }
-
-        // Add UTC fields
+        // Remove legacy fields, use only scheduledTimeUTC
         return {
           ...taskData,
-          // Keep legacy fields for backward compatibility
-          scheduledDate: taskData.scheduledDate,
-          scheduledStartTime: taskData.scheduledStartTime,
-          scheduledEndTime: taskData.scheduledEndTime,
-          includeTime: taskData.includeTime,
-          // Add UTC fields
-          scheduledStartTimeUTC: startTimeUTC,
-          scheduledEndTimeUTC: endTimeUTC,
-          timezoneContext: timezoneUtils.createTimezoneContext(userTimezone)
+          scheduledTimeUTC,
+          timezoneContext: timezoneUtils.createTimezoneContext(userTimezone),
+          // Clear legacy fields
+          scheduledDate: undefined,
+          scheduledStartTime: undefined,
+          scheduledEndTime: undefined,
+          includeTime: undefined
         };
       } else {
-        // All-day event - use date boundaries
-        const { startUTC, endUTC } = timezoneUtils.getUserDateBoundariesUTC(scheduledDate, userTimezone);
+        // All-day task - set to 00:00 (midnight) in user's timezone
+        const allDayTime = new Date(scheduledDate);
+        allDayTime.setHours(0, 0, 0, 0); // 00:00 (midnight)
+        const scheduledTimeUTC = timezoneUtils.userTimeToUTC(allDayTime, userTimezone);
         
         return {
           ...taskData,
-          scheduledStartTimeUTC: startUTC,
-          scheduledEndTimeUTC: endUTC,
-          timezoneContext: timezoneUtils.createTimezoneContext(userTimezone)
+          scheduledTimeUTC,
+          timezoneContext: timezoneUtils.createTimezoneContext(userTimezone),
+          // Clear legacy fields
+          scheduledDate: undefined,
+          scheduledStartTime: undefined,
+          scheduledEndTime: undefined,
+          includeTime: undefined
         };
       }
     } catch (error) {
