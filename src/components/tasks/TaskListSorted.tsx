@@ -43,10 +43,13 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEd
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.8 : 1,
     // Prevent horizontal overflow during drag
     maxWidth: '100%',
     overflow: 'hidden',
+    // Ensure dragged item appears above all other items
+    zIndex: isDragging ? 9999 : 'auto',
+    position: isDragging ? 'relative' : 'static',
   };
 
   // Handle click events for task selection with drag state safety check
@@ -79,7 +82,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, project, onEd
       {...attributes}
       {...listeners}
       onClick={handleClick}
-      className={`${isDragging ? 'z-50' : ''} w-full overflow-hidden ${isDragging ? 'cursor-grabbing' : 'cursor-pointer'}`}
+      className={`w-full overflow-hidden ${isDragging ? 'cursor-grabbing shadow-lg scale-105' : 'cursor-pointer'}`}
     >
       <div style={{ pointerEvents: isDragActive ? 'none' : 'auto' }}>
         <TaskItem
@@ -148,7 +151,7 @@ export const TaskListSorted: React.FC = () => {
   }, [editingTaskId, currentTask, isRunning, setEnableStartPauseBtn, pause]);
 
   // Handle drag start
-  const handleDragStart = () => {
+  const handleDragStart = (event: DragStartEvent) => {
     setIsDragActive(true);
   };
 
