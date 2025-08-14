@@ -43,6 +43,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
   const deleteProject = useTaskStore(state => state.deleteProject);
   const { isLeftSidebarOpen } = useUIStore();
   const isAuthenticated = useUserStore(state => state.isAuthenticated);
+  const showTaskCheckboxes = useUserStore(state => state.user?.settings?.showTaskCheckboxes ?? false);
   const authStatus = useMemo(() => ({ 
     isAuthenticated, 
     shouldShowAuth: true 
@@ -720,7 +721,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                                     }
                                     columnStatus={status}
                                     context="task-management"
-                                    hideCheckbox={true}
+                                    hideCheckbox={!showTaskCheckboxes}
                                   />
                                 ))}
                               </div>
