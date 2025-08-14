@@ -285,7 +285,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
 
   // Dynamic classes for positioning - Fixed to prevent visible repositioning
   const getPlacementClasses = () => {
-    const baseClasses = 'bg-background-secondary rounded-lg shadow-lg border border-border w-[300px] fixed z-50';
+    const baseClasses = 'bg-background-secondary rounded-lg shadow-lg border border-border w-[300px] fixed z-[1001]';
     
     // Use visibility instead of opacity to completely hide during positioning
     if (!position.isReady) {
