@@ -749,12 +749,17 @@ class StorageManager {
         console.warn('⚠️ Attempted to create session via incremental save (visits=0), rejecting');
         return null;
       } else if (activeSession) {
-        // Resume existing session
-        activeSession.status = 'active';
-        activeSession.isActive = true;
-        activeSession.endTime = null;
-        activeSession.endTimeUTC = null;
-        console.log('🔄 Resumed existing session:', activeSession.id, 'for domain:', domain);
+        // Resume existing session ONLY if not finalizing
+        if (operationType !== 'finalize') {
+          activeSession.status = 'active';
+          activeSession.isActive = true;
+          activeSession.endTime = null;
+          activeSession.endTimeUTC = null;
+          console.log('🔄 Resumed existing session:', activeSession.id, 'for domain:', domain);
+        } else {
+          // For finalization, keep the session completed and just update duration
+          console.log('🎯 Finalizing completed session:', activeSession.id, 'for domain:', domain);
+        }
       }
       
       // 🔥 FIX 3: Add strict duration caps and validation
@@ -3843,7 +3848,7 @@ class FocusTimeTracker {
     // ✅ IMPROVED: More frequent saves for better accuracy
     this.saveInterval = setInterval(() => {
       if (this.currentSession.isActive) {
-        this.saveCurrentSession();
+        this.saveCurrentSession('incremental');
       }
     }, 3000); // Save every 3 seconds for better tracking
     
@@ -5646,7 +5651,7 @@ class FocusTimeTracker {
   /**
    * Save current session progress (enhanced with pause tracking)
    */
-  async saveCurrentSession() {
+  async saveCurrentSession(operationType = 'incremental') {
     try {
       // SAFEGUARD 1: Validate session state
       if (!this.currentSession || !this.currentSession.isActive || !this.currentSession.startTime) {
@@ -5655,9 +5660,9 @@ class FocusTimeTracker {
 
       // 🎯 NEW: Prevent saves immediately after tab switches to avoid timing race conditions
       const now = Date.now();
-      if (this.lastTabSwitchTime && (now - this.lastTabSwitchTime) < this.tabSwitchCooldown) {
+      if (this.lastTabSwitchTime && (now - this.lastTabSwitchTime) < this.tabSwitchCooldown && operationType === 'finalize') {
         const cooldownRemaining = Math.round((this.tabSwitchCooldown - (now - this.lastTabSwitchTime)) / 1000);
-        console.debug(`🚫 Preventing save due to recent tab switch (${cooldownRemaining}s cooldown remaining)`);
+        console.debug(`🚫 Preventing finalization save due to recent tab switch (${cooldownRemaining}s cooldown remaining)`);
         return;
       }
 
@@ -5946,7 +5951,7 @@ class FocusTimeTracker {
     console.log(`🛑 Pausing session due to inactivity: ${Math.round(inactivityDuration / 1000)}s`);
     
     // Save current progress before pausing
-    await this.saveCurrentSession();
+    await this.saveCurrentSession('finalize');
     
     this.isSessionPaused = true;
     this.pausedAt = Date.now();
