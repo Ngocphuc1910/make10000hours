@@ -524,7 +524,7 @@ class ExtensionDataService {
       backgroundColor: this.getDomainColor(domain),
       timeSpent: Math.round(data.timeSpent / (1000 * 60)), // Convert ms to minutes
       sessions: data.visits,
-      percentage: Math.round((data.timeSpent / extensionData.totalTime) * 100)
+      percentage: extensionData.totalTime > 0 ? Math.round((data.timeSpent / extensionData.totalTime) * 100) : 0
     }));
 
     return {
