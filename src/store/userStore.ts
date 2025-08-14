@@ -228,11 +228,18 @@ export const useUserStore = create<UserState>((set, get) => {
       try {
         const userDocRef = doc(usersCollection, userData.uid);
         
+        // Handle migration from darkMode to theme field
+        let migratedSettings = { ...userData.settings };
+        if ('darkMode' in migratedSettings && !('theme' in migratedSettings)) {
+          migratedSettings.theme = (migratedSettings as any).darkMode ? 'dark' : 'light';
+          delete (migratedSettings as any).darkMode;
+        }
+        
         // Sanitize userData to remove Firebase Auth objects before saving to Firestore
         const sanitizedUserData: UserData = {
           uid: userData.uid,
           userName: userData.userName,
-          settings: userData.settings,
+          settings: migratedSettings,
           subscription: userData.subscription
         };
         

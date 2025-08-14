@@ -41,8 +41,19 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
 
   useEffect(() => {
     if (user) {
-      setSettings(user.settings);
-      setOriginalSettings(user.settings);
+      // Handle migration from darkMode to theme field
+      let migratedSettings = { ...user.settings };
+      if ('darkMode' in migratedSettings && !('theme' in migratedSettings)) {
+        migratedSettings.theme = migratedSettings.darkMode ? 'dark' : 'light';
+        delete (migratedSettings as any).darkMode;
+      }
+      setSettings(migratedSettings);
+      setOriginalSettings(migratedSettings);
+      
+      // Sync theme mode with user settings
+      if (migratedSettings.theme) {
+        setMode(migratedSettings.theme);
+      }
     }
   }, [user]);
 
@@ -51,6 +62,18 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
       setActiveSection(initialSection);
     }
   }, [initialSection]);
+
+  // Sync with user settings when mode changes
+  useEffect(() => {
+    if (user && settings) {
+      if (settings.theme !== mode) {
+        setSettings(prev => ({
+          ...prev,
+          theme: mode
+        }));
+      }
+    }
+  }, [user, mode, settings]);
 
   const handleTimezoneAutoDetect = async () => {
     setTimezoneLoading(true);
@@ -125,7 +148,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
     }));
   };
 
-  const handleAppSettingChange = (key: keyof Omit<AppSettings, 'timer'>, value: boolean) => {
+  const handleAppSettingChange = (key: keyof Omit<AppSettings, 'timer'>, value: boolean | string) => {
     setSettings(prev => ({
       ...prev,
       [key]: value
@@ -133,14 +156,15 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
   };
 
   const handleThemeChange = (themeValue: string) => {
+    console.log('🎨 SettingsDialog: Theme changed to:', themeValue);
     setMode(themeValue as 'light' | 'dark' | 'system');
-    // Also update the settings state to keep it in sync
-    handleAppSettingChange('darkMode', themeValue === 'dark');
+    handleAppSettingChange('theme', themeValue as 'light' | 'dark' | 'system');
   };
 
   const handleSave = async () => {
     if (!user) return;
     
+    console.log('💾 SettingsDialog: Saving settings:', settings);
     setIsLoading(true);
     setMessage(null);
     
@@ -148,15 +172,17 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
       await updateUserData({
         uid: user.uid,
         userName: user.userName,
-        settings
+        settings,
+        subscription: user.subscription
       });
       setOriginalSettings(settings);
+      console.log('✅ SettingsDialog: Settings saved successfully');
       setMessage({ type: 'success', text: 'Settings saved successfully!' });
       setTimeout(() => {
         setMessage(null);
       }, 2000);
     } catch (error) {
-      console.error('Error saving settings:', error);
+      console.error('❌ SettingsDialog: Error saving settings:', error);
       setMessage({ type: 'error', text: 'Failed to save settings. Please try again.' });
     } finally {
       setIsLoading(false);
