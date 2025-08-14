@@ -127,7 +127,7 @@ export interface TimezoneSettings {
 
 export interface AppSettings {
   timer: TimerSettings;
-  darkMode: boolean;
+  theme: 'light' | 'dark' | 'system';
   compactTaskView: boolean;
   taskListViewMode: 'pomodoro' | 'today';
   timezone?: TimezoneSettings;
@@ -142,7 +142,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     autoStartPomodoros: false,
     longBreakInterval: 4
   },
-  darkMode: false,
+  theme: 'system',
   compactTaskView: false,
   taskListViewMode: 'today',
 };
