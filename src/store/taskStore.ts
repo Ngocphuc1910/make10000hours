@@ -406,6 +406,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   updateTask: async (id, updates) => {
+    // Debug: TaskStore.updateTask ENTRY
+    
     try {
       // Validate multi-day task data if feature is enabled and scheduledEndDate is being updated
       if (updates.scheduledEndDate !== undefined) {
@@ -426,6 +428,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       const { tasks } = get();
       const currentTask = tasks.find(t => t.id === id);
       
+      console.log('📋 Current task state:', {
+        id: currentTask?.id,
+        title: currentTask?.title,
+        scheduledDate: currentTask?.scheduledDate,
+        scheduledTimeUTC: (currentTask as any)?.scheduledTimeUTC,
+        scheduledStartTime: currentTask?.scheduledStartTime,
+        includeTime: currentTask?.includeTime
+      });
+      
       // Check if projectId is being updated (including null values)
       const isProjectIdChanging = updates.hasOwnProperty('projectId') && currentTask && updates.projectId !== currentTask.projectId;
       
@@ -439,18 +450,44 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       // Check if scheduling-related fields are being updated
       const hasSchedulingChanges = get().hasSchedulingChanges(currentTask, updates);
       
+      console.log('⏰ Scheduling changes analysis:', {
+        hasSchedulingChanges,
+        schedulingFields: {
+          scheduledDate: updates.scheduledDate,
+          scheduledStartTime: updates.scheduledStartTime,
+          scheduledEndTime: updates.scheduledEndTime,
+          scheduledTimeUTC: updates.scheduledTimeUTC,
+          includeTime: updates.includeTime
+        }
+      });
+      
       // Filter out undefined values to prevent Firebase errors
       const filteredUpdates = Object.fromEntries(
         Object.entries(updates).filter(([_, value]) => value !== undefined)
       );
+      
+      // Debug: Filtered updates after removing undefined
 
       // Get user's timezone for UTC conversion
       const userTimezone = typeof user.settings?.timezone === 'string' 
         ? user.settings.timezone 
         : user.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
+        
+      console.log('🌍 User timezone resolution:', {
+        userSettingsTimezone: user.settings?.timezone,
+        resolvedTimezone: userTimezone
+      });
 
       // Use TaskStorageService for proper UTC handling
+      console.log('🚀 About to call TaskStorageService.updateTask:', {
+        taskId: id,
+        filteredUpdates: JSON.stringify(filteredUpdates, null, 2),
+        userTimezone
+      });
+      
       await TaskStorageService.updateTask(id, filteredUpdates, userTimezone);
+      
+      console.log('✅ TaskStorageService.updateTask completed successfully');
 
       // If projectId changed, update all related work sessions
       if (isProjectIdChanging && updates.projectId) {
@@ -486,8 +523,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       }
       
       set({ editingTaskId: null });
+      
+      console.log('✅ TaskStore.updateTask COMPLETED SUCCESSFULLY');
+      
     } catch (error) {
-      console.error('Error updating task:', error);
+      console.error('❌ TaskStore.updateTask ERROR:', error);
       throw error;
     }
   },

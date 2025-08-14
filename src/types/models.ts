@@ -17,6 +17,7 @@ export interface Task {
   scheduledStartTime?: string; // HH:MM format
   scheduledEndTime?: string; // HH:MM format
   includeTime?: boolean; // whether time is included in the schedule
+  scheduledTimeUTC?: string; // UTC ISO string for consistent today view filtering
   // Google Calendar sync fields
   googleCalendarEventId?: string; // Google Calendar event ID
   lastSyncedAt?: Date; // Last successful sync timestamp
