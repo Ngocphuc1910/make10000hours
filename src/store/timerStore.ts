@@ -163,9 +163,20 @@ export const useTimerStore = create<TimerState>((set, get) => {
     
     pause: () => {
       const state = get();
+      console.log('🛑 PAUSE FUNCTION CALLED - state before:', {
+        isRunning: state.isRunning,
+        timestamp: new Date().toISOString()
+      });
       
       // ✅ INSTANT UI UPDATE - No more blocking!
       set({ isRunning: false });
+      
+      // Verify state change immediately
+      const newState = get();
+      console.log('🛑 PAUSE FUNCTION - state after set:', {
+        isRunning: newState.isRunning,
+        timestamp: new Date().toISOString()
+      });
       
       // Complete active session in background with retry
       if (state.activeSession) {
@@ -180,7 +191,10 @@ export const useTimerStore = create<TimerState>((set, get) => {
       }
       
       // Save immediately when pausing to capture exact time
-      get().saveToDatabase();
+      // IMPORTANT: Save functions should NOT modify isRunning state
+      get().saveToDatabase().catch(error => {
+        console.error('Save to database failed:', error);
+      });
       get().saveToLocalStorage();
     },
     
