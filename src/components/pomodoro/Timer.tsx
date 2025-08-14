@@ -5,6 +5,19 @@ import TimerCircle from '../ui/TimerCircle';
 import { formatTime } from '../../utils/timeUtils';
 import { Icon } from '../ui/Icon';
 
+// Custom hook to get live task data from taskStore
+const useLiveCurrentTask = () => {
+  const currentTaskId = useTimerStore(state => state.currentTask?.id);
+  const tasks = useTaskStore(state => state.tasks);
+  const projects = useTaskStore(state => state.projects);
+  
+  // Find the live task data by ID from taskStore
+  const liveTask = currentTaskId ? tasks.find(task => task.id === currentTaskId) : null;
+  const liveProject = liveTask ? projects.find(project => project.id === liveTask.projectId) : null;
+  
+  return { liveTask, liveProject };
+};
+
 interface TimerProps {
   className?: string;
 }
@@ -20,6 +33,9 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
   const mode = useTimerStore(state => state.mode);
   const currentTask = useTimerStore(state => state.currentTask);
   const enableStartPauseBtn = useTimerStore(state => state.enableStartPauseBtn);
+  
+  // Get live task data with real-time timeSpent updates
+  const { liveTask, liveProject } = useLiveCurrentTask();
   
   // Use selectors for less frequently changing values
   const isLoading = useTimerStore(state => state.isLoading);
@@ -205,14 +221,18 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
         </p>
         <div className="flex items-center justify-between text-sm text-text-secondary flex-wrap gap-2 text-left">
           <span className="break-words text-left">
-            {currentTask 
-              ? `Project: ${useTaskStore.getState().projects.find(p => p.id === currentTask.projectId)?.name || 'Unknown Project'}`
-              : "No project selected"}
+            {liveProject 
+              ? `Project: ${liveProject.name}`
+              : currentTask 
+                ? "Project: Unknown Project"
+                : "No project selected"}
           </span>
           <span className="text-left">
-            {currentTask 
-              ? `Est: ${currentTask.timeSpent}/${currentTask.timeEstimated}m`
-              : "Est: --"}
+            {liveTask 
+              ? `Est: ${liveTask.timeSpent}/${liveTask.timeEstimated}m`
+              : currentTask 
+                ? `Est: ${currentTask.timeSpent}/${currentTask.timeEstimated}m`
+                : "Est: --"}
           </span>
         </div>
       </div>
