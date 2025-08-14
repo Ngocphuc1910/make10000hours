@@ -583,6 +583,25 @@ export const Calendar: React.FC = () => {
             duplicateTaskData.scheduledEndTime = end.toTimeString().substring(0, 5); // HH:MM format
           }
 
+          // FIX: Add scheduledTimeUTC for duplicate tasks
+          try {
+            if (shouldBeAllDay) {
+              // For all-day tasks, set to 00:00 (midnight) in user's timezone
+              const allDayTime = new Date(start);
+              allDayTime.setHours(0, 0, 0, 0); // 00:00 (midnight)
+              (duplicateTaskData as any).scheduledTimeUTC = timezoneUtils.userTimeToUTC(allDayTime, userTimezone);
+            } else {
+              // For timed tasks, use the actual scheduled time
+              (duplicateTaskData as any).scheduledTimeUTC = timezoneUtils.userTimeToUTC(start, userTimezone);
+            }
+            console.log('✅ DUPLICATE FIX: scheduledTimeUTC set to:', (duplicateTaskData as any).scheduledTimeUTC);
+          } catch (conversionError) {
+            console.error('❌ UTC conversion failed in duplicate task:', conversionError);
+            // Fallback to ISO string
+            (duplicateTaskData as any).scheduledTimeUTC = start.toISOString();
+            console.log('⚠️ Using fallback UTC for duplicate:', (duplicateTaskData as any).scheduledTimeUTC);
+          }
+
           // Auto-change status: "To do list" → "In Pomodoro" when duplicated to today
           const isMovedToToday = isSameDay(start, new Date());
           if (isMovedToToday && task.status === 'todo') {
@@ -678,6 +697,25 @@ export const Calendar: React.FC = () => {
           // For all-day events, explicitly set time fields to null (Firebase compatible)
           taskUpdateData.scheduledStartTime = null;
           taskUpdateData.scheduledEndTime = null;
+        }
+
+        // FIX: Add scheduledTimeUTC for Today view compatibility
+        try {
+          if (shouldBeAllDay) {
+            // For all-day tasks, set to 00:00 (midnight) in user's timezone
+            const allDayTime = new Date(start);
+            allDayTime.setHours(0, 0, 0, 0); // 00:00 (midnight)
+            taskUpdateData.scheduledTimeUTC = timezoneUtils.userTimeToUTC(allDayTime, userTimezone);
+          } else {
+            // For timed tasks, use the actual scheduled time
+            taskUpdateData.scheduledTimeUTC = timezoneUtils.userTimeToUTC(start, userTimezone);
+          }
+          console.log('✅ DRAG FIX: scheduledTimeUTC set to:', taskUpdateData.scheduledTimeUTC);
+        } catch (conversionError) {
+          console.error('❌ UTC conversion failed in Calendar drag handler:', conversionError);
+          // Fallback to ISO string
+          taskUpdateData.scheduledTimeUTC = start.toISOString();
+          console.log('⚠️ Using fallback UTC:', taskUpdateData.scheduledTimeUTC);
         }
 
         // Auto-change status: "To do list" → "In Pomodoro" when moved to today
