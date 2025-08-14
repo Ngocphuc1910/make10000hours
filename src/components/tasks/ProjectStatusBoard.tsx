@@ -720,6 +720,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                                     }
                                     columnStatus={status}
                                     context="task-management"
+                                    hideCheckbox={true}
                                   />
                                 ))}
                               </div>
