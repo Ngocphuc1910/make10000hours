@@ -17,7 +17,13 @@ const SettingsPage = () => {
 
   useEffect(() => {
     if (user) {
-      setSettings(user.settings);
+      // Handle migration from darkMode to theme field
+      let migratedSettings = { ...user.settings };
+      if ('darkMode' in migratedSettings && !('theme' in migratedSettings)) {
+        migratedSettings.theme = migratedSettings.darkMode ? 'dark' : 'light';
+        delete (migratedSettings as any).darkMode;
+      }
+      setSettings(migratedSettings);
     }
   }, [user]);
 
@@ -31,7 +37,7 @@ const SettingsPage = () => {
     }));
   };
 
-  const handleAppSettingChange = (key: keyof Omit<AppSettings, 'timer'>, value: boolean) => {
+  const handleAppSettingChange = (key: keyof Omit<AppSettings, 'timer'>, value: boolean | string) => {
     setSettings(prev => ({
       ...prev,
       [key]: value
@@ -48,7 +54,8 @@ const SettingsPage = () => {
       await updateUserData({
         uid: user.uid,
         userName: user.userName,
-        settings
+        settings,
+        subscription: user.subscription
       });
       setMessage({ type: 'success', text: 'Settings saved successfully!' });
     } catch (error) {
@@ -206,17 +213,20 @@ const SettingsPage = () => {
           <h2 className="text-xl font-semibold mb-4 text-gray-800">Appearance</h2>
           
           <div className="space-y-4">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="darkMode"
-                checked={settings.darkMode}
-                onChange={(e) => handleAppSettingChange('darkMode', e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="darkMode" className="ml-2 text-sm text-gray-700">
-                Enable dark mode
+            <div className="flex items-center justify-between">
+              <label htmlFor="theme" className="text-sm text-gray-700">
+                Theme
               </label>
+              <select
+                id="theme"
+                value={settings.theme}
+                onChange={(e) => handleAppSettingChange('theme', e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="system">System</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
             </div>
             
             <div className="flex items-center">
