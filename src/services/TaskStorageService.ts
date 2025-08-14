@@ -49,7 +49,24 @@ export class TaskStorageService {
     
     // Update in Firestore
     const taskDoc = doc(db, 'tasks', taskId);
-    await updateDoc(taskDoc, enhancedUpdates);
+    
+    // Debug: About to write to Firestore
+    
+    try {
+      await updateDoc(taskDoc, enhancedUpdates);
+      
+      // Only log success if scheduledTimeUTC is involved (for debugging drag & drop)
+      if ('scheduledTimeUTC' in updates) {
+        console.log('✅ TaskStorageService: Successfully wrote scheduledTimeUTC to Firestore');
+      }
+    } catch (error) {
+      console.error('❌ TaskStorageService Firestore write failed:', {
+        taskId,
+        error: (error as any).message,
+        enhancedUpdates: JSON.stringify(enhancedUpdates, null, 2)
+      });
+      throw error;
+    }
   }
   
   /**
@@ -124,15 +141,18 @@ export class TaskStorageService {
     
     // Check if user is removing scheduling information
     const isRemovingScheduling = this.isRemovingScheduling(updates);
+    const hasSchedulingData = this.hasSchedulingData(updates);
     
     if (isRemovingScheduling) {
+      console.log('🗑 Removing scheduling - clearing UTC fields');
       // Clear all scheduling-related UTC fields when scheduling is removed
+      // Use null (not undefined) for Firestore compatibility
       enhanced.scheduledTimeUTC = null;
       enhanced.scheduledEndTimeUTC = null;
       enhanced.scheduledTimezone = null;
       enhanced.scheduledDuration = null;
       enhanced.timezoneContext = null;
-    } else if (this.hasSchedulingData(updates)) {
+    } else if (hasSchedulingData) {
       // Update timezone context if scheduling changed
       enhanced.timezoneContext = timezoneUtils.createTimezoneContext(
         userTimezone, 
@@ -144,10 +164,28 @@ export class TaskStorageService {
         userTimezone,
         timestamp
       );
+      
       Object.assign(enhanced, schedulingEnhancement);
     }
     
-    return enhanced;
+    // Filter out undefined values to prevent Firestore errors
+    const cleanedEnhanced: Partial<TaskEnhanced> = {};
+    Object.keys(enhanced).forEach(key => {
+      const value = (enhanced as any)[key];
+      if (value !== undefined) {
+        (cleanedEnhanced as any)[key] = value;
+      }
+    });
+    
+    // Log only if we're processing scheduledTimeUTC for debugging
+    if ('scheduledTimeUTC' in updates) {
+      console.log('✅ TaskStorageService: Enhanced updates ready for Firestore:', {
+        hasScheduledTimeUTC: 'scheduledTimeUTC' in cleanedEnhanced,
+        filteredOutUndefined: Object.keys(enhanced).filter(key => (enhanced as any)[key] === undefined)
+      });
+    }
+    
+    return cleanedEnhanced;
   }
   
   /**
@@ -168,22 +206,29 @@ export class TaskStorageService {
     };
     
     // Handle different scheduling formats
-    if (taskData.scheduledDate && taskData.scheduledStartTime) {
-      // Timed task
+    if (taskData.scheduledTimeUTC) {
+      // Already in UTC format - this takes priority (from drag & drop)
+      const utcResult: any = {
+        scheduledTimeUTC: taskData.scheduledTimeUTC,
+        scheduledTimezone: userTimezone
+      };
+      
+      // Only include optional fields if they have valid values
+      if (taskData.scheduledEndTimeUTC) {
+        utcResult.scheduledEndTimeUTC = taskData.scheduledEndTimeUTC;
+      }
+      if (taskData.scheduledDuration) {
+        utcResult.scheduledDuration = taskData.scheduledDuration;
+      }
+      
+      return utcResult;
+    } else if (taskData.scheduledDate && taskData.scheduledStartTime) {
+      // Timed task - convert legacy format
       return this.convertTimedSchedulingToUTC(taskData, userTimezone);
     } else if (taskData.scheduledDate) {
-      // All-day task
+      // All-day task - convert legacy format
       return this.convertAllDaySchedulingToUTC(taskData, userTimezone);
-    } else if (taskData.scheduledTimeUTC) {
-      // Already in UTC format (rare update case)
-      return {
-        scheduledTimeUTC: taskData.scheduledTimeUTC,
-        scheduledEndTimeUTC: taskData.scheduledEndTimeUTC,
-        scheduledTimezone: userTimezone,
-        scheduledDuration: taskData.scheduledDuration
-      };
     }
-    
     return result;
   }
   
@@ -297,11 +342,18 @@ export class TaskStorageService {
    * This detects when user clears the scheduled date fields
    */
   private static isRemovingScheduling(updates: Partial<Task>): boolean {
+    // If scheduledTimeUTC is being explicitly set (from drag & drop), this is NOT removing scheduling
+    if ('scheduledTimeUTC' in updates && updates.scheduledTimeUTC) {
+      console.log('🔧 scheduledTimeUTC is being set, this is NOT removing scheduling');
+      return false;
+    }
+    
     // Check if key scheduling fields are being explicitly set to null/undefined/empty
     const hasExplicitNullScheduling = (
       'scheduledDate' in updates && (!updates.scheduledDate || updates.scheduledDate === '') ||
       'scheduledStartTime' in updates && (!updates.scheduledStartTime || updates.scheduledStartTime === '') ||
-      'scheduledEndTime' in updates && (!updates.scheduledEndTime || updates.scheduledEndTime === '')
+      'scheduledEndTime' in updates && (!updates.scheduledEndTime || updates.scheduledEndTime === '') ||
+      'scheduledTimeUTC' in updates && (!updates.scheduledTimeUTC || updates.scheduledTimeUTC === '')
     );
     
     // Also check if all scheduling fields are absent/empty in the update
@@ -309,7 +361,7 @@ export class TaskStorageService {
     
     return hasExplicitNullScheduling || (
       // If the update contains scheduling-related fields but they're all empty
-      ('scheduledDate' in updates || 'scheduledStartTime' in updates || 'scheduledEndTime' in updates) &&
+      ('scheduledDate' in updates || 'scheduledStartTime' in updates || 'scheduledEndTime' in updates || 'scheduledTimeUTC' in updates) &&
       hasNoSchedulingData
     );
   }
