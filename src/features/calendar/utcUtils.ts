@@ -317,41 +317,52 @@ export const calculateNewEventTimeUTC = (
       utcStart = timezoneUtils.userTimeToUTC(start, timezone);
       utcEnd = timezoneUtils.userTimeToUTC(end, timezone);
 
-      // Determine what fields to update based on original event metadata
-      if (originalEvent.utcMetadata?.hasUTCFields) {
-        // Update UTC fields
-        updateData = {
-          scheduledStartTimeUTC: utcStart,
-          scheduledEndTimeUTC: utcEnd,
-          timezoneContext: timezoneUtils.createTimezoneContext(timezone),
-          // Keep legacy fields for backward compatibility
-          scheduledDate: start.toISOString().split('T')[0],
-          includeTime: !dropResult.isAllDay,
-          scheduledStartTime: dropResult.isAllDay ? null : start.toTimeString().substring(0, 5),
-          scheduledEndTime: dropResult.isAllDay ? null : end.toTimeString().substring(0, 5)
-        };
+      // Always set scheduledTimeUTC for all tasks (for Today view compatibility)
+      let scheduledTimeUTC: string;
+      if (dropResult.isAllDay) {
+        // For all-day tasks, set to 00:00 (midnight) in user's timezone
+        const allDayTime = new Date(start);
+        allDayTime.setHours(0, 0, 0, 0); // 00:00 (midnight)
+        scheduledTimeUTC = timezoneUtils.userTimeToUTC(allDayTime, timezone);
       } else {
-        // Update legacy fields only
-        updateData = {
-          scheduledDate: start.toISOString().split('T')[0],
-          includeTime: !dropResult.isAllDay,
-          scheduledStartTime: dropResult.isAllDay ? null : start.toTimeString().substring(0, 5),
-          scheduledEndTime: dropResult.isAllDay ? null : end.toTimeString().substring(0, 5)
-        };
+        // For timed tasks, use the actual scheduled time
+        scheduledTimeUTC = utcStart;
       }
+
+      // Always update scheduledTimeUTC - remove legacy fields entirely
+      updateData = {
+        scheduledTimeUTC,
+        timezoneContext: timezoneUtils.createTimezoneContext(timezone)
+      };
 
       utcMonitoring.trackOperation('calendar_event_time_calculation', true);
 
     } catch (conversionError) {
-      console.error('UTC conversion failed, using legacy fields only:', conversionError);
+      console.error('UTC conversion failed:', conversionError);
       
-      // Fallback to legacy fields
-      updateData = {
-        scheduledDate: start.toISOString().split('T')[0],
-        includeTime: !dropResult.isAllDay,
-        scheduledStartTime: dropResult.isAllDay ? null : start.toTimeString().substring(0, 5),
-        scheduledEndTime: dropResult.isAllDay ? null : end.toTimeString().substring(0, 5)
-      };
+      // Even in error case, try to set scheduledTimeUTC for Today view compatibility
+      let fallbackScheduledTimeUTC: string | undefined;
+      try {
+        if (dropResult.isAllDay) {
+          const allDayTime = new Date(start);
+          allDayTime.setHours(0, 0, 0, 0); // 00:00 (midnight) fallback
+          fallbackScheduledTimeUTC = timezoneUtils.userTimeToUTC(allDayTime, timezone);
+        } else {
+          fallbackScheduledTimeUTC = timezoneUtils.userTimeToUTC(start, timezone);
+        }
+      } catch (fallbackError) {
+        console.error('Fallback UTC conversion also failed:', fallbackError);
+        // Will set scheduledTimeUTC to undefined
+      }
+      
+      // Only set scheduledTimeUTC if we managed to convert it
+      if (fallbackScheduledTimeUTC) {
+        updateData = {
+          scheduledTimeUTC: fallbackScheduledTimeUTC
+        };
+      } else {
+        updateData = {};
+      }
 
       utcMonitoring.trackOperation('calendar_event_time_calculation', false);
     }
