@@ -156,7 +156,7 @@ export const useSmartPosition = ({
     currentPositionRef.current = newPosition;
     setPosition(newPosition);
     setIsReady(true);
-  }, [isOpen, triggerRef, contentRef, preferredPlacement, offset, viewportPadding, modalThreshold, isReady]);
+  }, [isOpen, triggerRef, contentRef, preferredPlacement, offset, viewportPadding, modalThreshold]);
 
   // Sync ref with state
   useEffect(() => {

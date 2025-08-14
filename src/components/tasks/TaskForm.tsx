@@ -480,19 +480,6 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
 
   const handleCalendarClick = useCallback(() => {
     const newValue = !showDatePicker;
-    console.log('📅 Calendar button clicked:', {
-      currentShowDatePicker: showDatePicker,
-      newShowDatePicker: newValue,
-      triggerRef: {
-        hasCurrent: !!calendarInputRef.current,
-        tagName: calendarInputRef.current?.tagName,
-        dimensions: calendarInputRef.current ? {
-          offsetWidth: calendarInputRef.current.offsetWidth,
-          offsetHeight: calendarInputRef.current.offsetHeight,
-          boundingRect: calendarInputRef.current.getBoundingClientRect()
-        } : null
-      }
-    });
     setShowDatePicker(newValue);
   }, [showDatePicker]);
 
