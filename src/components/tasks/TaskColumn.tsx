@@ -259,6 +259,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
                                 onCrossColumnMove={handleCrossColumnMove}
                                 columnStatus={status}
                                 context="task-management"
+                                hideCheckbox={true}
                               />
                             ))}
                           </div>
@@ -331,6 +332,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
                   onCrossColumnMove={handleCrossColumnMove}
                   columnStatus={status}
                   context="task-management"
+                  hideCheckbox={true}
                 />
               ))
             }
@@ -356,6 +358,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
                         onCrossColumnMove={handleCrossColumnMove}
                         columnStatus={status}
                         context="task-management"
+                        hideCheckbox={true}
                       />
                     ))}
                   </div>

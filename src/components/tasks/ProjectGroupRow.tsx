@@ -98,6 +98,7 @@ const ProjectGroupRow: React.FC<ProjectGroupRowProps> = ({
                       }}
                       columnStatus={status}
                       context="task-management"
+                      hideCheckbox={true}
                       targetProject={project}
                     />
                   ))}
