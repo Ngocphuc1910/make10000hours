@@ -4,6 +4,7 @@ import TaskForm from './TaskForm';
 import ProjectChip from './ProjectChip';
 import { Icon } from '../ui/Icon';
 import { triggerAuthenticationFlow } from '../../utils/authGuard';
+import { useUserStore } from '../../store/userStore';
 import type { Task, Project } from '../../types/models';
 
 interface ProjectGroupRowProps {
@@ -39,6 +40,7 @@ const ProjectGroupRow: React.FC<ProjectGroupRowProps> = ({
 }) => {
   const [isAddingTask, setIsAddingTask] = React.useState<{ [key: string]: boolean }>({});
   const projectId = project?.id || 'no-project';
+  const showTaskCheckboxes = useUserStore(state => state.user?.settings?.showTaskCheckboxes ?? false);
 
   const handleAddTaskToggle = (status: Task['status'], adding: boolean) => {
     setIsAddingTask(prev => ({ ...prev, [status]: adding }));
@@ -98,7 +100,7 @@ const ProjectGroupRow: React.FC<ProjectGroupRowProps> = ({
                       }}
                       columnStatus={status}
                       context="task-management"
-                      hideCheckbox={true}
+                      hideCheckbox={!showTaskCheckboxes}
                       targetProject={project}
                     />
                   ))}
