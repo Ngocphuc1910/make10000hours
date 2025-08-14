@@ -179,7 +179,9 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
   };
 });
 
-// Subscribe to user authentication changes
+// Subscribe to user authentication changes - ONLY react to auth state, not all user changes
+let lastAuthState = { isAuthenticated: false, userId: null as string | null, isInitialized: false };
+
 useUserStore.subscribe((state) => {
   const dashboardStore = useDashboardStore.getState();
   
@@ -190,11 +192,33 @@ useUserStore.subscribe((state) => {
     return;
   }
   
-  console.log('DashboardStore - User state changed:', {
+  // INFINITE LOOP FIX: Only react to authentication state changes, not all user settings changes
+  const currentAuthState = {
     isAuthenticated: state.isAuthenticated,
-    hasUser: !!state.user,
-    userId: state.user?.uid,
+    userId: state.user?.uid || null,
     isInitialized: state.isInitialized
+  };
+  
+  // Check if authentication state actually changed
+  const authStateChanged = 
+    currentAuthState.isAuthenticated !== lastAuthState.isAuthenticated ||
+    currentAuthState.userId !== lastAuthState.userId ||
+    currentAuthState.isInitialized !== lastAuthState.isInitialized;
+  
+  if (!authStateChanged) {
+    // Auth state hasn't changed, ignore this update to prevent infinite loop
+    // This prevents reacting to user settings changes (like toggle states)
+    return;
+  }
+  
+  // Update the tracked state
+  lastAuthState = currentAuthState;
+  
+  console.log('DashboardStore - Auth state changed:', {
+    isAuthenticated: currentAuthState.isAuthenticated,
+    hasUser: !!currentAuthState.userId,
+    userId: currentAuthState.userId,
+    isInitialized: currentAuthState.isInitialized
   });
   
   if (state.isAuthenticated && state.user) {

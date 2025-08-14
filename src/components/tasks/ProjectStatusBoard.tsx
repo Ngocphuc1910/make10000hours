@@ -43,13 +43,20 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
   const deleteProject = useTaskStore(state => state.deleteProject);
   const { isLeftSidebarOpen } = useUIStore();
   const isAuthenticated = useUserStore(state => state.isAuthenticated);
-  const showTaskCheckboxes = useUserStore(state => state.user?.settings?.showTaskCheckboxes ?? false);
+  const user = useUserStore(state => state.user);
+  const showTaskCheckboxes = user?.settings?.showTaskCheckboxes ?? false;
+  const toggleStatusInProjectView = useUserStore(state => state.toggleStatusInProjectView);
   const authStatus = useMemo(() => ({ 
     isAuthenticated, 
     shouldShowAuth: true 
   }), [isAuthenticated]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [expandedStatuses, setExpandedStatuses] = useState<Set<string>>(new Set());
+  
+  // Get expanded statuses from user settings - memoized to prevent unnecessary re-renders
+  const expandedStatuses = React.useMemo(() => {
+    const expandedStatusIds = user?.settings?.expandedStatusesInProjectView || [];
+    return new Set(expandedStatusIds);
+  }, [user?.settings?.expandedStatusesInProjectView]);
   const [isAddingTask, setIsAddingTask] = useState<{ [key: string]: boolean }>({});
   const [showProjectDropdown, setShowProjectDropdown] = useState<{ [key: string]: boolean }>({});
   const [showColorPicker, setShowColorPicker] = useState<{ [key: string]: boolean }>({});
@@ -494,17 +501,13 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
     setIsAddingTask(prev => ({ ...prev, [key]: adding }));
   }, []);
 
-  // Toggle status expansion
-  const toggleStatusExpansion = (status: Task['status']) => {
-    setExpandedStatuses(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(status)) {
-        newSet.delete(status);
-      } else {
-        newSet.add(status);
-      }
-      return newSet;
-    });
+  // Toggle status expansion using userStore
+  const toggleStatusExpansion = async (status: Task['status']) => {
+    try {
+      await toggleStatusInProjectView(status);
+    } catch (error) {
+      console.error('Failed to toggle status expansion:', error);
+    }
   };
 
   // Click outside handler to close dropdowns (but not ColorPicker modal)
