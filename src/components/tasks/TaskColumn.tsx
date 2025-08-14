@@ -1,6 +1,7 @@
 import React, { useState, useLayoutEffect, useRef } from 'react';
 import type { Task, Project } from '../../types/models';
 import { useTaskStore } from '../../store/taskStore';
+import { useUserStore } from '../../store/userStore';
 import TaskCard from './TaskCard';
 import TaskForm from './TaskForm';
 import ProjectChips from './ProjectChips';
@@ -45,6 +46,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
   const allProjects = useTaskStore(state => state.projects);
   const authStatus = useAuthGuard();
   const { isLeftSidebarOpen } = useUIStore();
+  const showTaskCheckboxes = useUserStore(state => state.user?.settings?.showTaskCheckboxes ?? false);
   
 
   // Handle task card reordering within the same column
@@ -259,7 +261,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
                                 onCrossColumnMove={handleCrossColumnMove}
                                 columnStatus={status}
                                 context="task-management"
-                                hideCheckbox={true}
+                                hideCheckbox={!showTaskCheckboxes}
                               />
                             ))}
                           </div>
@@ -332,7 +334,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
                   onCrossColumnMove={handleCrossColumnMove}
                   columnStatus={status}
                   context="task-management"
-                  hideCheckbox={true}
+                  hideCheckbox={!showTaskCheckboxes}
                 />
               ))
             }
@@ -358,7 +360,7 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
                         onCrossColumnMove={handleCrossColumnMove}
                         columnStatus={status}
                         context="task-management"
-                        hideCheckbox={true}
+                        hideCheckbox={!showTaskCheckboxes}
                       />
                     ))}
                   </div>

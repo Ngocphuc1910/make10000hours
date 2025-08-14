@@ -47,6 +47,9 @@ export interface UserState {
   updateTimezone: (newTimezone: string) => Promise<void>;
   autoDetectTimezone: () => Promise<void>;
   getTimezone: () => string;
+  
+  // NEW: Task checkbox visibility management
+  setShowTaskCheckboxes: (show: boolean) => Promise<void>;
 }
 
 // Global flag to prevent double initialization in React.StrictMode
@@ -533,6 +536,34 @@ export const useUserStore = create<UserState>((set, get) => {
       });
       
       return userTimezone || fallbackTimezone;
+    },
+
+    // NEW: Task checkbox visibility management
+    setShowTaskCheckboxes: async (show: boolean) => {
+      const { user } = get();
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      try {
+        const updatedSettings = {
+          ...user.settings,
+          showTaskCheckboxes: show
+        };
+
+        const sanitizedUserData = {
+          uid: user.uid,
+          userName: user.userName,
+          settings: updatedSettings,
+          subscription: user.subscription
+        };
+
+        await get().updateUserData(sanitizedUserData);
+        console.log('✅ Task checkbox visibility updated:', show);
+      } catch (error) {
+        console.error('❌ Failed to update task checkbox visibility:', error);
+        throw error;
+      }
     },
   };
 });

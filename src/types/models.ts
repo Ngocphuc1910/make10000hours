@@ -131,6 +131,7 @@ export interface AppSettings {
   compactTaskView: boolean;
   taskListViewMode: 'pomodoro' | 'today';
   timezone?: TimezoneSettings;
+  showTaskCheckboxes: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -145,6 +146,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   compactTaskView: false,
   taskListViewMode: 'today',
+  showTaskCheckboxes: false,
 };
 
 export const DEFAULT_SUBSCRIPTION: UserSubscription = {
