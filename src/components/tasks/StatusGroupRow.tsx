@@ -112,7 +112,8 @@ const StatusGroupRow: React.FC<StatusGroupRowProps> = ({
                           <TaskForm 
                             status={status} 
                             initialProjectId={projectId}
-                            onCancel={() => handleAddTaskToggle(status, false)} 
+                            onCancel={() => handleAddTaskToggle(status, false)}
+                            creationContext="task-management"
                           />
                         )}
                       </div>

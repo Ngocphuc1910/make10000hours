@@ -136,6 +136,7 @@ export interface AppSettings {
   taskListViewMode: 'pomodoro' | 'today';
   timezone?: TimezoneSettings;
   showTaskCheckboxes: boolean;
+  defaultTaskDate: boolean;
   // Toggle state persistence
   expandedProjectsInStatusView: string[];     // Project IDs expanded in "By Status" view
   expandedStatusesInProjectView: string[];    // Status types expanded in "By Project" view
@@ -154,6 +155,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   compactTaskView: false,
   taskListViewMode: 'today',
   showTaskCheckboxes: false,
+  defaultTaskDate: true,
   expandedProjectsInStatusView: [],
   expandedStatusesInProjectView: [],
 };

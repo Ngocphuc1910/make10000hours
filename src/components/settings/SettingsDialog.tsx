@@ -18,7 +18,7 @@ interface SettingsDialogProps {
 }
 
 const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initialSection }) => {
-  const { user, updateUserData, updateTimezone, autoDetectTimezone, setShowTaskCheckboxes } = useUserStore();
+  const { user, updateUserData, updateTimezone, autoDetectTimezone, setShowTaskCheckboxes, setDefaultTaskDate } = useUserStore();
   const { mode, setMode } = useThemeStore();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [originalSettings, setOriginalSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -47,12 +47,16 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
         migratedSettings.theme = migratedSettings.darkMode ? 'dark' : 'light';
         delete (migratedSettings as any).darkMode;
       }
-      setSettings(migratedSettings);
-      setOriginalSettings(migratedSettings);
+      
+      // Merge with default settings to ensure new properties exist
+      const mergedSettings = { ...DEFAULT_SETTINGS, ...migratedSettings };
+      
+      setSettings(mergedSettings);
+      setOriginalSettings(mergedSettings);
       
       // Sync theme mode with user settings
-      if (migratedSettings.theme) {
-        setMode(migratedSettings.theme);
+      if (mergedSettings.theme) {
+        setMode(mergedSettings.theme);
       }
     }
   }, [user]);
@@ -175,6 +179,28 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
       // Removed success message for cleaner UX
     } catch (error) {
       console.error('Failed to update task checkbox setting:', error);
+      setMessage({ 
+        type: 'error', 
+        text: 'Failed to update setting. Please try again.' 
+      });
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
+  const handleDefaultTaskDateToggle = async (useDefault: boolean) => {
+    try {
+      setMessage(null);
+      await setDefaultTaskDate(useDefault);
+      
+      // Update local settings state to reflect the change immediately
+      setSettings(prev => ({
+        ...prev,
+        defaultTaskDate: useDefault
+      }));
+      
+      // Removed success message for cleaner UX
+    } catch (error) {
+      console.error('Failed to update default task date setting:', error);
       setMessage({ 
         type: 'error', 
         text: 'Failed to update setting. Please try again.' 
@@ -622,7 +648,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                   </div>
                 )}
 
-                {/* Task Management Section */}
+                {/* Task Management Section - Updated */}
                 {activeSection === 'tasks' && (
                   <div className="space-y-0">
                     <div>
@@ -630,7 +656,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Show task checkboxes</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Show task checkbox</div>
                               <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Display checkboxes in task management page</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
@@ -638,6 +664,27 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                                 type="checkbox"
                                 checked={settings.showTaskCheckboxes}
                                 onChange={(e) => handleTaskCheckboxToggle(e.target.checked)}
+                                className="sr-only peer focus:outline-none"
+                              />
+                              <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between py-3">
+                            <div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Default date for new tasks</div>
+                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Use current date for the default date value</div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={settings.defaultTaskDate}
+                                onChange={(e) => {
+                                  console.log('🔧 Settings: Changing defaultTaskDate to:', e.target.checked);
+                                  handleDefaultTaskDateToggle(e.target.checked);
+                                }}
                                 className="sr-only peer focus:outline-none"
                               />
                               <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>

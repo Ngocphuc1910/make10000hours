@@ -297,7 +297,8 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
                               <TaskForm 
                                 status={status} 
                                 initialProjectId={projectId}
-                                onCancel={() => setIsAddingTask(false)} 
+                                onCancel={() => setIsAddingTask(false)}
+                                creationContext="task-management"
                               />
                             )}
                           </div>
@@ -395,7 +396,8 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
               <TaskForm 
                 status={status} 
                 initialProjectId={projectId} 
-                onCancel={() => setIsAddingTask(false)} 
+                onCancel={() => setIsAddingTask(false)}
+                creationContext="task-management"
               />
             )}
           </div>
