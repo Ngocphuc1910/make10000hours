@@ -180,6 +180,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
         status={task?.status || 'todo'}
         initialProjectId={isNewTask ? projectId : undefined}
         onCancel={handleFormCancel}
+        creationContext="task-management"
       />
     );
   }

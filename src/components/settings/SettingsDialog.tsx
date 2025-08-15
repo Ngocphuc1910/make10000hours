@@ -18,7 +18,7 @@ interface SettingsDialogProps {
 }
 
 const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initialSection }) => {
-  const { user, updateUserData, updateTimezone, autoDetectTimezone, setShowTaskCheckboxes } = useUserStore();
+  const { user, updateUserData, updateTimezone, autoDetectTimezone, setShowTaskCheckboxes, setDefaultTaskDate } = useUserStore();
   const { mode, setMode } = useThemeStore();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [originalSettings, setOriginalSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -50,9 +50,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
       
       // Merge with default settings to ensure new properties exist
       const mergedSettings = { ...DEFAULT_SETTINGS, ...migratedSettings };
-      
-      console.log('🔧 SettingsDialog: Merged settings:', mergedSettings);
-      console.log('🔧 Default task date setting:', mergedSettings.defaultTaskDate);
       
       setSettings(mergedSettings);
       setOriginalSettings(mergedSettings);
@@ -155,7 +152,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
     }));
   };
 
-  const handleAppSettingChange = (key: keyof Omit<AppSettings, 'timer'>, value: boolean | string | 'today' | 'empty') => {
+  const handleAppSettingChange = (key: keyof Omit<AppSettings, 'timer'>, value: boolean | string) => {
     setSettings(prev => ({
       ...prev,
       [key]: value
@@ -182,6 +179,28 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
       // Removed success message for cleaner UX
     } catch (error) {
       console.error('Failed to update task checkbox setting:', error);
+      setMessage({ 
+        type: 'error', 
+        text: 'Failed to update setting. Please try again.' 
+      });
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
+  const handleDefaultTaskDateToggle = async (useDefault: boolean) => {
+    try {
+      setMessage(null);
+      await setDefaultTaskDate(useDefault);
+      
+      // Update local settings state to reflect the change immediately
+      setSettings(prev => ({
+        ...prev,
+        defaultTaskDate: useDefault
+      }));
+      
+      // Removed success message for cleaner UX
+    } catch (error) {
+      console.error('Failed to update default task date setting:', error);
       setMessage({ 
         type: 'error', 
         text: 'Failed to update setting. Please try again.' 
@@ -637,7 +656,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Show task checkboxes</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Show task checkbox</div>
                               <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Display checkboxes in task management page</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
@@ -655,33 +674,21 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                         <div>
                           <div className="flex items-center justify-between py-3">
                             <div>
-                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>🚀 DEFAULT DATE FOR NEW TASKS 🚀</div>
-                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Tasks from Pomodoro timer always use today's date</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Default date for new tasks</div>
+                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Use current date for the default date value</div>
                             </div>
-                            <div className="flex items-center space-x-4">
-                              <label className="flex items-center">
-                                <input
-                                  type="radio"
-                                  name="defaultTaskDate"
-                                  value="today"
-                                  checked={settings.defaultTaskDate === 'today'}
-                                  onChange={(e) => handleAppSettingChange('defaultTaskDate', e.target.value as 'today' | 'empty')}
-                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                                />
-                                <span className="ml-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Today</span>
-                              </label>
-                              <label className="flex items-center">
-                                <input
-                                  type="radio"
-                                  name="defaultTaskDate"
-                                  value="empty"
-                                  checked={settings.defaultTaskDate === 'empty'}
-                                  onChange={(e) => handleAppSettingChange('defaultTaskDate', e.target.value as 'today' | 'empty')}
-                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                                />
-                                <span className="ml-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Empty</span>
-                              </label>
-                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={settings.defaultTaskDate}
+                                onChange={(e) => {
+                                  console.log('🔧 Settings: Changing defaultTaskDate to:', e.target.checked);
+                                  handleDefaultTaskDateToggle(e.target.checked);
+                                }}
+                                className="sr-only peer focus:outline-none"
+                              />
+                              <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                            </label>
                           </div>
                         </div>
                       </div>
