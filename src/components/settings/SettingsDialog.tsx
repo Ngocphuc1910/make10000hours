@@ -47,12 +47,19 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
         migratedSettings.theme = migratedSettings.darkMode ? 'dark' : 'light';
         delete (migratedSettings as any).darkMode;
       }
-      setSettings(migratedSettings);
-      setOriginalSettings(migratedSettings);
+      
+      // Merge with default settings to ensure new properties exist
+      const mergedSettings = { ...DEFAULT_SETTINGS, ...migratedSettings };
+      
+      console.log('🔧 SettingsDialog: Merged settings:', mergedSettings);
+      console.log('🔧 Default task date setting:', mergedSettings.defaultTaskDate);
+      
+      setSettings(mergedSettings);
+      setOriginalSettings(mergedSettings);
       
       // Sync theme mode with user settings
-      if (migratedSettings.theme) {
-        setMode(migratedSettings.theme);
+      if (mergedSettings.theme) {
+        setMode(mergedSettings.theme);
       }
     }
   }, [user]);
@@ -148,7 +155,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
     }));
   };
 
-  const handleAppSettingChange = (key: keyof Omit<AppSettings, 'timer'>, value: boolean | string) => {
+  const handleAppSettingChange = (key: keyof Omit<AppSettings, 'timer'>, value: boolean | string | 'today' | 'empty') => {
     setSettings(prev => ({
       ...prev,
       [key]: value
@@ -622,7 +629,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                   </div>
                 )}
 
-                {/* Task Management Section */}
+                {/* Task Management Section - Updated */}
                 {activeSection === 'tasks' && (
                   <div className="space-y-0">
                     <div>
@@ -642,6 +649,39 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                               />
                               <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                             </label>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between py-3">
+                            <div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>🚀 DEFAULT DATE FOR NEW TASKS 🚀</div>
+                              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Tasks from Pomodoro timer always use today's date</div>
+                            </div>
+                            <div className="flex items-center space-x-4">
+                              <label className="flex items-center">
+                                <input
+                                  type="radio"
+                                  name="defaultTaskDate"
+                                  value="today"
+                                  checked={settings.defaultTaskDate === 'today'}
+                                  onChange={(e) => handleAppSettingChange('defaultTaskDate', e.target.value as 'today' | 'empty')}
+                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                                />
+                                <span className="ml-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Today</span>
+                              </label>
+                              <label className="flex items-center">
+                                <input
+                                  type="radio"
+                                  name="defaultTaskDate"
+                                  value="empty"
+                                  checked={settings.defaultTaskDate === 'empty'}
+                                  onChange={(e) => handleAppSettingChange('defaultTaskDate', e.target.value as 'today' | 'empty')}
+                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                                />
+                                <span className="ml-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Empty</span>
+                              </label>
+                            </div>
                           </div>
                         </div>
                       </div>
