@@ -165,7 +165,8 @@ const ProjectColumn: React.FC<ProjectColumnProps> = ({
             <TaskForm 
               status={'todo'} // Default status for new tasks in project columns
               initialProjectId={projectId || undefined}
-              onCancel={() => setIsAddingTask(false)} 
+              onCancel={() => setIsAddingTask(false)}
+              creationContext="task-management"
             />
           )}
         </div>

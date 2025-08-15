@@ -24,9 +24,10 @@ interface TaskFormProps {
   onCancel: () => void;
   onSave?: () => void;
   isCalendarContext?: boolean;
+  creationContext?: 'task-management' | 'pomodoro' | 'drag-create';
 }
 
-const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, initialStartTime, initialEndTime, isAllDay, onCancel, onSave, isCalendarContext = false }) => {
+const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, initialStartTime, initialEndTime, isAllDay, onCancel, onSave, isCalendarContext = false, creationContext }) => {
   const taskStoreWithSync = useTaskStoreWithSync();
   const { addTask, updateTask, deleteTask } = taskStoreWithSync;
   
@@ -61,22 +62,53 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
   const [isCreatingNewProject, setIsCreatingNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [calendarDate, setCalendarDate] = useState(() => {
+    console.log('🔍 TaskForm: Initializing date with context:', creationContext, 'user setting:', user?.settings?.defaultTaskDate);
+    
     // For existing tasks, use their scheduled date
     if (task?.scheduledDate) {
+      console.log('🔍 TaskForm: Using existing task date:', task.scheduledDate);
       return task.scheduledDate;
     }
-    // For drag-create, use the initial start time date
+    // For drag-create, use the initial start time date (preserve existing logic)
     if (initialStartTime) {
       const year = initialStartTime.getFullYear();
       const month = String(initialStartTime.getMonth() + 1).padStart(2, '0');
       const day = String(initialStartTime.getDate()).padStart(2, '0');
+      console.log('🔍 TaskForm: Using drag-create date:', `${year}-${month}-${day}`);
       return `${year}-${month}-${day}`;
     }
-    // For new tasks, default to today
+    // For new tasks - check context and user setting
     if (!task) {
+      // Pomodoro context always uses today (per requirement)
+      if (creationContext === 'pomodoro') {
+        const today = new Date();
+        const dateStr = today.toISOString().split('T')[0];
+        console.log('🔍 TaskForm: Pomodoro context - using today:', dateStr);
+        return dateStr;
+      }
+      
+      // Task management context respects user setting
+      if (creationContext === 'task-management') {
+        // Handle loading state - fallback to current behavior
+        const useDefaultDate = user?.settings?.defaultTaskDate !== false;
+        console.log('🔍 TaskForm: Task management context - useDefaultDate:', useDefaultDate);
+        if (useDefaultDate) {
+          const today = new Date();
+          const dateStr = today.toISOString().split('T')[0];
+          console.log('🔍 TaskForm: Using today date:', dateStr);
+          return dateStr;
+        }
+        console.log('🔍 TaskForm: Using empty date');
+        return ''; // Empty when setting is disabled
+      }
+      
+      // Default behavior for undefined context (backward compatibility)
       const today = new Date();
-      return today.toISOString().split('T')[0]; // YYYY-MM-DD format
+      const dateStr = today.toISOString().split('T')[0];
+      console.log('🔍 TaskForm: No context - using today (fallback):', dateStr, 'creationContext was:', creationContext);
+      return dateStr;
     }
+    console.log('🔍 TaskForm: Fallback to empty');
     return '';
   });
   const [calendarEndDate, setCalendarEndDate] = useState(() => {
