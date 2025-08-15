@@ -392,6 +392,7 @@ const App: React.FC = () => {
   // Global timer interval - runs regardless of current page
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
+    let lastTickTime = Date.now();
 
     const manageInterval = () => {
       // Get the latest state directly from the store
@@ -406,12 +407,45 @@ const App: React.FC = () => {
         intervalId = setInterval(() => {
           // Call tick using getState to ensure it's the most current version from the store
           useTimerStore.getState().tick();
+          lastTickTime = Date.now();
         }, 1000);
+      }
+    };
+
+    // Handle page visibility changes to compensate for throttling
+    const handleVisibilityChange = () => {
+      const { isRunning, isActiveDevice } = useTimerStore.getState();
+      
+      if (document.visibilityState === 'visible' && isRunning && isActiveDevice) {
+        console.log('📱 Tab became visible - checking for lost time');
+        const now = Date.now();
+        const timeSinceLastTick = now - lastTickTime;
+        
+        // If more than 2 seconds passed, we likely missed ticks due to throttling
+        if (timeSinceLastTick > 2000) {
+          const missedSeconds = Math.floor(timeSinceLastTick / 1000);
+          console.log(`⏰ Compensating for ${missedSeconds} missed seconds due to tab throttling`);
+          
+          // Catch up by calling tick multiple times
+          for (let i = 0; i < missedSeconds && i < 300; i++) { // Cap at 5 minutes max
+            useTimerStore.getState().tick();
+          }
+        }
+        
+        lastTickTime = now;
+        // Restart interval to ensure proper timing
+        manageInterval();
+      } else if (document.visibilityState === 'hidden') {
+        console.log('📱 Tab became hidden - timer may be throttled');
       }
     };
 
     // Initial setup of the interval based on the current store state
     manageInterval();
+    lastTickTime = Date.now();
+
+    // Add visibility change listener
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Subscribe to ALL state changes, not just specific ones - this fixes the timing issue
     const unsubscribe = useTimerStore.subscribe(() => {
@@ -426,6 +460,7 @@ const App: React.FC = () => {
       if (intervalId) {
         clearInterval(intervalId);
       }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       unsubscribe();
       ChatIntegrationService.cleanup();
     };
