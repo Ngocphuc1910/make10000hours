@@ -78,6 +78,9 @@ interface TimerState {
   taskLoadError: string | null;
 }
 
+// Add recovery flag to prevent race conditions
+let isRecoveringSession = false;
+
 export const useTimerStore = create<TimerState>((set, get) => {
   // Helper function to find task by ID with retry
   const findTaskWithRetry = async (taskId: string, maxRetries = 3): Promise<Task | null> => {
@@ -275,10 +278,31 @@ export const useTimerStore = create<TimerState>((set, get) => {
     },
     
     tick: () => {
-      const { currentTime, totalTime, isActiveDevice, isRunning, activeSession, lastCountedMinute, mode } = get();
+      const { currentTime, totalTime, isActiveDevice, isRunning, activeSession, lastCountedMinute, mode, currentTask } = get();
       
       // Only tick if this is the active device and timer is running
       if (!isActiveDevice || !isRunning) return;
+
+      // 🛡️ IMPROVED SAFETY NET (Agent 2's race condition fixed)
+      if (isRunning && mode === 'pomodoro' && currentTask && !activeSession && !isRecoveringSession) {
+        console.error('⚠️ Active session lost - starting recovery (once)');
+        isRecoveringSession = true; // Prevent multiple attempts
+        
+        get().createActiveSession().then(() => {
+          const currentMinute = Math.floor(get().currentTime / 60);
+          // Don't override lastCountedMinute - let boundary detection work naturally
+          console.log('✅ Session recovered, resuming at minute:', currentMinute);
+          isRecoveringSession = false;
+        }).catch(error => {
+          console.error('❌ Session recovery failed:', error);
+          isRecoveringSession = false;
+          // Could add retry logic here if needed
+        });
+        return; // Skip this tick
+      }
+
+      // If we're still recovering, skip this tick
+      if (isRecoveringSession) return;
 
       const { timeSpentIncrement } = useTaskStore.getState();
 
@@ -288,11 +312,11 @@ export const useTimerStore = create<TimerState>((set, get) => {
         
         if (lastCountedMinute !== null && currentMinute < lastCountedMinute) {
           // We've crossed a minute boundary (time decreased from one minute to the next)
-          console.log('🔄 Processing minute boundary:', {
-            currentMinute,
-            lastCountedMinute,
+          console.log('🔄 Minute boundary:', {
+            from: lastCountedMinute,
+            to: currentMinute,
             sessionId: activeSession.sessionId,
-            taskId: activeSession.taskId
+            deviceId: timerService.getDeviceId()
           });
           
           // Update active session duration in database
@@ -597,6 +621,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
           (Date.now() - parseInt(lastRemoteSync)) > 5 * 60 * 1000; // 5 minutes
         
         if (shouldSyncFromRemote) {
+          console.log('📡 Background sync starting (5-min interval)');
           // Sync in background
           timerService.loadTimerState(userId).then(remoteState => {
             if (remoteState) {
@@ -758,13 +783,38 @@ export const useTimerStore = create<TimerState>((set, get) => {
         ? useTaskStore.getState().tasks.find(task => task.id === currentTaskId) || null
         : null;
       
-      // First, set the basic timer state
+      // 🔧 CAPTURE CURRENT STATE BEFORE SYNC
+      const currentState = get();
+      
+      // 🏠 DEVICE OWNERSHIP CHECK (Agent 1's valid point)
+      const currentDeviceId = timerService.getDeviceId();
+      const shouldYieldToRemoteDevice = remoteState.activeDeviceId && 
+                                       remoteState.activeDeviceId !== currentDeviceId && 
+                                       remoteState.isRunning;
+      
+      // 🛡️ PRESERVATION LOGIC (Enhanced)
+      const shouldPreserveSession = currentState.isRunning && 
+                                    currentState.activeSession && 
+                                    currentState.mode === 'pomodoro' &&
+                                    !shouldYieldToRemoteDevice; // Don't preserve if another device should own
+      
+      // 📊 DEBUG LOG
+      if (shouldPreserveSession) {
+        console.log('🔄 Sync preserving active session (this device owns it)');
+      } else if (shouldYieldToRemoteDevice) {
+        console.log('🔄 Sync yielding to remote device:', remoteState.activeDeviceId);
+      }
+      
+      // ✅ ENHANCED STATE PRESERVATION (Agent 3's concern addressed)
       set({
         ...remoteState,
         currentTask: currentTask,
-        activeSession: null, // Will be created fresh if needed
-        sessionStartTimerPosition: null,
-        lastCountedMinute: null,
+        // Preserve ALL session state when appropriate
+        activeSession: shouldPreserveSession ? currentState.activeSession : null,
+        sessionStartTimerPosition: shouldPreserveSession ? currentState.sessionStartTimerPosition : null,
+        lastCountedMinute: shouldPreserveSession ? currentState.lastCountedMinute : null,
+        // Handle device ownership
+        isActiveDevice: shouldYieldToRemoteDevice ? false : currentState.isActiveDevice,
       });
       
       // If timer is running and we have a task, resume the existing session or create a new one

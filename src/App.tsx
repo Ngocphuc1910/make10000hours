@@ -389,43 +389,174 @@ const App: React.FC = () => {
 
   // Global Deep Focus sync now handled by DeepFocusProvider context
 
-  // Global timer interval - runs regardless of current page
+  // Global timer interval - runs regardless of current page with anti-throttling
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
+    let rafId: number | null = null;
+    let lastTickTime = Date.now();
+    let timerStartRealTime: number | null = null;
 
-    const manageInterval = () => {
-      // Get the latest state directly from the store
-      const { isRunning, isActiveDevice } = useTimerStore.getState();
-      
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
-      }
-
-      if (isRunning && isActiveDevice) {
-        intervalId = setInterval(() => {
-          // Call tick using getState to ensure it's the most current version from the store
-          useTimerStore.getState().tick();
-        }, 1000);
+    // Multi-layered timer system to combat browser throttling
+    const tick = () => {
+      const state = useTimerStore.getState();
+      if (state.isRunning && state.isActiveDevice) {
+        state.tick();
+        lastTickTime = Date.now();
       }
     };
 
-    // Initial setup of the interval based on the current store state
-    manageInterval();
+    // Strategy 1: RequestAnimationFrame (highest priority, rarely throttled)
+    const rafTick = () => {
+      if (document.visibilityState === 'visible') {
+        const state = useTimerStore.getState();
+        if (state.isRunning && state.isActiveDevice) {
+          tick();
+        }
+      }
+      rafId = requestAnimationFrame(rafTick);
+    };
 
-    // Subscribe to ALL state changes, not just specific ones - this fixes the timing issue
-    const unsubscribe = useTimerStore.subscribe(() => {
-      // Use setTimeout to ensure the state change has been processed
-      setTimeout(() => {
+    // Strategy 2: setTimeout fallback (less aggressive than setInterval)
+    const timeoutTick = () => {
+      tick();
+      timeoutId = setTimeout(timeoutTick, 1000);
+    };
+
+    // Strategy 3: Traditional setInterval (primary method)
+    const manageInterval = () => {
+      // Get the latest state directly from the store
+      const { isRunning, isActiveDevice, startTime } = useTimerStore.getState();
+      
+      // Clear existing intervals
+      if (intervalId) clearInterval(intervalId);
+      if (timeoutId) clearTimeout(timeoutId);
+      if (rafId) cancelAnimationFrame(rafId);
+      
+      intervalId = null;
+      timeoutId = null;
+      rafId = null;
+
+      if (isRunning && isActiveDevice) {
+        // Record when timer actually started for time-based calculation
+        if (!timerStartRealTime) {
+          timerStartRealTime = Date.now();
+        }
+        
+        // Primary interval
+        intervalId = setInterval(tick, 1000);
+        
+        // Fallback timeout chain (more resilient to throttling)
+        timeoutId = setTimeout(timeoutTick, 1000);
+        
+        // RAF for visual updates (only when visible)
+        if (document.visibilityState === 'visible') {
+          rafId = requestAnimationFrame(rafTick);
+        }
+      } else {
+        timerStartRealTime = null;
+      }
+    };
+
+    // Advanced recovery system for tab switching
+    const handleVisibilityChange = () => {
+      const state = useTimerStore.getState();
+      
+      if (document.visibilityState === 'visible') {
+        console.log('📱 Tab became visible - performing comprehensive time sync');
+        
+        if (state.isRunning && state.isActiveDevice && timerStartRealTime) {
+          const now = Date.now();
+          const realTimeElapsed = now - timerStartRealTime;
+          const timeSinceLastTick = now - lastTickTime;
+          
+          // If we missed significant time, do a comprehensive sync
+          if (timeSinceLastTick > 2000) {
+            const missedSeconds = Math.floor(timeSinceLastTick / 1000);
+            console.log(`⏰ AGGRESSIVE RECOVERY: Compensating for ${missedSeconds} missed seconds`);
+            
+            // Multiple recovery strategies
+            for (let i = 0; i < missedSeconds && i < 1800; i++) { // Cap at 30 minutes
+              state.tick();
+            }
+            
+            // Also sync with real elapsed time as double-check
+            const expectedCurrentTime = state.totalTime - Math.floor(realTimeElapsed / 1000);
+            if (Math.abs(expectedCurrentTime - state.currentTime) > 5) {
+              console.log(`🔄 Time drift detected, syncing: expected=${expectedCurrentTime}, actual=${state.currentTime}`);
+              useTimerStore.setState({
+                currentTime: Math.max(0, expectedCurrentTime)
+              });
+            }
+          }
+          
+          lastTickTime = now;
+        }
+        
+        // Restart all timer mechanisms
         manageInterval();
-      }, 0);
+        
+        // Start RAF for visual updates
+        if (state.isRunning && state.isActiveDevice && !rafId) {
+          rafId = requestAnimationFrame(rafTick);
+        }
+      } else {
+        console.log('📱 Tab became hidden - switching to background timer strategies');
+        // Cancel RAF when hidden (save resources)
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+      }
+    };
+
+    // Additional recovery triggers
+    const handleFocus = () => {
+      console.log('🔍 Window focus - triggering timer check');
+      handleVisibilityChange();
+    };
+
+    const handleMouseMove = () => {
+      // Passive recovery on user interaction
+      const state = useTimerStore.getState();
+      if (state.isRunning && state.isActiveDevice && (Date.now() - lastTickTime) > 5000) {
+        console.log('👆 User interaction - checking timer sync');
+        handleVisibilityChange();
+      }
+    };
+
+    // Initial setup
+    manageInterval();
+    lastTickTime = Date.now();
+
+    // Event listeners for comprehensive recovery
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('mousemove', handleMouseMove);
+
+    // Subscribe to timer state changes
+    const unsubscribe = useTimerStore.subscribe((state, prevState) => {
+      // Reset timer start time when timer starts fresh
+      if (state.isRunning && !prevState.isRunning) {
+        timerStartRealTime = Date.now();
+      } else if (!state.isRunning && prevState.isRunning) {
+        timerStartRealTime = null;
+      }
+      
+      // Restart intervals on state change
+      setTimeout(manageInterval, 0);
     });
 
-    // Cleanup function to clear interval and unsubscribe when App component unmounts
+    // Cleanup function
     return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
+      if (intervalId) clearInterval(intervalId);
+      if (timeoutId) clearTimeout(timeoutId);
+      if (rafId) cancelAnimationFrame(rafId);
+      
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('mousemove', handleMouseMove);
+      
       unsubscribe();
       ChatIntegrationService.cleanup();
     };
