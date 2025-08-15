@@ -37,7 +37,7 @@ const SettingsPage = () => {
     }));
   };
 
-  const handleAppSettingChange = (key: keyof Omit<AppSettings, 'timer'>, value: boolean | string) => {
+  const handleAppSettingChange = (key: keyof Omit<AppSettings, 'timer'>, value: boolean | string | 'today' | 'empty') => {
     setSettings(prev => ({
       ...prev,
       [key]: value
@@ -240,6 +240,52 @@ const SettingsPage = () => {
               <label htmlFor="compactTaskView" className="ml-2 text-sm text-gray-700">
                 Compact task view
               </label>
+            </div>
+          </div>
+        </section>
+
+        {/* Task Management Settings */}
+        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Task Management</h2>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Default Date for New Tasks
+              </label>
+              <div className="space-y-2">
+                <div className="flex items-center">
+                  <input
+                    type="radio"
+                    id="defaultDateToday"
+                    name="defaultTaskDate"
+                    value="today"
+                    checked={settings.defaultTaskDate === 'today'}
+                    onChange={(e) => handleAppSettingChange('defaultTaskDate', e.target.value as 'today' | 'empty')}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <label htmlFor="defaultDateToday" className="ml-2 text-sm text-gray-700">
+                    Set to today's date
+                  </label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    type="radio"
+                    id="defaultDateEmpty"
+                    name="defaultTaskDate"
+                    value="empty"
+                    checked={settings.defaultTaskDate === 'empty'}
+                    onChange={(e) => handleAppSettingChange('defaultTaskDate', e.target.value as 'today' | 'empty')}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <label htmlFor="defaultDateEmpty" className="ml-2 text-sm text-gray-700">
+                    Leave empty (let me choose)
+                  </label>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-gray-500">
+                Note: Tasks created from Pomodoro timer will always use today's date regardless of this setting.
+              </p>
             </div>
           </div>
         </section>

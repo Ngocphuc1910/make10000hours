@@ -801,7 +801,8 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                                   <TaskForm 
                                     status={status} 
                                     initialProjectId={id === 'no-project' ? undefined : id}
-                                    onCancel={() => handleAddTaskToggle(status, id, false)} 
+                                    onCancel={() => handleAddTaskToggle(status, id, false)}
+                                    creationContext="task-management"
                                   />
                                 )}
                               </div>
