@@ -439,6 +439,70 @@ const App: React.FC = () => {
     }
   }, [user?.settings?.theme, setMode]);
 
+  // Handle authentication URL parameters for landing page flow - detect and store intent immediately
+  useEffect(() => {
+    // HashRouter puts everything after # symbol, so we need to parse the hash
+    const hash = window.location.hash;
+    let urlParams: URLSearchParams;
+    
+    if (hash.includes('?')) {
+      // Extract query string from hash (e.g., #/?action=login -> ?action=login)
+      const queryString = hash.substring(hash.indexOf('?'));
+      urlParams = new URLSearchParams(queryString);
+    } else {
+      // Fallback: also check regular search params in case of direct URL access
+      urlParams = new URLSearchParams(window.location.search);
+    }
+    
+    const authParam = urlParams.get('action') || urlParams.get('auth');
+    
+    if (authParam === 'login' || authParam === 'required') {
+      console.log('🔗 Authentication requested via URL parameter');
+      console.log('🔗 Detected from:', hash.includes('?') ? 'hash parameters' : 'search parameters');
+      
+      // Set global flags to prevent any authentication modals and store intent
+      (window as any).__SKIP_AUTH_MODALS__ = true;
+      (window as any).__AUTH_INTENT__ = true;
+      
+      // Clean up URL parameters immediately to prevent re-triggering
+      if (hash.includes('?')) {
+        // For HashRouter: clean hash parameters
+        const baseHash = hash.substring(0, hash.indexOf('?'));
+        window.location.hash = baseHash;
+      } else {
+        // For regular URLs: clean search parameters
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('action');
+        newUrl.searchParams.delete('auth');
+        window.history.replaceState({}, '', newUrl.toString());
+      }
+      
+      console.log('🔗 URL cleaned up, auth intent stored globally');
+    }
+  }, []); // Run only once on mount
+
+  // Handle authentication flow once user store is initialized
+  useEffect(() => {
+    if (isInitialized && (window as any).__AUTH_INTENT__) {
+      if (!user) {
+        console.log('🔐 User not authenticated, triggering direct Google auth...');
+        
+        // Clear the auth intent since we're handling it now
+        (window as any).__AUTH_INTENT__ = false;
+        
+        // Trigger auth immediately
+        import('./utils/authGuard').then(({ directGoogleAuth }) => {
+          directGoogleAuth();
+        });
+      } else {
+        console.log('✅ User already authenticated, proceeding to app');
+        // Clear both flags since user is already authenticated
+        (window as any).__SKIP_AUTH_MODALS__ = false;
+        (window as any).__AUTH_INTENT__ = false;
+      }
+    }
+  }, [isInitialized, user]);
+
   // Initialize user store on app start
   useEffect(() => {
     // TODO: fix the problem that this runs twice on initial load. Check for React.StrictMode
@@ -645,6 +709,17 @@ const App: React.FC = () => {
         console.warn('Skipping reload to prevent infinite loop - localStorage will be empty');
       }
     }
+    
+    // Clear skip auth modals flag when user becomes authenticated
+    const clearAuthModalFlag = () => {
+      if (user && (window as any).__SKIP_AUTH_MODALS__) {
+        console.log('✅ User authenticated, clearing skip auth modals flag');
+        (window as any).__SKIP_AUTH_MODALS__ = false;
+      }
+    };
+    
+    // Check authentication state changes
+    clearAuthModalFlag();
     
     // Cleanup event listeners
     return () => {
