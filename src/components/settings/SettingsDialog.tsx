@@ -681,10 +681,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                               <input
                                 type="checkbox"
                                 checked={settings.defaultTaskDate}
-                                onChange={(e) => {
-                                  console.log('🔧 Settings: Changing defaultTaskDate to:', e.target.checked);
-                                  handleDefaultTaskDateToggle(e.target.checked);
-                                }}
+                                onChange={(e) => handleDefaultTaskDateToggle(e.target.checked)}
                                 className="sr-only peer focus:outline-none"
                               />
                               <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
