@@ -51,6 +51,9 @@ export interface UserState {
   // NEW: Task checkbox visibility management
   setShowTaskCheckboxes: (show: boolean) => Promise<void>;
   
+  // NEW: Default task date setting management
+  setDefaultTaskDate: (useDefault: boolean) => Promise<void>;
+  
   // NEW: Toggle state persistence methods
   toggleProjectInStatusView: (projectId: string) => Promise<void>;
   toggleStatusInProjectView: (statusType: string) => Promise<void>;
@@ -566,6 +569,34 @@ export const useUserStore = create<UserState>((set, get) => {
         console.log('✅ Task checkbox visibility updated:', show);
       } catch (error) {
         console.error('❌ Failed to update task checkbox visibility:', error);
+        throw error;
+      }
+    },
+
+    // NEW: Default task date setting management
+    setDefaultTaskDate: async (useDefault: boolean) => {
+      const { user } = get();
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      try {
+        const updatedSettings = {
+          ...user.settings,
+          defaultTaskDate: useDefault
+        };
+
+        const sanitizedUserData = {
+          uid: user.uid,
+          userName: user.userName,
+          settings: updatedSettings,
+          subscription: user.subscription
+        };
+
+        await get().updateUserData(sanitizedUserData);
+        console.log('✅ Default task date setting updated:', useDefault);
+      } catch (error) {
+        console.error('❌ Failed to update default task date setting:', error);
         throw error;
       }
     },
