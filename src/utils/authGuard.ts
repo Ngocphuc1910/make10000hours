@@ -67,8 +67,13 @@ export const withAuthGuard = <T extends any[]>(
  * Directly opens Google authentication popup since it's the only auth method
  */
 export const triggerAuthenticationFlow = (): void => {
-  // Directly trigger Google authentication without confirmation modal
-  // since Google is the only authentication method available
+  // Check if we should skip modals (from landing page flow)
+  if ((window as any).__SKIP_AUTH_MODALS__) {
+    console.log('🔗 Skipping authentication trigger - landing page flow active');
+    return;
+  }
+  
+  // For other cases, trigger direct Google auth
   directGoogleAuth();
 };
 
@@ -120,8 +125,18 @@ export const directGoogleAuth = async (): Promise<void> => {
       // Don't show an error for this case - user intentionally cancelled
     } else if (error.code === 'auth/popup-blocked') {
       console.error('🚫 Popup was blocked by browser');
-      // Fallback to the modal approach if popup is blocked
-      showAuthModal();
+      // Check if user came from landing page URL - if so, don't show modal
+      const urlParams = new URLSearchParams(window.location.search);
+      const authParam = urlParams.get('action') || urlParams.get('auth');
+      
+      if (authParam === 'login' || authParam === 'required') {
+        console.log('🔗 Popup blocked for direct auth flow - trying redirect approach');
+        // For landing page users, redirect to Google OAuth directly instead of modal
+        window.location.href = `https://accounts.google.com/oauth/v2/auth?client_id=496225832510-4q5t9iogu4dhpsbenkg6f5oqmbgudae8.apps.googleusercontent.com&redirect_uri=${encodeURIComponent(window.location.origin)}&response_type=code&scope=email%20profile&access_type=offline`;
+      } else {
+        // Fallback to the modal approach if popup is blocked for regular users
+        showAuthModal();
+      }
     } else {
       // Show a user-friendly error message
       alert('Failed to sign in. Please try again.');
@@ -134,6 +149,12 @@ export const directGoogleAuth = async (): Promise<void> => {
  * Only used when direct popup authentication fails
  */
 export const showAuthModal = (): void => {
+  // Check if we should skip modals (from landing page flow)
+  if ((window as any).__SKIP_AUTH_MODALS__) {
+    console.log('🔗 Skipping modal - landing page flow active');
+    return;
+  }
+  
   // Create and mount the auth component dynamically as fallback
   createAuthModal();
 };
@@ -142,6 +163,12 @@ export const showAuthModal = (): void => {
  * Create and show a modal with authentication UI
  */
 export const createAuthModal = (): void => {
+  // Check if we should skip modals (from landing page flow)
+  if ((window as any).__SKIP_AUTH_MODALS__) {
+    console.log('🔗 Skipping modal creation - landing page flow active');
+    return;
+  }
+  
   // Check if modal already exists
   if (document.getElementById('auth-modal')) {
     return;
