@@ -111,10 +111,30 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
   const [isHoveringTime, setIsHoveringTime] = useState(false);
   const [preventDropdown, setPreventDropdown] = useState(false);
   const [includeTime, setIncludeTime] = useState(() => {
+    // DEBUG: Log TaskForm initialization
+    console.log('🔧 TaskForm includeTime initialization:', {
+      isAllDay,
+      taskIncludeTime: task?.includeTime,
+      hasInitialStartTime: !!initialStartTime,
+      hasInitialEndTime: !!initialEndTime,
+      initialStartTime,
+      initialEndTime
+    });
+    
     // Always force false for all-day events, regardless of existing task data
-    if (isAllDay === true) return false;
-    if (task?.includeTime !== undefined) return task.includeTime;
-    if (initialStartTime && initialEndTime) return true;
+    if (isAllDay === true) {
+      console.log('💡 Setting includeTime = false (all-day event)');
+      return false;
+    }
+    if (task?.includeTime !== undefined) {
+      console.log('💡 Setting includeTime =', task.includeTime, '(existing task)');
+      return task.includeTime;
+    }
+    if (initialStartTime && initialEndTime) {
+      console.log('💡 Setting includeTime = true (has initial times)');
+      return true;
+    }
+    console.log('💡 Setting includeTime = false (default)');
     return false;
   });
   const [startTime, setStartTime] = useState(() => {
@@ -439,7 +459,13 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       }
     } else {
       // Add new task
-      console.log('Creating new task with data:', taskData);
+      console.log('🚀 Creating new task with data:', taskData);
+      console.log('🔍 Key fields check:', {
+        includeTime: taskData.includeTime,
+        scheduledStartTime: taskData.scheduledStartTime,
+        scheduledEndTime: taskData.scheduledEndTime,
+        scheduledDate: taskData.scheduledDate
+      });
       try {
         console.log('About to call addTask...');
         const taskId = await addTask(taskData);
