@@ -51,7 +51,7 @@ interface TaskState {
   hasSchedulingChanges: (currentTask: Task | undefined, updates: Partial<Task>) => boolean;
   validateMultiDayTask: (taskData: Partial<Task>) => { isValid: boolean; errors: string[] };
   reorderColumns: (newOrder: Task['status'][]) => void;
-  reorderProjectColumns: (newOrder: string[]) => void;
+  reorderProjectColumns: (newOrder: string[]) => Promise<void>;
 }
 
 const tasksCollection = collection(db, 'tasks');
@@ -1267,10 +1267,61 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     localStorage.setItem('taskColumnOrder', JSON.stringify(newOrder));
   },
 
-  reorderProjectColumns: (newOrder: string[]) => {
+  reorderProjectColumns: async (newOrder: string[]) => {
+    console.log('🔄 ===== REORDER PROJECTS DEBUG START =====');
+    console.log('🔄 New order received:', newOrder);
+    console.log('🔄 Current projectColumnOrder before update:', get().projectColumnOrder);
+    
+    // Update frontend state immediately (optimistic update)
     set({ projectColumnOrder: newOrder });
+    console.log('🔄 State updated with new order');
+    
     // Persist to localStorage for user preference
     localStorage.setItem('projectColumnOrder', JSON.stringify(newOrder));
+    console.log('🔄 LocalStorage updated');
+    console.log('🔄 LocalStorage content:', localStorage.getItem('projectColumnOrder'));
+    
+    // Sync order to database for persistence across sessions
+    try {
+      console.log('🔄 Starting database sync...');
+      const { user } = useUserStore.getState();
+      
+      if (!user) {
+        console.log('🔄 No user found, skipping database sync');
+        return;
+      }
+      
+      const { projects } = get();
+      console.log('🔄 Current projects:', projects.map(p => ({ id: p.id, name: p.name, order: p.order })));
+      
+      // Update order field for each project based on its position in newOrder
+      const batch = writeBatch(db);
+      
+      newOrder.forEach((projectId, index) => {
+        // Skip 'no-project' as it's a special case
+        if (projectId === 'no-project') return;
+        
+        const projectRef = doc(db, 'projects', projectId);
+        const newOrderValue = index + 1; // 1-based ordering
+        
+        console.log(`🔄 Setting project ${projectId} order to ${newOrderValue}`);
+        batch.update(projectRef, { 
+          order: newOrderValue,
+          updatedAt: new Date()
+        });
+      });
+      
+      await batch.commit();
+      console.log('🔄 Database sync completed successfully');
+      
+    } catch (error) {
+      console.error('🔄 Database sync failed:', error);
+      console.log('🔄 Frontend order preserved, but database not updated');
+      // Note: We don't revert the frontend state to maintain UX
+    }
+    
+    console.log('🔄 Final state projectColumnOrder:', get().projectColumnOrder);
+    console.log('🔄 ===== REORDER PROJECTS DEBUG END =====');
   },
 }));
 
