@@ -577,8 +577,10 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       
-      // Don't close if clicking inside project dropdown OR ColorPicker modal
-      if (!target.closest('.project-dropdown') && !target.closest('[data-color-picker-modal]')) {
+      // Don't close if clicking inside project dropdown button, dropdown menu, OR ColorPicker modal
+      if (!target.closest('.project-dropdown') && 
+          !target.closest('[data-project-dropdown-menu]') && 
+          !target.closest('[data-color-picker-modal]')) {
         setShowProjectDropdown({});
         // Don't close ColorPicker here - it has its own click-outside handler
       }
@@ -693,6 +695,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                     <div className="relative project-dropdown">
                       <button 
                         className="p-2 rounded-full hover:bg-background-container group"
+                        data-project-dropdown={id}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleProjectDropdownToggle(id);
@@ -706,45 +709,6 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                           </svg>
                         </div>
                       </button>
-                      
-                      {/* Project Dropdown Menu */}
-                      {showProjectDropdown[id] && id !== 'no-project' && (
-                        <div className="absolute right-0 mt-2 w-48 bg-background-secondary border border-border rounded-lg shadow-lg z-50 overflow-hidden">
-                          <div className="py-1 px-2">
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleProjectColorChange(id);
-                              }}
-                              className="w-full px-3 py-2 text-sm text-text-primary hover:bg-background-container text-left flex items-center transition-colors duration-200 rounded-md"
-                            >
-                              <Icon name="palette-line" size={16} className="mr-2" />
-                              Edit project color
-                            </button>
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditProjectName(id);
-                              }}
-                              className="w-full px-3 py-2 text-sm text-text-primary hover:bg-background-container text-left flex items-center transition-colors duration-200 rounded-md"
-                            >
-                              <Icon name="edit-line" size={16} className="mr-2" />
-                              Edit project name
-                            </button>
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteProject(id);
-                              }}
-                              className="w-full px-3 py-2 text-sm text-red-600 hover:bg-red-500/10 text-left flex items-center transition-colors duration-200 rounded-md"
-                            >
-                              <Icon name="delete-bin-line" size={16} className="mr-2" />
-                              Delete project
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      
                     </div>
                   </DraggableColumnHeader>
                 );
@@ -939,6 +903,72 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
         </div>
       </DndContext>
       
+      {/* Project Dropdown Menus - Rendered outside clipping containers */}
+      {Object.entries(showProjectDropdown).map(([projectId, isOpen]) => {
+        if (!isOpen || projectId === 'no-project') return null;
+        
+        // Find the button position to position dropdown relative to it
+        const buttonElement = document.querySelector(`[data-project-dropdown="${projectId}"]`);
+        if (!buttonElement) return null;
+        
+        const rect = buttonElement.getBoundingClientRect();
+        const dropdownWidth = 192; // w-48 = 12rem = 192px
+        const spaceOnRight = window.innerWidth - rect.right;
+        const spaceOnLeft = rect.left;
+        
+        // Position dropdown to the right if there's space, otherwise to the left
+        const positionRight = spaceOnRight >= dropdownWidth;
+        
+        return (
+          <div
+            key={`dropdown-${projectId}`}
+            className="fixed w-48 bg-background-secondary border border-border rounded-lg shadow-lg overflow-hidden"
+            style={{
+              top: Math.max(8, rect.bottom + 8), // Ensure it doesn't go above viewport
+              ...(positionRight 
+                ? { left: rect.right - dropdownWidth } // Align right edge of dropdown with right edge of button
+                : { right: window.innerWidth - rect.left } // Align left edge of dropdown with left edge of button
+              ),
+              zIndex: 9999,
+            }}
+            data-project-dropdown-menu={projectId}
+          >
+            <div className="py-1 px-2">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleProjectColorChange(projectId);
+                }}
+                className="w-full px-3 py-2 text-sm text-text-primary hover:bg-background-container text-left flex items-center transition-colors duration-200 rounded-md"
+              >
+                <Icon name="palette-line" size={16} className="mr-2" />
+                Edit project color
+              </button>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEditProjectName(projectId);
+                }}
+                className="w-full px-3 py-2 text-sm text-text-primary hover:bg-background-container text-left flex items-center transition-colors duration-200 rounded-md"
+              >
+                <Icon name="edit-line" size={16} className="mr-2" />
+                Edit project name
+              </button>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteProject(projectId);
+                }}
+                className="w-full px-3 py-2 text-sm text-red-600 hover:bg-red-500/10 text-left flex items-center transition-colors duration-200 rounded-md"
+              >
+                <Icon name="delete-bin-line" size={16} className="mr-2" />
+                Delete project
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
       {/* Color Picker Modals */}
       {Object.entries(showColorPicker).map(([projectId, isOpen]) => {
         const project = projects.find(p => p.id === projectId);
