@@ -157,7 +157,8 @@ const ProjectTaskBlock: React.FC<ProjectTaskBlockProps> = ({
           ) : (
             <TaskForm 
               status={status} 
-              onCancel={() => setIsAddingTask(false)} 
+              onCancel={() => setIsAddingTask(false)}
+              creationContext="task-management"
             />
           )}
         </div>
