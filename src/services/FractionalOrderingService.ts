@@ -16,23 +16,49 @@ export class FractionalOrderingService {
    * @returns New position string that sorts between before and after
    */
   static generatePosition(before: string | null, after: string | null): string {
+    let result: string;
+    
     // First item in empty list
     if (!before && !after) {
-      return 'V'; // Middle of our character range
+      result = 'V'; // Middle of our character range
     }
-    
     // Insert at beginning (before first item)
-    if (!before) {
-      return this.decrementPosition(after!);
+    else if (!before) {
+      result = this.decrementPosition(after!);
     }
-    
     // Insert at end (after last item)
-    if (!after) {
-      return this.incrementPosition(before!);
+    else if (!after) {
+      result = this.incrementPosition(before!);
+    }
+    // Insert between two positions
+    else {
+      result = this.midpoint(before, after);
     }
     
-    // Insert between two positions
-    return this.midpoint(before, after);
+    // Safety validation: ensure generated position maintains sort order
+    if (before && result.localeCompare(before) <= 0) {
+      console.error('🚨 Generated position would sort incorrectly, using fallback:', {
+        before,
+        generated: result,
+        after,
+        method: !before && !after ? 'empty' : !before ? 'decrement' : !after ? 'increment' : 'midpoint'
+      });
+      // Emergency fallback: use a safer strategy
+      return before + 'Z';
+    }
+    
+    if (after && result.localeCompare(after) >= 0) {
+      console.error('🚨 Generated position would sort incorrectly, using fallback:', {
+        before,
+        generated: result,
+        after,
+        method: !before && !after ? 'empty' : !before ? 'decrement' : !after ? 'increment' : 'midpoint'
+      });
+      // Emergency fallback: append to before with a safe character
+      return (before || '') + 'Z';
+    }
+    
+    return result;
   }
 
   /**
@@ -60,47 +86,64 @@ export class FractionalOrderingService {
    * Create a position that comes after the given position
    */
   private static incrementPosition(position: string): string {
-    // Simple approach: just append a middle character
-    return position + 'V';
+    // Try to increment the last character first
+    const lastChar = position[position.length - 1];
+    const lastCharIndex = this.CHARS.indexOf(lastChar);
+    
+    // If we can increment the last character safely within the same "group"
+    // Only increment within numbers (0-9) or within uppercase (A-Z) or within lowercase (a-z)
+    if (lastCharIndex >= 0 && lastCharIndex < this.CHARS.length - 1) {
+      const nextChar = this.CHARS[lastCharIndex + 1];
+      
+      // Check if we're staying within the same character group
+      const isInNumbers = lastChar >= '0' && lastChar <= '9' && nextChar >= '0' && nextChar <= '9';
+      const isInUppercase = lastChar >= 'A' && lastChar <= 'Z' && nextChar >= 'A' && nextChar <= 'Z';
+      const isInLowercase = lastChar >= 'a' && lastChar <= 'z' && nextChar >= 'a' && nextChar <= 'z';
+      
+      if (isInNumbers || isInUppercase || isInLowercase) {
+        return position.slice(0, -1) + nextChar; // "OF" → "OG"
+      }
+    }
+    
+    // If we can't increment safely within the same group, append a small character
+    return position + '1'; // "OZ" → "OZ1", "OFz" → "OFz1"
   }
 
   /**
    * Generate a position between two existing positions
    */
   private static midpoint(before: string, after: string): string {
-    // Find the first position where characters differ
-    const maxLength = Math.max(before.length, after.length);
+    // Simple and reliable approach: extend the before string with a middle character
+    // This ensures the result always sorts between before and after
     
+    // Pad strings to same length for comparison
+    const maxLength = Math.max(before.length, after.length);
+    const beforePadded = before.padEnd(maxLength, '0');
+    const afterPadded = after.padEnd(maxLength, '0');
+    
+    // Find the first differing position
     for (let i = 0; i < maxLength; i++) {
-      const beforeChar = i < before.length ? before[i] : '0';
-      const afterChar = i < after.length ? after[i] : 'z';
+      const beforeChar = beforePadded[i];
+      const afterChar = afterPadded[i];
       
-      const beforeIndex = this.CHARS.indexOf(beforeChar);
-      const afterIndex = this.CHARS.indexOf(afterChar);
-      
-      // If characters are the same, continue to next position
-      if (beforeChar === afterChar) {
-        continue;
-      }
-      
-      // If there's space between the characters
-      if (afterIndex - beforeIndex > 1) {
-        const midIndex = Math.floor((beforeIndex + afterIndex) / 2);
-        const midChar = this.CHARS[midIndex];
-        return before.slice(0, i) + midChar;
-      }
-      
-      // If characters are adjacent, we need to look deeper
-      if (afterIndex - beforeIndex === 1) {
-        // Use the before character and append something after it
-        const prefix = before.slice(0, i) + beforeChar;
-        const suffix = i + 1 < before.length ? before.slice(i + 1) : '';
-        return this.incrementPosition(prefix + suffix);
+      if (beforeChar !== afterChar) {
+        const beforeIndex = this.CHARS.indexOf(beforeChar);
+        const afterIndex = this.CHARS.indexOf(afterChar);
+        
+        // If there's space between characters, use the middle
+        if (afterIndex - beforeIndex > 1) {
+          const midIndex = Math.floor((beforeIndex + afterIndex) / 2);
+          const midChar = this.CHARS[midIndex];
+          return before.slice(0, i) + midChar;
+        }
+        
+        // If characters are adjacent or overlapping, extend with safe character
+        return before + 'M'; // 'M' is in the middle of our charset and safe
       }
     }
     
-    // Fallback: extend the before string
-    return this.incrementPosition(before);
+    // If all characters are the same (shouldn't happen), extend before
+    return before + 'M';
   }
 
   /**
