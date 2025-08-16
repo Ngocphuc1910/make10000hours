@@ -15,6 +15,19 @@ export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project)
   
   if (!taskAsTask.scheduledDate) return null;
   
+  // DEBUG: Log task conversion details
+  console.log('🔄 Converting task to CalendarEvent:', {
+    id: taskAsTask.id,
+    title: taskAsTask.title,
+    includeTime: taskAsTask.includeTime,
+    scheduledStartTime: taskAsTask.scheduledStartTime,
+    scheduledEndTime: taskAsTask.scheduledEndTime,
+    scheduledDate: taskAsTask.scheduledDate,
+    type: typeof taskAsTask.includeTime,
+    hasStartTime: !!taskAsTask.scheduledStartTime,
+    hasEndTime: !!taskAsTask.scheduledEndTime
+  });
+  
   // Parse the scheduled date as local date (not UTC)
   const baseDate = new Date(taskAsTask.scheduledDate + 'T00:00:00');
   
@@ -22,7 +35,17 @@ export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project)
   let end: Date;
   let isAllDay = false;
   
-  if (taskAsTask.includeTime && taskAsTask.scheduledStartTime && taskAsTask.scheduledEndTime) {
+  // DEBUG: Check condition for timed vs all-day
+  const conditionResult = taskAsTask.includeTime && taskAsTask.scheduledStartTime && taskAsTask.scheduledEndTime;
+  console.log('🔍 Timed event condition check:', {
+    includeTime: taskAsTask.includeTime,
+    hasStartTime: !!taskAsTask.scheduledStartTime,
+    hasEndTime: !!taskAsTask.scheduledEndTime,
+    conditionResult,
+    willCreateTimedEvent: conditionResult
+  });
+  
+  if (conditionResult) {
     // Parse times and combine with date
     const startTime = parse(taskAsTask.scheduledStartTime, 'HH:mm', baseDate);
     const endTime = parse(taskAsTask.scheduledEndTime, 'HH:mm', baseDate);
@@ -34,11 +57,27 @@ export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project)
     if (isBefore(end, start)) {
       end = addMinutes(end, 24 * 60);
     }
+    
+    console.log('⏰ TIMED event created:', {
+      id: taskAsTask.id,
+      title: taskAsTask.title,
+      isAllDay: false,
+      start: format(start, 'MMM dd HH:mm'),
+      end: format(end, 'MMM dd HH:mm')
+    });
   } else {
     // All-day event
     start = startOfDay(baseDate);
     end = endOfDay(baseDate);
     isAllDay = true;
+    
+    console.log('📅 ALL-DAY event created:', {
+      id: taskAsTask.id,
+      title: taskAsTask.title,
+      isAllDay: true,
+      start: format(start, 'MMM dd HH:mm'),
+      end: format(end, 'MMM dd HH:mm')
+    });
   }
 
   // Determine the color
@@ -85,8 +124,16 @@ export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project)
 };
 
 export const tasksToCalendarEvents = (tasks: Task[], projects: Project[]): CalendarEvent[] => {
-  return tasks
-    .filter(task => task.scheduledDate) // Only include tasks with scheduled dates
+  // DEBUG: Log tasks being converted
+  const scheduledTasks = tasks.filter(task => task.scheduledDate);
+  console.log('📝 Converting tasks to CalendarEvents:', {
+    totalTasks: tasks.length,
+    scheduledTasks: scheduledTasks.length,
+    scheduledTaskTitles: scheduledTasks.map(t => t.title),
+    callStack: new Error().stack?.split('\n').slice(1, 4) // Show where this is called from
+  });
+  
+  return scheduledTasks
     .map(task => {
       const project = projects.find(p => p.id === task.projectId);
       return taskToCalendarEvent(task, project);
@@ -103,8 +150,21 @@ export const mergeEventsAndTasks = (
   projects: Project[], 
   calendarEvents: CalendarEvent[] = []
 ): CalendarEvent[] => {
+  console.log('🔀 Merging events and tasks:', {
+    inputTasks: tasks.length,
+    inputCalendarEvents: calendarEvents.length
+  });
+  
   const taskEvents = tasksToCalendarEvents(tasks, projects);
-  return [...taskEvents, ...calendarEvents];
+  const mergedEvents = [...taskEvents, ...calendarEvents];
+  
+  console.log('✅ Merge complete:', {
+    outputTaskEvents: taskEvents.length,
+    outputTotalEvents: mergedEvents.length,
+    eventTitles: mergedEvents.map(e => e.title)
+  });
+  
+  return mergedEvents;
 };
 
 /**
