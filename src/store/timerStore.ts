@@ -45,6 +45,7 @@ interface TimerState {
   setMode: (mode: TimerMode) => void;
   setCurrentTask: (task: Task | null) => void;
   setSettings: (settings: TimerSettings) => void;
+  setCurrentTime: (time: number) => void;
   
   // Session management actions
   createActiveSession: () => Promise<void>;
@@ -420,6 +421,12 @@ export const useTimerStore = create<TimerState>((set, get) => {
         // Just update settings without resetting timer state
         set({ settings: settings });
       }
+    },
+    
+    setCurrentTime: (time: number) => {
+      // Set the current timer value (used for drift correction)
+      set({ currentTime: Math.max(0, time) });
+      get().saveToLocalStorage();
     },
     
     // Session management actions
