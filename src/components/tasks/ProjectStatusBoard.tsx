@@ -39,7 +39,6 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
   const updateTask = useTaskStore(state => state.updateTask);
   const moveTaskToProject = useTaskStore(state => state.moveTaskToProject);
   const reorderTasks = useTaskStore(state => state.reorderTasks);
-  const projectColumnOrder = useTaskStore(state => state.projectColumnOrder);
   const reorderProjectColumns = useTaskStore(state => state.reorderProjectColumns);
   const updateProject = useTaskStore(state => state.updateProject);
   const deleteProject = useTaskStore(state => state.deleteProject);
@@ -106,81 +105,23 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
       }
     });
     
-    // Return projects without sorting to preserve user's drag & drop order
-    return projectsWithTasksList;
+    // Sort by Firebase order field only (single source of truth)
+    return projectsWithTasksList.sort((a, b) => {
+      // 'No Project' always comes first
+      if (a.id === 'no-project') return -1;
+      if (b.id === 'no-project') return 1;
+      
+      // Sort by Firebase order field (ascending order: 1, 2, 3...)
+      const aOrder = a.project?.order || 999999; // Projects without order go to end
+      const bOrder = b.project?.order || 999999;
+      return aOrder - bOrder;
+    });
   }, [tasks, projects]);
 
-  // Initialize and sync project column order
-  React.useEffect(() => {
-    if (projectsWithTasks.length > 0) {
-      const currentProjectIds = projectsWithTasks.map(p => p.id);
-      
-      // If projectColumnOrder is empty, initialize it
-      if (projectColumnOrder.length === 0) {
-        console.log('🔄 Initializing projectColumnOrder with current projects:', currentProjectIds);
-        reorderProjectColumns(currentProjectIds).catch(error => 
-          console.error('Failed to initialize project column order:', error)
-        );
-        return;
-      }
-      
-      // Check if projectColumnOrder needs to be synced with current projects
-      const hasStaleIds = projectColumnOrder.some(id => !currentProjectIds.includes(id));
-      const hasMissingIds = currentProjectIds.some(id => !projectColumnOrder.includes(id));
-      
-      if (hasStaleIds || hasMissingIds) {
-        console.log('🔄 Syncing projectColumnOrder - stale or missing IDs detected');
-        console.log('🔄 Current projects:', currentProjectIds);
-        console.log('🔄 Current projectColumnOrder:', projectColumnOrder);
-        
-        // Create new order preserving existing order where possible, adding new projects at end
-        const newOrder = [];
-        
-        // First, add existing projects in their current order
-        projectColumnOrder.forEach(id => {
-          if (currentProjectIds.includes(id)) {
-            newOrder.push(id);
-          }
-        });
-        
-        // Then add any new projects not in the existing order
-        currentProjectIds.forEach(id => {
-          if (!newOrder.includes(id)) {
-            newOrder.push(id);
-          }
-        });
-        
-        console.log('🔄 New synced order:', newOrder);
-        reorderProjectColumns(newOrder).catch(error => 
-          console.error('Failed to sync project column order:', error)
-        );
-      }
-    }
-  }, [projectsWithTasks, projectColumnOrder, reorderProjectColumns]);
+  // No sync needed - Firebase is single source of truth
 
-  // Get ordered projects based on column order
-  const orderedProjects = React.useMemo(() => {
-    if (projectColumnOrder.length === 0) return projectsWithTasks;
-    
-    const orderedList: typeof projectsWithTasks = [];
-    
-    // Add projects in the specified order
-    projectColumnOrder.forEach(projectId => {
-      const projectData = projectsWithTasks.find(p => p.id === projectId);
-      if (projectData) {
-        orderedList.push(projectData);
-      }
-    });
-    
-    // Add any new projects not in the order
-    projectsWithTasks.forEach(projectData => {
-      if (!projectColumnOrder.includes(projectData.id)) {
-        orderedList.push(projectData);
-      }
-    });
-    
-    return orderedList;
-  }, [projectsWithTasks, projectColumnOrder]);
+  // Use Firebase-ordered projects directly (no localStorage complexity)
+  const orderedProjects = projectsWithTasks;
 
   // Filter tasks by project and sort them by order
   const getProjectTasks = useCallback((projectId: string) => {
@@ -599,8 +540,6 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
     console.log('🎯 ===== DRAG EVENT DEBUG START =====');
     console.log('🎯 Active ID:', active.id);
     console.log('🎯 Over ID:', over?.id);
-    console.log('🎯 Event object:', { active, over });
-    console.log('🎯 Current projectColumnOrder:', projectColumnOrder);
     console.log('🎯 Available projects:', orderedProjects.map(p => ({ 
       id: p.id, 
       name: p.project?.name || 'No Project',
@@ -610,27 +549,31 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
     if (over && active.id !== over.id) {
       console.log('🎯 Drag operation proceeding...');
       
-      const oldIndex = projectColumnOrder.indexOf(active.id as string);
-      const newIndex = projectColumnOrder.indexOf(over.id as string);
+      // Use current orderedProjects as the base, not projectColumnOrder
+      const currentProjectIds = orderedProjects.map(p => p.id);
+      const oldIndex = currentProjectIds.indexOf(active.id as string);
+      const newIndex = currentProjectIds.indexOf(over.id as string);
       
+      console.log('🎯 Current project IDs:', currentProjectIds);
       console.log('🎯 Old index:', oldIndex);
       console.log('🎯 New index:', newIndex);
       
       if (oldIndex === -1) {
-        console.error('🚨 ERROR: Active ID not found in projectColumnOrder!');
+        console.error('🚨 ERROR: Active ID not found in current projects!');
         console.log('🚨 Active ID:', active.id);
-        console.log('🚨 ProjectColumnOrder:', projectColumnOrder);
+        console.log('🚨 Current project IDs:', currentProjectIds);
         return;
       }
       
       if (newIndex === -1) {
-        console.error('🚨 ERROR: Over ID not found in projectColumnOrder!');
+        console.error('🚨 ERROR: Over ID not found in current projects!');
         console.log('🚨 Over ID:', over.id);
-        console.log('🚨 ProjectColumnOrder:', projectColumnOrder);
+        console.log('🚨 Current project IDs:', currentProjectIds);
         return;
       }
       
-      const newOrder = [...projectColumnOrder];
+      // Create new order based on current projects
+      const newOrder = [...currentProjectIds];
       const [movedItem] = newOrder.splice(oldIndex, 1);
       newOrder.splice(newIndex, 0, movedItem);
       
@@ -675,7 +618,7 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className={`flex flex-col bg-background-primary ${className}`}>
           {/* Fixed Headers Row */}
-          <SortableContext items={projectColumnOrder} strategy={horizontalListSortingStrategy}>
+          <SortableContext items={orderedProjects.map(p => p.id)} strategy={horizontalListSortingStrategy}>
             <div 
               className="grid gap-6 bg-background-primary sticky top-0 z-30 pl-2 pt-4 overflow-x-auto scrollbar-hide" 
               style={{ gridTemplateColumns: `repeat(${orderedProjects.length}, minmax(320px, 1fr)) minmax(320px, 1fr)` }}

@@ -21,7 +21,6 @@ interface TaskState {
   unsubscribe: (() => void) | null;
   taskListViewMode: 'pomodoro' | 'today';
   columnOrder: Task['status'][];
-  projectColumnOrder: string[];
   
   // Actions
   initializeStore: () => Promise<void>;
@@ -61,7 +60,6 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
   projects: [],
   columnOrder: ['pomodoro', 'todo', 'completed'],
-  projectColumnOrder: [],
   isAddingTask: false,
   editingTaskId: null,
   showDetailsMenu: false,
@@ -88,16 +86,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       }
     }
 
-    // Load persisted project column order
-    const savedProjectColumnOrder = localStorage.getItem('projectColumnOrder');
-    if (savedProjectColumnOrder) {
-      try {
-        const projectColumnOrder = JSON.parse(savedProjectColumnOrder);
-        set({ projectColumnOrder });
-      } catch (error) {
-        console.warn('Failed to parse saved project column order:', error);
-      }
-    }
+    // Clear any legacy localStorage project order (migrating to Firebase-only)
+    localStorage.removeItem('projectColumnOrder');
     
     if (!isAuthenticated || !user) {
       set({ tasks: [], projects: [], isLoading: false });
@@ -1270,16 +1260,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   reorderProjectColumns: async (newOrder: string[]) => {
     console.log('🔄 ===== REORDER PROJECTS DEBUG START =====');
     console.log('🔄 New order received:', newOrder);
-    console.log('🔄 Current projectColumnOrder before update:', get().projectColumnOrder);
     
-    // Update frontend state immediately (optimistic update)
-    set({ projectColumnOrder: newOrder });
-    console.log('🔄 State updated with new order');
-    
-    // Persist to localStorage for user preference
-    localStorage.setItem('projectColumnOrder', JSON.stringify(newOrder));
-    console.log('🔄 LocalStorage updated');
-    console.log('🔄 LocalStorage content:', localStorage.getItem('projectColumnOrder'));
+    // Firebase-only ordering system - single source of truth
     
     // Sync order to database for persistence across sessions
     try {
