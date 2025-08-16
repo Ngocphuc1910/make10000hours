@@ -48,6 +48,38 @@ export const WeekView: React.FC<WeekViewProps> = ({
   const startDate = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday = 1
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startDate, i));
 
+  // DEBUG: Log all events received by WeekView
+  React.useEffect(() => {
+    console.log('🎯 WeekView received events:', events.length);
+    
+    // Check for duplicate events (same taskId but different isAllDay values)
+    const taskEvents = events.filter(e => e.isTask && e.taskId);
+    const taskEventGroups = taskEvents.reduce((groups, event) => {
+      const key = event.taskId!;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(event);
+      return groups;
+    }, {} as Record<string, typeof events>);
+    
+    Object.entries(taskEventGroups).forEach(([taskId, eventsForTask]) => {
+      if (eventsForTask.length > 1) {
+        console.log('🚨 DUPLICATE TASK EVENTS DETECTED for taskId:', taskId);
+        console.log('Events:', eventsForTask.map(e => ({
+          id: e.id,
+          title: e.title,
+          isAllDay: e.isAllDay,
+          start: format(e.start, 'MMM dd HH:mm'),
+          end: format(e.end, 'MMM dd HH:mm')
+        })));
+      }
+    });
+    
+    // Log summary of event types
+    const allDayCount = events.filter(e => e.isAllDay).length;
+    const timedCount = events.filter(e => !e.isAllDay).length;
+    console.log(`📊 Event Summary: ${allDayCount} all-day, ${timedCount} timed`);
+  }, [events]);
+
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
     startElement: null,
@@ -93,16 +125,46 @@ export const WeekView: React.FC<WeekViewProps> = ({
 
   // Get events for a specific day
   const getDayEvents = (date: Date) => {
-    return events.filter(event => 
+    const dayEvents = events.filter(event => 
       isSameDay(event.start, date) && !event.isAllDay
     );
+    
+    // DEBUG: Log timed events for this day
+    if (dayEvents.length > 0) {
+      console.log(`🔍 TIMED Events for ${format(date, 'MMM dd')}:`, dayEvents.map(e => ({
+        id: e.id,
+        title: e.title,
+        isAllDay: e.isAllDay,
+        isTask: e.isTask,
+        taskId: e.taskId,
+        start: format(e.start, 'HH:mm'),
+        end: format(e.end, 'HH:mm')
+      })));
+    }
+    
+    return dayEvents;
   };
 
   // Get all-day events for a specific day
   const getAllDayEvents = (date: Date) => {
-    return events.filter(event => 
+    const allDayEvents = events.filter(event => 
       isSameDay(event.start, date) && event.isAllDay
     );
+    
+    // DEBUG: Log all-day events for this day
+    if (allDayEvents.length > 0) {
+      console.log(`📅 ALL-DAY Events for ${format(date, 'MMM dd')}:`, allDayEvents.map(e => ({
+        id: e.id,
+        title: e.title,
+        isAllDay: e.isAllDay,
+        isTask: e.isTask,
+        taskId: e.taskId,
+        start: format(e.start, 'MMM dd HH:mm'),
+        end: format(e.end, 'MMM dd HH:mm')
+      })));
+    }
+    
+    return allDayEvents;
   };
 
   // Calculate the maximum number of all-day events across all days

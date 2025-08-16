@@ -112,36 +112,41 @@ export const Calendar: React.FC = () => {
 
   // Merge calendar events with task events using timezone-aware display
   const allEvents = useMemo(() => {
+    console.log('🏗️ Calendar.tsx: Building allEvents...');
+    console.log('📊 Input data:', {
+      totalTasks: tasks.length,
+      totalCalendarEvents: calendarEvents.length,
+      totalProjects: projects.length
+    });
+    
     try {
       // Get user's timezone for proper display conversion
       const userTimezone = user?.settings?.timezone?.current || timezoneUtils.getCurrentTimezone();
       
-      // Only log conversion process in debug mode to prevent excessive logging during drag operations
-      if (globalThis.__debug_calendar_conversion) {
-        console.log('🔄 Calendar: Converting tasks for timezone:', userTimezone);
-        console.log('📋 Calendar: Processing', tasks.length, 'tasks');
-      }
-      
       // Convert tasks to display format with proper timezone
       const displayTasks = TaskDisplayService.batchConvertForDisplay(tasks, userTimezone);
       
-      if (globalThis.__debug_calendar_conversion) {
-        console.log('✅ Calendar: Successfully converted', displayTasks.length, 'tasks');
-      }
+      console.log('🔄 After timezone conversion:', {
+        originalTasks: tasks.length,
+        displayTasks: displayTasks.length
+      });
       
       // Merge calendar events with timezone-converted tasks
       const events = mergeEventsAndTasks(displayTasks, projects, calendarEvents);
       
-      if (globalThis.__debug_calendar_conversion) {
-        console.log('🎯 Calendar: Generated', events.length, 'total events');
-      }
+      console.log('🎯 Calendar.tsx final result:', {
+        totalEvents: events.length,
+        allDayEvents: events.filter(e => e.isAllDay).length,
+        timedEvents: events.filter(e => !e.isAllDay).length
+      });
       
       return events;
     } catch (error) {
       console.error('❌ Calendar: Failed to process events:', error);
       
-      // Fallback: use original tasks without timezone conversion
-      return mergeEventsAndTasks(tasks, projects, calendarEvents);
+      // Return only calendar events to prevent task duplication
+      console.log('⚠️ Using fallback: calendar events only...');
+      return [...calendarEvents];
     }
   }, [calendarEvents, tasks, projects, user?.settings?.timezone?.current]);
 
