@@ -106,16 +106,8 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
       }
     });
     
-    // Sort by task count (descending), then by creation time for empty projects
-    return projectsWithTasksList.sort((a, b) => {
-      if (a.taskCount !== b.taskCount) {
-        return b.taskCount - a.taskCount; // Higher task count first
-      }
-      // For projects with same task count, sort by order (newer projects first)
-      const aOrder = a.project?.order || 0;
-      const bOrder = b.project?.order || 0;
-      return bOrder - aOrder;
-    });
+    // Return projects without sorting to preserve user's drag & drop order
+    return projectsWithTasksList;
   }, [tasks, projects]);
 
   // Initialize and sync project column order
