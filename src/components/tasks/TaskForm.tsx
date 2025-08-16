@@ -25,9 +25,10 @@ interface TaskFormProps {
   onCancel: () => void;
   onSave?: () => void;
   isCalendarContext?: boolean;
+  creationContext?: 'task-management' | 'pomodoro' | 'drag-create';
 }
 
-const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, initialStartTime, initialEndTime, isAllDay, onCancel, onSave, isCalendarContext = false }) => {
+const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, initialStartTime, initialEndTime, isAllDay, onCancel, onSave, isCalendarContext = false, creationContext }) => {
   const taskStoreWithSync = useTaskStoreWithSync();
   const { addTask, updateTask, deleteTask } = taskStoreWithSync;
   
@@ -66,16 +67,32 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
     if (task?.scheduledDate) {
       return task.scheduledDate;
     }
-    // For drag-create, use the initial start time date
+    // For drag-create, use the initial start time date (preserve existing logic)
     if (initialStartTime) {
       const year = initialStartTime.getFullYear();
       const month = String(initialStartTime.getMonth() + 1).padStart(2, '0');
       const day = String(initialStartTime.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     }
-    // For new tasks, default to today in user's timezone
+    // For new tasks - check context and user setting (TIMEZONE-AWARE VERSION)
     if (!task) {
       const userTimezone = useUserStore.getState().getTimezone();
+      
+      // Pomodoro context always uses today (per requirement)
+      if (creationContext === 'pomodoro') {
+        return timezoneUtils.getTodayInUserTimezone(userTimezone);
+      }
+      
+      // Task management context respects user setting
+      if (creationContext === 'task-management') {
+        const useDefaultDate = user?.settings?.defaultTaskDate !== false;
+        if (useDefaultDate) {
+          return timezoneUtils.getTodayInUserTimezone(userTimezone);
+        }
+        return ''; // Empty when setting is disabled
+      }
+      
+      // Default behavior for undefined context (backward compatibility)
       return timezoneUtils.getTodayInUserTimezone(userTimezone);
     }
     return '';

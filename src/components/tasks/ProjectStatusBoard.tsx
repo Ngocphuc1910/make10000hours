@@ -118,11 +118,51 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
     });
   }, [tasks, projects]);
 
-  // Initialize project column order if empty
+  // Initialize and sync project column order
   React.useEffect(() => {
-    if (projectColumnOrder.length === 0 && projectsWithTasks.length > 0) {
-      const initialOrder = projectsWithTasks.map(p => p.id);
-      reorderProjectColumns(initialOrder);
+    if (projectsWithTasks.length > 0) {
+      const currentProjectIds = projectsWithTasks.map(p => p.id);
+      
+      // If projectColumnOrder is empty, initialize it
+      if (projectColumnOrder.length === 0) {
+        console.log('🔄 Initializing projectColumnOrder with current projects:', currentProjectIds);
+        reorderProjectColumns(currentProjectIds).catch(error => 
+          console.error('Failed to initialize project column order:', error)
+        );
+        return;
+      }
+      
+      // Check if projectColumnOrder needs to be synced with current projects
+      const hasStaleIds = projectColumnOrder.some(id => !currentProjectIds.includes(id));
+      const hasMissingIds = currentProjectIds.some(id => !projectColumnOrder.includes(id));
+      
+      if (hasStaleIds || hasMissingIds) {
+        console.log('🔄 Syncing projectColumnOrder - stale or missing IDs detected');
+        console.log('🔄 Current projects:', currentProjectIds);
+        console.log('🔄 Current projectColumnOrder:', projectColumnOrder);
+        
+        // Create new order preserving existing order where possible, adding new projects at end
+        const newOrder = [];
+        
+        // First, add existing projects in their current order
+        projectColumnOrder.forEach(id => {
+          if (currentProjectIds.includes(id)) {
+            newOrder.push(id);
+          }
+        });
+        
+        // Then add any new projects not in the existing order
+        currentProjectIds.forEach(id => {
+          if (!newOrder.includes(id)) {
+            newOrder.push(id);
+          }
+        });
+        
+        console.log('🔄 New synced order:', newOrder);
+        reorderProjectColumns(newOrder).catch(error => 
+          console.error('Failed to sync project column order:', error)
+        );
+      }
     }
   }, [projectsWithTasks, projectColumnOrder, reorderProjectColumns]);
 
@@ -562,16 +602,59 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
+    console.log('🎯 ===== DRAG EVENT DEBUG START =====');
+    console.log('🎯 Active ID:', active.id);
+    console.log('🎯 Over ID:', over?.id);
+    console.log('🎯 Event object:', { active, over });
+    console.log('🎯 Current projectColumnOrder:', projectColumnOrder);
+    console.log('🎯 Available projects:', orderedProjects.map(p => ({ 
+      id: p.id, 
+      name: p.project?.name || 'No Project',
+      order: p.project?.order 
+    })));
+    
     if (over && active.id !== over.id) {
+      console.log('🎯 Drag operation proceeding...');
+      
       const oldIndex = projectColumnOrder.indexOf(active.id as string);
       const newIndex = projectColumnOrder.indexOf(over.id as string);
+      
+      console.log('🎯 Old index:', oldIndex);
+      console.log('🎯 New index:', newIndex);
+      
+      if (oldIndex === -1) {
+        console.error('🚨 ERROR: Active ID not found in projectColumnOrder!');
+        console.log('🚨 Active ID:', active.id);
+        console.log('🚨 ProjectColumnOrder:', projectColumnOrder);
+        return;
+      }
+      
+      if (newIndex === -1) {
+        console.error('🚨 ERROR: Over ID not found in projectColumnOrder!');
+        console.log('🚨 Over ID:', over.id);
+        console.log('🚨 ProjectColumnOrder:', projectColumnOrder);
+        return;
+      }
       
       const newOrder = [...projectColumnOrder];
       const [movedItem] = newOrder.splice(oldIndex, 1);
       newOrder.splice(newIndex, 0, movedItem);
       
-      reorderProjectColumns(newOrder);
+      console.log('🎯 New order calculated:', newOrder);
+      console.log('🎯 Calling reorderProjectColumns...');
+      
+      reorderProjectColumns(newOrder).catch(error => {
+        console.error('🎯 reorderProjectColumns failed:', error);
+        // TODO: Could add user notification here
+      });
+      
+      console.log('🎯 reorderProjectColumns called successfully');
+    } else {
+      console.log('🎯 Drag operation skipped - no valid drop target or same position');
+      console.log('🎯 Conditions: over =', !!over, ', active.id !== over.id =', active.id !== over?.id);
     }
+    
+    console.log('🎯 ===== DRAG EVENT DEBUG END =====');
   };
 
   // Group tasks by status for status grouping
@@ -801,7 +884,8 @@ const ProjectStatusBoard: React.FC<ProjectStatusBoardProps> = ({ className = '',
                                   <TaskForm 
                                     status={status} 
                                     initialProjectId={id === 'no-project' ? undefined : id}
-                                    onCancel={() => handleAddTaskToggle(status, id, false)} 
+                                    onCancel={() => handleAddTaskToggle(status, id, false)}
+                                    creationContext="task-management"
                                   />
                                 )}
                               </div>
