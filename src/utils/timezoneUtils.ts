@@ -40,6 +40,21 @@ export class UTCTimezoneService {
   }
   
   /**
+   * Get today's date in user's timezone, consistent with TaskFilteringService
+   * @param timezone - Optional timezone override, falls back to current timezone
+   * @returns Date string in YYYY-MM-DD format
+   */
+  getTodayInUserTimezone(timezone?: string): string {
+    try {
+      const tz = timezone || this.getCurrentTimezone();
+      return this.formatDateInTimezone(new Date(), tz, 'yyyy-MM-dd');
+    } catch (error) {
+      console.warn('Timezone calculation failed, using UTC fallback:', error);
+      return this.formatDateInTimezone(new Date(), 'UTC', 'yyyy-MM-dd');
+    }
+  }
+  
+  /**
    * Convert user's local time to UTC for storage
    */
   userTimeToUTC(userTime: string | Date, timezone: string): string {
