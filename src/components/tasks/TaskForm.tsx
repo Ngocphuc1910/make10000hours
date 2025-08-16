@@ -9,6 +9,7 @@ import { useUserStore } from '../../store/userStore';
 import { workSessionService } from '../../api/workSessionService';
 import { formatMinutesToHoursAndMinutes, calculateDurationInMinutes } from '../../utils/timeUtils';
 import { getDateISOString } from '../../utils/timeUtils';
+import { timezoneUtils } from '../../utils/timezoneUtils';
 import { DatePicker, DateTimeProvider, useDateTimeContext } from '../common/DatePicker';
 import { format, isSameDay } from 'date-fns';
 import { getRandomPresetColor } from '../../utils/colorUtils';
@@ -73,28 +74,26 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       const day = String(initialStartTime.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     }
-    // For new tasks - check context and user setting
+    // For new tasks - check context and user setting (TIMEZONE-AWARE VERSION)
     if (!task) {
+      const userTimezone = useUserStore.getState().getTimezone();
+      
       // Pomodoro context always uses today (per requirement)
       if (creationContext === 'pomodoro') {
-        const today = new Date();
-        return today.toISOString().split('T')[0];
+        return timezoneUtils.getTodayInUserTimezone(userTimezone);
       }
       
       // Task management context respects user setting
       if (creationContext === 'task-management') {
-        // Handle loading state - fallback to current behavior
         const useDefaultDate = user?.settings?.defaultTaskDate !== false;
         if (useDefaultDate) {
-          const today = new Date();
-          return today.toISOString().split('T')[0];
+          return timezoneUtils.getTodayInUserTimezone(userTimezone);
         }
         return ''; // Empty when setting is disabled
       }
       
       // Default behavior for undefined context (backward compatibility)
-      const today = new Date();
-      return today.toISOString().split('T')[0];
+      return timezoneUtils.getTodayInUserTimezone(userTimezone);
     }
     return '';
   });
@@ -391,8 +390,9 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
       }
 
       // Auto-change status: "To do list" → "In Pomodoro" when scheduled for today
-      const scheduledDate = new Date(calendarDate.trim());
-      const isScheduledForToday = isSameDay(scheduledDate, new Date());
+      const userTimezone = useUserStore.getState().getTimezone();
+      const today = timezoneUtils.getTodayInUserTimezone(userTimezone);
+      const isScheduledForToday = calendarDate.trim() === today;
       if (isScheduledForToday && task?.status === 'todo') {
         taskData.status = 'pomodoro';
       }
@@ -483,7 +483,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, status, initialProjectId, ini
 
   const handleComplete = () => {
     if (task) {
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      const userTimezone = useUserStore.getState().getTimezone();
+      const today = timezoneUtils.getTodayInUserTimezone(userTimezone);
       const isScheduledForToday = task.scheduledDate === today;
       
       updateTask(task.id, {
