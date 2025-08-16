@@ -28,6 +28,9 @@ import { verifyAnalyticsSetup } from './utils/verifyAnalytics';
 import { timezoneUtils } from './utils/timezoneUtils';
 import { workSessionService } from './api/workSessionService';
 import { format } from 'date-fns';
+
+// Worker-timers import for background-safe timing
+import { setInterval as workerSetInterval, clearInterval as workerClearInterval } from 'worker-timers';
 import CalendarPage from './features/calendar/CalendarPage';
 import DeepFocusPage from './components/pages/DeepFocusPage';
 import { LoadingScreen } from './components/ui/LoadingScreen';
@@ -69,6 +72,25 @@ if (process.env.NODE_ENV === 'development') {
 if (process.env.NODE_ENV === 'development') {
   import('./utils/testAuthGuard');
 }
+
+// Feature flag controlled timer implementation
+const USE_WORKER_TIMERS = process.env.REACT_APP_USE_WORKER_TIMERS !== 'false';
+
+// Select timer implementation based on feature flag
+const [setIntervalFn, clearIntervalFn] = (() => {
+  if (USE_WORKER_TIMERS) {
+    try {
+      console.log('✅ Using worker-timers for background-safe timing');
+      return [workerSetInterval, workerClearInterval];
+    } catch (error) {
+      console.warn('⚠️ worker-timers not available, falling back to standard timers:', error);
+      return [window.setInterval, window.clearInterval];
+    }
+  } else {
+    console.log('⚠️ worker-timers disabled via environment variable');
+    return [window.setInterval, window.clearInterval];
+  }
+})();
 
 // Global tab title component - isolated to prevent parent re-renders
 const GlobalTabTitleUpdater: React.FC = () => {
@@ -411,7 +433,7 @@ const App: React.FC = () => {
       
       // Clear existing interval
       if (intervalId) {
-        clearInterval(intervalId);
+        clearIntervalFn(intervalId);
         intervalId = null;
       }
 
@@ -423,8 +445,8 @@ const App: React.FC = () => {
           console.log('⏱️ Timer started:', { time: currentTime });
         }
         
-        // Single interval - let browser throttle naturally
-        intervalId = setInterval(tick, 1000);
+        // Single interval - worker-timers prevents browser throttling
+        intervalId = setIntervalFn(tick, 1000);
       } else {
         sessionStartTime = null;
         sessionStartTimerValue = null;
@@ -443,20 +465,32 @@ const App: React.FC = () => {
           const currentTime = state.currentTime;
           const drift = currentTime - expectedTime;
           
-          // Only log and correct significant drift
-          if (Math.abs(drift) > 2) {
-            console.log(`📱 Tab visible - time drift: ${drift} seconds`);
+          // Apply correction for any drift (even 1 second matters for accuracy)
+          if (Math.abs(drift) > 0) {
+            console.log(`📱 Tab visible - correcting time drift: ${drift} seconds`);
+            console.log(`⏰ Current: ${currentTime}, Expected: ${expectedTime}, Correcting to: ${expectedTime}`);
             
-            // For now, just log the drift without auto-correction
-            // This prevents the rapid tick corruption
-            console.log(`⏰ Current: ${currentTime}, Expected: ${expectedTime}`);
+            // CRITICAL FIX: Apply time-based correction to compensate for browser throttling
+            state.setCurrentTime(expectedTime);
             
-            // TODO: Implement safe correction after testing
-            // Will need to add setCurrentTime and addMissedMinutesToSession methods
+            // If we missed significant time, update the session
+            if (drift > 60 && state.activeSession) {
+              const missedMinutes = Math.floor(drift / 60);
+              console.log(`📊 Updating session with ${missedMinutes} missed minutes`);
+              // The updateActiveSession will handle incrementing duration
+              for (let i = 0; i < missedMinutes; i++) {
+                state.updateActiveSession().catch(error => {
+                  console.error('Failed to update missed minutes:', error);
+                });
+              }
+            }
           }
           
           lastTickTime = now;
         }
+      } else {
+        // Tab going to background - log for debugging
+        console.log('📴 Tab hidden at', new Date().toISOString(), '- timer may be throttled');
       }
     };
 
@@ -483,7 +517,7 @@ const App: React.FC = () => {
 
     // Cleanup function
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      if (intervalId) clearIntervalFn(intervalId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       unsubscribe();
       ChatIntegrationService.cleanup();
