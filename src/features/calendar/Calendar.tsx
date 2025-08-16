@@ -1122,6 +1122,7 @@ export const Calendar: React.FC = () => {
                 initialStartTime={dragCreateData.startTime}
                 initialEndTime={dragCreateData.endTime}
                 status={dragCreateData.status}
+                creationContext="drag-create"
                 onCancel={() => {
                   setIsDragCreateTaskOpen(false);
                   setDragCreateData(null);
@@ -1149,6 +1150,7 @@ export const Calendar: React.FC = () => {
                 initialEndTime={timeSlotData.endTime}
                 status={timeSlotData.status}
                 isAllDay={timeSlotData.isAllDay}
+                creationContext="drag-create"
                 onCancel={() => {
                   setIsTimeSlotTaskOpen(false);
                   setTimeSlotData(null);
