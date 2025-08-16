@@ -30,7 +30,9 @@ const DraggableColumnHeader: React.FC<DraggableColumnHeaderProps> = ({
   } = useSortable({ id });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    // Constrain dragging to horizontal movement only (prevent vertical dragging)
+    transform: transform ? `translateX(${transform.x}px)` : undefined,
+    // Original transform (for rollback if needed): CSS.Transform.toString(transform),
     transition,
     zIndex: isDragging ? 1000 : 1,
   };
