@@ -465,25 +465,29 @@ const App: React.FC = () => {
           const currentTime = state.currentTime;
           const drift = currentTime - expectedTime;
           
-          // Apply correction for any drift (even 1 second matters for accuracy)
-          if (Math.abs(drift) > 0) {
-            console.log(`📱 Tab visible - correcting time drift: ${drift} seconds`);
-            console.log(`⏰ Current: ${currentTime}, Expected: ${expectedTime}, Correcting to: ${expectedTime}`);
+          // SURGICAL FIX: Simple, safe correction
+          if (Math.abs(drift) > 5) { // Only correct if drift > 5 seconds
+            const MAX_CORRECTION = 10; // Never correct more than 10 seconds
+            const MIN_TIMER_VALUE = 10; // Never let timer go below 10 seconds
             
-            // CRITICAL FIX: Apply time-based correction to compensate for browser throttling
-            state.setCurrentTime(expectedTime);
+            let correctedTime = expectedTime;
             
-            // If we missed significant time, update the session
-            if (drift > 60 && state.activeSession) {
-              const missedMinutes = Math.floor(drift / 60);
-              console.log(`📊 Updating session with ${missedMinutes} missed minutes`);
-              // The updateActiveSession will handle incrementing duration
-              for (let i = 0; i < missedMinutes; i++) {
-                state.updateActiveSession().catch(error => {
-                  console.error('Failed to update missed minutes:', error);
-                });
-              }
+            // Prevent instant completion
+            if (correctedTime < MIN_TIMER_VALUE && currentTime > MIN_TIMER_VALUE) {
+              correctedTime = MIN_TIMER_VALUE;
+              console.log('🛡️ Timer correction prevented instant completion');
             }
+            
+            // Limit correction magnitude
+            if (Math.abs(drift) > MAX_CORRECTION) {
+              const correctionDirection = drift > 0 ? -1 : 1;
+              correctedTime = currentTime + (correctionDirection * MAX_CORRECTION);
+              console.log(`📱 Large drift (${drift}s) limited to ${MAX_CORRECTION}s correction`);
+            }
+            
+            // Apply single correction
+            console.log(`📱 Drift correction: ${currentTime}s → ${correctedTime}s`);
+            state.setCurrentTime(Math.max(0, correctedTime));
           }
           
           lastTickTime = now;
