@@ -117,6 +117,40 @@ export class WorkSessionService {
   }
 
   /**
+   * Safe session creation with simple deduplication
+   */
+  async createActiveSessionSafe(
+    taskId: string,
+    projectId: string,
+    userId: string,
+    sessionType: 'pomodoro' | 'shortBreak' | 'longBreak',
+    userTimezone?: string
+  ): Promise<string> {
+    try {
+      // Check for existing active session for this task/type combination
+      const activeSessions = await this.getActiveSessions(userId);
+      const existingSession = activeSessions.find(session => 
+        session.taskId === taskId && 
+        session.sessionType === sessionType &&
+        session.status === 'active'
+      );
+      
+      if (existingSession) {
+        console.log('🔍 Reusing existing active session:', existingSession.id);
+        return existingSession.id;
+      }
+      
+      // Create new session only if no duplicate exists
+      console.log('✅ Creating new active session');
+      return await this.createActiveSession(taskId, projectId, userId, sessionType, userTimezone);
+      
+    } catch (error) {
+      console.error('Error in safe session creation:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Create an active work session for timer with UTC timezone support
    */
   async createActiveSession(

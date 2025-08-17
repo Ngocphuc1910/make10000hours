@@ -284,22 +284,29 @@ export const useTimerStore = create<TimerState>((set, get) => {
       // Only tick if this is the active device and timer is running
       if (!isActiveDevice || !isRunning) return;
 
-      // 🛡️ IMPROVED SAFETY NET (Agent 2's race condition fixed)
+      // SURGICAL FIX: Debounced session recovery
       if (isRunning && mode === 'pomodoro' && currentTask && !activeSession && !isRecoveringSession) {
-        console.error('⚠️ Active session lost - starting recovery (once)');
-        isRecoveringSession = true; // Prevent multiple attempts
+        // Wait 3 seconds to avoid race conditions during state transitions
+        setTimeout(() => {
+          const currentState = get();
+          // Double-check conditions after delay
+          if (currentState.isRunning && currentState.mode === 'pomodoro' && 
+              currentState.currentTask && !currentState.activeSession && !isRecoveringSession) {
+            
+            console.log('⚠️ Session recovery after 3s delay');
+            isRecoveringSession = true;
+            
+            get().createActiveSession().then(() => {
+              console.log('✅ Session recovered');
+              isRecoveringSession = false;
+            }).catch(error => {
+              console.error('❌ Session recovery failed:', error);
+              isRecoveringSession = false;
+            });
+          }
+        }, 3000);
         
-        get().createActiveSession().then(() => {
-          const currentMinute = Math.floor(get().currentTime / 60);
-          // Don't override lastCountedMinute - let boundary detection work naturally
-          console.log('✅ Session recovered, resuming at minute:', currentMinute);
-          isRecoveringSession = false;
-        }).catch(error => {
-          console.error('❌ Session recovery failed:', error);
-          isRecoveringSession = false;
-          // Could add retry logic here if needed
-        });
-        return; // Skip this tick
+        return; // Skip this tick during potential recovery
       }
 
       // If we're still recovering, skip this tick
@@ -437,18 +444,14 @@ export const useTimerStore = create<TimerState>((set, get) => {
       if (!currentTask || !user) return;
       
       try {
-        // Use transition service to create session (routes to UTC or legacy based on feature flags)
-        const userTimezone = useUserStore.getState().getTimezone();
-        console.log('🔍 TimerStore creating session with timezone:', userTimezone);
-        const sessionId = await transitionQueryService.createSession({
-          userId: user.uid,
-          taskId: currentTask.id,
-          projectId: currentTask.projectId,
-          duration: 0, // Start with 0 duration
-          sessionType: mode, // 'pomodoro', 'shortBreak', 'longBreak'
-          status: 'active',
-          notes: `${mode} session started`
-        }, userTimezone);
+        // Use safe session creation with deduplication
+        const sessionId = await workSessionService.createActiveSessionSafe(
+          currentTask.id,
+          currentTask.projectId,
+          user.uid,
+          mode,
+          useUserStore.getState().getTimezone()
+        );
         
         const activeSession: ActiveSession = {
           sessionId,
@@ -458,34 +461,16 @@ export const useTimerStore = create<TimerState>((set, get) => {
           status: 'active'
         };
         
-        // Track the timer position when this session started and initialize minute tracking
-        const currentMinute = Math.floor(currentTime / 60);
         set({ 
           activeSession,
           sessionStartTimerPosition: currentTime,
-          lastCountedMinute: null // Will be set on first tick
+          lastCountedMinute: null
         });
         
-        console.log('Created new session via transition service:', {
-          sessionId,
-          taskId: currentTask.id,
-          startTimerPosition: currentTime,
-          startMinute: currentMinute,
-          timer_display: `${Math.floor(currentTime / 60)}:${String(currentTime % 60).padStart(2, '0')}`,
-          sessionType: mode,
-          service: 'TransitionQueryService' // ✅ Now using UTC-aware service
-        });
+        console.log('✅ Active session established:', sessionId);
       } catch (error) {
-        console.error('Failed to create active session:', error);
-        
-        // Reset monitoring metrics if we're hitting too many errors
-        const isDevelopment = process.env.NODE_ENV === 'development';
-        if (isDevelopment) {
-          setTimeout(() => {
-            console.log('🔄 Resetting UTC monitoring due to session creation error...');
-            get().resetMonitoring();
-          }, 1000);
-        }
+        console.error('❌ Failed to create active session:', error);
+        throw error;
       }
     },
     
