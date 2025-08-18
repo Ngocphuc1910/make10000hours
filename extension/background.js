@@ -3834,7 +3834,7 @@ class FocusTimeTracker {
         focusTimeTracker.handleMessage(message, sender, sendResponse);
       } else {
         console.error('❌ focusTimeTracker not available for external message');
-        console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'Extension not initialized' });
+        console.log('📤 [BACKGROUND] Sending error response'); sendResponse({ success: false, error: 'Extension not initialized' });
       }
       return true; // Keep message channel open for async responses
     });
@@ -4220,18 +4220,18 @@ class FocusTimeTracker {
       switch (type) {
         case 'GET_FIREBASE_CONFIG':
           // Firebase removed for Chrome Web Store compliance
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'Firebase integration removed' });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'Firebase integration removed' });
           return true;
 
         case 'SET_FIREBASE_CONFIG':
           // Firebase removed for Chrome Web Store compliance  
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'Firebase integration removed' });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'Firebase integration removed' });
           return true;
 
         case 'GET_CURRENT_STATE':
           const currentState = await this.getCurrentState();
           const focusStats = this.blockingManager.getFocusStats(); // Add focus stats
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
             success: true, 
             data: { ...currentState, focusStats } 
           });
@@ -4240,10 +4240,10 @@ class FocusTimeTracker {
         case 'GET_TODAY_STATS':
           try {
             const stats = await this.storageManager.getTodayStats();
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: stats });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: stats });
           } catch (error) {
             console.error('Error getting today stats from sessions:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4251,10 +4251,10 @@ class FocusTimeTracker {
           try {
             console.log('🔄 Received FORCE_SYNC_SESSIONS request from web app');
             await this.storageManager.syncSessionsToFirebase();
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, message: 'Sessions sync initiated' });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, message: 'Sessions sync initiated' });
           } catch (error) {
             console.error('❌ Error syncing sessions:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4262,7 +4262,7 @@ class FocusTimeTracker {
           console.log('📊 Processing GET_REALTIME_STATS request...');
           const realTimeStats = await this.storageManager.getRealTimeStatsWithSession();
           console.log('📊 Retrieved real-time stats:', realTimeStats);
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: realTimeStats });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: realTimeStats });
           break;
 
         case 'GET_COMPLETE_STATS':
@@ -4274,7 +4274,7 @@ class FocusTimeTracker {
               sitesCount: Object.keys(completeStats.sites || {}).length,
               sitesVisited: completeStats.sitesVisited
             });
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: true, 
               data: {
                 totalTime: completeStats.totalTime,
@@ -4286,7 +4286,7 @@ class FocusTimeTracker {
             });
           } catch (error) {
             console.error('❌ Error getting complete stats:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: false, 
               error: error.message,
               data: {
@@ -4306,10 +4306,10 @@ class FocusTimeTracker {
             // Get all storage data
             const allData = await chrome.storage.local.get(null);
             console.log('🔍 All storage data:', allData);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: allData });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: allData });
           } catch (error) {
             console.error('❌ Debug storage error:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4317,40 +4317,40 @@ class FocusTimeTracker {
           try {
             const { startDate, endDate } = message.payload;
             const timeData = await this.storageManager.getTimeData(startDate, endDate);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: timeData });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: timeData });
           } catch (error) {
             console.error('Error getting time data range:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_SETTINGS':
           const settings = await this.storageManager.getSettings();
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: settings });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: settings });
           break;
 
         case 'GET_TOP_SITES':
           const topSites = await this.storageManager.getTopSites(message.payload?.limit || 5);
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: topSites });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: topSites });
           break;
 
         case 'GET_REALTIME_TOP_SITES':
           try {
             const realTimeTopSites = await this.storageManager.getRealTimeTopSites(message.payload?.limit || 20);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: realTimeTopSites });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: realTimeTopSites });
           } catch (error) {
             console.error('❌ Error in GET_REALTIME_TOP_SITES:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_LOCAL_DEEP_FOCUS_TIME':
           try {
             const localDeepFocusTime = await this.storageManager.getTodayDeepFocusTime();
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: { minutes: localDeepFocusTime } });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: { minutes: localDeepFocusTime } });
           } catch (error) {
             console.error('Error getting local deep focus time:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4361,28 +4361,28 @@ class FocusTimeTracker {
 
         case 'ACTIVITY_DETECTED':
           await this.handleActivityDetected(sender.tab?.id);
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true });
           break;
 
         case 'ENHANCED_ACTIVITY_DETECTED':
           await this.handleEnhancedActivityDetected(message.payload);
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true });
           break;
 
         case 'ACTIVITY_HEARTBEAT':
           this.updateActivity(message.payload);
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true });
           break;
 
         case 'GET_ACTIVITY_STATE':
           const activityState = this.getActivityState();
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: activityState });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: activityState });
           break;
 
         case 'TOGGLE_AUTO_MANAGEMENT':
           const enabled = message.payload?.enabled ?? true;
           await this.setAutoManagement(enabled);
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, enabled });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, enabled });
           break;
 
         // Blocking system messages
@@ -4443,7 +4443,7 @@ class FocusTimeTracker {
                   });
                 }, 100);
                 
-                console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+                console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
                   success: true, 
                   focusMode: newFocusMode,
                   previousMode: currentFocusMode
@@ -4453,7 +4453,7 @@ class FocusTimeTracker {
               }
             } else {
               console.log('🔄 Focus mode already in correct state:', newFocusMode);
-              console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+              console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
                 success: true, 
                 focusMode: newFocusMode,
                 noChange: true
@@ -4461,7 +4461,7 @@ class FocusTimeTracker {
             }
           } catch (error) {
             console.error('❌ Error processing web app focus state change:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: false, 
               error: error.message,
               focusMode: this.blockingManager.getFocusStats().focusMode
@@ -4480,7 +4480,7 @@ class FocusTimeTracker {
             }
           } catch (error) {
             console.error('❌ Error adding blocked site:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4488,7 +4488,7 @@ class FocusTimeTracker {
           try {
             const domains = message.payload?.domains || [];
             if (!Array.isArray(domains) || domains.length === 0) {
-              console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'Invalid domains array' });
+              console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'Invalid domains array' });
               break;
             }
             
@@ -4514,14 +4514,14 @@ class FocusTimeTracker {
             }
             
             console.log(`✅ Batch blocking completed: ${successCount} success, ${failureCount} failed`);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: true, 
               results,
               summary: { successCount, failureCount, total: domains.length }
             });
           } catch (error) {
             console.error('❌ Batch blocking failed:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4536,7 +4536,7 @@ class FocusTimeTracker {
             }
           } catch (error) {
             console.error('❌ Error removing blocked site:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4549,21 +4549,21 @@ class FocusTimeTracker {
               const currentDomain = this.extractDomain(tabs[0].url);
               if (currentDomain && this.isTrackableUrl(tabs[0].url)) {
                 const blockResult = await this.blockingManager.addBlockedSite(currentDomain);
-                console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ ...blockResult, domain: currentDomain });
+                console.log('📤 [BACKGROUND] Sending response'); sendResponse({ ...blockResult, domain: currentDomain });
               } else {
-                console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'Current site cannot be blocked' });
+                console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'Current site cannot be blocked' });
               }
             } else {
-              console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'No active tab found' });
+              console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'No active tab found' });
             }
           } catch (error) {
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'Failed to get current tab: ' + error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'Failed to get current tab: ' + error.message });
           }
           break;
 
         case 'GET_BLOCKED_SITES':
           const blockedSites = Array.from(this.blockingManager.blockedSites);
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: blockedSites });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: blockedSites });
           break;
 
         case 'SYNC_BLOCKED_SITES_FROM_WEBAPP':
@@ -4605,14 +4605,14 @@ class FocusTimeTracker {
             }
             
             console.log(`✅ Sync completed: ${successCount} success, ${failureCount} failed`);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: true, 
               synced: successCount,
               failed: failureCount 
             });
           } catch (error) {
             console.error('❌ Failed to sync blocked sites from web app:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4626,13 +4626,13 @@ class FocusTimeTracker {
               await this.storageManager.updateSettings(settings);
               
               console.log('🔄 Updated extension settings from web app:', blockedSites.length, 'sites');
-              console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true });
+              console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true });
             } else {
-              console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'Invalid blocked sites array' });
+              console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'Invalid blocked sites array' });
             }
           } catch (error) {
             console.error('❌ Failed to update settings from web app:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4646,12 +4646,12 @@ class FocusTimeTracker {
 
         case 'GET_FOCUS_STATS':
           const focusStatsOnly = this.blockingManager.getFocusStats();
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: focusStatsOnly });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: focusStatsOnly });
           break;
 
         case 'RECORD_BLOCKED_ATTEMPT':
           this.blockingManager.recordBlockedAttempt(message.payload?.domain);
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true });
           break;
 
         case 'FORCE_SYNC_FROM_WEBAPP':
@@ -4665,10 +4665,10 @@ class FocusTimeTracker {
             await this.blockingManager.saveState();
             
             console.log('✅ Extension blocked sites cleared and ready for sync');
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, message: 'Extension cleared and ready for sync' });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, message: 'Extension cleared and ready for sync' });
           } catch (error) {
             console.error('❌ Failed to force sync from web app:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4738,10 +4738,10 @@ class FocusTimeTracker {
               console.debug('📝 Failed to send user info update notification');
             }
             
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, userId: this.currentUserId });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, userId: this.currentUserId });
           } catch (error) {
             console.error('❌ DEBUG: Error setting user ID:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4802,7 +4802,7 @@ class FocusTimeTracker {
           try {
             if (!this.currentUserId) {
               console.warn('⚠️ No user ID available for override session');
-              console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+              console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
                 success: false, 
                 error: 'No user ID available. Please ensure you are logged in to the web app.' 
               });
@@ -4843,14 +4843,14 @@ class FocusTimeTracker {
             // Forward to web app for database storage
             this.forwardToWebApp('RECORD_OVERRIDE_SESSION', enhancedPayload);
             
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: true, 
               payload: enhancedPayload,
               localStorage: localSaveResult
             });
           } catch (error) {
             console.error('❌ Error recording override session:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4858,22 +4858,22 @@ class FocusTimeTracker {
           const sessionTime = this.blockingManager.focusStartTime 
             ? Date.now() - this.blockingManager.focusStartTime 
             : 0;
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: { sessionTime } });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: { sessionTime } });
           break;
 
         case 'GET_DEBUG_INFO':
           const debugInfo = this.blockingManager.getDebugInfo(message.payload?.domain);
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: debugInfo });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: debugInfo });
           break;
 
         case 'GET_CACHED_URL':
           const cachedUrl = this.blockingManager.getCachedUrl(sender.tab?.id);
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: { url: cachedUrl } });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: { url: cachedUrl } });
           break;
 
         case 'CLEAR_CACHED_URL':
           this.blockingManager.clearCachedUrl(sender.tab?.id);
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true });
           break;
 
         case 'RESET_BLOCKING_STATE':
@@ -4886,20 +4886,20 @@ class FocusTimeTracker {
           try {
             const period = message.payload?.period || 'week';
             const analyticsData = await this.storageManager.getAnalyticsData(period);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: analyticsData });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: analyticsData });
           } catch (error) {
             console.error('Error getting analytics data:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_PRODUCTIVITY_GOALS':
           try {
             const goals = await this.storageManager.getProductivityGoals();
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: goals });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: goals });
           } catch (error) {
             console.error('Error getting productivity goals:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4912,7 +4912,7 @@ class FocusTimeTracker {
             sendResponse(updateResult);
           } catch (error) {
             console.error('Error updating goal progress:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4925,24 +4925,24 @@ class FocusTimeTracker {
             sendResponse(categoryResult);
           } catch (error) {
             console.error('Error updating site category:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_SITE_CATEGORY':
           try {
             const category = this.storageManager.getSiteCategory(message.payload?.domain);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: { category } });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: { category } });
           } catch (error) {
             console.error('Error getting site category:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_CATEGORY_BREAKDOWN':
           try {
             const analyticsData = await this.storageManager.getAnalyticsData('week');
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: true, 
               data: { 
                 categories: analyticsData.categoryBreakdown,
@@ -4951,27 +4951,27 @@ class FocusTimeTracker {
             });
           } catch (error) {
             console.error('Error getting category breakdown:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_WEEKLY_STATS':
           try {
             const weeklyData = await this.storageManager.getAnalyticsData('week');
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: weeklyData });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: weeklyData });
           } catch (error) {
             console.error('Error getting weekly stats:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_MONTHLY_STATS':
           try {
             const monthlyData = await this.storageManager.getAnalyticsData('month');
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: monthlyData });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: monthlyData });
           } catch (error) {
             console.error('Error getting monthly stats:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -4989,10 +4989,10 @@ class FocusTimeTracker {
             setTimeout(() => {
               this.broadcastFocusStateChange(true);
             }, 50);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: { focusMode: true } });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: { focusMode: true } });
           } catch (error) {
             console.error('Error enabling focus mode:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -5010,17 +5010,17 @@ class FocusTimeTracker {
             setTimeout(() => {
               this.broadcastFocusStateChange(false);
             }, 50);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: { focusMode: false } });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: { focusMode: false } });
           } catch (error) {
             console.error('Error disabling focus mode:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_LOCAL_OVERRIDE_TIME':
           try {
             const overrideTimeResult = await this.overrideSessionManager.calculateTodayOverrideTime();
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: true, 
               data: { 
                 overrideTime: overrideTimeResult.minutes,
@@ -5029,14 +5029,14 @@ class FocusTimeTracker {
             });
           } catch (error) {
             console.error('Error getting local override time:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_LOCAL_OVERRIDE_SESSIONS':
           try {
             const sessionsResult = await this.overrideSessionManager.getTodayOverrideSessions();
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: true, 
               data: { 
                 sessions: sessionsResult.sessions,
@@ -5045,7 +5045,7 @@ class FocusTimeTracker {
             });
           } catch (error) {
             console.error('Error getting local override sessions:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -5053,7 +5053,7 @@ class FocusTimeTracker {
           try {
             const daysToKeep = message.payload?.daysToKeep || 30;
             const result = await this.overrideSessionManager.cleanupOldSessions(daysToKeep);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: true, 
               data: { 
                 deletedCount: result.deletedCount
@@ -5061,33 +5061,33 @@ class FocusTimeTracker {
             });
           } catch (error) {
             console.error('Error cleaning up old override sessions:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'CLEAR_ALL_OVERRIDE_SESSIONS':
           try {
             const result = await this.overrideSessionManager.clearAllSessions();
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: true, 
               data: { cleared: result.success }
             });
           } catch (error) {
             console.error('Error clearing all override sessions:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_OVERRIDE_DEBUG_INFO':
           try {
             const debugInfo = await this.overrideSessionManager.getDebugInfo();
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: true, 
               data: debugInfo.debug
             });
           } catch (error) {
             console.error('Error getting override debug info:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -5103,17 +5103,17 @@ class FocusTimeTracker {
 
         case 'GET_FOCUS_STATUS':
           try {
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: { focusMode: this.blockingManager.focusMode } });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: { focusMode: this.blockingManager.focusMode } });
           } catch (error) {
             console.error('Error getting focus status:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
 
         case 'PING':
           // Health check ping from content scripts
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
             success: true, 
             timestamp: Date.now(),
             extensionId: chrome.runtime.id 
@@ -5125,10 +5125,10 @@ class FocusTimeTracker {
           try {
             const userTimezone = await timezoneManager.getEffectiveTimezone();
             console.log('📍 Returning user timezone:', userTimezone);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, timezone: userTimezone });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, timezone: userTimezone });
           } catch (error) {
             console.error('Error getting user timezone:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -5136,10 +5136,10 @@ class FocusTimeTracker {
           try {
             const migrationResult = await this.storageManager.migrateSessionsToUTC();
             console.log('🔄 Session migration completed:', migrationResult);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: migrationResult });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: migrationResult });
           } catch (error) {
             console.error('Error migrating sessions to UTC:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -5147,60 +5147,60 @@ class FocusTimeTracker {
           try {
             const { startDate, endDate } = message.payload || {};
             const sessions = await this.storageManager.getDeepFocusSessionsForDateRange(startDate, endDate);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: sessions });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: sessions });
           } catch (error) {
             console.error('Error getting deep focus sessions for date range:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_TODAY_DEEP_FOCUS_SESSIONS':
           try {
             const todaySessions = await this.storageManager.getTodayDeepFocusSessions();
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: todaySessions });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: todaySessions });
           } catch (error) {
             console.error('Error getting today deep focus sessions:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_ACTIVE_DEEP_FOCUS_SESSION':
           try {
             const activeSession = await this.storageManager.getActiveDeepFocusSession();
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: activeSession });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: activeSession });
           } catch (error) {
             console.error('Error getting active deep focus session:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_ALL_DEEP_FOCUS_SESSIONS':
           try {
             const allSessions = await this.storageManager.getAllDeepFocusSessions();
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: allSessions });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: allSessions });
           } catch (error) {
             console.error('Error getting all deep focus sessions:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_RECENT_7_DAYS_DEEP_FOCUS_SESSIONS':
           try {
             const recent7DaysSessions = await this.storageManager.getRecent7DaysDeepFocusSessions();
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: recent7DaysSessions });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: recent7DaysSessions });
           } catch (error) {
             console.error('Error getting recent 7 days deep focus sessions:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
         case 'GET_LAST_10_DEEP_FOCUS_SESSIONS':
           try {
             const last10Sessions = await this.storageManager.getLast10DeepFocusSessions();
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: last10Sessions });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: last10Sessions });
           } catch (error) {
             console.error('Error getting last 10 deep focus sessions:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           }
           break;
 
@@ -5231,7 +5231,7 @@ class FocusTimeTracker {
             console.log('📋 Session dates available:', Object.keys(allSessions));
             
             // Respond with sessions in the expected format
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: true, 
               sessions: sessionsList,
               totalSessions: sessionsList.length,
@@ -5240,7 +5240,7 @@ class FocusTimeTracker {
             
           } catch (error) {
             console.error('❌ Error retrieving site usage sessions:', error);
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: false, 
               error: error.message,
               sessions: []
@@ -5252,11 +5252,11 @@ class FocusTimeTracker {
           console.warn('❓ Unknown message type:', type);
           console.log('🔍 DEBUG: Full message object:', message);
           console.log('🔍 DEBUG: Available message types should include GET_TODAY_DEEP_FOCUS_SESSIONS');
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'Unknown message type' });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'Unknown message type' });
       }
     } catch (error) {
       console.error('❌ Error handling message:', error);
-      console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+      console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
     }
     
     // Return true to keep the message channel open for async responses
@@ -6395,7 +6395,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
       sendResponse(response);
     }).catch(error => {
       console.error('❌ Failed to forward SET_USER_ID:', error);
-      console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+      console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
     });
     
     return true; // Keep message channel open for async response
@@ -6686,7 +6686,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   // Always respond to PING messages immediately
   if (message.type === 'PING') {
-    console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, initialized: isInitialized });
+    console.log('📤 [BACKGROUND] Sending PING response'); sendResponse({ success: true, initialized: isInitialized });
     return false; // Don't keep channel open for sync response
   }
   
@@ -6709,7 +6709,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       timezone: UTCCoordinator?.getStatus()?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
       initialized: UTCCoordinator?.isReady() || false
     };
-    console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, data: utcStatus });
+    console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, data: utcStatus });
     return false;
   }
 
@@ -6718,20 +6718,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (globalThis.utcCoordinator && message.data) {
       if (message.data.utcEnabled) {
         globalThis.utcCoordinator.enableUTCMode(message.data.userTimezone).then(() => {
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, message: 'UTC mode enabled' });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, message: 'UTC mode enabled' });
         }).catch(error => {
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
         });
       } else {
         globalThis.utcCoordinator.enableLocalMode().then(() => {
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, message: 'Local mode enabled' });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, message: 'Local mode enabled' });
         }).catch(error => {
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
         });
       }
       return true; // Keep channel open for async response
     }
-    console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'UTC Coordinator not available' });
+    console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'UTC Coordinator not available' });
     return false;
   }
 
@@ -6742,13 +6742,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message.data.oldTimezone, 
         message.data.newTimezone
       ).then(() => {
-        console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: true, message: 'Timezone change handled' });
+        console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: true, message: 'Timezone change handled' });
       }).catch(error => {
-        console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+        console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
       });
       return true; // Keep channel open for async response
     }
-    console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'UTC Coordinator not available' });
+    console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'UTC Coordinator not available' });
     return false;
   }
 
@@ -6756,7 +6756,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Handle data sync request from web app
     if (globalThis.utcCoordinator && message.data) {
       globalThis.utcCoordinator.getRecentDataForSync().then(recentData => {
-        console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ 
+        console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
           success: true, 
           data: { 
             extensionData: recentData,
@@ -6765,11 +6765,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         });
       }).catch(error => {
-        console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+        console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
       });
       return true; // Keep channel open for async response
     }
-    console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'UTC Coordinator not available' });
+    console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'UTC Coordinator not available' });
     return false;
   }
   
@@ -6782,14 +6782,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           focusTimeTracker.handleMessage(message, sender, sendResponse);
         } catch (error) {
           console.error('❌ Error in delayed message handler:', error);
-          console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'Message handler error' });
+          console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'Message handler error' });
         }
       } else {
-        console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'Extension initialization failed' });
+        console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'Extension initialization failed' });
       }
     }).catch(error => {
       console.error('❌ Extension initialization error:', error);
-      console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'Extension initialization failed' });
+      console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'Extension initialization failed' });
     });
     return true; // Keep channel open for async response
   }
@@ -6803,7 +6803,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         result.catch(error => {
           console.error('❌ Async message handler error:', error);
           try {
-            console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+            console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
           } catch (e) {
             console.error('❌ Failed to send error response:', e);
           }
@@ -6812,12 +6812,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true; // Keep channel open for async handlers
     } catch (error) {
       console.error('❌ Message handler error:', error);
-      console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: error.message });
+      console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: error.message });
       return false; // Don't keep channel open for sync errors
     }
   }
   
   console.warn('⚠️ FocusTimeTracker not available, message ignored:', message.type);
-  console.log('📤 [BACKGROUND] Sending response with', sessionsList.length, 'sessions'); sendResponse({ success: false, error: 'Extension not properly initialized' });
+  console.log('📤 [BACKGROUND] Sending response'); sendResponse({ success: false, error: 'Extension not properly initialized' });
   return false; // Don't keep channel open for sync errors
 });
