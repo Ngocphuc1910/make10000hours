@@ -12,6 +12,7 @@ import { composeDeepFocusData } from '../utils/stats';
 import { workSessionService } from '../api/workSessionService';
 import { DailySiteUsage } from '../api/siteUsageService';
 import { SiteUsageSession } from '../utils/SessionManager';
+import { convertSessionsToSiteUsage, calculateOnScreenTime, SiteUsageData } from '../utils/SessionConverter';
 
 // Helper function to convert session data to daily site usage format
 const convertSessionsToDailySiteUsage = (sessions: SiteUsageSession[]): DailySiteUsage[] => {
@@ -19,7 +20,7 @@ const convertSessionsToDailySiteUsage = (sessions: SiteUsageSession[]): DailySit
   
   sessions.forEach(session => {
     // Use UTC date for consistency
-    const dateKey = session.utcDate || new Date(session.startTime).toISOString().split('T')[0];
+    const dateKey = session.utcDate;
     
     if (!dailyUsageMap.has(dateKey)) {
       dailyUsageMap.set(dateKey, {
@@ -43,7 +44,7 @@ const convertSessionsToDailySiteUsage = (sessions: SiteUsageSession[]): DailySit
         domain: session.domain,
         timeSpent: 0,
         visits: 0,
-        lastVisit: session.startTime,
+        lastVisit: session.startTimeUTC,
         favicon: session.favicon || '',
         title: session.title || session.domain,
         category: session.category || 'uncategorized'
@@ -58,11 +59,11 @@ const convertSessionsToDailySiteUsage = (sessions: SiteUsageSession[]): DailySit
       const durationMs = session.duration * 1000;
       dayUsage.totalTime += durationMs;
       dayUsage.sites[session.domain].timeSpent += durationMs;
-      dayUsage.sites[session.domain].visits++;
+      dayUsage.sites[session.domain].visits += (session.visits || 1); // Use actual visit count from session
       
       // Update last visit time if this session is more recent
-      if (new Date(session.startTime) > new Date(dayUsage.sites[session.domain].lastVisit)) {
-        dayUsage.sites[session.domain].lastVisit = session.startTime;
+      if (new Date(session.startTimeUTC) > new Date(dayUsage.sites[session.domain].lastVisit)) {
+        dayUsage.sites[session.domain].lastVisit = session.startTimeUTC;
       }
       
       console.log(`✅ Processed session: ${session.domain}, duration: ${session.duration}s, status: ${session.status}`);
@@ -81,10 +82,17 @@ interface DeepFocusDashboardStore {
   comparisonData: ComparisonData | null;
   isLoading: boolean;
   isLoadingComparison: boolean;
+  
+  // New session-based data
+  siteUsageData: SiteUsageData[];
+  onScreenTime: number; // seconds
 
   loadExtensionData: (startDate: Date, endDate: Date) => Promise<void>;
   loadAllTimeExtensionData: () => Promise<void>;
   loadComparisonData: (startDate: Date, endDate: Date) => Promise<void>;
+  
+  // New session-based loader
+  loadSessionData: () => Promise<void>;
 };
 
 export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
@@ -101,6 +109,10 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
       comparisonData: null,
       isLoading: false,
       isLoadingComparison: false,
+      
+      // New session-based data
+      siteUsageData: [],
+      onScreenTime: 0,
 
       loadExtensionData: async (startDate: Date, endDate: Date) => {
         try {
@@ -109,9 +121,8 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
             return;
           }
           
-          // 🎯 TRIGGER: Request extension sync before loading data
-          console.log('🔄 Requesting extension to sync sessions to Firebase...');
-          await extensionSyncListener.triggerExtensionSync();
+          // Note: Extension sync is now handled at page level to prevent race conditions
+          console.log('🔄 Loading data (extension sync handled by page-level sync)...');
           
           const user = useUserStore.getState().user;
           if (!user?.uid) {
@@ -206,6 +217,52 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
       loadComparisonData: async (startDate: Date, endDate: Date) => {
         return;
       },
+
+      // New session-based data loader
+      loadSessionData: async () => {
+        const userStore = useUserStore.getState();
+        if (!userStore.user?.uid) {
+          console.warn('⚠️ No authenticated user, cannot load session data');
+          return;
+        }
+
+        set({ isLoading: true });
+
+        try {
+          console.log('🔄 Loading session-based data for dashboard...');
+          
+          const sessions = await siteUsageSessionService.getSessionsForToday(userStore.user.uid);
+          console.log(`📊 Retrieved ${sessions.length} sessions for today`);
+          
+          // If no sessions found, suggest data population
+          if (sessions.length === 0) {
+            console.log('⚠️ No sessions found in siteUsageSessions collection');
+            console.log('💡 Run: populateNewCollection() to migrate/create session data');
+            
+            set({ 
+              siteUsageData: [],
+              onScreenTime: 0,
+              isLoading: false 
+            });
+            return;
+          }
+          
+          const siteUsageData = convertSessionsToSiteUsage(sessions);
+          const onScreenTimeSeconds = calculateOnScreenTime(sessions);
+          
+          console.log(`✅ Converted to ${siteUsageData.length} site usage entries`);
+          console.log(`📱 Total on-screen time: ${Math.round(onScreenTimeSeconds / 60)} minutes`);
+          
+          set({ 
+            siteUsageData,
+            onScreenTime: onScreenTimeSeconds,
+            isLoading: false 
+          });
+        } catch (error) {
+          console.error('❌ Failed to load session data:', error);
+          set({ isLoading: false });
+        }
+      },
     }),
     {
       name: 'deepFocusDashboardStore',
@@ -216,6 +273,8 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
         comparisonData: state.comparisonData,
         isLoading: state.isLoading,
         isLoadingComparison: state.isLoadingComparison,
+        siteUsageData: state.siteUsageData,
+        onScreenTime: state.onScreenTime,
       }),
       version: 1,
     },
