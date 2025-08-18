@@ -699,9 +699,9 @@ class ActivityDetector {
                 type: 'REQUEST_SITE_USAGE_SESSIONS',
                 payload: payload || {}
               }, {
-                timeout: 15000,
-                maxRetries: 3,
-                fallback: null // Don't use fallback yet, we have our own fallback
+                timeout: 30000, // Increased timeout for large datasets
+                maxRetries: 2,   // Reduced retries since we have fallback logic
+                fallback: null   // Don't use fallback yet, we have our own fallback
               });
             } catch (error) {
               console.log('⚠️ sendMessageSafely failed, trying direct communication:', error.message);
@@ -711,7 +711,7 @@ class ActivityDetector {
                 response = await new Promise((resolve, reject) => {
                   const timeoutId = setTimeout(() => {
                     reject(new Error('Direct message timeout'));
-                  }, 10000);
+                  }, 25000); // Increased direct fallback timeout
 
                   chrome.runtime.sendMessage({
                     type: 'REQUEST_SITE_USAGE_SESSIONS',

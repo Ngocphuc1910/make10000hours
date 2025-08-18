@@ -42,35 +42,183 @@ class SiteUsageSessionService {
   private activeSessionListeners: Map<string, Unsubscribe> = new Map();
   
   /**
-   * Handle batch save from extension sync
-   * Extension sends sessions → This saves to Firebase
+   * Handle batch save from extension sync with efficient bulk operations
+   * Optimized for large datasets with proper rate limiting and batch management
    */
   async batchSaveSessions(sessions: SiteUsageSession[]): Promise<void> {
+    if (!sessions || sessions.length === 0) {
+      console.log('📭 No sessions to sync');
+      return;
+    }
+
     try {
-      console.log(`💾 Saving ${sessions.length} sessions to Firebase collection: ${this.collectionName}`);
-      console.log('📋 Session data sample:', sessions.slice(0, 2));
+      console.log(`🔄 Starting efficient bulk sync for ${sessions.length} sessions`);
       
-      const batch = writeBatch(db);
-      
-      sessions.forEach(session => {
-        const docRef = doc(collection(db, this.collectionName));
-        const firestoreSession = {
-          ...session,
-          // Keep string timestamps as-is for the new schema
-          createdAt: typeof session.createdAt === 'string' 
-            ? session.createdAt 
-            : new Date().toISOString()
-        };
-        batch.set(docRef, firestoreSession);
-        console.log(`📄 Adding session to batch: ${session.domain} (${session.duration}s)`);
+      // Validate sessions and filter out invalid ones
+      const validSessions = sessions.filter(session => {
+        if (!session.extensionSessionId || !session.userId) {
+          console.warn('⚠️ Session missing required fields, skipping:', {
+            extensionSessionId: session.extensionSessionId,
+            userId: session.userId,
+            domain: session.domain
+          });
+          return false;
+        }
+        return true;
       });
-      
-      await batch.commit();
-      console.log(`✅ Successfully synced ${sessions.length} sessions to Firebase collection: ${this.collectionName}`);
+
+      if (validSessions.length === 0) {
+        console.log('❌ No valid sessions to process after validation');
+        return;
+      }
+
+      console.log(`✅ ${validSessions.length} valid sessions after filtering`);
+
+      // Step 1: Bulk fetch existing sessions to avoid O(n) queries
+      const existingSessionsMap = await this.bulkFetchExistingSessions(
+        validSessions[0].userId, 
+        validSessions.map(s => s.extensionSessionId)
+      );
+
+      console.log(`📊 Found ${existingSessionsMap.size} existing sessions in Firebase`);
+
+      // Step 2: Process sessions in batches (Firebase limit: 500 operations per batch)
+      const BATCH_SIZE = 400; // Leave some buffer for safety
+      let totalCreated = 0;
+      let totalUpdated = 0; 
+      let totalSkipped = 0;
+
+      for (let i = 0; i < validSessions.length; i += BATCH_SIZE) {
+        const batchSessions = validSessions.slice(i, i + BATCH_SIZE);
+        console.log(`🔄 Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(validSessions.length/BATCH_SIZE)} (${batchSessions.length} sessions)`);
+        
+        const batchResult = await this.processBatch(batchSessions, existingSessionsMap);
+        totalCreated += batchResult.created;
+        totalUpdated += batchResult.updated;
+        totalSkipped += batchResult.skipped;
+
+        // Add small delay between batches to avoid rate limits
+        if (i + BATCH_SIZE < validSessions.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+
+      console.log(`✅ Bulk sync completed successfully!`);
+      console.log(`📊 Final stats: ${totalCreated} created, ${totalUpdated} updated, ${totalSkipped} skipped`);
+      console.log(`🎯 Total processed: ${totalCreated + totalUpdated + totalSkipped}/${sessions.length} sessions`);
+
     } catch (error) {
-      console.error('❌ Failed to sync sessions to Firebase:', error);
+      console.error('❌ Bulk sync failed:', error);
       throw error;
     }
+  }
+
+  /**
+   * Bulk fetch existing sessions to avoid O(n) individual queries
+   */
+  private async bulkFetchExistingSessions(
+    userId: string, 
+    extensionSessionIds: string[]
+  ): Promise<Map<string, any>> {
+    const existingMap = new Map<string, any>();
+    
+    // Firebase 'in' queries are limited to 10 items, so we need to batch them
+    const QUERY_BATCH_SIZE = 10;
+    
+    for (let i = 0; i < extensionSessionIds.length; i += QUERY_BATCH_SIZE) {
+      const idBatch = extensionSessionIds.slice(i, i + QUERY_BATCH_SIZE);
+      
+      try {
+        const q = query(
+          collection(db, this.collectionName),
+          where('userId', '==', userId),
+          where('extensionSessionId', 'in', idBatch)
+        );
+        
+        const snapshot = await getDocs(q);
+        
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          existingMap.set(data.extensionSessionId, {
+            ...data,
+            docId: doc.id
+          });
+        });
+
+      } catch (error) {
+        console.error('❌ Error in bulk fetch batch:', error);
+        // Continue with other batches even if one fails
+      }
+      
+      // Small delay between query batches to avoid rate limits
+      if (i + QUERY_BATCH_SIZE < extensionSessionIds.length) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    }
+    
+    return existingMap;
+  }
+
+  /**
+   * Process a batch of sessions with efficient write operations
+   */
+  private async processBatch(
+    sessions: SiteUsageSession[],
+    existingSessionsMap: Map<string, any>
+  ): Promise<{ created: number; updated: number; skipped: number }> {
+    const batch = writeBatch(db);
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (const session of sessions) {
+      const existingSession = existingSessionsMap.get(session.extensionSessionId);
+      
+      if (existingSession) {
+        // Check if update is needed
+        const hasChanges = (
+          existingSession.duration !== session.duration ||
+          existingSession.status !== session.status ||
+          existingSession.endTimeUTC !== session.endTimeUTC ||
+          existingSession.startTimeUTC !== session.startTimeUTC
+        );
+        
+        if (hasChanges) {
+          // UPDATE existing session
+          batch.update(doc(db, this.collectionName, existingSession.docId), {
+            ...session,
+            id: existingSession.docId,
+            syncTime: existingSession.syncTime, // Preserve original sync time
+            lastUpdated: new Date().toISOString()
+          });
+          updated++;
+        } else {
+          skipped++;
+        }
+      } else {
+        // CREATE new session
+        const docRef = doc(collection(db, this.collectionName));
+        const newSession = {
+          ...session,
+          id: docRef.id,
+          syncTime: new Date().toISOString(),
+          lastUpdated: new Date().toISOString()
+        };
+        
+        batch.set(docRef, newSession);
+        created++;
+      }
+    }
+
+    // Execute the batch
+    if (created + updated > 0) {
+      await batch.commit();
+      console.log(`✅ Batch committed: ${created} created, ${updated} updated, ${skipped} skipped`);
+    } else {
+      console.log(`⏭️ Batch skipped: all ${skipped} sessions unchanged`);
+    }
+
+    return { created, updated, skipped };
   }
   
   /**
