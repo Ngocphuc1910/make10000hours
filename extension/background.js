@@ -5208,34 +5208,117 @@ class FocusTimeTracker {
           try {
             console.log('🔄 [BACKGROUND] Received REQUEST_SITE_USAGE_SESSIONS from content script', { hasPayload: !!message.payload, timestamp: new Date().toISOString() });
             
-            // Get all site usage sessions from storage
-            const storage = await chrome.storage.local.get(['site_usage_sessions']);
-            const allSessions = storage.site_usage_sessions || {};
+            const payload = message.payload || {};
+            const incremental = payload.incremental !== false; // Default to true for performance
+            const daysBack = payload.daysBack || 7; // Default to last 7 days for incremental sync
             
-            // Flatten all sessions from all dates into a single array
-            const sessionsList = [];
-            Object.keys(allSessions).forEach(date => {
-              const daySessions = allSessions[date] || [];
-              if (Array.isArray(daySessions)) {
-                // Add date to each session for consistency
-                daySessions.forEach(session => {
-                  sessionsList.push({
-                    ...session,
-                    utcDate: date
+            // Get all site usage sessions from storage
+            const storage = await chrome.storage.local.get(['site_usage_sessions', 'last_sync_timestamp']);
+            const allSessions = storage.site_usage_sessions || {};
+            const lastSyncTime = storage.last_sync_timestamp || 0;
+            
+            let sessionsList = [];
+            let syncStrategy = 'full';
+            
+            if (incremental && lastSyncTime > 0) {
+              // INCREMENTAL SYNC: Only sessions modified since last sync
+              syncStrategy = 'incremental';
+              console.log(`📊 Incremental sync: checking sessions modified since ${new Date(lastSyncTime).toISOString()}`);
+              
+              Object.keys(allSessions).forEach(date => {
+                const daySessions = allSessions[date] || [];
+                if (Array.isArray(daySessions)) {
+                  daySessions.forEach(session => {
+                    // Include sessions that are:
+                    // 1. New (created after last sync)
+                    // 2. Modified (if they have a lastModified timestamp after last sync)
+                    // 3. Active (still ongoing)
+                    const sessionTime = new Date(session.startTimeUTC).getTime();
+                    const sessionModified = session.lastModified ? new Date(session.lastModified).getTime() : sessionTime;
+                    
+                    if (sessionModified > lastSyncTime || 
+                        session.status === 'active' ||
+                        sessionTime > lastSyncTime) {
+                      sessionsList.push({
+                        ...session,
+                        utcDate: date
+                      });
+                    }
                   });
-                });
-              }
+                }
+              });
+            } else if (incremental) {
+              // RECENT SYNC: Last N days only (when no previous sync timestamp)
+              syncStrategy = 'recent';
+              console.log(`📊 Recent sync: syncing last ${daysBack} days`);
+              
+              const cutoffDate = new Date();
+              cutoffDate.setDate(cutoffDate.getDate() - daysBack);
+              const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+              
+              Object.keys(allSessions).forEach(date => {
+                if (date >= cutoffDateStr) {
+                  const daySessions = allSessions[date] || [];
+                  if (Array.isArray(daySessions)) {
+                    daySessions.forEach(session => {
+                      sessionsList.push({
+                        ...session,
+                        utcDate: date
+                      });
+                    });
+                  }
+                }
+              });
+            } else {
+              // FULL SYNC: All sessions (fallback or explicitly requested)
+              syncStrategy = 'full';
+              console.log('📊 Full sync: retrieving all sessions');
+              
+              Object.keys(allSessions).forEach(date => {
+                const daySessions = allSessions[date] || [];
+                if (Array.isArray(daySessions)) {
+                  daySessions.forEach(session => {
+                    sessionsList.push({
+                      ...session,
+                      utcDate: date
+                    });
+                  });
+                }
+              });
+            }
+            
+            // Sort by date and time for consistent processing
+            sessionsList.sort((a, b) => {
+              const dateCompare = b.utcDate.localeCompare(a.utcDate);
+              if (dateCompare !== 0) return dateCompare;
+              return new Date(b.startTimeUTC).getTime() - new Date(a.startTimeUTC).getTime();
             });
             
-            console.log(`📊 Found ${sessionsList.length} total sessions in storage`);
+            console.log(`📊 ${syncStrategy.toUpperCase()} sync found ${sessionsList.length} sessions`);
             console.log('📋 Session dates available:', Object.keys(allSessions));
+            console.log('📋 Sync details:', {
+              strategy: syncStrategy,
+              lastSyncTime: lastSyncTime ? new Date(lastSyncTime).toISOString() : 'never',
+              daysBack,
+              totalAvailable: Object.values(allSessions).flat().length
+            });
+            
+            // Update last sync timestamp for future incremental syncs
+            if (sessionsList.length > 0) {
+              await chrome.storage.local.set({
+                'last_sync_timestamp': Date.now()
+              });
+              console.log('✅ Updated last sync timestamp for future incremental syncs');
+            }
             
             // Respond with sessions in the expected format
             console.log('📤 [BACKGROUND] Sending response'); sendResponse({ 
               success: true, 
               sessions: sessionsList,
               totalSessions: sessionsList.length,
-              datesAvailable: Object.keys(allSessions).length
+              syncStrategy,
+              datesAvailable: Object.keys(allSessions).length,
+              lastSyncTime: lastSyncTime ? new Date(lastSyncTime).toISOString() : null
             });
             
           } catch (error) {
