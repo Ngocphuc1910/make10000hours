@@ -1238,48 +1238,6 @@ const DeepFocusPage: React.FC = () => {
                   );
                 })}
               </div>
-              
-              {/* NEW: Session-based Site Usage */}
-              {siteUsageData.length > 0 && (
-                <div className="mt-8">
-                  <h3 className="text-sm font-medium text-text-secondary mb-4">
-                    Session-Based Site Usage (Today)
-                  </h3>
-                  <div className="space-y-2">
-                    {siteUsageData.map((site, index) => {
-                      const defaultColors = [
-                        '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de'
-                      ];
-                      
-                      const domain = extractDomain(site.url || site.name);
-                      const fallbackColor = index < 5 ? defaultColors[index] : '#9CA3AF';
-                      const progressBarColor = getProgressBarColor(domain, fallbackColor);
-                      
-                      return (
-                        <div key={site.id} className="flex items-center justify-between p-3 bg-surface border border-border rounded-lg">
-                          <div className="flex items-center space-x-3">
-                            <div 
-                              className="w-3 h-3 rounded-full"
-                              style={{ backgroundColor: progressBarColor }}
-                            />
-                            <div>
-                              <div className="text-sm font-medium text-text-primary">
-                                {site.name}
-                              </div>
-                              <div className="text-xs text-text-secondary">
-                                {site.sessions} sessions • {site.percentage}%
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-sm font-medium text-text-primary">
-                            {Math.round(site.timeSpent / 60000)}m
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </main>
