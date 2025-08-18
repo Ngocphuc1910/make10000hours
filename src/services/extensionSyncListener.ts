@@ -5,12 +5,14 @@
 
 import { siteUsageSessionService } from '../api/siteUsageSessionService';
 import { useUserStore } from '../store/userStore';
-import { SiteUsageSession } from '../utils/SessionManager';
+import { SiteUsageSession, ExtensionSiteUsageSession, SessionManager } from '../utils/SessionManager';
 
 class ExtensionSyncListener {
   private isInitialized = false;
   private messageHandler: (event: MessageEvent) => void;
   private chromeMessageHandler: (message: any, sender: any, sendResponse: (response?: any) => void) => void;
+  private syncInProgress = false;
+  private pendingSyncPromise: Promise<void> | null = null;
 
   constructor() {
     this.messageHandler = this.handleMessage.bind(this);
@@ -38,9 +40,21 @@ class ExtensionSyncListener {
   }
 
   private async handleMessage(event: MessageEvent) {
+    console.log('📨 Extension message received:', {
+      type: event.data?.type,
+      hasPayload: !!event.data?.payload,
+      hasSessions: !!event.data?.payload?.sessions,
+      sessionCount: event.data?.payload?.sessions?.length || 0,
+      source: event.source,
+      origin: event.origin
+    });
+
     // Only handle messages from extension
     if (event.data?.type === 'EXTENSION_SITE_USAGE_SESSION_BATCH') {
+      console.log('✅ Processing extension session batch...');
       await this.processSessions(event.data.payload.sessions);
+    } else if (event.data?.type && event.data.source !== 'web-app') {
+      console.log('ℹ️ Received other extension message:', event.data.type);
     }
   }
 
@@ -51,9 +65,9 @@ class ExtensionSyncListener {
     }
   }
 
-  private async processSessions(sessions: SiteUsageSession[]) {
+  private async processSessions(extensionSessions: ExtensionSiteUsageSession[]) {
     try {
-      console.log(`🔄 Received ${sessions.length} sessions from extension`);
+      console.log(`🔄 [SYNC-PROTECTION] Processing ${extensionSessions.length} sessions from extension`);
       
       // Get current user
       const userStore = useUserStore.getState();
@@ -63,21 +77,16 @@ class ExtensionSyncListener {
       }
 
       console.log(`🔍 Current user: ${userStore.user.uid}`);
-      console.log(`🔍 Session user IDs:`, sessions.map(s => `${s.id}: ${s.userId}`));
 
-      // Filter sessions for current user and validate
-      const validSessions = sessions.filter(session => {
-        const isValid = session.userId === userStore.user?.uid && 
-                       session.id && 
-                       session.domain && 
-                       session.startTime;
+      // Validate and filter sessions for current user
+      const validExtensionSessions = extensionSessions.filter(session => {
+        const isValid = SessionManager.validateExtensionSession(session) &&
+                       session.userId === userStore.user?.uid;
         
         if (!isValid) {
-          console.log(`❌ Invalid session ${session.id}:`, {
+          console.log(`❌ Invalid extension session:`, {
             userIdMatch: session.userId === userStore.user?.uid,
-            hasId: !!session.id,
-            hasDomain: !!session.domain,
-            hasStartTime: !!session.startTime,
+            hasValidFormat: SessionManager.validateExtensionSession(session),
             sessionUserId: session.userId,
             currentUserId: userStore.user?.uid
           });
@@ -86,17 +95,27 @@ class ExtensionSyncListener {
         return isValid;
       });
 
-      if (validSessions.length === 0) {
+      if (validExtensionSessions.length === 0) {
         console.warn('⚠️ No valid sessions to sync');
         return;
       }
 
-      console.log(`📊 Syncing ${validSessions.length} valid sessions to Firebase`);
+      // Convert extension sessions to Firebase format
+      const firebaseSessions = validExtensionSessions.map(session => 
+        SessionManager.convertExtensionToFirebase(session)
+      );
 
-      // Save sessions to Firebase
-      await siteUsageSessionService.batchSaveSessions(validSessions);
+      console.log(`📊 [SYNC-PROTECTION] Syncing ${firebaseSessions.length} sessions to Firebase`);
+
+      // Save sessions to Firebase (now protected against concurrent saves)
+      await siteUsageSessionService.batchSaveSessions(firebaseSessions);
       
-      console.log(`✅ Successfully synced ${validSessions.length} sessions to Firebase`);
+      console.log(`✅ [SYNC-PROTECTION] Successfully synced ${firebaseSessions.length} sessions to Firebase`);
+
+      // Trigger dashboard refresh
+      const { useDeepFocusDashboardStore } = await import('../store/deepFocusDashboardStore');
+      await useDeepFocusDashboardStore.getState().loadSessionData();
+      
     } catch (error) {
       console.error('❌ Failed to process extension sessions:', error);
     }
@@ -104,34 +123,43 @@ class ExtensionSyncListener {
 
   /**
    * Trigger extension to sync its data to the web app
+   * Prevents concurrent sync operations to avoid Firebase race conditions
    */
   async triggerExtensionSync(): Promise<void> {
+    // If sync is already in progress, return the pending promise
+    if (this.syncInProgress && this.pendingSyncPromise) {
+      console.log('⏳ Sync already in progress, waiting for completion...');
+      return this.pendingSyncPromise;
+    }
+
+    // Mark sync as in progress and create promise
+    this.syncInProgress = true;
+    this.pendingSyncPromise = this.performSync();
+
     try {
-      // Try Chrome extension API first
-      const chromeGlobal = (globalThis as any).chrome;
-      if (typeof chromeGlobal !== 'undefined' && chromeGlobal.runtime) {
-        console.log('🔄 Requesting extension sync via Chrome API...');
-        await new Promise((resolve) => {
-          chromeGlobal.runtime.sendMessage(
-            { type: 'FORCE_SYNC_SESSIONS' },
-            () => {
-              // Response received (or error occurred)
-              resolve(true);
-            }
-          );
-          // Timeout after 5 seconds
-          setTimeout(resolve, 5000);
-        });
-      } else {
-        // Fallback to postMessage
-        console.log('🔄 Requesting extension sync via postMessage...');
-        window.postMessage({ 
-          type: 'FORCE_SYNC_SESSIONS', 
-          source: 'webapp' 
-        }, '*');
-      }
+      await this.pendingSyncPromise;
+    } finally {
+      // Reset state when sync completes (success or failure)
+      this.syncInProgress = false;
+      this.pendingSyncPromise = null;
+    }
+  }
+
+  private async performSync(): Promise<void> {
+    try {
+      console.log('🔄 Requesting extension sync via postMessage...');
+      // Use postMessage to communicate with extension
+      window.postMessage({ 
+        type: 'REQUEST_SITE_USAGE_SESSIONS', 
+        source: 'web-app',
+        timestamp: new Date().toISOString()
+      }, '*');
+      
+      // Give extension time to respond
+      await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (error) {
       console.warn('⚠️ Could not trigger extension sync:', error);
+      throw error;
     }
   }
 
