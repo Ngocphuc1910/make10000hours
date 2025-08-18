@@ -40,10 +40,12 @@ export interface SessionQueryOptions {
 class SiteUsageSessionService {
   private readonly collectionName = 'siteUsageSessions';
   private activeSessionListeners: Map<string, Unsubscribe> = new Map();
+  private userSyncMutex: Map<string, Promise<void>> = new Map();
   
   /**
    * Handle batch save from extension sync with efficient bulk operations
    * Optimized for large datasets with proper rate limiting and batch management
+   * Protected against concurrent saves for the same user to prevent race conditions
    */
   async batchSaveSessions(sessions: SiteUsageSession[]): Promise<void> {
     if (!sessions || sessions.length === 0) {
@@ -51,8 +53,40 @@ class SiteUsageSessionService {
       return;
     }
 
+    // Get the userId for this batch (all sessions should have the same userId)
+    const userId = sessions[0]?.userId;
+    if (!userId) {
+      console.error('❌ No userId found in session batch');
+      return;
+    }
+
+    // Check if there's already a sync operation in progress for this user
+    const existingSync = this.userSyncMutex.get(userId);
+    if (existingSync) {
+      console.log(`⏳ [RACE-PROTECTION] Batch save already in progress for user ${userId}, waiting for completion...`);
+      await existingSync;
+      console.log(`✅ [RACE-PROTECTION] Previous batch save completed for user ${userId}, skipping duplicate`);
+      return;
+    }
+
+    // Create mutex promise for this user
+    const syncPromise = this.performBatchSave(sessions);
+    this.userSyncMutex.set(userId, syncPromise);
+
     try {
-      console.log(`🔄 Starting efficient bulk sync for ${sessions.length} sessions`);
+      await syncPromise;
+    } finally {
+      // Clean up mutex when done
+      this.userSyncMutex.delete(userId);
+    }
+  }
+
+  /**
+   * Internal method to perform the actual batch save operation
+   */
+  private async performBatchSave(sessions: SiteUsageSession[]): Promise<void> {
+    try {
+      console.log(`🔄 [RACE-PROTECTION] Starting protected bulk sync for ${sessions.length} sessions`);
       
       // Validate sessions and filter out invalid ones
       const validSessions = sessions.filter(session => {
@@ -74,7 +108,7 @@ class SiteUsageSessionService {
 
       console.log(`✅ ${validSessions.length} valid sessions after filtering`);
 
-      // Step 1: Bulk fetch existing sessions to avoid O(n) queries
+      // Step 1: Bulk fetch existing sessions to avoid O(n) queries  
       const existingSessionsMap = await this.bulkFetchExistingSessions(
         validSessions[0].userId, 
         validSessions.map(s => s.extensionSessionId)
@@ -220,6 +254,7 @@ class SiteUsageSessionService {
 
     return { created, updated, skipped };
   }
+
   
   /**
    * Get sessions for a specific date range (for web app display)

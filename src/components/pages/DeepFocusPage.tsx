@@ -975,7 +975,7 @@ const DeepFocusPage: React.FC = () => {
               {[
                 { 
                   label: 'On Screen Time', 
-                  value: onScreenTime * 1000, // Convert seconds to milliseconds for display compatibility
+                  value: timeMetrics.onScreenTime, // Range-aware data in minutes
                   metricKey: 'onScreenTime' as keyof ComparisonMetrics,
                   icon: 'computer-line',
                   iconColor: 'text-blue-500',
