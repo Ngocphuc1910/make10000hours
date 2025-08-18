@@ -66,6 +66,15 @@ import('./utils/cleanupSessions');
 if (process.env.NODE_ENV === 'development') {
   import('./utils/debugCheckout');
   import('./utils/testFirebaseFunction');
+  import('./utils/debugSessionSync'); // Import session sync debug tools
+  import('./utils/debugActiveSyncs'); // Import active sync debug tools
+  import('./utils/debugExtensionData'); // Import extension data debug tools
+  import('./utils/migrateToSessionData'); // Import migration utilities
+  import('./utils/debugFirebaseWrite'); // Import Firebase write debug tools
+  import('./utils/testFirebaseConnectivity'); // Import Firebase connectivity tests
+  import('./utils/debugExtensionStorage'); // Import extension storage debug tools
+  import('./utils/testExtensionProtocol'); // Import extension protocol testing
+  import('./utils/debugExtensionDataFlow'); // Import comprehensive extension debug tools
 }
 
 // Import auth guard test utilities in development mode
@@ -111,6 +120,11 @@ const GlobalTabTitleUpdater: React.FC = () => {
       window.useTaskStore = useTaskStore;
       window.format = format;
       console.log('🔧 Debug modules exposed to window for timezone debugging');
+      
+      // Load extension testing utilities
+      import('./utils/testExtensionPresence').catch(console.error);
+      import('./utils/debugExtensionDataFlow').catch(console.error);
+      import('./utils/debugExtensionStorage').catch(console.error);
     }
   }, []);
 
@@ -408,6 +422,28 @@ const App: React.FC = () => {
   
   // Initialize Google Calendar sync monitoring for authenticated users
   useSimpleGoogleCalendarAuth();
+
+  // Initialize session-based extension sync listener
+  useEffect(() => {
+    const initializeExtensionSync = async () => {
+      try {
+        const { extensionSyncListener } = await import('./services/extensionSyncListener');
+        extensionSyncListener.initialize();
+        console.log('✅ Extension sync listener initialized for session-based sync');
+      } catch (error) {
+        console.error('❌ Failed to initialize extension sync listener:', error);
+      }
+    };
+
+    initializeExtensionSync();
+
+    // Cleanup on unmount
+    return () => {
+      import('./services/extensionSyncListener').then(({ extensionSyncListener }) => {
+        extensionSyncListener.cleanup();
+      });
+    };
+  }, []);
 
   // Global Deep Focus sync now handled by DeepFocusProvider context
 

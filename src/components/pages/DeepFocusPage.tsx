@@ -118,7 +118,7 @@ const DeepFocusPage: React.FC = () => {
   // Flag to prevent automatic closing
   const [isInitializing, setIsInitializing] = useState(false);
 
-  const { timeMetrics, dailyUsage, siteUsage, isLoading: isDashboardLoading, loadExtensionData, loadAllTimeExtensionData } = useDeepFocusDashboardStore();
+  const { timeMetrics, dailyUsage, siteUsage, siteUsageData, onScreenTime, isLoading: isDashboardLoading, loadExtensionData, loadAllTimeExtensionData, loadSessionData } = useDeepFocusDashboardStore();
   
   // Loading timeout state to prevent indefinite loading
   const [loadingTimeout, setLoadingTimeout] = useState(false);
@@ -145,26 +145,8 @@ const DeepFocusPage: React.FC = () => {
   // Expose backup function globally for debugging
   React.useEffect(() => {
     (window as any).debugBackupTodayData = async () => {
-      try {
-        console.log('🔧 Manual debug backup triggered...');
-        await backupTodayData();
-        console.log('✅ Manual debug backup completed');
-        
-        // Reload data after manual sync
-        console.log('🔄 Reloading data after manual sync...');
-        if (selectedRange.rangeType === 'all time') {
-          loadAllTimeExtensionData();
-        } else {
-          const startDate = selectedRange.startDate || new Date();
-          const endDate = selectedRange.endDate || new Date();
-          if (startDate && endDate) {
-            loadExtensionData(startDate, endDate);
-          }
-        }
-        console.log('✅ Data reloaded after manual sync');
-      } catch (error) {
-        console.error('❌ Manual debug backup failed:', error);
-      }
+      console.log('❌ OLD BACKUP DISABLED - Use session-based sync instead');
+      console.log('✅ Try: debugSessionSync() for new system');
     };
     
     // Debug function for smart sync (prioritizes last 10 sessions)
@@ -242,14 +224,13 @@ const DeepFocusPage: React.FC = () => {
       console.log('✅ Backup state reset');
     };
     console.log('🔧 Debug functions exposed:', { 
-      debugSmartSync: 'function (PRIORITY - use this first)',
-      debugSyncLast10Sessions: 'function',
-      debugBackupTodayData: typeof backupTodayData,
+      debugSessionSync: 'function (NEW SESSION-BASED)',
+      debugExtensionData: 'function (EXTENSION DATA)',
+      debugActiveSyncs: 'function (FIND CONFLICTS)',
       debugUser: user?.uid || 'No user',
-      resetExtensionConnection: 'function (CIRCUIT BREAKER FIX)',
-      resetBackupState: 'function'
+      resetExtensionConnection: 'function (CIRCUIT BREAKER FIX)'
     });
-  }, [backupTodayData, user]);
+  }, [user]);
   
   const dateFilterRef = useRef<HTMLDivElement>(null);
   const dateRangeInputRef = useRef<HTMLInputElement>(null);
@@ -267,32 +248,21 @@ const DeepFocusPage: React.FC = () => {
   const handleLoadData = async () => {
     console.log('🔄 handleLoadData called for range:', selectedRange.rangeType);
     
-    // Use SMART SYNC that prioritizes last 10 sessions
+    // NEW: Use session-based sync ONLY (no fallback to old sync)
     if (user?.uid) {
       try {
-        console.log('🎯 Using SMART SYNC with priority on last 10 sessions...');
-        const smartSyncResult = await DeepFocusSync.smartSync(user.uid, selectedRange.rangeType);
-        console.log('✅ Smart sync completed:', smartSyncResult);
+        console.log('🎯 Using NEW session-based sync (no fallback)...');
         
-        if (!smartSyncResult.success) {
-          throw new Error(smartSyncResult.error || 'Smart sync failed');
-        }
+        // Import the extension sync listener  
+        const { extensionSyncListener } = await import('../../services/extensionSyncListener');
+        
+        // Trigger extension to send session data
+        await extensionSyncListener.triggerExtensionSync();
+        console.log('✅ Extension sync request sent - waiting for session data...');
         
       } catch (error) {
-        console.error('❌ Smart sync failed, falling back to basic sync:', error);
-        
-        // Fallback to basic sync methods
-        try {
-          console.log('🔄 Falling back to individual sync methods...');
-          if (selectedRange.rangeType === 'today') {
-            await backupTodayData();
-          } else {
-            const result = await DeepFocusSync.syncRecent7DaysFromExtension(user.uid);
-            console.log('✅ Fallback sync result:', result);
-          }
-        } catch (fallbackError) {
-          console.error('❌ Fallback sync also failed:', fallbackError);
-        }
+        console.error('❌ Session-based sync failed:', error);
+        // NO FALLBACK - let session-based system handle this
       }
     }
     
@@ -311,6 +281,10 @@ const DeepFocusPage: React.FC = () => {
         loadExtensionData(startDate, endDate);
       }
     }
+    
+    // Load session-based data for new metrics display
+    console.log('🔄 Loading session-based data...');
+    await loadSessionData();
   }
 
   useEffect(() => {
@@ -380,7 +354,7 @@ const DeepFocusPage: React.FC = () => {
 
   // Initialize daily backup system and trigger immediate sync
   useEffect(() => {
-    initializeDailyBackup();
+    // DISABLED: initializeDailyBackup(); // OLD SYNC - REPLACED WITH SESSION-BASED
     
     // Trigger immediate backup to sync extension data to Firebase
     const triggerImmediateSync = async () => {
@@ -398,14 +372,11 @@ const DeepFocusPage: React.FC = () => {
           await forceFreshExtensionData();
           console.log('✅ Fresh extension data loaded');
           
-          // Use SMART SYNC on page load for optimal performance
-          console.log('🎯 Using SMART SYNC on page load with priority on last 10 sessions...');
-          const smartSyncResult = await DeepFocusSync.smartSync(user.uid, selectedRange.rangeType);
-          console.log('✅ Smart sync completed on page load:', smartSyncResult);
-          
-          if (!smartSyncResult.success) {
-            throw new Error(smartSyncResult.error || 'Smart sync failed on page load');
-          }
+          // NEW: Use session-based sync on page load
+          console.log('🎯 Using NEW session-based sync on page load...');
+          const { extensionSyncListener } = await import('../../services/extensionSyncListener');
+          await extensionSyncListener.triggerExtensionSync();
+          console.log('✅ Session-based sync request sent on page load');
           
           // Reload data after sync to show latest information
           console.log('🔄 Reloading data after initial sync...');
@@ -418,41 +389,28 @@ const DeepFocusPage: React.FC = () => {
               loadExtensionData(startDate, endDate);
             }
           }
+          
+          // Load session-based data for new metrics display
+          console.log('🔄 Loading session-based data after initial sync...');
+          await loadSessionData();
           console.log('✅ Data reloaded after initial sync');
         } else {
           console.warn('⚠️ User not authenticated, skipping immediate sync');
         }
       } catch (error) {
-        console.error('❌ Immediate sync failed:', error);
-        
-        // Fallback to basic sync if smart sync fails
-        try {
-          console.log('🔄 Falling back to basic sync on page load...');
-          const last10Fallback = await DeepFocusSync.syncLast10SessionsFromExtension(user.uid);
-          console.log('✅ Last 10 fallback sync result on page load:', last10Fallback);
-          
-          // Additional fallback for range-specific data
-          if (selectedRange.rangeType === 'today') {
-            await backupTodayData();
-          } else if (selectedRange.rangeType !== 'all time') {
-            const result = await DeepFocusSync.syncRecent7DaysFromExtension(user.uid);
-            console.log('✅ Additional fallback sync result on page load:', result);
-          }
-        } catch (fallbackError) {
-          console.error('❌ Fallback sync also failed on page load:', fallbackError);
-        }
-        
+        console.error('❌ Session-based immediate sync failed:', error);
         console.error('🔍 Error details:', {
           name: error.name,
           message: error.message,
           stack: error.stack
         });
+        // NO FALLBACK - rely on session-based sync only
       }
     };
     
     // Reduced delay for faster initial sync
     setTimeout(triggerImmediateSync, 500);
-  }, [initializeDailyBackup, backupTodayData, user?.uid, forceFreshExtensionData]);
+  }, [user?.uid, forceFreshExtensionData]); // Removed old backup dependencies
 
   // Preload favicons for better UX
   useEffect(() => {
@@ -1017,7 +975,7 @@ const DeepFocusPage: React.FC = () => {
               {[
                 { 
                   label: 'On Screen Time', 
-                  value: timeMetrics.onScreenTime, 
+                  value: onScreenTime * 1000, // Convert seconds to milliseconds for display compatibility
                   metricKey: 'onScreenTime' as keyof ComparisonMetrics,
                   icon: 'computer-line',
                   iconColor: 'text-blue-500',
@@ -1158,7 +1116,10 @@ const DeepFocusPage: React.FC = () => {
                         isBackingUp={isBackingUp}
                         lastBackupTime={lastBackupTime}
                         backupError={backupError}
-                        onRetryBackup={backupTodayData}
+                        onRetryBackup={() => {
+                          console.log('❌ OLD BACKUP DISABLED - Use session-based sync');
+                          // No backup action - session-based sync handles this
+                        }}
                       />
                     </div>
                     
@@ -1277,6 +1238,48 @@ const DeepFocusPage: React.FC = () => {
                   );
                 })}
               </div>
+              
+              {/* NEW: Session-based Site Usage */}
+              {siteUsageData.length > 0 && (
+                <div className="mt-8">
+                  <h3 className="text-sm font-medium text-text-secondary mb-4">
+                    Session-Based Site Usage (Today)
+                  </h3>
+                  <div className="space-y-2">
+                    {siteUsageData.map((site, index) => {
+                      const defaultColors = [
+                        '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de'
+                      ];
+                      
+                      const domain = extractDomain(site.url || site.name);
+                      const fallbackColor = index < 5 ? defaultColors[index] : '#9CA3AF';
+                      const progressBarColor = getProgressBarColor(domain, fallbackColor);
+                      
+                      return (
+                        <div key={site.id} className="flex items-center justify-between p-3 bg-surface border border-border rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <div 
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: progressBarColor }}
+                            />
+                            <div>
+                              <div className="text-sm font-medium text-text-primary">
+                                {site.name}
+                              </div>
+                              <div className="text-xs text-text-secondary">
+                                {site.sessions} sessions • {site.percentage}%
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-sm font-medium text-text-primary">
+                            {Math.round(site.timeSpent / 60000)}m
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </main>

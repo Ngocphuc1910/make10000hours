@@ -669,6 +669,133 @@ class ActivityDetector {
           }
         }
 
+        // Handle REQUEST_SITE_USAGE_SESSIONS messages (site usage data sync)
+        if (type === 'REQUEST_SITE_USAGE_SESSIONS') {
+          console.log('🔄 Received REQUEST_SITE_USAGE_SESSIONS from web app');
+          
+          try {
+            // DEBUGGING: Check initialization state
+            console.log('🔍 Extension context validation before sending:', {
+              extensionInitialized: extensionInitManager.isBackgroundReady,
+              communicatorInitialized: extensionCommunicator.initialized,
+              contextValid: extensionCommunicator.isExtensionContextValid()
+            });
+
+            // Ensure background script is ready
+            if (!extensionInitManager.isBackgroundReady) {
+              console.log('⏳ Background script not ready, waiting...');
+              const isReady = await extensionInitManager.waitForBackgroundScript();
+              if (!isReady) {
+                throw new Error('Background script failed to initialize');
+              }
+            }
+
+            console.log('📤 Forwarding REQUEST_SITE_USAGE_SESSIONS to background script...');
+            
+            // First try with sendMessageSafely (uses message queue)
+            let response;
+            try {
+              response = await extensionCommunicator.sendMessageSafely({
+                type: 'REQUEST_SITE_USAGE_SESSIONS',
+                payload: payload || {}
+              }, {
+                timeout: 15000,
+                maxRetries: 3,
+                fallback: null // Don't use fallback yet, we have our own fallback
+              });
+            } catch (error) {
+              console.log('⚠️ sendMessageSafely failed, trying direct communication:', error.message);
+              
+              // Fallback: Try direct communication with background script
+              try {
+                response = await new Promise((resolve, reject) => {
+                  const timeoutId = setTimeout(() => {
+                    reject(new Error('Direct message timeout'));
+                  }, 10000);
+
+                  chrome.runtime.sendMessage({
+                    type: 'REQUEST_SITE_USAGE_SESSIONS',
+                    payload: payload || {}
+                  }, (directResponse) => {
+                    clearTimeout(timeoutId);
+                    if (chrome.runtime.lastError) {
+                      reject(new Error(chrome.runtime.lastError.message));
+                    } else {
+                      resolve(directResponse);
+                    }
+                  });
+                });
+                console.log('✅ Direct communication succeeded');
+              } catch (directError) {
+                console.error('❌ Direct communication also failed:', directError.message);
+                response = { 
+                  success: false, 
+                  error: 'Extension communication failed',
+                  sessions: []
+                };
+              }
+            }
+            
+            console.log('📥 Received response from background script:', {
+              success: response?.success,
+              hasResponse: !!response,
+              hasSessions: !!response?.sessions,
+              sessionCount: response?.sessions?.length || 0,
+              error: response?.error
+            });
+            
+            if (response?.success && response.sessions) {
+              console.log(`📊 Retrieved ${response.sessions.length} sessions from extension storage`);
+              
+              // Send sessions back to web app in correct format
+              window.postMessage({
+                type: 'EXTENSION_SITE_USAGE_SESSION_BATCH',
+                payload: {
+                  sessions: response.sessions
+                },
+                source: 'extension',
+                timestamp: new Date().toISOString()
+              }, '*');
+              
+              console.log('✅ Sent site usage sessions to web app');
+            } else {
+              console.log('⚠️ No sessions available or failed to retrieve sessions, response:', response);
+              
+              // Send empty response to web app
+              window.postMessage({
+                type: 'EXTENSION_SITE_USAGE_SESSION_BATCH',
+                payload: {
+                  sessions: []
+                },
+                source: 'extension',
+                timestamp: new Date().toISOString()
+              }, '*');
+            }
+            
+          } catch (error) {
+            console.error('❌ Failed to process site usage sessions request:', error);
+            console.error('❌ Error details:', {
+              name: error.name,
+              message: error.message,
+              stack: error.stack
+            });
+            
+            // Send error response to web app
+            window.postMessage({
+              type: 'EXTENSION_SITE_USAGE_SESSION_BATCH',
+              payload: {
+                sessions: []
+              },
+              source: 'extension',
+              error: error.message,
+              timestamp: new Date().toISOString()
+            }, '*');
+            
+            console.log('📤 Sent error response to web app');
+          }
+          return;
+        }
+
         // Handle EXTENSION_REQUEST messages (general extension communication)
         if (type === 'EXTENSION_REQUEST') {
           console.log('🔄 Received EXTENSION_REQUEST from web app:', payload);

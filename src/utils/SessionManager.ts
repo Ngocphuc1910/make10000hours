@@ -3,18 +3,28 @@
  * Shared types between extension and web app for site usage sessions
  */
 
+// Extension contract (exact match to extension data format)
+export interface ExtensionSiteUsageSession {
+  domain: string;
+  duration: number; // seconds
+  startTimeUTC: string;
+  endTimeUTC?: string;
+  status: 'completed' | 'active' | 'suspended';
+  utcDate: string; // YYYY-MM-DD
+  userId: string;
+}
+
+// Firebase session schema
 export interface SiteUsageSession {
   id: string;
   userId: string;
   domain: string;
-  startTime: Date | string;
-  endTime?: Date | string | null;
-  duration: number; // in milliseconds
+  startTimeUTC: string;
+  endTimeUTC?: string;
+  duration: number; // seconds (matching extension)
   utcDate: string; // YYYY-MM-DD format in UTC
   status: 'active' | 'completed' | 'suspended';
-  isActive: boolean;
-  createdAt: Date | string;
-  updatedAt?: Date | string;
+  createdAt: string;
   
   // Optional metadata
   title?: string;
@@ -44,6 +54,23 @@ export class SessionManager {
   }
   
   /**
+   * Convert extension session to Firebase format
+   */
+  static convertExtensionToFirebase(ext: ExtensionSiteUsageSession): SiteUsageSession {
+    return {
+      id: this.generateSessionId(),
+      userId: ext.userId,
+      domain: ext.domain,
+      startTimeUTC: ext.startTimeUTC,
+      endTimeUTC: ext.endTimeUTC,
+      duration: ext.duration, // keep seconds
+      utcDate: ext.utcDate,
+      status: ext.status,
+      createdAt: new Date().toISOString()
+    };
+  }
+
+  /**
    * Create a new session object
    */
   static createSession(
@@ -55,14 +82,12 @@ export class SessionManager {
       id: this.generateSessionId(),
       userId,
       domain,
-      startTime,
-      endTime: null,
+      startTimeUTC: startTime.toISOString(),
+      endTimeUTC: undefined,
       duration: 0,
       utcDate: this.getUtcDateString(startTime),
       status: 'active',
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      createdAt: new Date().toISOString()
     };
   }
   
@@ -73,19 +98,14 @@ export class SessionManager {
     session: SiteUsageSession,
     endTime: Date = new Date()
   ): SiteUsageSession {
-    const startTimeDate = session.startTime instanceof Date 
-      ? session.startTime 
-      : new Date(session.startTime);
-    
-    const duration = endTime.getTime() - startTimeDate.getTime();
+    const startTimeDate = new Date(session.startTimeUTC);
+    const duration = Math.floor((endTime.getTime() - startTimeDate.getTime()) / 1000); // seconds
     
     return {
       ...session,
-      endTime,
+      endTimeUTC: endTime.toISOString(),
       duration,
-      status: 'completed',
-      isActive: false,
-      updatedAt: new Date()
+      status: 'completed'
     };
   }
   
@@ -95,9 +115,7 @@ export class SessionManager {
   static suspendSession(session: SiteUsageSession): SiteUsageSession {
     return {
       ...session,
-      status: 'suspended',
-      isActive: false,
-      updatedAt: new Date()
+      status: 'suspended'
     };
   }
   
@@ -107,9 +125,7 @@ export class SessionManager {
   static resumeSession(session: SiteUsageSession): SiteUsageSession {
     return {
       ...session,
-      status: 'active',
-      isActive: true,
-      updatedAt: new Date()
+      status: 'active'
     };
   }
   
@@ -122,11 +138,11 @@ export class SessionManager {
       typeof session.id === 'string' &&
       typeof session.userId === 'string' &&
       typeof session.domain === 'string' &&
-      (session.startTime instanceof Date || typeof session.startTime === 'string') &&
+      typeof session.startTimeUTC === 'string' &&
       typeof session.duration === 'number' &&
       typeof session.utcDate === 'string' &&
       ['active', 'completed', 'suspended'].includes(session.status) &&
-      typeof session.isActive === 'boolean'
+      typeof session.createdAt === 'string'
     );
   }
   
@@ -184,28 +200,18 @@ export class SessionManager {
   }
   
   /**
-   * Convert session times to consistent Date objects
+   * Validate extension session format
    */
-  static normalizeDates(session: SiteUsageSession): SiteUsageSession {
-    return {
-      ...session,
-      startTime: session.startTime instanceof Date 
-        ? session.startTime 
-        : new Date(session.startTime),
-      endTime: session.endTime 
-        ? (session.endTime instanceof Date 
-          ? session.endTime 
-          : new Date(session.endTime))
-        : null,
-      createdAt: session.createdAt instanceof Date 
-        ? session.createdAt 
-        : new Date(session.createdAt),
-      updatedAt: session.updatedAt 
-        ? (session.updatedAt instanceof Date 
-          ? session.updatedAt 
-          : new Date(session.updatedAt))
-        : new Date()
-    };
+  static validateExtensionSession(session: any): session is ExtensionSiteUsageSession {
+    return (
+      session &&
+      typeof session.domain === 'string' &&
+      typeof session.duration === 'number' &&
+      typeof session.startTimeUTC === 'string' &&
+      typeof session.utcDate === 'string' &&
+      typeof session.userId === 'string' &&
+      ['active', 'completed', 'suspended'].includes(session.status)
+    );
   }
 }
 
