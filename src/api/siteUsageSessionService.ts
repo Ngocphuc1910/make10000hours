@@ -47,30 +47,26 @@ class SiteUsageSessionService {
    */
   async batchSaveSessions(sessions: SiteUsageSession[]): Promise<void> {
     try {
+      console.log(`💾 Saving ${sessions.length} sessions to Firebase collection: ${this.collectionName}`);
+      console.log('📋 Session data sample:', sessions.slice(0, 2));
+      
       const batch = writeBatch(db);
       
       sessions.forEach(session => {
-        const docRef = doc(db, this.collectionName, session.id);
+        const docRef = doc(collection(db, this.collectionName));
         const firestoreSession = {
           ...session,
-          startTime: session.startTime instanceof Date 
-            ? Timestamp.fromDate(session.startTime)
-            : Timestamp.fromDate(new Date(session.startTime)),
-          endTime: session.endTime 
-            ? (session.endTime instanceof Date 
-              ? Timestamp.fromDate(session.endTime)
-              : Timestamp.fromDate(new Date(session.endTime)))
-            : null,
-          createdAt: session.createdAt instanceof Date
-            ? Timestamp.fromDate(session.createdAt)
-            : Timestamp.fromDate(new Date(session.createdAt)),
-          updatedAt: serverTimestamp()
+          // Keep string timestamps as-is for the new schema
+          createdAt: typeof session.createdAt === 'string' 
+            ? session.createdAt 
+            : new Date().toISOString()
         };
-        batch.set(docRef, firestoreSession, { merge: true });
+        batch.set(docRef, firestoreSession);
+        console.log(`📄 Adding session to batch: ${session.domain} (${session.duration}s)`);
       });
       
       await batch.commit();
-      console.log(`✅ Synced ${sessions.length} sessions from extension to Firebase`);
+      console.log(`✅ Successfully synced ${sessions.length} sessions to Firebase collection: ${this.collectionName}`);
     } catch (error) {
       console.error('❌ Failed to sync sessions to Firebase:', error);
       throw error;
@@ -96,7 +92,7 @@ class SiteUsageSessionService {
         where('utcDate', '>=', startUtc),
         where('utcDate', '<=', endUtc),
         orderBy('utcDate', 'desc'),
-        orderBy('startTime', 'desc')
+        orderBy('startTimeUTC', 'desc')
       );
       
       const snapshot = await getDocs(q);
@@ -119,6 +115,32 @@ class SiteUsageSessionService {
     
     return this.getSessionsForDateRange(userId, today, tomorrow);
   }
+
+  /**
+   * Get sessions for today only (specific method for dashboard)
+   */
+  async getSessionsForToday(userId: string): Promise<SiteUsageSession[]> {
+    const today = new Date().toISOString().split('T')[0];
+    
+    try {
+      const q = query(
+        collection(db, this.collectionName),
+        where('userId', '==', userId),
+        where('utcDate', '==', today),
+        where('status', '==', 'completed'),
+        orderBy('startTimeUTC', 'desc')
+      );
+      
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      } as SiteUsageSession));
+    } catch (error) {
+      console.error('❌ Failed to get today\'s sessions:', error);
+      return [];
+    }
+  }
   
   /**
    * Get active sessions (currently tracking)
@@ -128,8 +150,8 @@ class SiteUsageSessionService {
       const q = query(
         collection(db, this.collectionName),
         where('userId', '==', userId),
-        where('isActive', '==', true),
-        orderBy('startTime', 'desc')
+        where('status', '==', 'active'),
+        orderBy('startTimeUTC', 'desc')
       );
       
       const snapshot = await getDocs(q);
@@ -156,7 +178,7 @@ class SiteUsageSessionService {
       collection(db, this.collectionName),
       where('userId', '==', userId),
       where('utcDate', '==', todayUtc),
-      orderBy('startTime', 'desc')
+      orderBy('startTimeUTC', 'desc')
     );
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -192,7 +214,7 @@ class SiteUsageSessionService {
         where('utcDate', '>=', startUtc),
         where('utcDate', '<=', endUtc),
         orderBy('utcDate', 'desc'),
-        orderBy('startTime', 'desc')
+        orderBy('startTimeUTC', 'desc')
       );
       
       const snapshot = await getDocs(q);
@@ -272,11 +294,11 @@ class SiteUsageSessionService {
   private convertFirestoreToSession(data: any): SiteUsageSession {
     return {
       ...data,
-      startTime: data.startTime?.toDate ? data.startTime.toDate() : new Date(data.startTime),
-      endTime: data.endTime?.toDate ? data.endTime?.toDate() : (data.endTime ? new Date(data.endTime) : null),
-      createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
-      updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt)
-    };
+      // Keep timestamps as strings in new schema
+      startTimeUTC: data.startTimeUTC,
+      endTimeUTC: data.endTimeUTC || undefined,
+      createdAt: data.createdAt
+    } as SiteUsageSession;
   }
   
   /**
