@@ -787,21 +787,27 @@ class PopupManager {
    */
   async loadUserInfo() {
     try {
-      const result = await this.sendMessageWithRetry('GET_USER_INFO', {}, 3);
-      if (result?.success) {
-        this.enhancedState.userInfo = result.data;
-        return { success: true, type: 'user', data: result.data };
-      }
-      
-      // Fallback to local storage
+      // TEMPORARY FIX: Try direct storage access first since we know data is there
+      console.log('🔍 Trying direct storage access for user info...');
       const localData = await chrome.storage.local.get(['userInfo']);
       if (localData.userInfo) {
+        console.log('✅ Found user info in direct storage:', localData.userInfo);
         this.enhancedState.userInfo = localData.userInfo;
         return { success: true, type: 'user', data: localData.userInfo };
+      }
+      
+      // Original background script communication
+      console.log('🔍 Trying background script communication for user info...');
+      const result = await this.sendMessageWithRetry('GET_USER_INFO', {}, 3);
+      if (result?.success) {
+        console.log('✅ Found user info via background script:', result.data);
+        this.enhancedState.userInfo = result.data;
+        return { success: true, type: 'user', data: result.data };
       }
     } catch (error) {
       console.warn('Failed to load user info:', error);
     }
+    console.log('❌ No user info found in any method');
     return { success: false, type: 'user' };
   }
 
