@@ -11,6 +11,8 @@ class ExtensionSyncListener {
   private isInitialized = false;
   private messageHandler: (event: MessageEvent) => void;
   private chromeMessageHandler: (message: any, sender: any, sendResponse: (response?: any) => void) => void;
+  private syncInProgress = false;
+  private pendingSyncPromise: Promise<void> | null = null;
 
   constructor() {
     this.messageHandler = this.handleMessage.bind(this);
@@ -65,7 +67,7 @@ class ExtensionSyncListener {
 
   private async processSessions(extensionSessions: ExtensionSiteUsageSession[]) {
     try {
-      console.log(`🔄 Received ${extensionSessions.length} sessions from extension`);
+      console.log(`🔄 [SYNC-PROTECTION] Processing ${extensionSessions.length} sessions from extension`);
       
       // Get current user
       const userStore = useUserStore.getState();
@@ -103,12 +105,12 @@ class ExtensionSyncListener {
         SessionManager.convertExtensionToFirebase(session)
       );
 
-      console.log(`📊 Syncing ${firebaseSessions.length} sessions to Firebase`);
+      console.log(`📊 [SYNC-PROTECTION] Syncing ${firebaseSessions.length} sessions to Firebase`);
 
-      // Save sessions to Firebase
+      // Save sessions to Firebase (now protected against concurrent saves)
       await siteUsageSessionService.batchSaveSessions(firebaseSessions);
       
-      console.log(`✅ Successfully synced ${firebaseSessions.length} sessions to Firebase`);
+      console.log(`✅ [SYNC-PROTECTION] Successfully synced ${firebaseSessions.length} sessions to Firebase`);
 
       // Trigger dashboard refresh
       const { useDeepFocusDashboardStore } = await import('../store/deepFocusDashboardStore');
@@ -121,8 +123,29 @@ class ExtensionSyncListener {
 
   /**
    * Trigger extension to sync its data to the web app
+   * Prevents concurrent sync operations to avoid Firebase race conditions
    */
   async triggerExtensionSync(): Promise<void> {
+    // If sync is already in progress, return the pending promise
+    if (this.syncInProgress && this.pendingSyncPromise) {
+      console.log('⏳ Sync already in progress, waiting for completion...');
+      return this.pendingSyncPromise;
+    }
+
+    // Mark sync as in progress and create promise
+    this.syncInProgress = true;
+    this.pendingSyncPromise = this.performSync();
+
+    try {
+      await this.pendingSyncPromise;
+    } finally {
+      // Reset state when sync completes (success or failure)
+      this.syncInProgress = false;
+      this.pendingSyncPromise = null;
+    }
+  }
+
+  private async performSync(): Promise<void> {
     try {
       console.log('🔄 Requesting extension sync via postMessage...');
       // Use postMessage to communicate with extension
@@ -136,6 +159,7 @@ class ExtensionSyncListener {
       await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (error) {
       console.warn('⚠️ Could not trigger extension sync:', error);
+      throw error;
     }
   }
 

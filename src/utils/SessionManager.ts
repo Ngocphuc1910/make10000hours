@@ -8,6 +8,7 @@ export interface ExtensionSiteUsageSession {
   id: string; // Extension's existing session ID (e.g., "sus_1755479527996_bwkdc1277")
   domain: string;
   duration: number; // seconds
+  visits: number; // page visits within this session
   startTimeUTC: string;
   endTimeUTC?: string;
   status: 'completed' | 'active' | 'suspended';
@@ -24,6 +25,7 @@ export interface SiteUsageSession {
   startTimeUTC: string;
   endTimeUTC?: string;
   duration: number; // seconds (matching extension)
+  visits: number; // page visits within this session (from extension)
   utcDate: string; // YYYY-MM-DD format in UTC
   status: 'active' | 'completed' | 'suspended';
   createdAt: string;
@@ -70,6 +72,7 @@ export class SessionManager {
       startTimeUTC: ext.startTimeUTC,
       endTimeUTC: ext.endTimeUTC,
       duration: ext.duration, // keep seconds
+      visits: ext.visits || 1, // preserve visit count from extension, default to 1
       utcDate: ext.utcDate,
       status: ext.status,
       createdAt: now,
