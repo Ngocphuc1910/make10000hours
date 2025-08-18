@@ -5,6 +5,7 @@
 
 // Extension contract (exact match to extension data format)
 export interface ExtensionSiteUsageSession {
+  id: string; // Extension's existing session ID (e.g., "sus_1755479527996_bwkdc1277")
   domain: string;
   duration: number; // seconds
   startTimeUTC: string;
@@ -17,6 +18,7 @@ export interface ExtensionSiteUsageSession {
 // Firebase session schema
 export interface SiteUsageSession {
   id: string;
+  extensionSessionId: string; // Maps to extension's session ID for deduplication
   userId: string;
   domain: string;
   startTimeUTC: string;
@@ -25,6 +27,8 @@ export interface SiteUsageSession {
   utcDate: string; // YYYY-MM-DD format in UTC
   status: 'active' | 'completed' | 'suspended';
   createdAt: string;
+  syncTime: string; // First sync timestamp
+  lastUpdated: string; // Last update timestamp
   
   // Optional metadata
   title?: string;
@@ -57,8 +61,10 @@ export class SessionManager {
    * Convert extension session to Firebase format
    */
   static convertExtensionToFirebase(ext: ExtensionSiteUsageSession): SiteUsageSession {
+    const now = new Date().toISOString();
     return {
-      id: this.generateSessionId(),
+      id: this.generateSessionId(), // Firebase document ID
+      extensionSessionId: ext.id, // Map extension's existing ID
       userId: ext.userId,
       domain: ext.domain,
       startTimeUTC: ext.startTimeUTC,
@@ -66,7 +72,9 @@ export class SessionManager {
       duration: ext.duration, // keep seconds
       utcDate: ext.utcDate,
       status: ext.status,
-      createdAt: new Date().toISOString()
+      createdAt: now,
+      syncTime: now, // First sync time
+      lastUpdated: now // Last update time
     };
   }
 
@@ -78,8 +86,10 @@ export class SessionManager {
     domain: string,
     startTime: Date = new Date()
   ): SiteUsageSession {
+    const now = new Date().toISOString();
     return {
       id: this.generateSessionId(),
+      extensionSessionId: `sus_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Generate extension-style ID
       userId,
       domain,
       startTimeUTC: startTime.toISOString(),
@@ -87,7 +97,9 @@ export class SessionManager {
       duration: 0,
       utcDate: this.getUtcDateString(startTime),
       status: 'active',
-      createdAt: new Date().toISOString()
+      createdAt: now,
+      syncTime: now,
+      lastUpdated: now
     };
   }
   
