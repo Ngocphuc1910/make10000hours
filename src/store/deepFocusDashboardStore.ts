@@ -59,7 +59,7 @@ const convertSessionsToDailySiteUsage = (sessions: SiteUsageSession[]): DailySit
       const durationMs = session.duration * 1000;
       dayUsage.totalTime += durationMs;
       dayUsage.sites[session.domain].timeSpent += durationMs;
-      dayUsage.sites[session.domain].visits++;
+      dayUsage.sites[session.domain].visits += (session.visits || 1); // Use actual visit count from session
       
       // Update last visit time if this session is more recent
       if (new Date(session.startTimeUTC) > new Date(dayUsage.sites[session.domain].lastVisit)) {
@@ -121,9 +121,8 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
             return;
           }
           
-          // 🎯 TRIGGER: Request extension sync before loading data
-          console.log('🔄 Requesting extension to sync sessions to Firebase...');
-          await extensionSyncListener.triggerExtensionSync();
+          // Note: Extension sync is now handled at page level to prevent race conditions
+          console.log('🔄 Loading data (extension sync handled by page-level sync)...');
           
           const user = useUserStore.getState().user;
           if (!user?.uid) {

@@ -21,8 +21,16 @@ export const composeDeepFocusData = (input: {
 } => {
   const { workSessions, dailySiteUsages, deepFocusSessions, overrideSessions } = input;
 
-  // Calculate TimeMetrics
-  const onScreenTime = dailySiteUsages.reduce((total, usage) => total + Math.round(usage.totalTime / (1000 * 60)), 0);
+  // Calculate TimeMetrics with debugging
+  console.log('🔍 [STATS] Processing dailySiteUsages:', dailySiteUsages.length, 'records');
+  
+  const onScreenTime = dailySiteUsages.reduce((total, usage, index) => {
+    const timeInMinutes = Math.round(usage.totalTime / (1000 * 60));
+    console.log(`🔍 [STATS] Usage ${index + 1}: ${usage.date}, totalTime: ${usage.totalTime}ms, minutes: ${timeInMinutes}`);
+    return total + timeInMinutes;
+  }, 0);
+  
+  console.log(`🔍 [STATS] Final onScreenTime: ${onScreenTime} minutes`);
   const workingTime = workSessions.reduce((total, session) => total + session.duration, 0);
   const deepFocusTime = deepFocusSessions.reduce((total, session) => {
     // Always use stored duration only - never recalculate to prevent UI increments

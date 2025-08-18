@@ -5294,6 +5294,20 @@ class FocusTimeTracker {
               return new Date(b.startTimeUTC).getTime() - new Date(a.startTimeUTC).getTime();
             });
             
+            // Deduplicate by session ID to prevent downstream complexity
+            const beforeDedup = sessionsList.length;
+            const sessionMap = new Map();
+            sessionsList.forEach(session => {
+              if (session.id) {
+                sessionMap.set(session.id, session);
+              }
+            });
+            sessionsList = Array.from(sessionMap.values());
+            
+            if (beforeDedup !== sessionsList.length) {
+              console.log(`🔍 Extension deduplication: ${beforeDedup} → ${sessionsList.length} sessions (removed ${beforeDedup - sessionsList.length} duplicates)`);
+            }
+            
             console.log(`📊 ${syncStrategy.toUpperCase()} sync found ${sessionsList.length} sessions`);
             console.log('📋 Session dates available:', Object.keys(allSessions));
             console.log('📋 Sync details:', {
