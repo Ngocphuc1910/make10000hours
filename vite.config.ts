@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     port: 3001,
     host: 'localhost',
-    https: true
+    https: false
   },
   define: {
     global: 'globalThis',

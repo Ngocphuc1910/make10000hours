@@ -1,68 +1,279 @@
-# dependencies
+# ===================================================================
+# GITIGNORE - SECURITY-HARDENED CONFIGURATION
+# ===================================================================
+# This file prevents sensitive data from being committed to version control
+# Review regularly and update when adding new sensitive file types
+# ===================================================================
+
+# ===================================================================
+# NODE.JS AND DEPENDENCIES
+# ===================================================================
 /node_modules
 /functions/node_modules
 /.pnp
 .pnp.js
-
-# testing
-/coverage
-
-# production
-/build
-
-# misc
-.DS_Store
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env
-
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
-# Firebase
-firebase-debug.log*
-firebase-debug.*.log*
-.firebase/
+# ===================================================================
+# BUILD ARTIFACTS AND TEMPORARY FILES
+# ===================================================================
+/build
+/dist
+/coverage
+/.next/
+.cache/
+.parcel-cache/
+.vite/
 
-# IDE
-/.idea
-/.vscode
-# Screenshot
-/.Screenshot
-/.cursor/mcp.json# Ignore MCP configuration files that may contain secrets
-**/.cursor/mcp.json
-mcp.json
-figma-postComment.js
-figma-update-design.js
-
-# Security: Files that may contain secrets
-temp-env-source.txt
-environment-config.md
-test-chatbot.html
-.env.production
+# ===================================================================
+# ENVIRONMENT VARIABLES (CRITICAL SECURITY)
+# ===================================================================
+# NEVER commit any file containing real credentials
+.env
+.env.*
 .env.local
 .env.development
+.env.development.local
 .env.staging
+.env.staging.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
 *.env
+*.env.*
 
-# Firebase Admin SDK and Service Accounts
+# Environment backups and temporary files
+temp-env*
+*-env-*
+env-backup*
+environment-config.*
+
+# ===================================================================
+# SERVICE ACCOUNT KEYS AND CREDENTIALS (CRITICAL SECURITY)
+# ===================================================================
+# Firebase service accounts
 make10000hours-firebase-adminsdk-*.json
 *-firebase-adminsdk-*.json
 serviceAccount*.json
 **/serviceAccount*.json
 firebase-service-account*.json
 **/firebase-service-account*.json
+firebase-admin-key*.json
 
-dist/
+# Google Cloud service accounts
+gcloud-key*.json
+google-credentials*.json
+gcp-service-account*.json
+
+# Other credential files
+*.key
+*.pem
+*.p12
+*.pfx
+credentials*.json
+secrets*.json
+auth*.json
+config/credentials*
+config/secrets*
+
+# ===================================================================
+# API KEYS AND TOKENS (CRITICAL SECURITY)
+# ===================================================================
+api-keys.*
+tokens.*
+access-token*
+refresh-token*
+*-token.txt
+*-key.txt
+
+# ===================================================================
+# FIREBASE CONFIGURATION
+# ===================================================================
+firebase-debug.log*
+firebase-debug.*.log*
+.firebase/
+.firebaserc.local
+firebase-config*.json
 
 # Functions build artifacts
 /functions/lib/
+/functions/dist/
+/functions/.env*
 /functions/package-lock.json
+
+# ===================================================================
+# DATABASE AND STORAGE
+# ===================================================================
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+/data/
+/database/
+
+# Database dumps and backups
+*.sql.backup
+*.dump
+database-backup*
+
+# ===================================================================
+# LOGS AND DEBUG FILES
+# ===================================================================
+logs/
+*.log
+debug*.log
+error*.log
+access*.log
+combined*.log
+
+# Application specific logs
+app*.log
+server*.log
+client*.log
+
+# ===================================================================
+# DEVELOPMENT AND IDE FILES
+# ===================================================================
+# IDE configuration
+/.idea
+/.vscode
+.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+/.tmp
+/.temp
+/tmp/
+temp/
+*.tmp
+*.temp
+
+# ===================================================================
+# TESTING AND DEBUGGING
+# ===================================================================
+/coverage
+.nyc_output
+.coverage
+coverage.xml
+*.coverageprofile
 
 # Test files that may contain secrets
 test-webhook*.js
 test-accessibility*.js
-*-test.js
+test-secrets*.js
+test-credentials*.js
+*-test-secrets.*
+
+# Debug files
+debug-*
+*.debug
+trace-*
+
+# ===================================================================
+# SECURITY AND SENSITIVE DATA
+# ===================================================================
+# Cursor MCP configuration files (may contain secrets)
+/.cursor/mcp.json
+**/.cursor/mcp.json
+mcp.json
+
+# Backup and recovery files
+*.backup
+*-backup*
+backup-*
+recovery-*
+
+# Configuration files that may contain secrets
+config.local.*
+config.secret.*
+local-config.*
+secret-config.*
+
+# Development tools that may expose secrets
+figma-postComment.js
+figma-update-design.js
+test-chatbot.html
+environment-config.md
+temp-env-source.txt
+
+# ===================================================================
+# DEPLOYMENT AND CI/CD
+# ===================================================================
+# Docker
+.dockerignore.local
+docker-compose.override.yml
+.docker/
+
+# Kubernetes
+k8s-secret*.yaml
+secret*.yaml
+
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
+
+# ===================================================================
+# BROWSER EXTENSIONS AND MOBILE
+# ===================================================================
+# Extension builds with embedded secrets
+extension-build/
+extension-dist/
+*.crx
+*.xpi
+
+# Mobile builds
+*.ipa
+*.apk
+*.aab
+
+# ===================================================================
+# MISCELLANEOUS SENSITIVE FILES
+# ===================================================================
+# Screenshots that may contain sensitive info
+/.Screenshot
+screenshots/
+*-screenshot.*
+
+# Notes and documentation that may contain secrets
+private-notes.*
+internal-docs/
+confidential-*
+
+# Monitoring and analytics
+.sentry-*
+analytics-config.*
+
+# ===================================================================
+# CUSTOM PROJECT FILES
+# ===================================================================
+# Add any project-specific files that may contain secrets below
+# Example:
+# custom-secrets/
+# project-specific-credentials.*
+
+# ===================================================================
+# SECURITY REMINDER
+# ===================================================================
+# If you need to add new file types, consider:
+# 1. Could this file type ever contain credentials?
+# 2. Could this file type expose sensitive business logic?
+# 3. Could this file type contain user data?
+# If yes to any, add it to this gitignore file
+# ===================================================================

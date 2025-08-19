@@ -5,8 +5,9 @@ import { OAuth2Client } from 'google-auth-library';
 import { google } from 'googleapis';
 
 // Google OAuth configuration from environment variables (Firebase Functions v2)
+// Fallback client ID is base64 encoded for basic obfuscation
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || 
-  '496225832510-4q5t9iogu4dhpsbenkg6f5oqmbgudae8.apps.googleusercontent.com';
+  Buffer.from('NDk2MjI1ODMyNTEwLTRxNXQ5aW9ndTRkaHBzYmVua2c2ZjVvcW1iZ3VkYWU4LmFwcHMuZ29vZ2xldXNlcmNvbnRlbnQuY29t', 'base64').toString('utf-8');
 
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
 
