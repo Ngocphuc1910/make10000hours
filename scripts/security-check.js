@@ -68,7 +68,9 @@ function checkForSecrets() {
     'weeklyData[weekKey]',
     'monthlyData[monthKey]',
     'const weekKey =',
-    'const monthKey ='
+    'const monthKey =',
+    'refreshToken: \'BACKEND_MANAGED\'',
+    'accessToken: \'BACKEND_MANAGED\''
   ];
 
   try {
