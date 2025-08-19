@@ -104,8 +104,9 @@ export const Timer: React.FC<TimerProps> = ({ className = '' }) => {
       );
     }
     
-    // Only show persistent connection errors that prevent functionality
-    if (syncError && !isLoading && !isSyncing) {
+    // Only show sync errors that actually prevent timer functionality
+    // Don't show background sync failures that don't impact current operation
+    if (syncError && !isLoading && !isSyncing && (!currentTask || !enableStartPauseBtn)) {
       return (
         <div className="flex items-center text-sm text-red-500 mb-2">
           <Icon name="error-warning-line" className="mr-1" size={16} />
