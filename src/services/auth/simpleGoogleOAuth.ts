@@ -148,8 +148,7 @@ export class SimpleGoogleOAuthService {
       this.codeClient = window.google.accounts.oauth2.initCodeClient({
         client_id: this.clientId,
         scope: this.scope,
-        ux_mode: 'redirect',
-        redirect_uri: window.location.origin + '/oauth/callback',
+        ux_mode: 'popup',
         callback: async (response: any) => {
           try {
             if (response.error) {
