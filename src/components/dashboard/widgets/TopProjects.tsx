@@ -14,22 +14,13 @@ export const TopProjects: React.FC = React.memo(() => {
   
   // Filter work sessions based on selected date range (same logic as FocusTimeTrend)
   const filteredWorkSessions = useMemo(() => {
-    console.log('TopProjects - Filtering work sessions:', {
-      totalSessions: workSessions.length,
-      rangeType: selectedRange.rangeType,
-      startDate: selectedRange.startDate?.toISOString(),
-      endDate: selectedRange.endDate?.toISOString()
-    });
-    
     // For 'all time' range, show all work sessions without filtering
     if (selectedRange.rangeType === 'all time') {
-      console.log('TopProjects - Using all sessions for "all time"');
       return workSessions;
     }
     
     // For all other cases, use the selected range if available
     if (!selectedRange.startDate || !selectedRange.endDate) {
-      console.log('TopProjects - No date range specified, using all sessions');
       return workSessions;
     }
     
@@ -41,12 +32,6 @@ export const TopProjects: React.FC = React.memo(() => {
     const filtered = workSessions.filter(session => {
       const sessionDate = new Date(session.date);
       return sessionDate >= startDate && sessionDate <= endDate;
-    });
-    
-    console.log('TopProjects - Filtered result:', {
-      originalCount: workSessions.length,
-      filteredCount: filtered.length,
-      sampleFiltered: filtered.slice(0, 3)
     });
     
     return filtered;

@@ -6,6 +6,7 @@ import { utcFeatureFlags } from './featureFlags';
 import type { WorkSession } from '../types/models';
 import type { WorkSessionUTC, UnifiedWorkSession } from '../types/utcModels';
 import { format } from 'date-fns';
+import { logDebug, logPerformance } from '../utils/logger';
 
 interface TransitionConfig {
   preferUTC: boolean;
@@ -652,7 +653,8 @@ export class TransitionQueryService {
     legacySessions: WorkSession[],
     userTimezone: string
   ): UnifiedWorkSession[] {
-    return legacySessions.map(legacySession => {
+    const batchStartTime = performance.now();
+    const result = legacySessions.map(legacySession => {
       const startTime = performance.now();
       
       try {
@@ -691,8 +693,7 @@ export class TransitionQueryService {
           sessionEndTime = undefined;
         }
         
-        const duration = performance.now() - startTime;
-        utcMonitoring.trackOperation('convert_legacy_session', true, duration);
+        // Individual session monitoring removed to reduce log noise
         
         return {
           id: legacySession.id,
@@ -712,8 +713,7 @@ export class TransitionQueryService {
           rawData: legacySession
         };
       } catch (error) {
-        const duration = performance.now() - startTime;
-        utcMonitoring.trackOperation('convert_legacy_session', false, duration);
+        // Individual session error monitoring removed to reduce log noise
         
         console.error('❌ Error converting legacy session to unified format:', {
           sessionId: legacySession.id,
@@ -742,6 +742,17 @@ export class TransitionQueryService {
         };
       }
     });
+    
+    // Add batch monitoring instead of individual session monitoring
+    const batchDuration = performance.now() - batchStartTime;
+    if (legacySessions.length > 0) {
+      utcMonitoring.trackOperation('convert_legacy_sessions_batch', true, batchDuration, {
+        sessionCount: legacySessions.length,
+        avgPerSession: batchDuration / legacySessions.length
+      });
+    }
+    
+    return result;
   }
   
   /**

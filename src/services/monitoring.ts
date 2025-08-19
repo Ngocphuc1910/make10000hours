@@ -105,13 +105,16 @@ export class UTCMonitoringService {
         });
       }
       
-      console.debug('UTC Analytics:', {
-        operation,
-        success,
-        duration,
-        timestamp: new Date().toISOString(),
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      });
+      // Only log significant operations, not individual session conversions
+      if (operation !== 'convert_legacy_session') {
+        console.debug('UTC Analytics:', {
+          operation,
+          success,
+          duration,
+          timestamp: new Date().toISOString(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        });
+      }
     } catch (error) {
       console.debug('Analytics send failed:', error);
     }

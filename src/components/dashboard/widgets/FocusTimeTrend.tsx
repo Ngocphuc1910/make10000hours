@@ -119,7 +119,7 @@ export const FocusTimeTrend: React.FC = React.memo(() => {
           // Track session duration (logging removed to reduce console noise)
         });
       
-      console.log('Time by date aggregated:', timeByDate);
+      // Time aggregation completed (logging removed to reduce console noise)
       
       const days: ChartDataPoint[] = [];
       
@@ -127,11 +127,7 @@ export const FocusTimeTrend: React.FC = React.memo(() => {
         // Daily view - use selected date range or reasonable defaults
         let startDate: Date, endDate: Date;
         
-        console.log('Daily view processing selectedRange:', {
-          rangeType: selectedRange.rangeType,
-          startDate: selectedRange.startDate?.toISOString(),
-          endDate: selectedRange.endDate?.toISOString()
-        });
+        // Daily view processing (logging removed to reduce console noise)
         
         if (selectedRange.rangeType === 'all time') {
           // For 'all time', show all available data - simpler approach

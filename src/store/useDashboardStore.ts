@@ -3,6 +3,7 @@ import { WorkSession } from '../types/models';
 import { useUserStore } from './userStore';
 import { workSessionService } from '../api/workSessionService';
 import { transitionQueryService } from '../services/transitionService';
+import { logCache, logPerformance, logger } from '../utils/logger';
 
 export type RangeType = 'today' | 'yesterday' | 'last 7 days' | 'last 30 days' | 'all time' | 'custom';
 
@@ -122,14 +123,14 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
       
       if (!entry) {
         set({ cacheStats: { ...newStats, cacheMisses: newStats.cacheMisses + 1 } });
-        console.log('📦 Cache MISS:', cacheKey);
+        logCache('Cache MISS:', cacheKey);
         return null;
       }
 
       // Historical data never expires (expiresAt = null)
       if (entry.expiresAt === null) {
         set({ cacheStats: { ...newStats, cacheHits: newStats.cacheHits + 1 } });
-        console.log('📦 Cache HIT [HISTORICAL]:', {
+        logCache('Cache HIT [HISTORICAL]:', {
           cacheKey,
           dataSize: entry.data.length,
           age: Math.round((Date.now() - entry.timestamp) / 1000) + 's',
@@ -145,13 +146,13 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
           cache: new Map(cache),
           cacheStats: { ...newStats, cacheMisses: newStats.cacheMisses + 1 }
         });
-        console.log('📦 Cache EXPIRED:', cacheKey);
+        logCache('Cache EXPIRED:', cacheKey);
         return null;
       }
 
       // Current data cache hit
       set({ cacheStats: { ...newStats, cacheHits: newStats.cacheHits + 1 } });
-      console.log('📦 Cache HIT [CURRENT]:', {
+      logCache('Cache HIT [CURRENT]:', {
         cacheKey,
         dataSize: entry.data.length,
         age: Math.round((Date.now() - entry.timestamp) / 1000) + 's',
@@ -176,7 +177,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
       cache.set(cacheKey, entry);
       set({ cache: new Map(cache) });
 
-      console.log(`📦 Cache SET [${isHistorical ? 'HISTORICAL' : 'CURRENT'}]:`, {
+      logCache(`Cache SET [${isHistorical ? 'HISTORICAL' : 'CURRENT'}]:`, {
         cacheKey,
         dataSize: data.length,
         expiresIn: entry.expiresAt ? Math.round((entry.expiresAt - Date.now()) / 1000) + 's' : 'NEVER'
@@ -193,13 +194,13 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
         if (entry.userId === userId && key.includes(today)) {
           cache.delete(key);
           invalidatedCount++;
-          console.log('🔄 Invalidated current day cache:', key);
+          logCache('Invalidated current day cache:', key);
         }
       }
       
       if (invalidatedCount > 0) {
         set({ cache: new Map(cache) });
-        console.log(`🔄 Invalidated ${invalidatedCount} cache entries including today`);
+        logCache(`Invalidated ${invalidatedCount} cache entries including today`);
       }
     },
 
@@ -218,7 +219,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
       
       if (cleanedCount > 0) {
         set({ cache: new Map(cache) });
-        console.log(`🧹 Cleaned up ${cleanedCount} expired cache entries`);
+        logCache(`Cleaned up ${cleanedCount} expired cache entries`);
       }
     },
 
@@ -260,7 +261,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
       // 🚀 PHASE 1: Check cache first
       const cachedData = get().getCachedData(userId, range);
       if (cachedData) {
-        console.log('📦 Using cached data, skipping database query');
+        logPerformance('Using cached data, skipping database query');
         set({ workSessions: cachedData, isLoading: false });
         return;
       }
