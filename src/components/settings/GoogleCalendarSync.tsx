@@ -24,7 +24,14 @@ interface WebhookStatus {
 const GoogleCalendarSync: React.FC = () => {
   const { user } = useUserStore();
   const { hasCalendarAccess, isCheckingAccess, error: authError, requestCalendarAccess, revokeAccess, token } = useSimpleGoogleCalendarAuth();
-  const { startWebhookMonitoring, stopWebhookMonitoring } = useSyncStore();
+  const { 
+    startWebhookMonitoring, 
+    stopWebhookMonitoring, 
+    syncError, 
+    authError: syncAuthError, 
+    clearSyncError, 
+    clearAuthError 
+  } = useSyncStore();
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -381,14 +388,103 @@ const GoogleCalendarSync: React.FC = () => {
         </div>
       )}
 
-      {/* Error Display */}
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <div className="flex items-center gap-2 text-red-800">
-            <AlertCircle className="w-4 h-4" />
-            <span className="font-medium">Error</span>
-          </div>
-          <p className="text-sm text-red-700 mt-1">{error}</p>
+      {/* Error Display - Different styling for auth vs sync errors */}
+      {(error || syncError) && (
+        <div className="mb-4 space-y-3">
+          {/* Authentication Errors - Need re-authorization */}
+          {(authError || syncAuthError) && (
+            <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+              <div className="flex items-center gap-2 text-orange-800 mb-2">
+                <AlertCircle className="w-4 h-4" />
+                <span className="font-medium">Google Calendar Authorization Required</span>
+              </div>
+              <p className="text-sm text-orange-700 mb-3">
+                {syncAuthError ? syncError : authError || 'Your Google Calendar authorization has expired or been revoked.'}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={requestCalendarAccess}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Settings className="w-3 h-3" />
+                  )}
+                  <span>Reconnect Google Calendar</span>
+                </button>
+                <button
+                  onClick={syncAuthError ? clearAuthError : () => setError(null)}
+                  className="px-3 py-1.5 bg-white text-orange-700 text-sm rounded border border-orange-300 hover:bg-orange-50"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {/* Regular Sync Errors - Can retry */}
+          {error && !syncAuthError && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-2 text-red-800 mb-2">
+                <AlertCircle className="w-4 h-4" />
+                <span className="font-medium">Sync Error</span>
+              </div>
+              <p className="text-sm text-red-700 mb-3">{error}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleManualSync}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Calendar className="w-3 h-3" />
+                  )}
+                  <span>Retry Sync</span>
+                </button>
+                <button
+                  onClick={() => setError(null)}
+                  className="px-3 py-1.5 bg-white text-red-700 text-sm rounded border border-red-300 hover:bg-red-50"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {/* Store-level sync errors */}
+          {syncError && !syncAuthError && !error && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-2 text-red-800 mb-2">
+                <AlertCircle className="w-4 h-4" />
+                <span className="font-medium">Sync Error</span>
+              </div>
+              <p className="text-sm text-red-700 mb-3">{syncError}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleManualSync}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Calendar className="w-3 h-3" />
+                  )}
+                  <span>Retry Sync</span>
+                </button>
+                <button
+                  onClick={clearSyncError}
+                  className="px-3 py-1.5 bg-white text-red-700 text-sm rounded border border-red-300 hover:bg-red-50"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -462,6 +558,10 @@ const GoogleCalendarSync: React.FC = () => {
         <p className="text-sm text-blue-700">
           <strong>How it works:</strong> When you schedule a task in Make10000hours, it will automatically appear in your Google Calendar. 
           Changes made in either app will sync to the other.
+        </p>
+        <p className="text-sm text-blue-600 mt-2">
+          <strong>Enhanced Security:</strong> Your Google Calendar tokens are now securely managed on our servers with automatic refresh. 
+          You'll stay logged in without hourly re-authorization prompts.
         </p>
       </div>
     </div>
