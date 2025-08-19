@@ -1,6 +1,11 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // SECURITY: Private tokens collection - ZERO client access
+    // Only Firebase Functions can access these tokens
+    match /private_tokens/{userId} {
+      allow read, write: if false; // Completely block client access
+    }
     // Allow authenticated users to read/write their own Deep Focus sessions
     match /deepFocusSessions/{sessionId} {
       allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;

@@ -37,6 +37,16 @@ export { testWebhookProcessing } from './testWebhookProcessing';
 export { testVariants } from './testVariants';
 
 /**
+ * Google OAuth Management Functions
+ */
+export { 
+  exchangeCodeForTokens, 
+  getFreshAccessToken, 
+  revokeGoogleAccess, 
+  checkGoogleAuth 
+} from './oauth-manager';
+
+/**
  * Lemon Squeezy Webhook Handler
  */
 export const lemonSqueezyWebhook = onRequest(
