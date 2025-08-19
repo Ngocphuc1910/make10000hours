@@ -59,7 +59,11 @@ const SyncIndicator: React.FC<SyncIndicatorProps> = ({
       case 'synced':
         return `Synced to Google Calendar${task.lastSyncedAt ? ` at ${task.lastSyncedAt.toLocaleString()}` : ''}`;
       case 'error':
-        return `Sync failed: ${task.syncError || 'Unknown error'}`;
+        const errorMsg = task.syncError || 'Unknown error';
+        if (errorMsg.includes('re-authorize') || errorMsg.includes('AuthError') || errorMsg.includes('unauthenticated')) {
+          return 'Sync failed: Google Calendar authorization required. Please reconnect in Settings.';
+        }
+        return `Sync failed: ${errorMsg}`;
       case 'disabled':
         return 'Google Calendar sync is disabled';
       default:
