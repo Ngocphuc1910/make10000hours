@@ -108,6 +108,72 @@ export class TransitionQueryService {
   }
   
   /**
+   * OPTIMIZED: Get sessions for date range with database-level filtering
+   * Uses smart routing to minimize database reads
+   */
+  async getSessionsForDateRangeOptimized(
+    startDate: Date,
+    endDate: Date,
+    userId: string,
+    userTimezone: string
+  ): Promise<UnifiedWorkSession[]> {
+    const startTime = performance.now();
+    
+    try {
+      const transitionMode = utcFeatureFlags.getTransitionMode(userId);
+      
+      console.log('🚀 OPTIMIZED QUERY:', {
+        userId: userId.substring(0, 8),
+        transitionMode,
+        dateRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`,
+        strategy: this.getOptimizationStrategy(transitionMode)
+      });
+      
+      let sessions: UnifiedWorkSession[] = [];
+      
+      switch (transitionMode) {
+        case 'utc-only':
+          // OPTIMAL: Single UTC query with date filtering
+          sessions = await this.getUTCSessionsWithDateFilter(userId, startDate, endDate, userTimezone);
+          break;
+          
+        case 'disabled':
+          // OPTIMAL: Single legacy query with date filtering
+          sessions = await this.getLegacySessionsWithDateFilter(userId, startDate, endDate);
+          break;
+          
+        case 'dual':
+        default:
+          // SAFE: Dual query with date filtering for transition users
+          sessions = await this.getDualModeWithDateFilter(userId, startDate, endDate, userTimezone);
+          break;
+      }
+      
+      const sortedSessions = sessions.sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
+      
+      const duration = performance.now() - startTime;
+      utcMonitoring.trackOperation('transition_optimized_date_range_query', true, duration);
+      
+      console.log('✅ OPTIMIZED QUERY SUCCESS:', {
+        sessionsReturned: sortedSessions.length,
+        utcSessions: sortedSessions.filter(s => s.dataSource === 'utc').length,
+        legacySessions: sortedSessions.filter(s => s.dataSource === 'legacy').length,
+        queryTimeMs: duration.toFixed(2)
+      });
+      
+      return sortedSessions;
+      
+    } catch (error) {
+      const duration = performance.now() - startTime;
+      utcMonitoring.trackOperation('transition_optimized_date_range_query', false, duration);
+      console.error('❌ Optimized query failed, falling back to original:', error);
+      
+      // SAFETY: Fallback to original wide-range query
+      return this.getSessionsForDateRange(startDate, endDate, userId, userTimezone);
+    }
+  }
+
+  /**
    * Get sessions for date range with unified interface
    */
   async getSessionsForDateRange(
@@ -119,8 +185,18 @@ export class TransitionQueryService {
     const startTime = performance.now();
     const allSessions: UnifiedWorkSession[] = [];
     
+    // 🔍 AUDIT: Track query patterns for optimization analysis
+    const auditData = {
+      userId: userId.substring(0, 8),
+      requestedRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`,
+      rangeType: this.determineRangeType(startDate, endDate),
+      userTimezone,
+      queryStart: startTime
+    };
+    
     try {
       const transitionMode = utcFeatureFlags.getTransitionMode(userId);
+      auditData.transitionMode = transitionMode;
       
       if (transitionMode === 'disabled') {
         // Legacy only
@@ -168,6 +244,26 @@ export class TransitionQueryService {
       const sortedSessions = allSessions.sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
       
       const duration = performance.now() - startTime;
+      
+      // 🔍 AUDIT: Complete query analysis
+      const finalAudit = {
+        ...auditData,
+        sessionsReturned: sortedSessions.length,
+        utcSessions: sortedSessions.filter(s => s.dataSource === 'utc').length,
+        legacySessions: sortedSessions.filter(s => s.dataSource === 'legacy').length,
+        queryDurationMs: duration.toFixed(2),
+        isOptimizable: this.isQueryOptimizable(auditData.rangeType, sortedSessions.length),
+        estimatedWaste: this.calculateQueryWaste(auditData.rangeType, sortedSessions.length)
+      };
+      
+      console.log('🔍 QUERY AUDIT:', finalAudit);
+      
+      // Store for analysis (development only)
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        window.queryAuditLog = window.queryAuditLog || [];
+        window.queryAuditLog.push(finalAudit);
+      }
+      
       utcMonitoring.trackOperation('transition_get_sessions_for_date_range', true, duration);
       
       return sortedSessions;
@@ -787,6 +883,189 @@ export class TransitionQueryService {
       console.warn('Failed to convert metadata timestamp:', error);
       return null;
     }
+  }
+  
+  /**
+   * Get UTC sessions with database-level date filtering
+   */
+  private async getUTCSessionsWithDateFilter(
+    userId: string,
+    startDate: Date,
+    endDate: Date,
+    userTimezone: string
+  ): Promise<UnifiedWorkSession[]> {
+    
+    const startUTC = timezoneUtils.userTimeToUTC(startDate.toISOString(), userTimezone);
+    const endUTC = timezoneUtils.userTimeToUTC(endDate.toISOString(), userTimezone);
+    
+    console.log('🌍 UTC Query Filter:', {
+      userRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`,
+      utcRange: `${startUTC.split('T')[0]} to ${endUTC.split('T')[0]}`,
+      timezone: userTimezone
+    });
+    
+    try {
+      const utcSessions = await workSessionServiceUTC.getSessionsForDateRange(
+        startDate, endDate, userId, userTimezone
+      );
+      
+      const unifiedSessions = this.convertUTCSessionsToUnified(utcSessions, userTimezone);
+      
+      console.log(`✅ UTC OPTIMIZED query: ${unifiedSessions.length} sessions (database filtered)`);
+      return unifiedSessions;
+      
+    } catch (error) {
+      console.error('❌ UTC filtered query failed:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get legacy sessions with database-level date filtering
+   */
+  private async getLegacySessionsWithDateFilter(
+    userId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<UnifiedWorkSession[]> {
+    
+    console.log('📝 Legacy Query Filter (NOW OPTIMIZED):', {
+      dateRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`,
+      strategy: 'database_level_filtering',
+      optimizationActive: true
+    });
+    
+    try {
+      const legacySessions = await workSessionService.getWorkSessionsForRange(
+        userId, startDate, endDate
+      );
+      
+      const unifiedSessions = this.convertLegacySessionsToUnified(legacySessions, timezoneUtils.getCurrentTimezone());
+      
+      console.log(`✅ Legacy OPTIMIZED query: ${unifiedSessions.length} sessions (database filtered)`);
+      return unifiedSessions;
+      
+    } catch (error) {
+      console.error('❌ Legacy filtered query failed:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get sessions from both systems with date filtering (for transition users)
+   */
+  private async getDualModeWithDateFilter(
+    userId: string,
+    startDate: Date,
+    endDate: Date,
+    userTimezone: string
+  ): Promise<UnifiedWorkSession[]> {
+    
+    console.log('🔄 Dual Mode Query Filter:', {
+      dateRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`,
+      strategy: 'parallel_filtered_queries'
+    });
+    
+    try {
+      // Run both queries in parallel with date filtering
+      const [utcSessions, legacySessions] = await Promise.all([
+        this.getUTCSessionsWithDateFilter(userId, startDate, endDate, userTimezone).catch(error => {
+          console.warn('UTC query failed in dual mode:', error);
+          return [];
+        }),
+        this.getLegacySessionsWithDateFilter(userId, startDate, endDate).catch(error => {
+          console.warn('Legacy query failed in dual mode:', error);
+          return [];
+        })
+      ]);
+      
+      // Simple deduplication: prefer UTC sessions over legacy
+      const legacyIds = new Set(legacySessions.map(s => s.id));
+      const filteredLegacy = legacySessions.filter(legacy => {
+        // Check if this legacy session exists as UTC (basic deduplication)
+        const hasUTCVersion = utcSessions.some(utc => 
+          utc.id === legacy.id ||
+          (Math.abs(utc.startTime.getTime() - legacy.startTime.getTime()) < 60000 && 
+           utc.duration === legacy.duration)
+        );
+        return !hasUTCVersion;
+      });
+      
+      const combinedSessions = [...utcSessions, ...filteredLegacy];
+      
+      console.log(`✅ Dual mode filtered: ${utcSessions.length} UTC + ${filteredLegacy.length} legacy = ${combinedSessions.length} total`);
+      return combinedSessions;
+      
+    } catch (error) {
+      console.error('❌ Dual mode filtered query failed:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get optimization strategy description for logging
+   */
+  private getOptimizationStrategy(transitionMode: string): string {
+    switch (transitionMode) {
+      case 'utc-only': return 'SINGLE_UTC_QUERY';
+      case 'disabled': return 'SINGLE_LEGACY_QUERY';
+      case 'dual': return 'DUAL_FILTERED_QUERIES';
+      default: return 'FALLBACK_TO_DUAL';
+    }
+  }
+
+  /**
+   * Helper method to determine query range type for audit
+   */
+  private determineRangeType(startDate: Date, endDate: Date): string {
+    const diffMs = endDate.getTime() - startDate.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays <= 1) return 'single_day';
+    if (diffDays <= 7) return 'week';
+    if (diffDays <= 31) return 'month';
+    if (diffDays <= 365) return 'year';
+    return 'all_time';
+  }
+  
+  /**
+   * Determine if a query could benefit from date-range optimization
+   */
+  private isQueryOptimizable(rangeType: string, sessionsReturned: number): boolean {
+    // Queries that fetch small subsets of data are highly optimizable
+    if (rangeType === 'single_day' || rangeType === 'week') return true;
+    if (rangeType === 'month' && sessionsReturned < 1000) return true;
+    if (rangeType === 'all_time' && sessionsReturned > 100) return true;
+    return false;
+  }
+  
+  /**
+   * Estimate potential query waste reduction
+   */
+  private calculateQueryWaste(rangeType: string, sessionsReturned: number): string {
+    // Estimate based on typical user patterns
+    let estimatedTotalSessions = sessionsReturned;
+    
+    switch (rangeType) {
+      case 'single_day':
+        estimatedTotalSessions = sessionsReturned * 365; // Daily vs yearly
+        break;
+      case 'week':
+        estimatedTotalSessions = sessionsReturned * 52; // Weekly vs yearly
+        break;
+      case 'month':
+        estimatedTotalSessions = sessionsReturned * 12; // Monthly vs yearly
+        break;
+      default:
+        return 'minimal'; // All time queries need most data
+    }
+    
+    const wastePercentage = ((estimatedTotalSessions - sessionsReturned) / estimatedTotalSessions * 100);
+    
+    if (wastePercentage > 95) return 'extreme';
+    if (wastePercentage > 80) return 'high';
+    if (wastePercentage > 50) return 'moderate';
+    return 'low';
   }
 }
 
