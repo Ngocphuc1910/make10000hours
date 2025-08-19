@@ -81,6 +81,7 @@ if (process.env.NODE_ENV === 'development') {
 // Import auth guard test utilities in development mode
 if (process.env.NODE_ENV === 'development') {
   import('./utils/testAuthGuard');
+  import('./utils/optimizationMonitor'); // Import database optimization monitor
 }
 
 // Feature flag controlled timer implementation
