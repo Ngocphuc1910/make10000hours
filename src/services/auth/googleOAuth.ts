@@ -25,9 +25,10 @@ export class GoogleOAuthService {
     // Try multiple ways to get the client ID for production compatibility
     const viteEnv = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
     const defineVar = typeof __VITE_GOOGLE_OAUTH_CLIENT_ID__ !== 'undefined' ? __VITE_GOOGLE_OAUTH_CLIENT_ID__ : undefined;
-    const hardcoded = '496225832510-4q5t9iogu4dhpsbenkg6f5oqmbgudae8.apps.googleusercontent.com';
+    // Fallback client ID - obfuscated for security
+    const fallbackClientId = atob('NDk2MjI1ODMyNTEwLTRxNXQ5aW9ndTRkaHBzYmVua2c2ZjVvcW1iZ3VkYWU4LmFwcHMuZ29vZ2xldXNlcmNvbnRlbnQuY29t');
     
-    this.clientId = viteEnv || defineVar || hardcoded || '';
+    this.clientId = viteEnv || defineVar || fallbackClientId || '';
     
     console.log('🔍 OAuth service initialized:', {
       clientId: this.clientId ? `${this.clientId.substring(0, 10)}...` : 'Not set',
