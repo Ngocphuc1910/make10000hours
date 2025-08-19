@@ -1,15 +1,14 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
-import { config } from 'firebase-functions';
 import { OAuth2Client } from 'google-auth-library';
 import { google } from 'googleapis';
 
-// Google OAuth configuration from Firebase Functions config
-const GOOGLE_CLIENT_ID = config().google?.oauth_client_id || 
+// Google OAuth configuration from environment variables (Firebase Functions v2)
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || 
   '496225832510-4q5t9iogu4dhpsbenkg6f5oqmbgudae8.apps.googleusercontent.com';
 
-const GOOGLE_CLIENT_SECRET = config().google?.oauth_client_secret || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
 
 const REDIRECT_URI = 'postmessage'; // For web applications using authorization code flow
 
