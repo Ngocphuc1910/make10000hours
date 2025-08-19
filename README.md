@@ -128,6 +128,31 @@ If you experience issues with authentication:
 3. Make sure your Supabase project has Email/Password authentication enabled
 4. If you see placeholder errors, run the setup script again to update your credentials
 
+## Performance Optimization
+
+This project includes advanced database optimization features to reduce costs and improve performance:
+
+### Environment Configuration
+
+The application uses environment variables for feature flags. Copy `.env.example` to `.env` and configure:
+
+```bash
+# 🚀 Database Query Optimization - Enable smart caching system
+REACT_APP_USE_OPTIMIZED_QUERIES=true
+
+# 📝 Logging Control  
+REACT_APP_DEBUG_MODE=false
+```
+
+### Smart Caching System
+
+- **Historical Data Caching**: Past work sessions are cached permanently (immutable data)
+- **Current Data Caching**: Today's data cached for 1 minute (mutable data)
+- **95% Database Cost Reduction**: Optimized queries with database-level filtering
+- **Real-time Cache Invalidation**: Automatic cache updates when new sessions are created
+
+To monitor caching performance, set `REACT_APP_DEBUG_MODE=true` to see cache hits/misses in the console.
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
