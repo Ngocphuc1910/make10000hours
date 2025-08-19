@@ -84,6 +84,7 @@ export const FocusStreak: React.FC = () => {
     }
   };
 
+
   // Check if we're viewing current year
   const isCurrentYear = selectedYear === new Date().getFullYear();
 

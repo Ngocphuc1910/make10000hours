@@ -603,14 +603,31 @@ export class WorkSessionService {
         utcEndDate: endDateUTC.split('T')[0]
       });
       
-      // Get all sessions for the user (we'll filter by timezone in memory)
+      // 🚀 OPTIMIZED: Use database-level date filtering for LEGACY sessions
+      console.log('WorkSessionService - Using DATABASE-LEVEL date filtering for LEGACY sessions (OPTIMIZED)');
+      
+      // Legacy sessions use date string field - this is the ONLY correct strategy
+      const startDateStr = format(startDate, 'yyyy-MM-dd');
+      const endDateStr = format(endDate, 'yyyy-MM-dd');
+      
       const q = query(
         this.workSessionsCollection,
-        where('userId', '==', userId)
+        where('userId', '==', userId),
+        where('date', '>=', startDateStr),
+        where('date', '<=', endDateStr),
+        orderBy('date', 'desc')
       );
       
+      const queryStrategy = 'LEGACY_DATE_FIELD_FILTERING';
+      
+      console.log('Using LEGACY date field query strategy:', {
+        date_gte: startDateStr,
+        date_lte: endDateStr,
+        note: 'Legacy sessions do NOT have startTimeUTC field'
+      });
+      
       const querySnapshot = await getDocs(q);
-      const allSessions = querySnapshot.docs.map(doc => {
+      const sessions = querySnapshot.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -620,24 +637,18 @@ export class WorkSessionService {
         };
       }) as WorkSession[];
       
-      // Filter sessions based on timezone-aware date comparison
-      const filteredSessions = allSessions.filter(session => {
-        // Use UTC fields if available (enhanced sessions), otherwise fall back to legacy logic
-        if (session.startTimeUTC) {
-          // Enhanced session: compare UTC times directly
-          const sessionStartUTC = session.startTimeUTC;
-          return sessionStartUTC >= startDateUTC && sessionStartUTC <= endDateUTC;
-        } else {
-          // Legacy session: use date field
-          const sessionDate = session.date;
-          const userStartDateStr = format(startDate, 'yyyy-MM-dd');
-          const userEndDateStr = format(endDate, 'yyyy-MM-dd');
-          return sessionDate >= userStartDateStr && sessionDate <= userEndDateStr;
-        }
+      // 🎯 OPTIMIZATION COMPLETE: Sessions are already filtered by database!
+      // No more memory filtering needed - database did the work
+      
+      console.log('WorkSessionService - DATABASE OPTIMIZATION RESULTS:', {
+        queryStrategy,
+        sessionsFromDatabase: sessions.length,
+        noMemoryFilteringNeeded: true,
+        optimizationActive: true
       });
       
-      // Sort by date descending
-      filteredSessions.sort((a, b) => {
+      // Database already sorted by orderBy clause, but ensure consistency
+      sessions.sort((a, b) => {
         if (a.startTimeUTC && b.startTimeUTC) {
           // Both have UTC times
           return b.startTimeUTC.localeCompare(a.startTimeUTC);
@@ -647,14 +658,16 @@ export class WorkSessionService {
         }
       });
       
-      console.log('WorkSessionService - Filtered sessions result:', {
-        totalSessions: allSessions.length,
-        filteredSessions: filteredSessions.length,
-        enhancedSessions: filteredSessions.filter(s => s.startTimeUTC).length,
-        legacySessions: filteredSessions.filter(s => !s.startTimeUTC).length
+      console.log('WorkSessionService - OPTIMIZATION SUCCESS:', {
+        queryStrategy,
+        sessionsReturned: sessions.length,
+        enhancedSessions: sessions.filter(s => s.startTimeUTC).length,
+        legacySessions: sessions.filter(s => !s.startTimeUTC).length,
+        databaseFiltered: true,
+        memoryFiltered: false
       });
       
-      return filteredSessions;
+      return sessions;
     } catch (error) {
       console.error('Error getting work sessions for range:', error);
       throw error;
@@ -669,10 +682,11 @@ export class WorkSessionService {
     try {
       console.log('WorkSessionService - Loading ALL sessions for user:', userId);
       
-      // Get all sessions for the user (no date filtering, no limit)
+      // 🚀 OPTIMIZED: Add ordering to database query (better than memory sorting)
       const q = query(
         this.workSessionsCollection,
-        where('userId', '==', userId)
+        where('userId', '==', userId),
+        orderBy('date', 'desc') // Use database ordering instead of memory sorting
       );
       
       const querySnapshot = await getDocs(q);
@@ -686,8 +700,7 @@ export class WorkSessionService {
         };
       }) as WorkSession[];
       
-      // Sort by date descending in memory
-      sessions.sort((a, b) => b.date.localeCompare(a.date));
+      // 🎯 OPTIMIZATION: No memory sorting needed - database handles ordering
       
       console.log('WorkSessionService - Loaded ALL sessions:', sessions.length);
       return sessions;
