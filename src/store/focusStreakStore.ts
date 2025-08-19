@@ -57,8 +57,7 @@ export const useFocusStreakStore = create<FocusStreakState>()(
           const yearStart = new Date(year, 0, 1);
           const yearEnd = new Date(year, 11, 31);
           
-          // 🚀 FIX: Use transitionQueryService to get data from BOTH UTC and Legacy systems
-          console.log(`FocusStreakStore - Using transitionQueryService for COMPLETE data (UTC + Legacy)`);
+          // Use transitionQueryService to get data from both UTC and Legacy systems
           const userTimezone = timezoneUtils.getCurrentTimezone();
           
           const unifiedSessions = await transitionQueryService.getSessionsForDateRangeOptimized(
@@ -92,12 +91,6 @@ export const useFocusStreakStore = create<FocusStreakState>()(
             }
           });
           
-          console.log(`FocusStreakStore - Retrieved COMPLETE data:`, {
-            totalSessions: sessions.length,
-            utcSessions: unifiedSessions.filter(s => s.dataSource === 'utc').length,
-            legacySessions: unifiedSessions.filter(s => s.dataSource === 'legacy').length,
-            year: year
-          });
           
           // Update cache
           const newCache = new Map(yearCache);
@@ -147,8 +140,7 @@ export const useFocusStreakStore = create<FocusStreakState>()(
           const yearStart = new Date(currentYear, 0, 1);
           const yearEnd = new Date(currentYear, 11, 31);
           
-          // 🚀 FIX: Use transitionQueryService for current year refresh too
-          console.log(`FocusStreakStore - Refreshing current year with COMPLETE data (UTC + Legacy)`);
+          // Use transitionQueryService for current year refresh
           const userTimezone = timezoneUtils.getCurrentTimezone();
           
           const unifiedSessions = await transitionQueryService.getSessionsForDateRangeOptimized(
@@ -182,11 +174,6 @@ export const useFocusStreakStore = create<FocusStreakState>()(
             }
           });
           
-          console.log(`FocusStreakStore - Current year refresh COMPLETE:`, {
-            totalSessions: sessions.length,
-            utcSessions: unifiedSessions.filter(s => s.dataSource === 'utc').length,
-            legacySessions: unifiedSessions.filter(s => s.dataSource === 'legacy').length
-          });
           
           // Update cache
           const newCache = new Map(yearCache);
