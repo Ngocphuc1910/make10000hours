@@ -597,7 +597,7 @@ export class TransitionQueryService {
   }
   
   /**
-   * Get legacy sessions for date range
+   * Get legacy sessions for date range - FIXED to use consistent optimized method
    */
   private async getLegacySessionsForDateRange(
     startDate: Date,
@@ -605,8 +605,10 @@ export class TransitionQueryService {
     userId: string,
     userTimezone: string
   ): Promise<WorkSession[]> {
-    // Use existing legacy service
-    return workSessionService.getWorkSessionsByDateRange(userId, startDate, endDate);
+    // 🚀 FIX: Use the same optimized method as the primary path to ensure consistency
+    // This prevents fallback query failures when Firebase indexes are missing for updatedAt field
+    console.log('📝 Legacy fallback query using OPTIMIZED method (consistent with primary path)');
+    return workSessionService.getWorkSessionsForRange(userId, startDate, endDate);
   }
   
   /**

@@ -603,50 +603,28 @@ export class WorkSessionService {
         utcEndDate: endDateUTC.split('T')[0]
       });
       
-      // 🚀 OPTIMIZED: Use database-level date filtering instead of memory filtering
-      console.log('WorkSessionService - Using DATABASE-LEVEL date filtering (OPTIMIZED)');
+      // 🚀 OPTIMIZED: Use database-level date filtering for LEGACY sessions
+      console.log('WorkSessionService - Using DATABASE-LEVEL date filtering for LEGACY sessions (OPTIMIZED)');
       
-      // Try UTC field first (for enhanced sessions), fallback to date field (legacy sessions)
-      let q;
-      let queryStrategy = '';
+      // Legacy sessions use date string field - this is the ONLY correct strategy
+      const startDateStr = format(startDate, 'yyyy-MM-dd');
+      const endDateStr = format(endDate, 'yyyy-MM-dd');
       
-      try {
-        // Strategy 1: Query by startTimeUTC field (enhanced sessions)
-        q = query(
-          this.workSessionsCollection,
-          where('userId', '==', userId),
-          where('startTimeUTC', '>=', startDateUTC),
-          where('startTimeUTC', '<=', endDateUTC),
-          orderBy('startTimeUTC', 'desc')
-        );
-        queryStrategy = 'UTC_FIELD_FILTERING';
-        
-        console.log('Trying UTC field query strategy:', {
-          startTimeUTC_gte: startDateUTC,
-          startTimeUTC_lte: endDateUTC
-        });
-        
-      } catch (error) {
-        console.warn('UTC field query failed, falling back to date field:', error);
-        
-        // Strategy 2: Query by date field (legacy sessions)
-        const startDateStr = format(startDate, 'yyyy-MM-dd');
-        const endDateStr = format(endDate, 'yyyy-MM-dd');
-        
-        q = query(
-          this.workSessionsCollection,
-          where('userId', '==', userId),
-          where('date', '>=', startDateStr),
-          where('date', '<=', endDateStr),
-          orderBy('date', 'desc')
-        );
-        queryStrategy = 'DATE_FIELD_FILTERING';
-        
-        console.log('Using date field query strategy:', {
-          date_gte: startDateStr,
-          date_lte: endDateStr
-        });
-      }
+      const q = query(
+        this.workSessionsCollection,
+        where('userId', '==', userId),
+        where('date', '>=', startDateStr),
+        where('date', '<=', endDateStr),
+        orderBy('date', 'desc')
+      );
+      
+      const queryStrategy = 'LEGACY_DATE_FIELD_FILTERING';
+      
+      console.log('Using LEGACY date field query strategy:', {
+        date_gte: startDateStr,
+        date_lte: endDateStr,
+        note: 'Legacy sessions do NOT have startTimeUTC field'
+      });
       
       const querySnapshot = await getDocs(q);
       const sessions = querySnapshot.docs.map(doc => {
