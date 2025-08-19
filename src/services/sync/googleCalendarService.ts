@@ -26,10 +26,10 @@ export class GoogleCalendarService {
       return;
     }
 
-    // Check if we have calendar access token
-    const token = await simpleGoogleOAuthService.getStoredToken();
-    if (!token) {
-      console.warn('📅 No calendar access token - running in demo mode');
+    // Check if we have calendar access
+    const hasAccess = await simpleGoogleOAuthService.hasCalendarAccess();
+    if (!hasAccess) {
+      console.warn('📅 No calendar access - running in demo mode');
       console.warn('ℹ️  Grant calendar access in settings to enable real sync');
       return;
     }
@@ -39,22 +39,22 @@ export class GoogleCalendarService {
   }
 
   /**
-   * Get authorization headers for API requests with automatic token refresh
+   * Get authorization headers for API requests (server-side managed tokens)
    */
   private async getAuthHeaders(): Promise<HeadersInit> {
-    const token = await simpleGoogleOAuthService.getStoredToken();
-    if (!token) {
-      throw new Error('No access token available - user needs to re-authorize');
+    const accessToken = await simpleGoogleOAuthService.getAccessToken();
+    if (!accessToken) {
+      throw new Error('No access token available - user needs to re-authorize Google Calendar');
     }
 
     return {
-      'Authorization': `Bearer ${token.accessToken}`,
+      'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     };
   }
 
   /**
-   * Make authenticated API request with automatic retry on token expiration
+   * Make authenticated API request with proper error handling
    */
   private async makeAuthenticatedRequest(
     url: string, 
@@ -70,43 +70,16 @@ export class GoogleCalendarService {
         },
       });
 
-      // If we get 401, the token might be expired - try refreshing once
+      // Check for authentication errors
       if (response.status === 401) {
-        console.log('🔄 Got 401, attempting token refresh and retry...');
-        
-        // Force a token refresh
-        const token = await simpleGoogleOAuthService.getStoredToken();
-        if (token && token.refreshToken && 
-            token.refreshToken !== 'CLIENT_SIDE_APP' &&
-            token.refreshToken !== 'PENDING_REFRESH_TOKEN' && 
-            token.refreshToken !== 'MISSING_REFRESH_TOKEN') {
-          
-          // Get fresh headers and retry
-          const freshHeaders = await this.getAuthHeaders();
-          const retryResponse = await fetch(url, {
-            ...options,
-            headers: {
-              ...freshHeaders,
-              ...options.headers,
-            },
-          });
-          
-          if (retryResponse.status === 401) {
-            throw new Error('Authentication failed after token refresh - user needs to re-authorize');
-          }
-          
-          return retryResponse;
-        } else {
-          // No refresh token available - user needs to re-authorize
-          throw new Error('Token expired and no refresh token available - user needs to re-authorize Google Calendar access');
-        }
+        throw new Error('Authentication failed - user needs to re-authorize Google Calendar access');
       }
 
       // Check for rate limiting
       if (response.status === 429) {
         console.log('🚦 Rate limit hit, waiting before retry...');
         
-        // Wait longer for rate limit (exponential backoff)
+        // Wait for rate limit (exponential backoff)
         const retryAfter = response.headers.get('Retry-After');
         const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 5000; // Default 5 seconds
         
@@ -127,6 +100,12 @@ export class GoogleCalendarService {
       return response;
     } catch (error) {
       console.error('Error in authenticated request:', error);
+      
+      // Re-throw authentication errors with clearer messaging
+      if (error instanceof Error && error.message.includes('re-authorize')) {
+        throw new Error('AuthError: ' + error.message);
+      }
+      
       throw error;
     }
   }
@@ -137,8 +116,8 @@ export class GoogleCalendarService {
   async createEvent(task: Task, project: Project): Promise<string> {
     await this.initialize();
 
-    const token = await simpleGoogleOAuthService.getStoredToken();
-    if (token) {
+    const hasAccess = await simpleGoogleOAuthService.hasCalendarAccess();
+    if (hasAccess) {
       // Real Google Calendar API call
       try {
         const event = this.taskToGoogleEvent(task, project);
@@ -186,8 +165,8 @@ export class GoogleCalendarService {
   async updateEvent(eventId: string, task: Task, project: Project): Promise<void> {
     await this.initialize();
 
-    const token = await simpleGoogleOAuthService.getStoredToken();
-    if (token) {
+    const hasAccess = await simpleGoogleOAuthService.hasCalendarAccess();
+    if (hasAccess) {
       // Real Google Calendar API call
       try {
         const event = this.taskToGoogleEvent(task, project);
@@ -230,8 +209,8 @@ export class GoogleCalendarService {
   async deleteEvent(eventId: string): Promise<void> {
     await this.initialize();
 
-    const token = await simpleGoogleOAuthService.getStoredToken();
-    if (token) {
+    const hasAccess = await simpleGoogleOAuthService.hasCalendarAccess();
+    if (hasAccess) {
       // Real Google Calendar API call
       try {
         const response = await this.makeAuthenticatedRequest(`${this.baseUrl}/calendars/${this.calendarId}/events/${eventId}`, {
@@ -265,9 +244,9 @@ export class GoogleCalendarService {
   async getEvent(eventId: string): Promise<GoogleCalendarEvent> {
     await this.initialize();
 
-    const token = await simpleGoogleOAuthService.getStoredToken();
-    if (!token) {
-      throw new Error('No access token available');
+    const hasAccess = await simpleGoogleOAuthService.hasCalendarAccess();
+    if (!hasAccess) {
+      throw new Error('No Google Calendar access - user needs to authorize');
     }
 
     try {
@@ -297,8 +276,8 @@ export class GoogleCalendarService {
   }> {
     await this.initialize();
 
-    const token = await simpleGoogleOAuthService.getStoredToken();
-    if (!token) {
+    const hasAccess = await simpleGoogleOAuthService.hasCalendarAccess();
+    if (!hasAccess) {
       console.log('🔄 DEMO MODE: Simulating Google Calendar events list');
       await new Promise(resolve => setTimeout(resolve, 1200));
       return {
@@ -364,7 +343,9 @@ export class GoogleCalendarService {
   }> {
     await this.initialize();
 
-    if (this.isDemoMode) {
+    // Check if we have a token for real API calls
+    const hasAccess = await simpleGoogleOAuthService.hasCalendarAccess();
+    if (!hasAccess) {
       console.log('🔄 DEMO MODE: Simulating sync token generation');
       await new Promise(resolve => setTimeout(resolve, 1200));
       return {
@@ -463,9 +444,9 @@ export class GoogleCalendarService {
   }> {
     await this.initialize();
 
-    const token = await simpleGoogleOAuthService.getStoredToken();
-    if (!token) {
-      throw new Error('No access token available');
+    const hasAccess = await simpleGoogleOAuthService.hasCalendarAccess();
+    if (!hasAccess) {
+      throw new Error('No Google Calendar access - user needs to authorize');
     }
 
     try {
@@ -501,9 +482,9 @@ export class GoogleCalendarService {
   async stopChannel(channelId: string, resourceId: string): Promise<void> {
     await this.initialize();
 
-    const token = await simpleGoogleOAuthService.getStoredToken();
-    if (!token) {
-      throw new Error('No access token available');
+    const hasAccess = await simpleGoogleOAuthService.hasCalendarAccess();
+    if (!hasAccess) {
+      throw new Error('No Google Calendar access - user needs to authorize');
     }
 
     try {
