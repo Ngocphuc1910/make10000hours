@@ -66,3 +66,16 @@ dist/
 test-webhook*.js
 test-accessibility*.js
 *-test.js
+
+# Security: Environment files (NEVER COMMIT)
+.env
+.env.*
+.env.local
+.env.production
+.env.development
+*.env
+
+# Backup files
+*.backup
+temp-env*
+*-backup*
