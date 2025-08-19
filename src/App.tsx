@@ -49,6 +49,7 @@ import SettingsDialogWrapper from './components/settings/SettingsDialogWrapper';
 import { testDeepFocusFixes } from './utils/testDeepFocusFix';
 import DeepFocusCleanup from './utils/deepFocusCleanup';
 import { useSimpleGoogleCalendarAuth } from './hooks/useSimpleGoogleCalendarAuth';
+import OAuthCallbackPage from './components/auth/OAuthCallbackPage';
 import './utils/resetMonitoring'; // Make resetUTCMonitoring available globally
 
 // Import test utilities in development mode
@@ -80,6 +81,7 @@ if (process.env.NODE_ENV === 'development') {
 // Import auth guard test utilities in development mode
 if (process.env.NODE_ENV === 'development') {
   import('./utils/testAuthGuard');
+  import('./utils/optimizationMonitor'); // Import database optimization monitor
 }
 
 // Feature flag controlled timer implementation
@@ -994,6 +996,7 @@ const App: React.FC = () => {
               <Route path="data-sync" element={<DataSyncPageWithLayout />} />
               <Route path="support" element={<SupportPageWithLayout />} />
               <Route path="privacy-policy" element={<PrivacyPolicyPageWithLayout />} />
+              <Route path="oauth/callback" element={<OAuthCallbackPage />} />
               <Route path="debug-markdown" element={<DebugMarkdown />} />
             </Routes>
           </AnalyticsWrapper>

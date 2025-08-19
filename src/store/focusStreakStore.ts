@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { workSessionService } from '../api/workSessionService';
+import { transitionQueryService } from '../services/transitionService';
+import { timezoneUtils } from '../utils/timezoneUtils';
 import type { WorkSession } from '../types/models';
 
 interface FocusStreakCache {
@@ -55,11 +57,40 @@ export const useFocusStreakStore = create<FocusStreakState>()(
           const yearStart = new Date(year, 0, 1);
           const yearEnd = new Date(year, 11, 31);
           
-          const sessions = await workSessionService.getWorkSessionsForRange(
-            userId,
+          // Use transitionQueryService to get data from both UTC and Legacy systems
+          const userTimezone = timezoneUtils.getCurrentTimezone();
+          
+          const unifiedSessions = await transitionQueryService.getSessionsForDateRangeOptimized(
             yearStart,
-            yearEnd
+            yearEnd,
+            userId,
+            userTimezone
           );
+          
+          // Convert unified sessions back to WorkSession format for compatibility
+          const sessions: WorkSession[] = unifiedSessions.map(unified => {
+            if (unified.dataSource === 'legacy') {
+              return unified.rawData as WorkSession;
+            } else {
+              // Convert UTC session to legacy format
+              return {
+                id: unified.id,
+                userId: unified.userId,
+                taskId: unified.taskId,
+                projectId: unified.projectId,
+                duration: unified.duration,
+                sessionType: unified.sessionType,
+                status: unified.status,
+                notes: unified.notes,
+                date: unified.startTime.toISOString().split('T')[0],
+                startTime: unified.startTime,
+                endTime: unified.endTime,
+                createdAt: new Date(unified.createdAt),
+                updatedAt: new Date(unified.updatedAt),
+              };
+            }
+          });
+          
           
           // Update cache
           const newCache = new Map(yearCache);
@@ -109,11 +140,40 @@ export const useFocusStreakStore = create<FocusStreakState>()(
           const yearStart = new Date(currentYear, 0, 1);
           const yearEnd = new Date(currentYear, 11, 31);
           
-          const sessions = await workSessionService.getWorkSessionsForRange(
-            userId,
+          // Use transitionQueryService for current year refresh
+          const userTimezone = timezoneUtils.getCurrentTimezone();
+          
+          const unifiedSessions = await transitionQueryService.getSessionsForDateRangeOptimized(
             yearStart,
-            yearEnd
+            yearEnd,
+            userId,
+            userTimezone
           );
+          
+          // Convert unified sessions back to WorkSession format for compatibility
+          const sessions: WorkSession[] = unifiedSessions.map(unified => {
+            if (unified.dataSource === 'legacy') {
+              return unified.rawData as WorkSession;
+            } else {
+              // Convert UTC session to legacy format
+              return {
+                id: unified.id,
+                userId: unified.userId,
+                taskId: unified.taskId,
+                projectId: unified.projectId,
+                duration: unified.duration,
+                sessionType: unified.sessionType,
+                status: unified.status,
+                notes: unified.notes,
+                date: unified.startTime.toISOString().split('T')[0],
+                startTime: unified.startTime,
+                endTime: unified.endTime,
+                createdAt: new Date(unified.createdAt),
+                updatedAt: new Date(unified.updatedAt),
+              };
+            }
+          });
+          
           
           // Update cache
           const newCache = new Map(yearCache);

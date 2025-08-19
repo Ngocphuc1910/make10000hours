@@ -6,11 +6,28 @@ import { Task, Project } from '../types/models';
 import { db } from '../api/firebase';
 import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
 
+// Helper function to check if error is authentication-related
+const isAuthError = (error: Error | string): boolean => {
+  const errorMessage = typeof error === 'string' ? error : error.message;
+  return errorMessage.includes('AuthError:') || 
+         errorMessage.includes('re-authorize') ||
+         errorMessage.includes('unauthenticated') ||
+         errorMessage.includes('not-found') ||
+         errorMessage.includes('Authentication failed');
+};
+
+// Helper function to clean auth error message for display
+const cleanErrorMessage = (error: Error | string): string => {
+  const errorMessage = typeof error === 'string' ? error : error.message;
+  return errorMessage.replace('AuthError: ', '');
+};
+
 interface SyncState {
   syncEnabled: boolean;
   syncInProgress: boolean;
   lastSyncTime: Date | null;
   syncError: string | null;
+  authError: boolean; // New: indicates if error requires re-authorization
   pendingTasks: Set<string>;
   errorTasks: Set<string>;
   webhookMonitoringInterval: NodeJS.Timeout | null;
@@ -24,6 +41,7 @@ interface SyncState {
   syncTaskDeletion: (taskId: string) => Promise<void>;
   performManualSync: () => Promise<void>;
   clearSyncError: () => void;
+  clearAuthError: () => void;
   getSyncManager: () => any;
   // Webhook lifecycle actions
   setupWebhook: () => Promise<void>;
@@ -40,6 +58,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   syncInProgress: false,
   lastSyncTime: null,
   syncError: null,
+  authError: false,
   pendingTasks: new Set(),
   errorTasks: new Set(),
   webhookMonitoringInterval: null,
@@ -80,7 +99,11 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       });
     } catch (error) {
       console.error('Error initializing sync:', error);
-      set({ syncError: error.message });
+      const isAuth = isAuthError(error);
+      set({ 
+        syncError: cleanErrorMessage(error),
+        authError: isAuth
+      });
     }
   },
 
@@ -100,8 +123,10 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       });
     } catch (error) {
       console.error('Error enabling sync:', error);
+      const isAuth = isAuthError(error);
       set({ 
-        syncError: error.message,
+        syncError: cleanErrorMessage(error),
+        authError: isAuth,
         syncInProgress: false,
       });
       throw error;
@@ -125,8 +150,10 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       });
     } catch (error) {
       console.error('Error disabling sync:', error);
+      const isAuth = isAuthError(error);
       set({ 
-        syncError: error.message,
+        syncError: cleanErrorMessage(error),
+        authError: isAuth,
         syncInProgress: false,
       });
       throw error;
@@ -208,10 +235,12 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       const newErrorTasks = new Set(errorTasks);
       newErrorTasks.add(taskId);
       
+      const isAuth = isAuthError(error);
       set({ 
         pendingTasks: newPendingTasks,
         errorTasks: newErrorTasks,
-        syncError: error.message,
+        syncError: cleanErrorMessage(error),
+        authError: isAuth,
       });
     }
   },
@@ -235,7 +264,11 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       set({ lastSyncTime: new Date() });
     } catch (error) {
       console.error('Error syncing task deletion:', error);
-      set({ syncError: error.message });
+      const isAuth = isAuthError(error);
+      set({ 
+        syncError: cleanErrorMessage(error),
+        authError: isAuth
+      });
     }
   },
 
@@ -254,8 +287,10 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       });
     } catch (error) {
       console.error('Error performing manual sync:', error);
+      const isAuth = isAuthError(error);
       set({ 
-        syncError: error.message,
+        syncError: cleanErrorMessage(error),
+        authError: isAuth,
         syncInProgress: false,
       });
       throw error;
@@ -263,7 +298,11 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   },
 
   clearSyncError: () => {
-    set({ syncError: null });
+    set({ syncError: null, authError: false });
+  },
+
+  clearAuthError: () => {
+    set({ authError: false, syncError: null });
   },
 
   // ================ WEBHOOK LIFECYCLE METHODS ================
@@ -283,8 +322,10 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       });
     } catch (error) {
       console.error('Error setting up webhook:', error);
+      const isAuth = isAuthError(error);
       set({ 
-        syncError: error.message,
+        syncError: cleanErrorMessage(error),
+        authError: isAuth,
         syncInProgress: false,
       });
       // Don't throw - webhook failure should fall back to polling
@@ -444,7 +485,11 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         }
       }, (error) => {
         console.error('❌ Sync state listener error:', error);
-        set({ syncError: 'Real-time sync monitoring failed' });
+        const isAuth = isAuthError(error);
+        set({ 
+          syncError: 'Real-time sync monitoring failed',
+          authError: isAuth
+        });
       });
 
       set({ syncStateListener: unsubscribe });
@@ -452,7 +497,11 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       
     } catch (error) {
       console.error('❌ Failed to start sync state listener:', error);
-      set({ syncError: 'Failed to start real-time sync monitoring' });
+      const isAuth = isAuthError(error);
+      set({ 
+        syncError: 'Failed to start real-time sync monitoring',
+        authError: isAuth
+      });
     }
   },
 
