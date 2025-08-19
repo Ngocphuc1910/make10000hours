@@ -12,6 +12,23 @@ export type DateRange = {
   endDate: Date | null;
 };
 
+// Simple smart cache entry
+interface CacheEntry {
+  data: WorkSession[];
+  timestamp: number;
+  expiresAt: number | null; // null = never expires (historical data)
+  cacheKey: string;
+  userId: string;
+}
+
+// Cache statistics for monitoring
+interface CacheStats {
+  totalQueries: number;
+  cacheHits: number;
+  cacheMisses: number;
+  lastResetTime: number;
+}
+
 interface DashboardState {
   selectedRange: DateRange;
   workSessions: WorkSession[];
@@ -20,6 +37,10 @@ interface DashboardState {
   isLoading: boolean;
   useEventDrivenLoading: boolean; // Feature flag for safe rollback
   
+  // Simple smart caching system
+  cache: Map<string, CacheEntry>;
+  cacheStats: CacheStats;
+  
   // Actions
   setSelectedRange(range: DateRange): void;
   setWorkSessions(sessions: WorkSession[]): void;
@@ -27,6 +48,14 @@ interface DashboardState {
   subscribeWorkSessions(userId: string): void;
   loadWorkSessionsForRange(userId: string, range: DateRange): Promise<void>;
   cleanupListeners(): void;
+  
+  // Simple smart caching methods
+  getCacheKey(userId: string, range: DateRange): string;
+  isHistoricalData(range: DateRange): boolean;
+  getCachedData(userId: string, range: DateRange): WorkSession[] | null;
+  setCachedData(userId: string, range: DateRange, data: WorkSession[]): void;
+  invalidateCurrentDayCache(userId: string): void;
+  cleanupExpiredEntries(): void;
 }
 
 export const useDashboardStore = create<DashboardState>((set, get) => {
@@ -41,6 +70,15 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
     unsubscribe: null,
     isLoading: false,
     useEventDrivenLoading: true, // Feature flag - set to false to revert to subscription
+    
+    // Initialize simple smart caching system
+    cache: new Map<string, CacheEntry>(),
+    cacheStats: {
+      totalQueries: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      lastResetTime: Date.now()
+    },
 
     setSelectedRange: async (range) => {
       set({ selectedRange: range });
@@ -56,6 +94,134 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
     },
     setWorkSessions: (sessions) => set({ workSessions: sessions }),
     setFocusTimeView: (view) => set({ focusTimeView: view }),
+
+    // 🚀 SIMPLE SMART CACHING METHODS
+    getCacheKey: (userId: string, range: DateRange): string => {
+      const startStr = range.startDate?.toISOString().split('T')[0] || 'null';
+      const endStr = range.endDate?.toISOString().split('T')[0] || 'null';
+      return `${userId}:${range.rangeType}:${startStr}:${endStr}`;
+    },
+
+    isHistoricalData: (range: DateRange): boolean => {
+      if (!range.endDate) return false;
+      
+      const today = new Date().toDateString();
+      const rangeEnd = range.endDate.toDateString();
+      
+      // Historical data = range that doesn't include today
+      return rangeEnd !== today;
+    },
+
+    getCachedData: (userId: string, range: DateRange): WorkSession[] | null => {
+      const { cache, cacheStats } = get();
+      const cacheKey = get().getCacheKey(userId, range);
+      const entry = cache.get(cacheKey);
+
+      // Update query stats
+      const newStats = { ...cacheStats, totalQueries: cacheStats.totalQueries + 1 };
+      
+      if (!entry) {
+        set({ cacheStats: { ...newStats, cacheMisses: newStats.cacheMisses + 1 } });
+        console.log('📦 Cache MISS:', cacheKey);
+        return null;
+      }
+
+      // Historical data never expires (expiresAt = null)
+      if (entry.expiresAt === null) {
+        set({ cacheStats: { ...newStats, cacheHits: newStats.cacheHits + 1 } });
+        console.log('📦 Cache HIT [HISTORICAL]:', {
+          cacheKey,
+          dataSize: entry.data.length,
+          age: Math.round((Date.now() - entry.timestamp) / 1000) + 's',
+          expires: 'NEVER'
+        });
+        return [...entry.data]; // Return copy to prevent mutations
+      }
+
+      // Check if current data expired
+      if (Date.now() > entry.expiresAt) {
+        cache.delete(cacheKey);
+        set({ 
+          cache: new Map(cache),
+          cacheStats: { ...newStats, cacheMisses: newStats.cacheMisses + 1 }
+        });
+        console.log('📦 Cache EXPIRED:', cacheKey);
+        return null;
+      }
+
+      // Current data cache hit
+      set({ cacheStats: { ...newStats, cacheHits: newStats.cacheHits + 1 } });
+      console.log('📦 Cache HIT [CURRENT]:', {
+        cacheKey,
+        dataSize: entry.data.length,
+        age: Math.round((Date.now() - entry.timestamp) / 1000) + 's',
+        expiresIn: Math.round((entry.expiresAt - Date.now()) / 1000) + 's'
+      });
+      return [...entry.data]; // Return copy to prevent mutations
+    },
+
+    setCachedData: (userId: string, range: DateRange, data: WorkSession[]): void => {
+      const { cache } = get();
+      const cacheKey = get().getCacheKey(userId, range);
+      const isHistorical = get().isHistoricalData(range);
+      
+      const entry: CacheEntry = {
+        data: [...data], // Store copy to prevent mutations
+        timestamp: Date.now(),
+        expiresAt: isHistorical ? null : Date.now() + (1 * 60 * 1000), // Historical = never, Current = 1min
+        cacheKey,
+        userId
+      };
+
+      cache.set(cacheKey, entry);
+      set({ cache: new Map(cache) });
+
+      console.log(`📦 Cache SET [${isHistorical ? 'HISTORICAL' : 'CURRENT'}]:`, {
+        cacheKey,
+        dataSize: data.length,
+        expiresIn: entry.expiresAt ? Math.round((entry.expiresAt - Date.now()) / 1000) + 's' : 'NEVER'
+      });
+    },
+
+    invalidateCurrentDayCache: (userId: string): void => {
+      const { cache } = get();
+      const today = new Date().toDateString();
+      let invalidatedCount = 0;
+      
+      // Remove any cache entries that include today's data
+      for (const [key, entry] of cache.entries()) {
+        if (entry.userId === userId && key.includes(today)) {
+          cache.delete(key);
+          invalidatedCount++;
+          console.log('🔄 Invalidated current day cache:', key);
+        }
+      }
+      
+      if (invalidatedCount > 0) {
+        set({ cache: new Map(cache) });
+        console.log(`🔄 Invalidated ${invalidatedCount} cache entries including today`);
+      }
+    },
+
+    cleanupExpiredEntries: (): void => {
+      const { cache } = get();
+      const now = Date.now();
+      let cleanedCount = 0;
+      
+      for (const [key, entry] of cache.entries()) {
+        // Only clean up entries that have expiration times (current data)
+        if (entry.expiresAt !== null && now > entry.expiresAt) {
+          cache.delete(key);
+          cleanedCount++;
+        }
+      }
+      
+      if (cleanedCount > 0) {
+        set({ cache: new Map(cache) });
+        console.log(`🧹 Cleaned up ${cleanedCount} expired cache entries`);
+      }
+    },
+
     subscribeWorkSessions: (userId) => {
       console.log('DashboardStore - Subscribing to work sessions for user:', userId);
       const { unsubscribe } = get();
@@ -83,13 +249,24 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
       const { startDate, endDate, rangeType } = range;
       const userTimezone = useUserStore.getState().getTimezone();
       
-      console.log('DashboardStore - Loading work sessions for range (UTC-based):', {
+      console.log('DashboardStore - Loading work sessions for range (SMART-CACHED):', {
         userId,
         userTimezone,
         rangeType,
         startDate: startDate?.toISOString().split('T')[0] || 'null',
         endDate: endDate?.toISOString().split('T')[0] || 'null'
       });
+
+      // 🚀 PHASE 1: Check cache first
+      const cachedData = get().getCachedData(userId, range);
+      if (cachedData) {
+        console.log('📦 Using cached data, skipping database query');
+        set({ workSessions: cachedData, isLoading: false });
+        return;
+      }
+
+      // 🔄 PHASE 2: Cleanup expired entries before database query
+      get().cleanupExpiredEntries();
       
       set({ isLoading: true });
       
@@ -193,6 +370,9 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
           });
         }
         
+        // 🚀 PHASE 3: Cache the fetched data
+        get().setCachedData(userId, range, sessions);
+        
         set({ workSessions: sessions });
       } catch (error) {
         console.error('DashboardStore - Error loading work sessions via transition service:', error);
@@ -205,6 +385,8 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
           } else {
             sessions = await workSessionService.getWorkSessionsForRange(userId, startDate, endDate);
           }
+          // Cache fallback data too
+          get().setCachedData(userId, range, sessions);
           set({ workSessions: sessions });
         } catch (fallbackError) {
           console.error('DashboardStore - Legacy fallback also failed:', fallbackError);

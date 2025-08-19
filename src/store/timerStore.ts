@@ -8,6 +8,7 @@ import { transitionQueryService } from '../services/transitionService';
 import { getDateISOString } from '../utils/timeUtils';
 import { trackPomodoroStarted, trackPomodoroCompleted } from '../utils/analytics';
 import { resetUTCMonitoring } from '../utils/resetMonitoring';
+import { useDashboardStore } from './useDashboardStore';
 
 interface TimerState {
   // Timer status
@@ -468,6 +469,9 @@ export const useTimerStore = create<TimerState>((set, get) => {
         });
         
         console.log('✅ Active session established:', sessionId);
+        
+        // 🔄 Invalidate dashboard cache for current day data
+        useDashboardStore.getState().invalidateCurrentDayCache(user.uid);
       } catch (error) {
         console.error('❌ Failed to create active session:', error);
         throw error;
@@ -568,6 +572,12 @@ export const useTimerStore = create<TimerState>((set, get) => {
           status,
           remainingMinutes
         });
+        
+        // 🔄 Invalidate dashboard cache for current day data
+        const { user } = useUserStore.getState();
+        if (user) {
+          useDashboardStore.getState().invalidateCurrentDayCache(user.uid);
+        }
       } catch (error) {
         console.error('Failed to complete active session:', error);
       }
