@@ -123,14 +123,14 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
       
       if (!entry) {
         set({ cacheStats: { ...newStats, cacheMisses: newStats.cacheMisses + 1 } });
-        logCache('Cache MISS:', cacheKey);
+        console.log('📦 Cache MISS:', cacheKey);
         return null;
       }
 
       // Historical data never expires (expiresAt = null)
       if (entry.expiresAt === null) {
         set({ cacheStats: { ...newStats, cacheHits: newStats.cacheHits + 1 } });
-        logCache('Cache HIT [HISTORICAL]:', {
+        console.log('📦 Cache HIT [HISTORICAL]:', {
           cacheKey,
           dataSize: entry.data.length,
           age: Math.round((Date.now() - entry.timestamp) / 1000) + 's',
@@ -152,7 +152,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
 
       // Current data cache hit
       set({ cacheStats: { ...newStats, cacheHits: newStats.cacheHits + 1 } });
-      logCache('Cache HIT [CURRENT]:', {
+      console.log('📦 Cache HIT [CURRENT]:', {
         cacheKey,
         dataSize: entry.data.length,
         age: Math.round((Date.now() - entry.timestamp) / 1000) + 's',
@@ -177,7 +177,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
       cache.set(cacheKey, entry);
       set({ cache: new Map(cache) });
 
-      logCache(`Cache SET [${isHistorical ? 'HISTORICAL' : 'CURRENT'}]:`, {
+      console.log(`📦 Cache SET [${isHistorical ? 'HISTORICAL' : 'CURRENT'}]:`, {
         cacheKey,
         dataSize: data.length,
         expiresIn: entry.expiresAt ? Math.round((entry.expiresAt - Date.now()) / 1000) + 's' : 'NEVER'
@@ -200,7 +200,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
       
       if (invalidatedCount > 0) {
         set({ cache: new Map(cache) });
-        logCache(`Invalidated ${invalidatedCount} cache entries including today`);
+        console.log(`🔄 Invalidated ${invalidatedCount} cache entries including today`);
       }
     },
 
@@ -261,7 +261,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
       // 🚀 PHASE 1: Check cache first
       const cachedData = get().getCachedData(userId, range);
       if (cachedData) {
-        logPerformance('Using cached data, skipping database query');
+        console.log('⚡ Using cached data, skipping database query');
         set({ workSessions: cachedData, isLoading: false });
         return;
       }
