@@ -433,6 +433,7 @@ export class WorkSessionServiceUTC {
       // Convert end date to UTC
       const { endUTC } = timezoneUtils.getUserDateBoundariesUTC(endDate, userTimezone);
       
+      // 🚀 OPTIMIZED: UTC service already uses database-level date filtering!
       const q = query(
         this.collection,
         where('userId', '==', userId),
@@ -440,6 +441,13 @@ export class WorkSessionServiceUTC {
         where('startTimeUTC', '<=', endUTC),
         orderBy('startTimeUTC', 'desc')
       );
+      
+      console.log('WorkSessionServiceUTC - Using OPTIMIZED database filtering:', {
+        startUTC,
+        endUTC,
+        userTimezone,
+        queryStrategy: 'UTC_NATIVE_FILTERING'
+      });
       
       const snapshot = await getDocs(q);
       const sessions = snapshot.docs.map(doc => ({
@@ -449,6 +457,13 @@ export class WorkSessionServiceUTC {
       
       const duration = performance.now() - perfStart;
       utcMonitoring.trackOperation('get_sessions_for_date_range', true, duration);
+      
+      console.log('WorkSessionServiceUTC - OPTIMIZATION SUCCESS:', {
+        sessionsReturned: sessions.length,
+        queryTimeMs: duration.toFixed(2),
+        databaseFiltered: true,
+        optimizationActive: true
+      });
       
       return sessions;
     } catch (error) {

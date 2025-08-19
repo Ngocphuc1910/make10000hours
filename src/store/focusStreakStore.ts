@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { workSessionService } from '../api/workSessionService';
+import { transitionQueryService } from '../services/transitionService';
+import { timezoneUtils } from '../utils/timezoneUtils';
 import type { WorkSession } from '../types/models';
 
 interface FocusStreakCache {
@@ -55,11 +57,47 @@ export const useFocusStreakStore = create<FocusStreakState>()(
           const yearStart = new Date(year, 0, 1);
           const yearEnd = new Date(year, 11, 31);
           
-          const sessions = await workSessionService.getWorkSessionsForRange(
-            userId,
+          // 🚀 FIX: Use transitionQueryService to get data from BOTH UTC and Legacy systems
+          console.log(`FocusStreakStore - Using transitionQueryService for COMPLETE data (UTC + Legacy)`);
+          const userTimezone = timezoneUtils.getCurrentTimezone();
+          
+          const unifiedSessions = await transitionQueryService.getSessionsForDateRangeOptimized(
             yearStart,
-            yearEnd
+            yearEnd,
+            userId,
+            userTimezone
           );
+          
+          // Convert unified sessions back to WorkSession format for compatibility
+          const sessions: WorkSession[] = unifiedSessions.map(unified => {
+            if (unified.dataSource === 'legacy') {
+              return unified.rawData as WorkSession;
+            } else {
+              // Convert UTC session to legacy format
+              return {
+                id: unified.id,
+                userId: unified.userId,
+                taskId: unified.taskId,
+                projectId: unified.projectId,
+                duration: unified.duration,
+                sessionType: unified.sessionType,
+                status: unified.status,
+                notes: unified.notes,
+                date: unified.startTime.toISOString().split('T')[0],
+                startTime: unified.startTime,
+                endTime: unified.endTime,
+                createdAt: new Date(unified.createdAt),
+                updatedAt: new Date(unified.updatedAt),
+              };
+            }
+          });
+          
+          console.log(`FocusStreakStore - Retrieved COMPLETE data:`, {
+            totalSessions: sessions.length,
+            utcSessions: unifiedSessions.filter(s => s.dataSource === 'utc').length,
+            legacySessions: unifiedSessions.filter(s => s.dataSource === 'legacy').length,
+            year: year
+          });
           
           // Update cache
           const newCache = new Map(yearCache);
@@ -109,11 +147,46 @@ export const useFocusStreakStore = create<FocusStreakState>()(
           const yearStart = new Date(currentYear, 0, 1);
           const yearEnd = new Date(currentYear, 11, 31);
           
-          const sessions = await workSessionService.getWorkSessionsForRange(
-            userId,
+          // 🚀 FIX: Use transitionQueryService for current year refresh too
+          console.log(`FocusStreakStore - Refreshing current year with COMPLETE data (UTC + Legacy)`);
+          const userTimezone = timezoneUtils.getCurrentTimezone();
+          
+          const unifiedSessions = await transitionQueryService.getSessionsForDateRangeOptimized(
             yearStart,
-            yearEnd
+            yearEnd,
+            userId,
+            userTimezone
           );
+          
+          // Convert unified sessions back to WorkSession format for compatibility
+          const sessions: WorkSession[] = unifiedSessions.map(unified => {
+            if (unified.dataSource === 'legacy') {
+              return unified.rawData as WorkSession;
+            } else {
+              // Convert UTC session to legacy format
+              return {
+                id: unified.id,
+                userId: unified.userId,
+                taskId: unified.taskId,
+                projectId: unified.projectId,
+                duration: unified.duration,
+                sessionType: unified.sessionType,
+                status: unified.status,
+                notes: unified.notes,
+                date: unified.startTime.toISOString().split('T')[0],
+                startTime: unified.startTime,
+                endTime: unified.endTime,
+                createdAt: new Date(unified.createdAt),
+                updatedAt: new Date(unified.updatedAt),
+              };
+            }
+          });
+          
+          console.log(`FocusStreakStore - Current year refresh COMPLETE:`, {
+            totalSessions: sessions.length,
+            utcSessions: unifiedSessions.filter(s => s.dataSource === 'utc').length,
+            legacySessions: unifiedSessions.filter(s => s.dataSource === 'legacy').length
+          });
           
           // Update cache
           const newCache = new Map(yearCache);

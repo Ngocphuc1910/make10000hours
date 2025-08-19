@@ -96,27 +96,52 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
       try {
         let unifiedSessions;
         
+        // 🚀 FEATURE FLAG: Use optimized database queries
+        const USE_OPTIMIZED_QUERIES = process.env.REACT_APP_USE_OPTIMIZED_QUERIES === 'true';
+        
         if (rangeType === 'all time' || !startDate || !endDate) {
-          // For "All time", get ALL sessions from both UTC and legacy systems
+          // For "All time", preserve existing behavior (complete data needed)
           console.log('DashboardStore - Loading all sessions for "all time" via transition service');
-          // Use a very wide date range to get all data
           const veryOldDate = new Date('2020-01-01');
           const today = new Date();
-          unifiedSessions = await transitionQueryService.getSessionsForDateRange(
-            veryOldDate,
-            today,
-            userId,
-            userTimezone
-          );
+          
+          if (USE_OPTIMIZED_QUERIES) {
+            console.log('📊 Using OPTIMIZED queries for "all time" (wide range)');
+            // Still use optimized method but with wide range for all time
+            unifiedSessions = await transitionQueryService.getSessionsForDateRangeOptimized(
+              veryOldDate,
+              today,
+              userId,
+              userTimezone
+            );
+          } else {
+            // Original behavior for all time
+            unifiedSessions = await transitionQueryService.getSessionsForDateRange(
+              veryOldDate,
+              today,
+              userId,
+              userTimezone
+            );
+          }
         } else {
-          // For specific date ranges, use UTC-aware transition service
-          console.log('DashboardStore - Loading sessions for date range via transition service');
-          unifiedSessions = await transitionQueryService.getSessionsForDateRange(
-            startDate,
-            endDate,
-            userId,
-            userTimezone
-          );
+          // For specific date ranges, use optimized filtering
+          if (USE_OPTIMIZED_QUERIES) {
+            console.log('🎯 Using OPTIMIZED date-range queries with database filtering');
+            unifiedSessions = await transitionQueryService.getSessionsForDateRangeOptimized(
+              startDate,
+              endDate,
+              userId,
+              userTimezone
+            );
+          } else {
+            console.log('📝 Using ORIGINAL transition service (fallback)');
+            unifiedSessions = await transitionQueryService.getSessionsForDateRange(
+              startDate,
+              endDate,
+              userId,
+              userTimezone
+            );
+          }
         }
         
         // Convert unified sessions back to legacy format for compatibility
@@ -143,11 +168,30 @@ export const useDashboardStore = create<DashboardState>((set, get) => {
           }
         });
         
-        console.log('DashboardStore - Successfully loaded sessions via transition service:', {
+        // 📊 ENHANCED LOGGING: Track optimization performance
+        const optimizationMetrics = {
           totalSessions: sessions.length,
           utcSessions: unifiedSessions.filter(s => s.dataSource === 'utc').length,
-          legacySessions: unifiedSessions.filter(s => s.dataSource === 'legacy').length
-        });
+          legacySessions: unifiedSessions.filter(s => s.dataSource === 'legacy').length,
+          queryMethod: USE_OPTIMIZED_QUERIES ? 'OPTIMIZED' : 'ORIGINAL',
+          rangeType: rangeType,
+          dateRange: startDate && endDate ? 
+            `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}` : 
+            'all_time',
+          userTimezone
+        };
+        
+        console.log('DashboardStore - Query completed with performance metrics:', optimizationMetrics);
+        
+        // Store metrics for analysis (development only)
+        if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+          window.dashboardOptimizationMetrics = window.dashboardOptimizationMetrics || [];
+          window.dashboardOptimizationMetrics.push({
+            ...optimizationMetrics,
+            timestamp: new Date().toISOString(),
+            userId: userId.substring(0, 8)
+          });
+        }
         
         set({ workSessions: sessions });
       } catch (error) {
