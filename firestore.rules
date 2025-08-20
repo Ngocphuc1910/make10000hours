@@ -67,10 +67,10 @@ service cloud.firestore {
         request.auth.uid == userId;
       allow write: if request.auth != null && 
         request.auth.uid == userId &&
-        request.auth.uid == request.resource.data.userId;
+        request.auth.uid == request.resource.data.uid;
       allow create: if request.auth != null && 
         request.auth.uid == userId &&
-        request.auth.uid == request.resource.data.userId;
+        request.auth.uid == request.resource.data.uid;
     }
     
     // Tasks collection - users can only access their own tasks
@@ -128,6 +128,15 @@ service cloud.firestore {
     
     // REMOVED: Dangerous catch-all rule that exposed all data
     // DO NOT ADD ANY CATCH-ALL RULES HERE
+    
+    // Timer states collection - users can only access their own timer state
+    match /timerStates/{userId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == userId;
+      allow create: if request.auth != null && 
+        request.auth.uid == userId &&
+        request.auth.uid == request.resource.data.userId;
+    }
     
     // Any collection not explicitly listed above will be BLOCKED by default
     // This is the secure-by-default approach

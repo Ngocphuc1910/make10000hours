@@ -142,14 +142,40 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
   // Check if there are unsaved changes
   const hasChanges = JSON.stringify(settings) !== JSON.stringify(originalSettings);
 
-  const handleTimerSettingChange = (key: keyof TimerSettings, value: number | boolean) => {
-    setSettings(prev => ({
-      ...prev,
-      timer: {
-        ...prev.timer,
-        [key]: value
+  const handleTimerSettingChange = async (key: keyof TimerSettings, value: number | boolean) => {
+    const updatedTimerSettings = {
+      ...settings.timer,
+      [key]: value
+    };
+    
+    const updatedSettings = {
+      ...settings,
+      timer: updatedTimerSettings
+    };
+    
+    // Update local state immediately for UI responsiveness
+    setSettings(updatedSettings);
+    
+    // Auto-save to Firebase (matching behavior of other settings)
+    if (user) {
+      try {
+        const sanitizedUserData = {
+          uid: user.uid,
+          userName: user.userName,
+          settings: updatedSettings,
+          subscription: user.subscription
+        };
+        
+        await updateUserData(sanitizedUserData);
+        setOriginalSettings(updatedSettings); // Update original to prevent "unsaved changes" state
+      } catch (error) {
+        console.error('Failed to save timer setting:', error);
+        // Revert local state on error
+        setSettings(settings);
+        setMessage({ type: 'error', text: 'Failed to save timer setting' });
+        setTimeout(() => setMessage(null), 3000);
       }
-    }));
+    }
   };
 
   const handleAppSettingChange = (key: keyof Omit<AppSettings, 'timer'>, value: boolean | string) => {
@@ -535,7 +561,12 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                               min="1"
                               max="60"
                               value={settings.timer.pomodoro}
-                              onChange={(e) => handleTimerSettingChange('pomodoro', parseInt(e.target.value))}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value);
+                                if (value > 0 && value <= 60) {
+                                  handleTimerSettingChange('pomodoro', value);
+                                }
+                              }}
                               className="w-16 px-2 py-1 text-right bg-transparent border rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-gray-500"
                               style={{
                                 borderColor: 'var(--border-color)',
@@ -556,7 +587,12 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                               min="1"
                               max="30"
                               value={settings.timer.shortBreak}
-                              onChange={(e) => handleTimerSettingChange('shortBreak', parseInt(e.target.value))}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value);
+                                if (value > 0 && value <= 30) {
+                                  handleTimerSettingChange('shortBreak', value);
+                                }
+                              }}
                               className="w-16 px-2 py-1 text-right bg-transparent border rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-gray-500"
                               style={{
                                 borderColor: 'var(--border-color)',
@@ -577,7 +613,12 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                               min="1"
                               max="60"
                               value={settings.timer.longBreak}
-                              onChange={(e) => handleTimerSettingChange('longBreak', parseInt(e.target.value))}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value);
+                                if (value > 0 && value <= 60) {
+                                  handleTimerSettingChange('longBreak', value);
+                                }
+                              }}
                               className="w-16 px-2 py-1 text-right bg-transparent border rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-gray-500"
                               style={{
                                 borderColor: 'var(--border-color)',
@@ -598,7 +639,12 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, initia
                               min="2"
                               max="10"
                               value={settings.timer.longBreakInterval}
-                              onChange={(e) => handleTimerSettingChange('longBreakInterval', parseInt(e.target.value))}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value);
+                                if (value >= 2 && value <= 10) {
+                                  handleTimerSettingChange('longBreakInterval', value);
+                                }
+                              }}
                               className="w-16 px-2 py-1 text-right bg-transparent border rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-gray-500"
                               style={{
                                 borderColor: 'var(--border-color)',
