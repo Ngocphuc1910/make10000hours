@@ -1140,7 +1140,9 @@ class PopupManager {
       }
       
       // Initialize new tab content
-      this.initializeTabContent(tabName);
+      this.initializeTabContent(tabName).catch(error => {
+        console.error('❌ Error initializing tab content:', error);
+      });
       
       // Set up new intervals if switching to site-usage
       if (tabName === 'site-usage') {
@@ -1169,10 +1171,20 @@ class PopupManager {
   /**
    * Initialize specific tab content
    */
-  initializeTabContent(tabName) {
+  async initializeTabContent(tabName) {
     switch (tabName) {
       case 'site-usage':
-        this.updateTopSites();
+        // Use existing data if available, otherwise fetch fresh data
+        if (this.enhancedState.todayStats && this.enhancedState.todayStats.sites) {
+          console.log('🔄 Using cached data for tab switch');
+          await this.updateTopSitesFromData(this.enhancedState.todayStats.sites);
+        } else {
+          console.log('🔄 Fetching fresh data for tab switch');
+          const statsResult = await this.getCompleteStats();
+          if (statsResult.success && statsResult.data.sites) {
+            await this.updateTopSitesFromData(statsResult.data.sites);
+          }
+        }
         break;
       case 'blocking-sites':
         this.updateBlockedSitesList();
