@@ -842,6 +842,82 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep channel open for async
   }
   
+  // Handle SET_USER_ID from web app
+  if (message.type === 'SET_USER_ID') {
+    (async () => {
+      try {
+        console.log('🔄 SET_USER_ID received:', message.payload);
+        
+        // Create user info object from payload
+        const userInfo = {
+          userId: message.payload.userId,
+          displayName: message.payload.displayName,
+          userEmail: message.payload.userEmail,
+          timezone: message.payload.timezone,
+          lastUpdated: Date.now()
+        };
+        
+        // Store user info in local storage
+        await chrome.storage.local.set({ userInfo });
+        console.log('✅ User info stored in local storage:', userInfo);
+        
+        // Notify popup of user info update
+        try {
+          chrome.runtime.sendMessage({
+            type: 'USER_INFO_UPDATED',
+            payload: userInfo
+          }).catch(() => {
+            console.debug('📝 Popup not available for user info update notification');
+          });
+        } catch (error) {
+          console.debug('📝 Could not notify popup of user info update:', error.message);
+        }
+        
+        sendResponse({ success: true, message: 'User info updated' });
+      } catch (error) {
+        console.error('❌ Error handling SET_USER_ID:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async
+  }
+
+  // Handle SET_USER_INFO from web app (complete user info)
+  if (message.type === 'SET_USER_INFO') {
+    (async () => {
+      try {
+        console.log('🔄 SET_USER_INFO received:', message.payload);
+        
+        // Store complete user info
+        const userInfo = {
+          ...message.payload,
+          lastUpdated: Date.now()
+        };
+        
+        await chrome.storage.local.set({ userInfo });
+        console.log('✅ Complete user info stored:', userInfo);
+        
+        // Notify popup of user info update
+        try {
+          chrome.runtime.sendMessage({
+            type: 'USER_INFO_UPDATED',
+            payload: userInfo
+          }).catch(() => {
+            console.debug('📝 Popup not available for user info update notification');
+          });
+        } catch (error) {
+          console.debug('📝 Could not notify popup of user info update:', error.message);
+        }
+        
+        sendResponse({ success: true, message: 'Complete user info updated' });
+      } catch (error) {
+        console.error('❌ Error handling SET_USER_INFO:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async
+  }
+
   // For other messages, ensure initialization
   if (!isInitialized) {
     console.log('⚠️ Extension not initialized, initializing now...');

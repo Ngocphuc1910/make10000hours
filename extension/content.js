@@ -632,6 +632,38 @@ class ActivityDetector {
           }
         }
 
+        // Handle SET_USER_INFO messages (complete user info sync)
+        if (type === 'SET_USER_INFO') {
+          console.log('🔄 Received SET_USER_INFO from web app:', payload);
+          
+          const message = {
+            type: 'SET_USER_INFO',
+            payload
+          };
+
+          try {
+            const response = await this.sendMessageSafely(message, {
+              timeout: 15000,
+              maxRetries: 3,
+              fallback: { 
+                success: false, 
+                error: 'Extension temporarily unavailable',
+                queued: false 
+              }
+            });
+            
+            sendResponse('SET_USER_INFO_RESPONSE', response);
+            
+          } catch (error) {
+            console.error('❌ Failed to process SET_USER_INFO:', error);
+            sendResponse('SET_USER_INFO_RESPONSE', {
+              success: false,
+              error: error.message,
+              queued: false
+            });
+          }
+        }
+
         // Handle WEB_APP_FOCUS_STATE_CHANGED messages
         if (type === 'WEB_APP_FOCUS_STATE_CHANGED') {
           console.log('🔄 Received focus state change from web app:', payload);
