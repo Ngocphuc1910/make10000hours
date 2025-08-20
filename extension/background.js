@@ -170,6 +170,101 @@ const UTCFilteringUtils = {
   }
 };
 
+// CONFIGURATION - Choose your tracking philosophy
+const TRACKING_CONFIG = {
+  // Option 1: STRICT - Track ALL time when unlocked (may overcount)
+  // EXTENDED_IDLE_MINUTES: 0,
+  
+  // Option 2: BALANCED - Stop after 10 min idle (recommended)
+  EXTENDED_IDLE_MINUTES: 10,
+  
+  // Option 3: CONSERVATIVE - Stop after 30 min idle
+  // EXTENDED_IDLE_MINUTES: 30,
+};
+
+/**
+ * Simple Chrome Idle Integration
+ * Only tracks lock state and configurable extended idle
+ */
+class ChromeIdleHelper {
+  constructor() {
+    this.currentState = 'active';
+    this.idleStartTime = null;
+    this.initialized = false;
+    
+    // Apply configuration
+    this.EXTENDED_IDLE_THRESHOLD = TRACKING_CONFIG.EXTENDED_IDLE_MINUTES * 60 * 1000;
+  }
+  
+  async initialize() {
+    if (!chrome.idle) {
+      console.warn('⚠️ Chrome Idle API not available');
+      return false;
+    }
+    
+    // Set Chrome to check every 60 seconds
+    chrome.idle.setDetectionInterval(60);
+    
+    // Get initial state
+    chrome.idle.queryState(60, (state) => {
+      this.currentState = state;
+      console.log('🎯 Chrome Idle initialized:', state);
+    });
+    
+    // Listen for changes
+    chrome.idle.onStateChanged.addListener((newState) => {
+      const oldState = this.currentState;
+      this.currentState = newState;
+      
+      // Track when idle starts
+      if (newState === 'idle' && oldState === 'active') {
+        this.idleStartTime = Date.now();
+      } else if (newState === 'active') {
+        this.idleStartTime = null;
+      }
+      
+      console.log(`🔄 Chrome Idle: ${oldState} → ${newState}`);
+      
+      // Notify the main tracker - use global reference for service workers
+      if (self.focusTimeTracker) {
+        self.focusTimeTracker.onIdleStateChanged(newState, oldState);
+      }
+    });
+    
+    this.initialized = true;
+    return true;
+  }
+  
+  shouldTrackTime() {
+    // Never track when locked
+    if (this.currentState === 'locked') {
+      return false;
+    }
+    
+    // If extended idle is disabled (0), always track
+    if (this.EXTENDED_IDLE_THRESHOLD === 0) {
+      return true;
+    }
+    
+    // Check for extended idle
+    if (this.currentState === 'idle' && this.idleStartTime) {
+      const idleDuration = Date.now() - this.idleStartTime;
+      if (idleDuration > this.EXTENDED_IDLE_THRESHOLD) {
+        return false; // Been idle too long
+      }
+    }
+    
+    return true;
+  }
+  
+  isLocked() {
+    return this.currentState === 'locked';
+  }
+}
+
+// Create global instance
+const chromeIdleHelper = new ChromeIdleHelper();
+
 // At the top of the file
 const ExtensionEventBus = {
   EVENTS: {
@@ -664,6 +759,12 @@ class StorageManager {
         if (!existingActiveSession) {
           console.warn('⚠️ Incremental save (visits=0) attempted but no active session exists for:', domain);
           console.log('🚫 Rejecting incremental save without active session to prevent orphaned session creation');
+          
+          // 📊 Track blocked save for diagnostics
+          if (this.focusTimeTracker?.diagnostics) {
+            this.focusTimeTracker.diagnostics.blockedSaves++;
+          }
+          
           return null;
         }
         
@@ -766,11 +867,22 @@ class StorageManager {
       const incrementalSeconds = Math.round(incrementalTimeSpent / 1000);
       
       // Cap incremental time to prevent excessive accumulation
-      const cappedIncrementalSeconds = Math.min(incrementalSeconds, 300); // Max 5 minutes per save cycle
+      const cappedIncrementalSeconds = Math.min(incrementalSeconds, 600); // Max 10 minutes per save cycle (PHASE 3 TEST)
+      
+      // 📊 EVIDENCE LOGGING: Track when caps are hit
+      if (incrementalSeconds > 600) { // Updated for 10min cap
+        console.warn('🚨 INCREMENTAL CAP HIT (10min limit):', {
+          original: incrementalSeconds + 's',
+          capped: cappedIncrementalSeconds + 's', 
+          dataLoss: (incrementalSeconds - cappedIncrementalSeconds) + 's',
+          phase: 'PHASE_3_TEST',
+          timestamp: new Date().toISOString()
+        });
+      }
       
       if (cappedIncrementalSeconds > 0 && activeSession) {
-        // 🔥 FIX 4: Add session duration cap (4 hours max per session)
-        const maxSessionDuration = 14400; // 4 hours in seconds
+        // 🔥 FIX 4: Add session duration cap (8 hours max per session - increased for full work day)
+        const maxSessionDuration = 28800; // 8 hours in seconds (FINAL)
         const newTotalDuration = activeSession.duration + cappedIncrementalSeconds;
         
         if (newTotalDuration <= maxSessionDuration) {
@@ -3618,6 +3730,21 @@ class FocusTimeTracker {
     this.configManager = new ConfigManager();
     
     this.stateManager = null;
+    
+    // 🎯 NEW: Tab switch diagnostics for measuring improvements
+    this.diagnostics = {
+      tabSwitches: 0,
+      dataLossEvents: 0,
+      successfulSaves: 0,
+      blockedSaves: 0,
+      overlapBufferUses: 0,
+      snapshotCreations: 0,
+      immediateSaves: 0,          // NEW: Count of immediate saves
+      tabCloseSaves: 0,           // NEW: Count of tab close saves
+      browserCloseSaves: 0,       // NEW: Count of browser close saves
+      savedFromDataLoss: 0,       // NEW: Time (ms) saved from data loss
+      startTime: Date.now()
+    };
     this.storageManager = null;
     this.blockingManager = null;
     this.overrideSessionManager = new OverrideSessionManager();
@@ -3635,7 +3762,7 @@ class FocusTimeTracker {
     this.isSessionPaused = false;
     this.pausedAt = null;
     this.totalPausedTime = 0;
-    this.inactivityThreshold = 480000; // 8 minutes (conservative increase, stays within sleep detection safety margin)
+    this.inactivityThreshold = 1200000; // 20 minutes (increased from 8min to prevent aggressive sleep detection during reading/thinking)
     this.lastActivityTime = Date.now();
     this.autoManagementEnabled = true;
     
@@ -3662,6 +3789,9 @@ class FocusTimeTracker {
     
     // 🎯 NEW: Initialize TabEventCoordinator for reliable tab detection
     this.tabEventCoordinator = new TabEventCoordinator(this);
+    
+    // Chrome Idle integration
+    this.chromeIdleInitialized = false;
     
     this.initialize();
   }
@@ -3751,6 +3881,23 @@ class FocusTimeTracker {
       this.blockingManager.setFocusTimeTracker(this);
       await this.blockingManager.initialize();
       
+      // Initialize Chrome Idle with error handling and fallback
+      try {
+        const idleReady = await chromeIdleHelper.initialize();
+        if (idleReady) {
+          this.chromeIdleInitialized = true;
+          // Store reference for idle callback - use self for service workers
+          self.focusTimeTracker = this;
+          console.log('✅ Chrome Idle integrated successfully');
+        } else {
+          console.warn('⚠️ Chrome Idle failed to initialize - falling back to time-based detection');
+          this.chromeIdleInitialized = false;
+        }
+      } catch (error) {
+        console.warn('⚠️ Chrome Idle initialization error - falling back to time-based detection:', error);
+        this.chromeIdleInitialized = false;
+      }
+      
       // Skip Firebase initialization for now - extension works with local storage only
       console.log('ℹ️ Firebase integration disabled - using local storage only');
 
@@ -3815,6 +3962,31 @@ class FocusTimeTracker {
       this.handleTabRemoved(tabId);
     });
 
+    // 🚨 CRITICAL: Browser close/extension suspend immediate saves
+    chrome.runtime.onSuspend.addListener(async () => {
+      console.log('🚨 Extension suspending - emergency save');
+      if (this.currentSession.isActive) {
+        await this.saveCurrentSessionImmediately();
+        
+        // Track browser close save
+        if (this.diagnostics) {
+          this.diagnostics.browserCloseSaves = (this.diagnostics.browserCloseSaves || 0) + 1;
+        }
+      }
+    });
+
+    chrome.windows.onRemoved.addListener(async (windowId) => {
+      console.log('🚨 Window closing - emergency save');
+      if (this.currentSession.isActive) {
+        await this.saveCurrentSessionImmediately();
+        
+        // Track browser close save
+        if (this.diagnostics) {
+          this.diagnostics.browserCloseSaves = (this.diagnostics.browserCloseSaves || 0) + 1;
+        }
+      }
+    });
+
     // Window events - coordinated through TabEventCoordinator
     chrome.windows.onFocusChanged.addListener((windowId) => {
       this.tabEventCoordinator.onWindowFocusChanged(windowId);
@@ -3845,36 +4017,158 @@ class FocusTimeTracker {
       this.checkForSleep();
     }, 10000); // Check every 10 seconds
 
-    // ✅ IMPROVED: More frequent saves for better accuracy
+    // ✅ BALANCED: Reasonable save frequency with immediate saves for critical events
     this.saveInterval = setInterval(() => {
       if (this.currentSession.isActive) {
         this.saveCurrentSession('incremental');
       }
-    }, 3000); // Save every 3 seconds for better tracking
+    }, 15000); // Save every 15 seconds - balanced approach
     
-    console.log('✅ Event listeners set up with TabEventCoordinator - save interval: 3 seconds, sleep detection: 10 seconds');
+    // 📊 Setup periodic diagnostics reporting (every 5 minutes)
+    this.diagnosticsInterval = setInterval(() => {
+      this.printDiagnosticsReport();
+    }, 300000); // Every 5 minutes
+    
+    console.log('✅ Event listeners set up with TabEventCoordinator');
+    console.log('🔧 SLEEP DETECTION THRESHOLDS CONFIGURED:', {
+      heartbeatInterval: '10 seconds',
+      sleepDetection: '30 minutes (1800000ms)',
+      inactivityThreshold: '20 minutes (1200000ms)', 
+      chromeIdleExtended: this.chromeIdleInitialized ? '10 minutes' : 'disabled',
+      saveInterval: '3 seconds'
+    });
+  }
+
+  /**
+   * Handle Chrome Idle state changes
+   */
+  async onIdleStateChanged(newState, oldState) {
+    // Handle lock/unlock
+    if (newState === 'locked') {
+      console.log('🔒 System locked - pausing tracking');
+      if (this.currentSession.isActive) {
+        await this.saveCurrentSession('lock');
+        this.currentSession.isActive = false;
+      }
+    } else if (oldState === 'locked' && newState !== 'locked') {
+      console.log('🔓 System unlocked - checking if should resume');
+      if (this.currentSession.domain && !this.currentSession.isActive) {
+        // Check if tab is still active
+        try {
+          const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (tabs.length > 0 && tabs[0].id === this.currentSession.tabId) {
+            const now = Date.now();
+            this.currentSession.isActive = true;
+            this.currentSession.startTime = now;
+            this.lastHeartbeat = now;
+            console.log('▶️ Resumed tracking after unlock');
+          }
+        } catch (e) {
+          console.error('Error checking tab after unlock:', e);
+        }
+      }
+    }
+    
+    // Always update heartbeat when not locked
+    if (newState !== 'locked') {
+      this.lastHeartbeat = Date.now();
+    }
   }
 
   /**
    * Capture valid session snapshot with validation
    * Used to prevent race conditions during tab switches
    */
-  captureValidSnapshot() {
+  captureCompleteSnapshot() {
     if (!this.currentSession || !this.currentSession.isActive || !this.currentSession.startTime) {
       return null;
     }
     
-    const duration = Date.now() - this.currentSession.startTime;
-    if (duration < 500) { // Skip very short sessions
+    const now = Date.now();
+    const sessionDuration = now - this.currentSession.startTime;
+    const lastSaveTime = this.currentSession.lastSaveTime || this.currentSession.startTime;
+    const incrementalTime = now - lastSaveTime;
+    
+    // Skip very short sessions (< 1 second)
+    if (sessionDuration < 1000) {
+      console.log(`⚠️ Skipping snapshot for very short session: ${sessionDuration}ms`);
       return null;
     }
     
     return Object.freeze({
       domain: this.currentSession.domain,
+      tabId: this.currentSession.tabId,
       startTime: this.currentSession.startTime,
-      duration: duration,
-      capturedAt: Date.now()
+      lastSaveTime: lastSaveTime,
+      sessionDuration: sessionDuration,
+      incrementalTime: incrementalTime,
+      savedTime: this.currentSession.savedTime || 0,
+      capturedAt: now,
+      isValid: true
     });
+  }
+  
+  // Keep the old method for backward compatibility
+  captureValidSnapshot() {
+    return this.captureCompleteSnapshot();
+  }
+
+  /**
+   * 📊 Log tab switch metrics for diagnostic purposes
+   */
+  logTabSwitchMetrics(sessionSnapshot) {
+    if (sessionSnapshot) {
+      console.log('TAB_SWITCH_METRIC', {
+        domain: sessionSnapshot.domain,
+        sessionDuration: sessionSnapshot.sessionDuration,
+        incrementalTime: sessionSnapshot.incrementalTime,
+        wasSuccessful: true,
+        timestamp: Date.now()
+      });
+    }
+  }
+
+  /**
+   * 📊 Get comprehensive diagnostics report
+   */
+  getDiagnosticsReport() {
+    const runtime = Date.now() - this.diagnostics.startTime;
+    const dataLossRate = this.diagnostics.tabSwitches > 0 ? 
+      (this.diagnostics.dataLossEvents / this.diagnostics.tabSwitches * 100).toFixed(2) : 0;
+    
+    return {
+      // Basic metrics
+      runtime: Math.round(runtime / 1000), // seconds
+      tabSwitches: this.diagnostics.tabSwitches,
+      dataLossEvents: this.diagnostics.dataLossEvents,
+      successfulSaves: this.diagnostics.successfulSaves,
+      blockedSaves: this.diagnostics.blockedSaves,
+      
+      // Tab switch improvements
+      overlapBufferUses: this.diagnostics.overlapBufferUses,
+      snapshotCreations: this.diagnostics.snapshotCreations,
+      
+      // 🆕 IMMEDIATE SAVE METRICS
+      immediateSaves: this.diagnostics.immediateSaves || 0,
+      tabCloseSaves: this.diagnostics.tabCloseSaves || 0,
+      browserCloseSaves: this.diagnostics.browserCloseSaves || 0,
+      savedFromDataLossSeconds: Math.round((this.diagnostics.savedFromDataLoss || 0) / 1000),
+      
+      // Calculated rates
+      dataLossRate: `${dataLossRate}%`,
+      avgTabSwitchesPerHour: Math.round(this.diagnostics.tabSwitches / (runtime / 3600000)),
+      immediateSaveSuccessRate: this.diagnostics.immediateSaves > 0 ? 
+        `${Math.round((this.diagnostics.immediateSaves / (this.diagnostics.immediateSaves + this.diagnostics.dataLossEvents)) * 100)}%` : 'N/A'
+    };
+  }
+
+  /**
+   * 📊 Print diagnostics report to console
+   */
+  printDiagnosticsReport() {
+    const report = this.getDiagnosticsReport();
+    console.log('🎯 TAB SWITCH DIAGNOSTICS REPORT:');
+    console.table(report);
   }
 
   /**
@@ -3973,6 +4267,17 @@ class FocusTimeTracker {
   async handleTabRemoved(tabId) {
     try {
       if (this.currentSession.tabId === tabId) {
+        console.log('🚨 Tab closing - immediate save before cleanup');
+        
+        // CRITICAL: Immediate save before stopping tracking
+        await this.saveCurrentSessionImmediately();
+        
+        // Track tab close save
+        if (this.diagnostics) {
+          this.diagnostics.tabCloseSaves = (this.diagnostics.tabCloseSaves || 0) + 1;
+        }
+        
+        // Then proceed with normal cleanup
         await this.stopCurrentTracking();
       }
       // Clean up cached URL
@@ -4024,12 +4329,29 @@ class FocusTimeTracker {
         this.lastTabSwitchTime = now;
         this.previousTabId = previousTabId;
         
+        // 📊 Track tab switch for diagnostics
+        this.diagnostics.tabSwitches++;
+        
         // 🎯 FIXED: Capture snapshot BEFORE any state changes
         const sessionSnapshot = this.captureValidSnapshot();
+        if (sessionSnapshot) {
+          this.diagnostics.snapshotCreations++;
+        }
         
-        // Clear session state immediately (prevent further races)
+        // 🎯 NEW: Implement 1-second overlap buffer instead of immediate stop
         if (this.currentSession.isActive) {
-          console.log(`🚫 Immediately stopping session for tab switch: ${this.currentSession.domain}`);
+          console.log(`⏱️ Starting 1-second overlap buffer for: ${this.currentSession.domain}`);
+          this.diagnostics.overlapBufferUses++;
+          
+          // Keep old session data for overlap period
+          const oldSessionData = {
+            domain: this.currentSession.domain,
+            tabId: this.currentSession.tabId,
+            startTime: this.currentSession.startTime,
+            savedTime: this.currentSession.savedTime
+          };
+          
+          // Clear current session to prevent race conditions
           this.currentSession = {
             tabId: null,
             domain: null,
@@ -4037,11 +4359,21 @@ class FocusTimeTracker {
             savedTime: 0,
             isActive: false
           };
-        }
-        
-        // Finalize using snapshot (single save, no duplicates)
-        if (sessionSnapshot) {
-          await this.finalizeFromSnapshot(sessionSnapshot);
+          
+          // Schedule finalization after 1-second overlap
+          setTimeout(async () => {
+            if (sessionSnapshot) {
+              console.log(`📝 Finalizing session after overlap buffer: ${sessionSnapshot.domain}`);
+              try {
+                await this.finalizeFromSnapshot(sessionSnapshot);
+                this.diagnostics.successfulSaves++;
+                this.logTabSwitchMetrics(sessionSnapshot);
+              } catch (error) {
+                console.error('❌ Error finalizing snapshot:', error);
+                this.diagnostics.dataLossEvents++;
+              }
+            }
+          }, 1000); // 1-second overlap buffer
         }
       }
       
@@ -5204,6 +5536,57 @@ class FocusTimeTracker {
           }
           break;
 
+        // 📊 Phase 1 Diagnostics Handlers
+        case 'GET_DIAGNOSTICS':
+          try {
+            const report = this.getDiagnosticsReport();
+            console.log('📊 Sending diagnostics report:', report);
+            sendResponse({ success: true, data: report });
+          } catch (error) {
+            console.error('Error getting diagnostics:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'GET_CURRENT_SESSION':
+          try {
+            const sessionInfo = {
+              isActive: this.currentSession.isActive,
+              domain: this.currentSession.domain,
+              tabId: this.currentSession.tabId,
+              startTime: this.currentSession.startTime,
+              duration: this.currentSession.isActive ? Date.now() - this.currentSession.startTime : 0
+            };
+            sendResponse({ success: true, data: sessionInfo });
+          } catch (error) {
+            console.error('Error getting current session:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'RESET_DIAGNOSTICS':
+          try {
+            this.diagnostics = {
+              tabSwitches: 0,
+              dataLossEvents: 0,
+              successfulSaves: 0,
+              blockedSaves: 0,
+              overlapBufferUses: 0,
+              snapshotCreations: 0,
+              immediateSaves: 0,
+              tabCloseSaves: 0,
+              browserCloseSaves: 0,
+              savedFromDataLoss: 0,
+              startTime: Date.now()
+            };
+            console.log('📊 Diagnostics reset');
+            sendResponse({ success: true, message: 'Diagnostics reset successfully' });
+          } catch (error) {
+            console.error('Error resetting diagnostics:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
         case 'REQUEST_SITE_USAGE_SESSIONS':
           try {
             console.log('🔄 [BACKGROUND] Received REQUEST_SITE_USAGE_SESSIONS from content script', { hasPayload: !!message.payload, timestamp: new Date().toISOString() });
@@ -5630,6 +6013,60 @@ class FocusTimeTracker {
   }
 
   /**
+   * 🚨 IMMEDIATE SAVE: Save current session immediately for critical events
+   * Used for tab closes, browser closes, extension suspension
+   */
+  async saveCurrentSessionImmediately() {
+    if (!this.currentSession.isActive || !this.currentSession.domain) {
+      console.log('⚠️ No active session to save immediately');
+      return;
+    }
+    
+    const now = Date.now();
+    const lastSaveTime = this.currentSession.lastSaveTime || this.currentSession.startTime;
+    const incrementalTime = now - lastSaveTime;
+    
+    // Only save if meaningful time accumulated (>2 seconds)
+    if (incrementalTime > 2000) {
+      console.log(`💾 IMMEDIATE SAVE: ${this.currentSession.domain} - ${Math.round(incrementalTime/1000)}s`);
+      
+      try {
+        await this.storageManager.saveTimeEntry(
+          this.currentSession.domain, 
+          incrementalTime, 
+          0, 
+          lastSaveTime, 
+          'immediate'
+        );
+        
+        this.currentSession.lastSaveTime = now;
+        
+        // Track immediate save success
+        if (this.diagnostics) {
+          this.diagnostics.successfulSaves++;
+          this.diagnostics.immediateSaves = (this.diagnostics.immediateSaves || 0) + 1;
+          this.diagnostics.savedFromDataLoss = (this.diagnostics.savedFromDataLoss || 0) + incrementalTime;
+        }
+        
+        console.log('IMMEDIATE_SAVE_METRIC', {
+          domain: this.currentSession.domain,
+          timeSpent: incrementalTime,
+          trigger: 'critical_event',
+          timestamp: now
+        });
+        
+      } catch (error) {
+        console.error('❌ Immediate save failed:', error);
+        if (this.diagnostics) {
+          this.diagnostics.dataLossEvents++;
+        }
+      }
+    } else {
+      console.log(`⏭️ Skipping immediate save - insufficient time: ${Math.round(incrementalTime/1000)}s`);
+    }
+  }
+
+  /**
    * Stop tracking current website and save data (immediate, no grace period)
    */
   async stopCurrentTracking() {
@@ -5716,11 +6153,33 @@ class FocusTimeTracker {
    */
   async checkForSleep() {
     const now = Date.now();
-    const timeSinceLastHeartbeat = now - this.lastHeartbeat;
     
-    // If more than 5 minutes have passed, assume system was sleeping
-    if (timeSinceLastHeartbeat > 300000) { // 5 minutes (more sensitive detection)
-      console.log('💤 Sleep detected in periodic check - time gap:', Math.round(timeSinceLastHeartbeat / 1000) + 's');
+    // Use Chrome Idle if available
+    if (this.chromeIdleInitialized && chromeIdleHelper) {
+      // Let Chrome Idle handle it
+      if (!chromeIdleHelper.shouldTrackTime()) {
+        // Either locked or extended idle
+        if (chromeIdleHelper.isLocked()) {
+          console.log('💤 System locked - stopping tracking');
+        } else {
+          console.log('💤 Extended idle detected - stopping tracking');
+        }
+        
+        if (this.currentSession.isActive) {
+          await this.handleSleepDetected();
+        }
+        return;
+      }
+      
+      // Chrome Idle says we should track - update heartbeat
+      this.lastHeartbeat = now;
+      return;
+    }
+    
+    // Fallback to time-based detection (30 minutes)
+    const timeSinceLastHeartbeat = now - this.lastHeartbeat;
+    if (timeSinceLastHeartbeat > 1800000) {
+      console.log('💤 Sleep detected (fallback):', Math.round(timeSinceLastHeartbeat / 1000) + 's');
       
       // If we have an active session, save time before sleep and pause
       if (this.currentSession.isActive && this.currentSession.startTime) {
@@ -5730,7 +6189,7 @@ class FocusTimeTracker {
         // Save accumulated time before sleep
         if (timeBeforeSleep >= 1000) { // At least 1 second of activity
           await this.storageManager.saveTimeEntry(this.currentSession.domain, timeBeforeSleep, 0, null, 'incremental');
-          console.log('💾 Saved time before sleep (periodic check):', {
+          console.log('💾 Saved time before sleep (fallback):', {
             domain: this.currentSession.domain,
             duration: this.storageManager.formatTime(timeBeforeSleep),
             sleepGap: Math.round(timeSinceLastHeartbeat / 1000) + 's'
@@ -5742,8 +6201,8 @@ class FocusTimeTracker {
       }
     }
     
-    // DON'T update heartbeat here - let user activity drive heartbeat updates
-    // this.lastHeartbeat = now; // REMOVED: This prevented sleep detection
+    // Update heartbeat to prevent false sleep detection
+    this.lastHeartbeat = now; // CRITICAL: Must update heartbeat
   }
 
   /**
@@ -5799,13 +6258,8 @@ class FocusTimeTracker {
         return;
       }
 
-      // 🎯 NEW: Prevent saves immediately after tab switches to avoid timing race conditions
+      // Tab switch cooldown removed - allowing all saves to prevent data loss
       const now = Date.now();
-      if (this.lastTabSwitchTime && (now - this.lastTabSwitchTime) < this.tabSwitchCooldown && operationType === 'finalize') {
-        const cooldownRemaining = Math.round((this.tabSwitchCooldown - (now - this.lastTabSwitchTime)) / 1000);
-        console.debug(`🚫 Preventing finalization save due to recent tab switch (${cooldownRemaining}s cooldown remaining)`);
-        return;
-      }
 
       // 🎯 ENHANCED: Verify the session's tab is still active before saving
       if (this.currentSession.tabId) {
@@ -5860,15 +6314,15 @@ class FocusTimeTracker {
       const timeSinceLastHeartbeat = now - this.lastHeartbeat;
       
       // DEFENSIVE CHECK: Check for sleep BEFORE calculating session duration
-      if (timeSinceLastHeartbeat > 300000) { // 5 minutes gap indicates sleep
+      if (timeSinceLastHeartbeat > 1800000) { // 30 minutes gap indicates sleep
         console.log('💤 Sleep detected during save - handling sleep condition');
         
         // ✅ FIX: Calculate incremental time up to last heartbeat
         const lastSaveTime = this.currentSession.lastSaveTime || this.currentSession.startTime;
         const incrementalDuration = Math.max(0, this.lastHeartbeat - lastSaveTime);
         
-        // Save incremental time before sleep if any - but NOT if recent tab switch
-        if (incrementalDuration >= 1000 && (!this.lastTabSwitchTime || (this.lastHeartbeat - this.lastTabSwitchTime) > this.tabSwitchCooldown)) {
+        // Save incremental time before sleep if any - tab switch cooldown removed
+        if (incrementalDuration >= 1000) {
           await this.storageManager.saveTimeEntry(this.currentSession.domain, incrementalDuration, 0, lastSaveTime, 'incremental');
           this.currentSession.lastSaveTime = this.lastHeartbeat; // Update last save time
           console.log('💾 Saved incremental time before sleep:', {
@@ -5876,8 +6330,6 @@ class FocusTimeTracker {
             incrementalDuration: this.storageManager.formatTime(incrementalDuration),
             sleepGap: Math.round(timeSinceLastHeartbeat / 1000) + 's'
           });
-        } else if (this.lastTabSwitchTime && (this.lastHeartbeat - this.lastTabSwitchTime) <= this.tabSwitchCooldown) {
-          console.log('🚫 Skipping save before sleep due to recent tab switch');
         }
         
         this.isProcessingSleep = true;
@@ -5910,20 +6362,24 @@ class FocusTimeTracker {
       
       // 🔥 NEW: Check for session lifetime reasonableness
       const totalSessionLifetime = now - this.currentSession.startTime;
-      if (totalSessionLifetime > 14400000) { // 4 hours max session lifetime
-        console.warn('⚠️ Session lifetime exceeded 4 hours, forcing session end');
+      if (totalSessionLifetime > 28800000) { // 8 hours max session lifetime (FINAL)
+        // 📊 EVIDENCE LOGGING: Track session terminations  
+        const totalHours = Math.round(totalSessionLifetime / 3600000 * 10) / 10;
+        console.warn('🚨 SESSION LIFETIME CAP HIT (8hr limit):', {
+          domain: this.currentSession.domain,
+          totalHours: totalHours + 'h',
+          forcedTermination: true,
+          status: 'FINAL_IMPLEMENTATION',
+          dataLossRisk: 'MINIMAL',
+          timestamp: new Date().toISOString()
+        });
         await this.stopCurrentTracking();
         return;
       }
       
       // ✅ IMPROVEMENT: Only save meaningful incremental time with stricter validation
-      if (incrementalDuration >= 2000 && incrementalDuration <= 300000) { // 2 seconds to 5 minutes range
-        // 🎯 NEW: Final check - ensure this save is not happening due to a timing race
-        const timeSinceTabSwitch = this.lastTabSwitchTime ? (now - this.lastTabSwitchTime) : Number.MAX_SAFE_INTEGER;
-        if (timeSinceTabSwitch < this.tabSwitchCooldown) {
-          console.log(`🚫 Preventing save due to recent tab switch (${Math.round(timeSinceTabSwitch/1000)}s ago)`);
-          return;
-        }
+      if (incrementalDuration >= 2000 && incrementalDuration <= 600000) { // 2 seconds to 10 minutes range (PHASE 3 TEST)
+        // Tab switch cooldown removed - save all incremental time
         
         await this.storageManager.saveTimeEntry(this.currentSession.domain, incrementalDuration, 0, lastSaveTime, 'incremental');
         
@@ -5936,6 +6392,17 @@ class FocusTimeTracker {
           totalSessionTime: this.storageManager.formatTime(totalSessionLifetime)
         });
       } else {
+        // 📊 EVIDENCE LOGGING: Track when incremental saves are blocked by range caps
+        if (incrementalDuration > 600000) { // More than 10 minutes
+          console.warn('🚨 INCREMENTAL RANGE CAP HIT (10min limit):', {
+            incrementalMinutes: Math.round(incrementalDuration / 60000 * 10) / 10,
+            domain: this.currentSession.domain,
+            dataLoss: 'BLOCKED_SAVE', 
+            reason: 'exceeds_10min_range',
+            phase: 'PHASE_3_TEST',
+            timestamp: new Date().toISOString()
+          });
+        }
         console.debug('⏭️ Skipping save - duration outside valid range:', Math.round(incrementalDuration/1000) + 's');
       }
     } catch (error) {
