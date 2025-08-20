@@ -47,6 +47,11 @@ export {
 } from './oauth-manager';
 
 /**
+ * OpenAI Proxy for secure API calls (Soft Launch)
+ */
+export { openaiProxy } from './openaiProxy';
+
+/**
  * Lemon Squeezy Webhook Handler
  */
 export const lemonSqueezyWebhook = onRequest(

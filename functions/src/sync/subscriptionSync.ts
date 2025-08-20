@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { logger } from 'firebase-functions';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getLemonSqueezyConfig } from '../config/lemonSqueezy';
 
 const db = getFirestore();
 const LEMON_SQUEEZY_API_BASE = 'https://api.lemonsqueezy.com/v1';
@@ -46,7 +47,10 @@ export const syncSubscriptions = onCall<SyncRequest>(
       }
 
       const { userId, force = false } = request.data;
-      const apiKey = process.env.LEMON_SQUEEZY_API_KEY;
+      
+      // Get secure configuration
+      const config = getLemonSqueezyConfig();
+      const apiKey = config.apiKey;
 
       if (!apiKey) {
         throw new HttpsError('internal', 'Lemon Squeezy API key not configured');
