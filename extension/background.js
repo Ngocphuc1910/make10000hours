@@ -603,26 +603,90 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
   
-  // Handle get stats
+  // Handle get stats (original handler) - FIXED: Convert seconds to milliseconds
   if (message.type === 'GET_STATS') {
     const today = DateUtils.getLocalDateString();
     chrome.storage.local.get(['site_usage_sessions']).then(storage => {
       const sessions = storage.site_usage_sessions?.[today] || [];
       const stats = {
-        totalTime: sessions.reduce((sum, s) => sum + s.duration, 0),
+        totalTime: sessions.reduce((sum, s) => sum + (s.duration || 0), 0) * 1000, // Convert seconds to milliseconds
         sitesVisited: sessions.length,
         sites: {}
       };
       
       sessions.forEach(session => {
         stats.sites[session.domain] = {
-          time: session.duration,
-          visits: session.visits
+          time: (session.duration || 0) * 1000, // Convert seconds to milliseconds
+          visits: session.visits || 0
         };
       });
       
       sendResponse({ success: true, data: stats });
     }).catch(error => {
+      sendResponse({ success: false, error: error.message });
+    });
+    return true; // Keep channel open
+  }
+  
+  // Handle realtime stats - FIXED: Convert seconds to milliseconds
+  if (message.type === 'GET_REALTIME_STATS') {
+    const today = DateUtils.getLocalDateString();
+    chrome.storage.local.get(['site_usage_sessions']).then(storage => {
+      const sessions = storage.site_usage_sessions?.[today] || [];
+      const stats = {
+        totalTime: sessions.reduce((sum, s) => sum + (s.duration || 0), 0) * 1000, // Convert seconds to milliseconds
+        sitesVisited: sessions.length,
+        sites: {}
+      };
+      
+      sessions.forEach(session => {
+        stats.sites[session.domain] = {
+          time: (session.duration || 0) * 1000, // Convert seconds to milliseconds
+          visits: session.visits || 0
+        };
+      });
+      
+      console.log('📊 GET_REALTIME_STATS response:', { totalTime: stats.totalTime, sitesCount: Object.keys(stats.sites).length });
+      sendResponse({ success: true, data: stats });
+    }).catch(error => {
+      console.error('❌ GET_REALTIME_STATS error:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+    return true; // Keep channel open
+  }
+  
+  // Handle complete stats - FIXED: Convert seconds to milliseconds  
+  if (message.type === 'GET_COMPLETE_STATS') {
+    const today = DateUtils.getLocalDateString();
+    chrome.storage.local.get(['site_usage_sessions']).then(storage => {
+      const sessions = storage.site_usage_sessions?.[today] || [];
+      
+      // Group sessions by domain for better aggregation
+      const domainStats = {};
+      sessions.forEach(session => {
+        const domain = session.domain;
+        if (!domainStats[domain]) {
+          domainStats[domain] = {
+            timeSpent: 0,
+            visits: 0,
+            sessions: []
+          };
+        }
+        domainStats[domain].timeSpent += (session.duration || 0) * 1000; // Convert seconds to milliseconds
+        domainStats[domain].visits += (session.visits || 0);
+        domainStats[domain].sessions.push(session);
+      });
+      
+      const stats = {
+        totalTime: sessions.reduce((sum, s) => sum + (s.duration || 0), 0) * 1000, // Convert seconds to milliseconds
+        sitesVisited: Object.keys(domainStats).length,
+        sites: domainStats
+      };
+      
+      console.log('📊 GET_COMPLETE_STATS response:', { totalTime: stats.totalTime, sitesCount: stats.sitesVisited });
+      sendResponse({ success: true, data: stats });
+    }).catch(error => {
+      console.error('❌ GET_COMPLETE_STATS error:', error);
       sendResponse({ success: false, error: error.message });
     });
     return true; // Keep channel open
