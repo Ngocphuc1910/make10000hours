@@ -1,6 +1,7 @@
 import { createHmac } from 'crypto';
 import { logger } from 'firebase-functions';
 import { LemonSqueezyWebhookEvent, LemonSqueezyWebhookHeaders, WebhookEventType } from './types';
+import { getLemonSqueezyConfig } from '../../config/lemonSqueezy';
 
 /**
  * Verify the webhook signature using HMAC-SHA256
@@ -214,24 +215,29 @@ export function validateEnvironmentConfig(): {
   isValid: boolean;
   error?: string;
 } {
-  const isTestMode = process.env.NODE_ENV !== 'production';
-  const webhookSecret = isTestMode 
-    ? process.env.LEMON_SQUEEZY_TEST_WEBHOOK_SECRET || process.env.LEMON_SQUEEZY_WEBHOOK_SECRET
-    : process.env.LEMON_SQUEEZY_WEBHOOK_SECRET;
-  
-  if (!webhookSecret) {
+  try {
+    const config = getLemonSqueezyConfig();
+    const webhookSecret = config.webhookSecret;
+    
+    if (!webhookSecret) {
+      return {
+        isValid: false,
+        error: 'Missing webhook secret in configuration'
+      };
+    }
+
+    if (webhookSecret.length < 10) {
+      return {
+        isValid: false,
+        error: 'Webhook secret appears to be too short'
+      };
+    }
+
+    return { isValid: true };
+  } catch (error) {
     return {
       isValid: false,
-      error: 'Missing LEMON_SQUEEZY_WEBHOOK_SECRET environment variable'
+      error: error instanceof Error ? error.message : 'Configuration error'
     };
   }
-
-  if (webhookSecret.length < 10) {
-    return {
-      isValid: false,
-      error: 'LEMON_SQUEEZY_WEBHOOK_SECRET appears to be too short'
-    };
-  }
-
-  return { isValid: true };
 }

@@ -1,5 +1,6 @@
 import { onCall } from 'firebase-functions/v2/https';
 import { logger } from 'firebase-functions';
+import { getLemonSqueezyConfig, isTestMode } from './config/lemonSqueezy';
 
 /**
  * Test function to list available variants in your Lemon Squeezy store
@@ -13,8 +14,10 @@ export const testVariants = onCall(
     try {
       logger.info('🔍 Testing available variants...');
 
-      const apiKey = process.env.LEMON_SQUEEZY_API_KEY;
-      const storeId = process.env.LEMON_SQUEEZY_TEST_STORE_ID || process.env.LEMON_SQUEEZY_STORE_ID;
+      const config = getLemonSqueezyConfig();
+      const testMode = isTestMode();
+      const apiKey = config.apiKey;
+      const storeId = testMode ? (config.testStoreId || config.storeId) : config.storeId;
 
       if (!apiKey || !storeId) {
         throw new Error('Missing API key or store ID');

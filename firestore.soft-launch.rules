@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions for soft launch security
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Soft launch rate limiting helper
+    function withinRateLimit() {
+      // Allow 100 writes per minute per user (soft launch tolerance)
+      return request.time > resource.data.lastWrite + duration.value(1, 's') ||
+             resource.data.writeCount < 100;
+    }
+    
+    // Users collection - with basic write protection
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) && 
+                      request.resource.data.keys().hasAll(['email']) &&
+                      request.resource.data.email is string;
+    }
+    
+    // Tasks collection - owner only with size limits
+    match /tasks/{taskId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isOwner(request.resource.data.userId) &&
+                      request.resource.size() < 10 * 1024; // 10KB limit
+      allow update: if isOwner(resource.data.userId) &&
+                      request.resource.size() < 10 * 1024;
+      allow delete: if isOwner(resource.data.userId);
+    }
+    
+    // Work sessions - owner only
+    match /workSessions/{sessionId} {
+      allow read: if isOwner(resource.data.userId);
+      allow write: if isOwner(request.resource.data.userId) &&
+                     request.resource.size() < 5 * 1024; // 5KB limit
+    }
+    
+    // Embeddings - read-only for users, write via functions only
+    match /embeddings/{embeddingId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only Cloud Functions can write
+    }
+    
+    // Rate limiting collection - user-specific
+    match /rateLimit/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId);
+    }
+    
+    // AI usage tracking - write via functions only
+    match /aiUsage/{docId} {
+      allow read: if isAuthenticated() && 
+                    resource.data.userId == request.auth.uid;
+      allow write: if false; // Only Cloud Functions can write
+    }
+    
+    // Subscription data - read only for owner
+    match /subscriptions/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false; // Only webhook handlers can write
+    }
+    
+    // Payment data - strict access
+    match /payments/{paymentId} {
+      allow read: if isOwner(resource.data.userId);
+      allow write: if false; // Only webhook handlers can write
+    }
+    
+    // Default deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

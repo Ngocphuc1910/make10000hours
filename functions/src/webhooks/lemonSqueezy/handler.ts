@@ -1,6 +1,7 @@
 import { logger } from 'firebase-functions';
 import { Request } from 'firebase-functions/v2/https';
 import { Response } from 'express';
+import { getLemonSqueezyConfig } from '../../config/lemonSqueezy';
 import { 
   verifyWebhookSignature,
   validateWebhookHeaders,
@@ -87,13 +88,13 @@ export async function handleLemonSqueezyWebhook(
     // Get raw body for signature verification
     const rawBody = request.rawBody.toString('utf8');
     const signature = headers['x-signature']!;
-    const isTestMode = process.env.NODE_ENV !== 'production';
-    const webhookSecret = isTestMode 
-      ? process.env.LEMON_SQUEEZY_TEST_WEBHOOK_SECRET || process.env.LEMON_SQUEEZY_WEBHOOK_SECRET
-      : process.env.LEMON_SQUEEZY_WEBHOOK_SECRET;
+    
+    // Get secure configuration
+    const config = getLemonSqueezyConfig();
+    const webhookSecret = config.webhookSecret;
 
     if (!webhookSecret) {
-      logger.error('Webhook secret not found');
+      logger.error('Webhook secret not found in configuration');
       response.status(500).json({ 
         error: 'Server configuration error',
         message: 'Webhook secret not configured' 
