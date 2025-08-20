@@ -194,7 +194,7 @@ async function updateDomainSession(domain, incrementalSeconds = 0, isNewVisit = 
       // Update existing session
       existingSession.duration += incrementalSeconds;
       if (isNewVisit) existingSession.visits += 1;
-      existingSession.updatedAt = now;
+      existingSession.updatedAt = now.toISOString();
       existingSession.currentlyActive = true;
     } else {
       // Create new session
@@ -207,8 +207,8 @@ async function updateDomainSession(domain, incrementalSeconds = 0, isNewVisit = 
         visits: isNewVisit ? 1 : 0,
         status: 'active',
         currentlyActive: true,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         utcDate: now.toISOString().split('T')[0]
       };
@@ -241,7 +241,7 @@ async function completeActiveSessions() {
       if (session.currentlyActive) {
         session.currentlyActive = false;
         session.status = 'completed';
-        session.updatedAt = new Date();
+        session.updatedAt = new Date().toISOString();
         updated = true;
       }
     });
