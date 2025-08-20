@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { logger } from 'firebase-functions';
+import { getLemonSqueezyConfig, isTestMode } from '../config/lemonSqueezy';
 
 // Lemon Squeezy API configuration (server-side only)
 const LEMON_SQUEEZY_API_BASE = 'https://api.lemonsqueezy.com/v1';
@@ -15,22 +16,22 @@ interface SubscriptionPlan {
   price: number;
 }
 
-// Get subscription plans using environment variables
+// Get subscription plans using secure config
 const getSubscriptionPlans = (): Record<string, SubscriptionPlan> => {
-  // Use correct test variant IDs based on API results
-  const isTestMode = process.env.NODE_ENV !== 'production';
+  const config = getLemonSqueezyConfig();
+  const testMode = isTestMode();
   
   return {
     'pro-monthly': {
       tier: 'pro',
       billing: 'monthly',
-      variantId: isTestMode ? '924211' : (process.env.LEMON_SQUEEZY_PRO_MONTHLY_VARIANT_ID || '903137'),
+      variantId: testMode ? (config.testProMonthlyVariantId || '924211') : (config.proMonthlyVariantId || '903137'),
       price: 1 // Test price
     },
     'pro-annual': {
       tier: 'pro',
       billing: 'annual',
-      variantId: isTestMode ? '924217' : (process.env.LEMON_SQUEEZY_PRO_ANNUAL_VARIANT_ID || '922210'),
+      variantId: testMode ? (config.testProAnnualVariantId || '924217') : (config.proAnnualVariantId || '922210'),
       price: 1.1 // Test price
     }
   };
@@ -73,18 +74,17 @@ export const createCheckout = onCall<CheckoutRequest>(
         throw new HttpsError('invalid-argument', 'Invalid billing period');
       }
 
-      // Check environment variables
-      const isTestMode = process.env.NODE_ENV !== 'production';
-      const apiKey = isTestMode 
-        ? process.env.LEMON_SQUEEZY_TEST_API_KEY || process.env.LEMON_SQUEEZY_API_KEY
-        : process.env.LEMON_SQUEEZY_API_KEY;
-      const storeId = process.env.LEMON_SQUEEZY_STORE_ID;
+      // Get secure configuration
+      const config = getLemonSqueezyConfig();
+      const testMode = isTestMode();
+      const apiKey = config.apiKey;
+      const storeId = testMode ? (config.testStoreId || config.storeId) : config.storeId;
 
-      logger.info('🔐 Environment check:', {
+      logger.info('🔐 Configuration check:', {
         hasApiKey: !!apiKey,
         hasStoreId: !!storeId,
         apiKeyLength: apiKey?.length || 0,
-        isTestMode: isTestMode,
+        isTestMode: testMode,
         storeId: storeId
       });
 
