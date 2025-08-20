@@ -918,6 +918,160 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep channel open for async
   }
 
+  // Handle SET_BLOCKED_SITES from web app
+  if (message.type === 'SET_BLOCKED_SITES') {
+    (async () => {
+      try {
+        console.log('🔄 SET_BLOCKED_SITES received:', message.payload);
+        
+        // Extract blocked sites from payload
+        const blockedSites = Array.isArray(message.payload) 
+          ? message.payload 
+          : (message.payload?.blockedSites || []);
+        
+        // Store blocked sites
+        await chrome.storage.local.set({ blockedSites });
+        console.log('✅ Blocked sites synced from web app:', blockedSites);
+        
+        // Notify popup and other parts of extension
+        try {
+          chrome.runtime.sendMessage({
+            type: 'BLOCKED_SITES_UPDATED',
+            payload: { blockedSites }
+          }).catch(() => {
+            console.debug('📝 No listeners for blocked sites update');
+          });
+        } catch (error) {
+          console.debug('📝 Could not broadcast blocked sites update:', error.message);
+        }
+        
+        sendResponse({ success: true, message: 'Blocked sites synced', count: blockedSites.length });
+      } catch (error) {
+        console.error('❌ Error handling SET_BLOCKED_SITES:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async
+  }
+
+  // Handle GET_BLOCKED_SITES request
+  if (message.type === 'GET_BLOCKED_SITES') {
+    (async () => {
+      try {
+        const storage = await chrome.storage.local.get(['blockedSites']);
+        const blockedSites = storage.blockedSites || [];
+        
+        console.log('✅ GET_BLOCKED_SITES: Found sites:', blockedSites);
+        sendResponse({ success: true, data: blockedSites });
+      } catch (error) {
+        console.error('❌ Error getting blocked sites:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async
+  }
+
+  // Handle ADD_BLOCKED_SITE request
+  if (message.type === 'ADD_BLOCKED_SITE') {
+    (async () => {
+      try {
+        const domain = message.payload?.domain;
+        if (!domain) {
+          sendResponse({ success: false, error: 'Domain is required' });
+          return;
+        }
+
+        // Clean domain (remove protocol, www, path)
+        const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+        
+        // Get current blocked sites
+        const storage = await chrome.storage.local.get(['blockedSites']);
+        const blockedSites = storage.blockedSites || [];
+        
+        // Check if already blocked
+        if (blockedSites.includes(cleanDomain)) {
+          sendResponse({ success: false, error: 'Site is already blocked' });
+          return;
+        }
+        
+        // Add to blocked sites
+        blockedSites.push(cleanDomain);
+        await chrome.storage.local.set({ blockedSites });
+        
+        console.log('✅ ADD_BLOCKED_SITE: Added', cleanDomain);
+        sendResponse({ success: true, domain: cleanDomain, message: 'Site blocked successfully' });
+        
+        // Notify other parts of extension
+        try {
+          chrome.runtime.sendMessage({
+            type: 'BLOCKED_SITES_UPDATED',
+            payload: { blockedSites }
+          }).catch(() => {
+            console.debug('📝 No listeners for blocked sites update');
+          });
+        } catch (error) {
+          console.debug('📝 Could not broadcast blocked sites update:', error.message);
+        }
+        
+      } catch (error) {
+        console.error('❌ Error adding blocked site:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async
+  }
+
+  // Handle REMOVE_BLOCKED_SITE request
+  if (message.type === 'REMOVE_BLOCKED_SITE') {
+    (async () => {
+      try {
+        const domain = message.payload?.domain;
+        if (!domain) {
+          sendResponse({ success: false, error: 'Domain is required' });
+          return;
+        }
+
+        // Clean domain (remove protocol, www, path)
+        const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+        
+        // Get current blocked sites
+        const storage = await chrome.storage.local.get(['blockedSites']);
+        const blockedSites = storage.blockedSites || [];
+        
+        // Check if site is blocked
+        const index = blockedSites.indexOf(cleanDomain);
+        if (index === -1) {
+          sendResponse({ success: false, error: 'Site is not blocked' });
+          return;
+        }
+        
+        // Remove from blocked sites
+        blockedSites.splice(index, 1);
+        await chrome.storage.local.set({ blockedSites });
+        
+        console.log('✅ REMOVE_BLOCKED_SITE: Removed', cleanDomain);
+        sendResponse({ success: true, domain: cleanDomain, message: 'Site unblocked successfully' });
+        
+        // Notify other parts of extension
+        try {
+          chrome.runtime.sendMessage({
+            type: 'BLOCKED_SITES_UPDATED',
+            payload: { blockedSites }
+          }).catch(() => {
+            console.debug('📝 No listeners for blocked sites update');
+          });
+        } catch (error) {
+          console.debug('📝 Could not broadcast blocked sites update:', error.message);
+        }
+        
+      } catch (error) {
+        console.error('❌ Error removing blocked site:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async
+  }
+
   // For other messages, ensure initialization
   if (!isInitialized) {
     console.log('⚠️ Extension not initialized, initializing now...');

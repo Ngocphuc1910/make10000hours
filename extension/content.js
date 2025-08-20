@@ -664,6 +664,38 @@ class ActivityDetector {
           }
         }
 
+        // Handle SET_BLOCKED_SITES messages (blocked sites sync from web app)
+        if (type === 'SET_BLOCKED_SITES') {
+          console.log('🔄 Received SET_BLOCKED_SITES from web app:', payload);
+          
+          const message = {
+            type: 'SET_BLOCKED_SITES',
+            payload
+          };
+
+          try {
+            const response = await this.sendMessageSafely(message, {
+              timeout: 15000,
+              maxRetries: 3,
+              fallback: { 
+                success: false, 
+                error: 'Extension temporarily unavailable',
+                queued: false 
+              }
+            });
+            
+            sendResponse('SET_BLOCKED_SITES_RESPONSE', response);
+            
+          } catch (error) {
+            console.error('❌ Failed to process SET_BLOCKED_SITES:', error);
+            sendResponse('SET_BLOCKED_SITES_RESPONSE', {
+              success: false,
+              error: error.message,
+              queued: false
+            });
+          }
+        }
+
         // Handle WEB_APP_FOCUS_STATE_CHANGED messages
         if (type === 'WEB_APP_FOCUS_STATE_CHANGED') {
           console.log('🔄 Received focus state change from web app:', payload);
