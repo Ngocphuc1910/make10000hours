@@ -751,6 +751,97 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
   
+  // Handle focus mode toggle
+  if (message.type === 'TOGGLE_FOCUS_MODE') {
+    (async () => {
+      try {
+        // Get current focus mode state from storage
+        const storage = await chrome.storage.local.get(['focusMode']);
+        const currentFocusMode = storage.focusMode || false;
+        const newFocusMode = !currentFocusMode;
+        
+        // Update focus mode state in storage
+        await chrome.storage.local.set({ focusMode: newFocusMode });
+        
+        console.log(`🎯 Focus mode toggled: ${currentFocusMode} → ${newFocusMode}`);
+        
+        sendResponse({ 
+          success: true, 
+          focusMode: newFocusMode,
+          message: newFocusMode ? 'Deep Focus mode activated' : 'Deep Focus mode deactivated'
+        });
+      } catch (error) {
+        console.error('❌ Error toggling focus mode:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async
+  }
+  
+  // Handle get focus mode state
+  if (message.type === 'GET_FOCUS_STATE') {
+    (async () => {
+      try {
+        const storage = await chrome.storage.local.get(['focusMode']);
+        const focusMode = storage.focusMode || false;
+        
+        sendResponse({ 
+          success: true, 
+          focusMode: focusMode,
+          data: { isActive: focusMode }
+        });
+      } catch (error) {
+        console.error('❌ Error getting focus state:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async
+  }
+
+  // Handle user info request
+  if (message.type === 'GET_USER_INFO') {
+    (async () => {
+      try {
+        const storage = await chrome.storage.local.get(['userInfo']);
+        if (storage.userInfo) {
+          console.log('✅ GET_USER_INFO: Found user info:', storage.userInfo);
+          sendResponse({ success: true, data: storage.userInfo });
+        } else {
+          console.log('ℹ️ GET_USER_INFO: No user info found');
+          sendResponse({ success: false, error: 'No user info available' });
+        }
+      } catch (error) {
+        console.error('❌ Error getting user info:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async
+  }
+
+  // Handle current state request  
+  if (message.type === 'GET_CURRENT_STATE') {
+    (async () => {
+      try {
+        const storage = await chrome.storage.local.get(['focusMode']);
+        const focusMode = storage.focusMode || false;
+        
+        const currentState = {
+          focusMode: focusMode,
+          isInitialized: isInitialized,
+          currentDomain: trackingState.currentDomain,
+          lastHeartbeat: trackingState.lastHeartbeat
+        };
+        
+        console.log('✅ GET_CURRENT_STATE:', currentState);
+        sendResponse({ success: true, data: currentState });
+      } catch (error) {
+        console.error('❌ Error getting current state:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async
+  }
+  
   // For other messages, ensure initialization
   if (!isInitialized) {
     console.log('⚠️ Extension not initialized, initializing now...');
