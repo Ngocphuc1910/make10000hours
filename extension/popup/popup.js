@@ -594,7 +594,7 @@ class PopupManager {
       
       if (statsResult.success) {
         // 4. Update all UI elements at once with complete data
-        this.updateAllStatsUI(statsResult.data);
+        await this.updateAllStatsUI(statsResult.data);
         this.hideDataLoadingState();
         console.log('✅ Popup initialization complete with data');
       } else {
@@ -668,7 +668,7 @@ class PopupManager {
   }
 
   // NEW: Update all UI with complete data in single operation  
-  updateAllStatsUI(data) {
+  async updateAllStatsUI(data) {
     console.log('🔄 Updating all UI with complete stats:', data);
     
     // Update total screen time
@@ -680,7 +680,7 @@ class PopupManager {
     
     // Update sites list if we're on the site-usage tab
     if (this.currentTab === 'site-usage' && data.sites) {
-      this.updateTopSitesFromData(data.sites);
+      await this.updateTopSitesFromData(data.sites);
     }
     
     // Update other stats displays
@@ -689,7 +689,7 @@ class PopupManager {
   }
 
   // NEW: Update sites list from provided data
-  updateTopSitesFromData(sites) {
+  async updateTopSitesFromData(sites) {
     if (!sites || typeof sites !== 'object') {
       console.warn('⚠️ Invalid sites data provided');
       return;
@@ -723,13 +723,13 @@ class PopupManager {
         // Calculate total time from current sites data to prevent race conditions
         const totalTime = sitesArray.reduce((sum, site) => sum + site.timeSpent, 0);
         
-        // Create site items using existing method
-        sitesArray.forEach(async (site) => {
+        // Create site items using existing method - use for loop to preserve order
+        for (const site of sitesArray) {
           const siteItem = await this.createSiteItem(site, totalTime);
           if (siteItem) {
             sitesListEl.appendChild(siteItem);
           }
-        });
+        }
       } else {
         // Show empty state
         const emptyState = document.createElement('div');
