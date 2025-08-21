@@ -106,6 +106,30 @@ class ChromeIdleHelper {
 // Global Chrome Idle Helper
 const chromeIdleHelper = new ChromeIdleHelper();
 
+/**
+ * Get default blocked sites list for new users
+ * Same list as used in the web app for consistency
+ */
+function getDefaultBlockedSites() {
+  return [
+    'facebook.com',
+    'x.com',
+    'instagram.com',
+    'youtube.com',
+    'tiktok.com',
+    'reddit.com',
+    'pinterest.com',
+    'tumblr.com',
+    'netflix.com',
+    'hulu.com',
+    'amazon.com',
+    'ebay.com',
+    'craigslist.org',
+    'etsy.com',
+    'buzzfeed.com'
+  ];
+}
+
 // ===== ULTRA-SIMPLE DOMAIN-DAY TRACKING SYSTEM =====
 
 /**
@@ -556,10 +580,25 @@ async function initializeExtension() {
     console.log('🚀 Starting ultra-simple extension initialization...');
     
     // Initialize Chrome storage
-    const storage = await chrome.storage.local.get(['site_usage_sessions']);
+    const storage = await chrome.storage.local.get(['site_usage_sessions', 'blockedSites', 'defaultSitesApplied']);
     if (!storage.site_usage_sessions) {
       await chrome.storage.local.set({ site_usage_sessions: {} });
       console.log('🆕 Initialized site_usage_sessions storage');
+    }
+    
+    // Initialize default blocked sites for new users (only on first install)
+    if (!storage.defaultSitesApplied && (!storage.blockedSites || storage.blockedSites.length === 0)) {
+      const defaultSites = getDefaultBlockedSites();
+      await chrome.storage.local.set({ 
+        blockedSites: defaultSites,
+        defaultSitesApplied: true
+      });
+      console.log('🆕 Initialized default blocked sites for new user:', defaultSites.length, 'sites');
+      console.log('📋 Default sites:', defaultSites.join(', '));
+    } else if (storage.blockedSites) {
+      console.log('✅ Existing blocked sites found:', storage.blockedSites.length, 'sites');
+    } else {
+      console.log('ℹ️ User previously cleared blocked sites - respecting preference');
     }
     
     // Initialize Chrome Idle API
