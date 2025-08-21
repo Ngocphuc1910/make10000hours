@@ -68,6 +68,63 @@ export const useChatStore = create<ChatStoreState>()(
 
       set({ isLoading: true, error: null });
 
+      // HARDCODED RESPONSE FOR BETA - TODO: Remove when AI feature is ready
+      try {
+        const conversationId = get().currentConversationId!;
+        
+        // Add user message
+        const userMessage: ChatMessage = {
+          id: `msg_${Date.now()}_user`,
+          conversationId,
+          userId: _userId,
+          role: 'user',
+          content,
+          timestamp: new Date(),
+        };
+
+        // Update conversation with user message
+        set(state => ({
+          conversations: state.conversations.map(conv =>
+            conv.id === conversationId
+              ? { ...conv, messages: [...conv.messages, userMessage] }
+              : conv
+          )
+        }));
+
+        // Hardcoded response
+        const assistantMessage: ChatMessage = {
+          id: `msg_${Date.now()}_assistant`,
+          conversationId,
+          userId: _userId,
+          role: 'assistant',
+          content: 'Hello! Thanks for joining our beta version!\n\nThe AI Buddy is currently under maintenance. We will announce when it\'s ready.',
+          timestamp: new Date(),
+          // No metadata to hide response time and sources
+        };
+
+        // Add assistant response after a short delay to simulate processing
+        setTimeout(() => {
+          set(state => ({
+            conversations: state.conversations.map(conv =>
+              conv.id === conversationId
+                ? { ...conv, messages: [...conv.messages, assistantMessage] }
+                : conv
+            ),
+            isLoading: false,
+          }));
+        }, 1000);
+
+        return;
+      } catch (error) {
+        console.error('Error in hardcoded response:', error);
+        set({ 
+          error: 'Failed to send message',
+          isLoading: false 
+        });
+        return;
+      }
+      // END HARDCODED RESPONSE
+
       try {
         const conversationId = get().currentConversationId!;
         
