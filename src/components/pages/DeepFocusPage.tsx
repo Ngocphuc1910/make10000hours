@@ -1204,7 +1204,7 @@ const DeepFocusPage: React.FC = () => {
           <div className="w-1/3 space-y-6">
             {/* Usage Pie Chart */}
             <div className="bg-background-secondary rounded-lg">
-              <h2 className="text-lg font-medium mb-6 text-text-primary p-6 pb-0">Site Usage</h2>
+              <h2 className="text-lg font-medium text-text-primary px-6 pb-0">Site Usage</h2>
               <div className="w-full h-48 mb-4">
                 {/* ALWAYS render pie chart - let it handle empty data gracefully */}
                 {/* This ensures auto-reload works and chart updates properly */}
