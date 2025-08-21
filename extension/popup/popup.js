@@ -1398,10 +1398,11 @@ class PopupManager {
       if (response.success) {
         const deepFocusTimeEl = document.getElementById('deep-focus-time');
         if (deepFocusTimeEl) {
-          // Convert minutes to milliseconds for formatting
-          const focusTimeMs = response.data.minutes * 60 * 1000;
+          // Use timeMinutes directly from response (coordinator format)
+          const minutes = response.timeMinutes || 0;
+          const focusTimeMs = minutes * 60 * 1000;
           deepFocusTimeEl.textContent = this.formatTime(focusTimeMs);
-          console.log('📊 Updated local deep focus time:', response.data.minutes, 'minutes');
+          console.log('📊 Updated local deep focus time:', minutes, 'minutes');
         }
       }
     } catch (error) {
