@@ -1332,6 +1332,127 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep channel open for async
   }
 
+  // Handle BLOCKED_ATTEMPT - Record when user tries to access blocked site
+  if (message.type === 'BLOCKED_ATTEMPT') {
+    (async () => {
+      try {
+        const domain = message.payload?.domain;
+        if (!domain) {
+          sendResponse({ success: false, error: 'Domain is required' });
+          return;
+        }
+
+        if (blockingManager) {
+          blockingManager.recordBlockedAttempt(domain);
+          console.log('🚫 Recorded blocked attempt for:', domain);
+          sendResponse({ success: true, message: 'Blocked attempt recorded' });
+        } else {
+          console.warn('⚠️ BlockingManager not available for recording blocked attempt');
+          sendResponse({ success: false, error: 'BlockingManager not available' });
+        }
+      } catch (error) {
+        console.error('❌ Error recording blocked attempt:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // Handle OVERRIDE_SITE - Temporarily allow site access during focus mode
+  if (message.type === 'OVERRIDE_SITE') {
+    (async () => {
+      try {
+        const domain = message.payload?.domain;
+        const duration = message.payload?.duration || 5; // Default 5 minutes
+        
+        if (!domain) {
+          sendResponse({ success: false, error: 'Domain is required' });
+          return;
+        }
+
+        if (blockingManager) {
+          const result = await blockingManager.overrideSite(domain, duration);
+          console.log('⏰ Site override result:', result);
+          sendResponse(result);
+        } else {
+          console.warn('⚠️ BlockingManager not available for site override');
+          sendResponse({ success: false, error: 'BlockingManager not available' });
+        }
+      } catch (error) {
+        console.error('❌ Error creating site override:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // Handle GET_SESSION_TIME - Get current focus session time
+  if (message.type === 'GET_SESSION_TIME') {
+    (async () => {
+      try {
+        if (blockingManager) {
+          const stats = blockingManager.getFocusStats();
+          const sessionTime = stats.focusTime || 0;
+          
+          console.log('⏱️ Current session time:', Math.floor(sessionTime / 1000 / 60), 'minutes');
+          sendResponse({ 
+            success: true, 
+            sessionTime: sessionTime,
+            sessionTimeMinutes: Math.floor(sessionTime / 1000 / 60),
+            focusMode: stats.focusMode
+          });
+        } else {
+          console.warn('⚠️ BlockingManager not available for session time');
+          sendResponse({ success: false, error: 'BlockingManager not available' });
+        }
+      } catch (error) {
+        console.error('❌ Error getting session time:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // Handle GET_FOCUS_STATS - Get detailed focus statistics
+  if (message.type === 'GET_FOCUS_STATS') {
+    (async () => {
+      try {
+        if (blockingManager) {
+          const stats = blockingManager.getFocusStats();
+          console.log('📊 Focus stats requested:', stats);
+          sendResponse({ success: true, data: stats });
+        } else {
+          console.warn('⚠️ BlockingManager not available for focus stats');
+          sendResponse({ success: false, error: 'BlockingManager not available' });
+        }
+      } catch (error) {
+        console.error('❌ Error getting focus stats:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // Handle RESET_BLOCKING_STATE - Reset all blocking state (for debugging/testing)
+  if (message.type === 'RESET_BLOCKING_STATE') {
+    (async () => {
+      try {
+        if (blockingManager) {
+          const result = await blockingManager.resetBlockingState();
+          console.log('🔄 Blocking state reset result:', result);
+          sendResponse(result);
+        } else {
+          console.warn('⚠️ BlockingManager not available for state reset');
+          sendResponse({ success: false, error: 'BlockingManager not available' });
+        }
+      } catch (error) {
+        console.error('❌ Error resetting blocking state:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
   // For other messages, ensure initialization
   if (!isInitialized) {
     console.log('⚠️ Extension not initialized, initializing now...');

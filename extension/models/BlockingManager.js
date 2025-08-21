@@ -83,6 +83,17 @@ class BlockingManager {
     this.retryAttempts = 0;
     this.maxRetries = 3;
     this.focusMode = false;
+    
+    // Enhanced Deep Focus properties
+    this.blockedSites = new Set();
+    this.temporaryOverrides = new Map(); // domain -> expiry timestamp
+    this.focusStartTime = null;
+    this.blockedAttempts = 0;
+    this.focusStats = {
+      totalFocusTime: 0,
+      sessionsToday: 0,
+      blockedAttemptsToday: 0
+    };
 
     // Subscribe to deep focus updates
     ExtensionEventBus.subscribe((message) => {
@@ -336,24 +347,31 @@ class BlockingManager {
   }
 
   /**
-   * Save the current blocking manager state
+   * Save the current blocking manager state (Enhanced with Deep Focus properties)
    */
   async saveState() {
     try {
       const state = {
         focusMode: this.focusMode,
         currentLocalSessionId: this.currentLocalSessionId,
-        blockedSites: this.blockedSites || [],
         lastUpdated: Date.now()
       };
       
-      // Save both the internal state and the main storage keys that updateBlockingRules() uses
+      // Convert Sets and Maps to serializable formats
+      const blockedSitesArray = Array.from(this.blockedSites);
+      const temporaryOverridesObj = Object.fromEntries(this.temporaryOverrides);
+      
+      // Save all state including enhanced Deep Focus properties
       await chrome.storage.local.set({ 
         blockingManagerState: state,
         focusMode: this.focusMode,
-        blockedSites: this.blockedSites || []
+        blockedSites: blockedSitesArray,
+        focusStartTime: this.focusStartTime,
+        blockedAttempts: this.blockedAttempts,
+        focusStats: this.focusStats,
+        temporaryOverrides: temporaryOverridesObj
       });
-      console.log('💾 Blocking manager state saved (internal + main keys)');
+      console.log('💾 Blocking manager state saved (internal + main keys + Deep Focus state)');
     } catch (error) {
       console.error('❌ Failed to save blocking manager state:', error);
       // Don't throw error to prevent blocking other operations
@@ -365,23 +383,41 @@ class BlockingManager {
    */
   async loadState() {
     try {
-      // Load both the internal state and the main storage keys
-      const result = await chrome.storage.local.get(['blockingManagerState', 'focusMode', 'blockedSites']);
+      // Load both the internal state and the main storage keys + enhanced Deep Focus state
+      const result = await chrome.storage.local.get([
+        'blockingManagerState', 'focusMode', 'blockedSites',
+        'focusStartTime', 'blockedAttempts', 'focusStats', 'temporaryOverrides'
+      ]);
       
       if (result.blockingManagerState) {
         const state = result.blockingManagerState;
         this.focusMode = state.focusMode || false;
         this.currentLocalSessionId = state.currentLocalSessionId || null;
-        this.blockedSites = state.blockedSites || [];
         
         console.log('📂 Blocking manager internal state loaded:', state);
       }
       
-      // Also load from main storage keys and ensure consistency
+      // Load main storage keys and ensure consistency
       this.focusMode = result.focusMode !== undefined ? result.focusMode : this.focusMode;
-      this.blockedSites = result.blockedSites || this.blockedSites || [];
       
-      console.log('🔍 Final loaded state - Focus mode:', this.focusMode, 'Blocked sites:', this.blockedSites.length);
+      // Load blocked sites and convert to Set
+      const blockedSitesArray = result.blockedSites || [];
+      this.blockedSites = new Set(blockedSitesArray);
+      
+      // Load enhanced Deep Focus state
+      this.focusStartTime = result.focusStartTime || null;
+      this.blockedAttempts = result.blockedAttempts || 0;
+      this.focusStats = result.focusStats || {
+        totalFocusTime: 0,
+        sessionsToday: 0,
+        blockedAttemptsToday: 0
+      };
+      
+      // Load temporary overrides
+      const overrides = result.temporaryOverrides || {};
+      this.temporaryOverrides = new Map(Object.entries(overrides));
+      
+      console.log('🔍 Final loaded state - Focus mode:', this.focusMode, 'Blocked sites:', this.blockedSites.size, 'Focus session active:', !!this.focusStartTime);
       
       // If focus mode is active and we have a session ID, restart the timer
       if (this.focusMode && this.currentLocalSessionId && this.storageManager) {
@@ -584,6 +620,185 @@ class BlockingManager {
       }
     } catch (error) {
       console.error('❌ Failed to disable blocking:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Add a site to the blocked list
+   */
+  async addBlockedSite(domain) {
+    try {
+      if (!domain) {
+        return { success: false, error: 'Domain is required' };
+      }
+      
+      // Clean domain (remove protocol, www, path)
+      const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+      
+      if (this.blockedSites.has(cleanDomain)) {
+        return { success: false, error: 'Site is already blocked' };
+      }
+      
+      this.blockedSites.add(cleanDomain);
+      await this.saveState();
+      
+      // Update blocking rules if focus mode is active
+      if (this.focusMode) {
+        await this.updateBlockingRules();
+      }
+      
+      console.log('➕ Added blocked site:', cleanDomain);
+      return { success: true, domain: cleanDomain, message: 'Site blocked successfully' };
+    } catch (error) {
+      console.error('❌ Error adding blocked site:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Remove a site from the blocked list
+   */
+  async removeBlockedSite(domain) {
+    try {
+      if (!domain) {
+        return { success: false, error: 'Domain is required' };
+      }
+      
+      // Clean domain (remove protocol, www, path)
+      const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+      
+      if (!this.blockedSites.has(cleanDomain)) {
+        return { success: false, error: 'Site is not blocked' };
+      }
+      
+      this.blockedSites.delete(cleanDomain);
+      await this.saveState();
+      
+      // Update blocking rules if focus mode is active
+      if (this.focusMode) {
+        await this.updateBlockingRules();
+      }
+      
+      console.log('➖ Removed blocked site:', cleanDomain);
+      return { success: true, domain: cleanDomain, message: 'Site unblocked successfully' };
+    } catch (error) {
+      console.error('❌ Error removing blocked site:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Record a blocked attempt when user tries to access blocked site
+   */
+  recordBlockedAttempt(domain) {
+    this.blockedAttempts++;
+    this.focusStats.blockedAttemptsToday++;
+    this.saveState();
+    console.log(`🚫 Blocked attempt to access: ${domain} (Total: ${this.blockedAttempts})`);
+  }
+
+  /**
+   * Temporarily override blocking for a site (allow access during focus mode)
+   */
+  async overrideSite(domain, durationMinutes = 5) {
+    try {
+      const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+      const expiryTime = Date.now() + (durationMinutes * 60 * 1000);
+      
+      this.temporaryOverrides.set(cleanDomain, expiryTime);
+      await this.saveState();
+      
+      // Update blocking rules to exclude this domain temporarily
+      if (this.focusMode) {
+        await this.updateBlockingRules();
+      }
+      
+      // Set timeout to remove override
+      setTimeout(() => {
+        this.temporaryOverrides.delete(cleanDomain);
+        if (this.focusMode) {
+          this.updateBlockingRules();
+        }
+      }, durationMinutes * 60 * 1000);
+      
+      console.log(`⏰ Temporary override for ${cleanDomain}: ${durationMinutes} minutes`);
+      return { 
+        success: true, 
+        domain: cleanDomain, 
+        expiryTime: expiryTime,
+        message: `Temporary access granted for ${durationMinutes} minutes` 
+      };
+    } catch (error) {
+      console.error('❌ Error creating site override:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get comprehensive focus statistics
+   */
+  getFocusStats() {
+    const focusTime = this.focusStartTime ? Date.now() - this.focusStartTime : 0;
+    
+    return {
+      focusMode: this.focusMode,
+      focusTime: focusTime,
+      focusStartTime: this.focusStartTime,
+      blockedAttempts: this.blockedAttempts,
+      blockedSites: Array.from(this.blockedSites),
+      blockedSitesCount: this.blockedSites.size,
+      temporaryOverrides: Object.fromEntries(this.temporaryOverrides),
+      activeOverrides: Array.from(this.temporaryOverrides.entries()).filter(([domain, expiry]) => expiry > Date.now()),
+      focusStats: this.focusStats
+    };
+  }
+
+  /**
+   * Clear all blocking rules (separate from updateBlockingRules for explicit clearing)
+   */
+  async clearBlockingRules() {
+    try {
+      // Get existing rules
+      const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+      const ruleIds = existingRules.map(rule => rule.id);
+      
+      if (ruleIds.length > 0) {
+        await chrome.declarativeNetRequest.updateDynamicRules({
+          removeRuleIds: ruleIds
+        });
+        
+        console.log(`🧹 Cleared ${ruleIds.length} blocking rules`);
+      }
+      return { success: true, rulesRemoved: ruleIds.length };
+    } catch (error) {
+      console.error('❌ Error clearing blocking rules:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Reset all blocking state (for debugging/testing)
+   */
+  async resetBlockingState() {
+    try {
+      this.focusMode = false;
+      this.focusStartTime = null;
+      this.blockedAttempts = 0;
+      this.temporaryOverrides.clear();
+      this.focusStats = {
+        totalFocusTime: 0,
+        sessionsToday: 0,
+        blockedAttemptsToday: 0
+      };
+      
+      await this.clearBlockingRules();
+      await this.saveState();
+      
+      console.log('🔄 Blocking state reset successfully');
+      return { success: true, message: 'Blocking state reset' };
+    } catch (error) {
+      console.error('❌ Error resetting blocking state:', error);
       return { success: false, error: error.message };
     }
   }
