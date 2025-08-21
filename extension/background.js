@@ -113,6 +113,23 @@ const ExtensionEventBus = {
     FOCUS_STATE_CHANGE: 'FOCUS_STATE_CHANGED'
   },
 
+  // Add missing subscribe method that BlockingManager expects
+  subscribe(callback) {
+    console.log('📡 ExtensionEventBus.subscribe called with callback');
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (Object.values(this.EVENTS).includes(message.type)) {
+        console.log('📨 ExtensionEventBus received subscribed event:', message.type);
+        try {
+          callback(message);
+        } catch (error) {
+          console.error('❌ ExtensionEventBus callback error:', error);
+        }
+      }
+      return false; // Don't keep channel open unless needed
+    });
+    console.log('✅ ExtensionEventBus subscription registered');
+  },
+
   async emit(eventName, payload) {
     try {
       const manifestData = chrome.runtime.getManifest();
@@ -172,8 +189,11 @@ const ExtensionEventBus = {
 // Global instances
 let blockingManager = null;
 let storageManager = null;
+let focusTimeTracker = null;
 
-// Load StorageManager
+// Load scripts in proper dependency order to prevent initialization issues
+
+// Load StorageManager first (base dependency)
 try {
   importScripts('./models/StorageManager.js');
   console.log('✅ StorageManager script loaded successfully');
@@ -186,7 +206,20 @@ try {
   console.error('❌ Failed to load StorageManager:', error);
 }
 
-// Load BlockingManager
+// Load StateManager second (base dependency)
+try {
+  importScripts('./models/StateManager.js');
+  console.log('✅ StateManager script loaded successfully');
+  if (typeof StateManager !== 'undefined') {
+    console.log('✅ StateManager class is available');
+  } else {
+    console.error('❌ StateManager class not found after import');
+  }
+} catch (error) {
+  console.error('❌ Failed to load StateManager:', error);
+}
+
+// Load BlockingManager third (depends on ExtensionEventBus which is now properly defined)
 try {
   importScripts('./models/BlockingManager.js');
   console.log('✅ BlockingManager script loaded successfully');
@@ -197,6 +230,19 @@ try {
   }
 } catch (error) {
   console.error('❌ Failed to load BlockingManager:', error);
+}
+
+// Load FocusTimeTracker last (depends on all the above)
+try {
+  importScripts('./models/FocusTimeTracker.js');
+  console.log('✅ FocusTimeTracker script loaded successfully');
+  if (typeof FocusTimeTracker !== 'undefined') {
+    console.log('✅ FocusTimeTracker class is available');
+  } else {
+    console.error('❌ FocusTimeTracker class not found after import');
+  }
+} catch (error) {
+  console.error('❌ Failed to load FocusTimeTracker:', error);
 }
 
 /**
@@ -804,7 +850,7 @@ async function initializeExtension() {
       console.warn('⚠️ StorageManager not available - Deep Focus sessions will not be tracked');
     }
 
-    // Initialize BlockingManager
+    // Initialize BlockingManager with enhanced error handling
     if (typeof BlockingManager !== 'undefined') {
       try {
         console.log('🚀 Creating BlockingManager instance...');
@@ -820,16 +866,57 @@ async function initializeExtension() {
         await blockingManager.initialize();
         console.log('✅ BlockingManager initialized successfully');
         
-        // Test the blocking engine immediately
-        console.log('🧪 Testing blocking engine...');
-        const testResult = await blockingManager.updateBlockingRules();
-        console.log('🧪 Blocking engine test result:', testResult);
+        // Test the blocking engine immediately with error handling
+        try {
+          console.log('🧪 Testing blocking engine...');
+          const testResult = await blockingManager.updateBlockingRules();
+          console.log('🧪 Blocking engine test result:', testResult);
+        } catch (testError) {
+          console.warn('⚠️ Blocking engine test failed but BlockingManager is initialized:', testError);
+        }
       } catch (error) {
         console.error('❌ BlockingManager initialization failed:', error);
+        // Log more specific error details for debugging
+        if (error.message && error.message.includes('ExtensionEventBus')) {
+          console.error('🔍 ExtensionEventBus related error - check subscribe method availability');
+        }
         blockingManager = null;
       }
     } else {
-      console.warn('⚠️ BlockingManager not available');
+      console.warn('⚠️ BlockingManager class not available - check script loading');
+    }
+
+    // Initialize FocusTimeTracker coordinator with improved dependency checking
+    if (typeof FocusTimeTracker !== 'undefined') {
+      try {
+        console.log('🚀 Creating FocusTimeTracker coordinator...');
+        focusTimeTracker = new FocusTimeTracker();
+        
+        // Add explicit delay to ensure all dependencies are fully initialized
+        console.log('⏳ Allowing time for dependencies to settle...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        console.log('🔧 Initializing FocusTimeTracker coordinator...');
+        const coordinatorResult = await focusTimeTracker.initialize();
+        if (coordinatorResult) {
+          console.log('✅ FocusTimeTracker coordinator initialized successfully');
+        } else {
+          console.error('❌ FocusTimeTracker coordinator initialization failed');
+          focusTimeTracker = null;
+        }
+      } catch (error) {
+        console.error('❌ FocusTimeTracker coordinator initialization failed:', error);
+        // Log more specific error details
+        if (error.message && error.message.includes('Timeout waiting for dependencies')) {
+          console.error('🔍 Dependency timeout - checking what\'s available:');
+          console.error('  - StorageManager:', typeof StorageManager !== 'undefined' && !!storageManager);
+          console.error('  - BlockingManager:', typeof BlockingManager !== 'undefined' && !!blockingManager);
+          console.error('  - StateManager:', typeof StateManager !== 'undefined');
+        }
+        focusTimeTracker = null;
+      }
+    } else {
+      console.warn('⚠️ FocusTimeTracker class not available - check script loading');
     }
     
     // Start master timer
@@ -870,6 +957,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('📨 Received message:', message.type);
+
+  // Route Deep Focus messages through FocusTimeTracker coordinator
+  if (focusTimeTracker && focusTimeTracker.initialized) {
+    // Check if this is a Deep Focus message type
+    const deepFocusMessages = [
+      'TOGGLE_FOCUS_MODE', 'ENABLE_FOCUS_MODE', 'DISABLE_FOCUS_MODE',
+      'GET_FOCUS_STATE', 'GET_FOCUS_STATS', 'CREATE_DEEP_FOCUS_SESSION',
+      'COMPLETE_DEEP_FOCUS_SESSION', 'GET_LOCAL_DEEP_FOCUS_TIME'
+    ];
+    
+    if (deepFocusMessages.includes(message.type)) {
+      // Handle asynchronously through coordinator
+      focusTimeTracker.handleMessage(message, sender, sendResponse);
+      return true; // Keep channel open for async response
+    }
+  }
   
   // Handle ping messages
   if (message.type === 'PING') {
@@ -1036,79 +1139,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
   
-  // Handle focus mode toggle
-  if (message.type === 'TOGGLE_FOCUS_MODE') {
-    (async () => {
-      try {
-        if (blockingManager) {
-          // Use BlockingManager for comprehensive focus mode toggle
-          const result = await blockingManager.toggleFocusMode();
-          
-          if (result.success) {
-            console.log(`🎯 Focus mode toggled via BlockingManager: ${result.focusMode}`);
-            
-            // Notify web app of focus mode change
-            try {
-              chrome.tabs.query({url: ['*://app.make10000hours.com/*', '*://localhost:*/*']}, (tabs) => {
-                tabs.forEach(tab => {
-                  chrome.tabs.sendMessage(tab.id, {
-                    type: 'EXTENSION_FOCUS_STATE_CHANGED',
-                    payload: { 
-                      isActive: result.focusMode,
-                      sessionId: result.sessionId,
-                      source: 'extension_toggle'
-                    }
-                  }).catch(() => {
-                    console.debug('📝 Could not notify tab', tab.id, 'of focus state change');
-                  });
-                });
-                console.log('📡 Notified', tabs.length, 'web app tabs of focus state change');
-              });
-            } catch (error) {
-              console.debug('📝 Could not notify web app tabs:', error.message);
-            }
-            
-            sendResponse({ 
-              success: true, 
-              focusMode: result.focusMode,
-              sessionId: result.sessionId,
-              message: result.focusMode ? 'Deep Focus mode activated' : 'Deep Focus mode deactivated'
-            });
-          } else {
-            throw new Error(result.error);
-          }
-        } else {
-          // BlockingManager is critical for Deep Focus - cannot proceed without it
-          console.error('❌ BlockingManager not available - Deep Focus cannot function');
-          throw new Error('BlockingManager not initialized - site blocking unavailable');
-        }
-      } catch (error) {
-        console.error('❌ Error toggling focus mode:', error);
-        sendResponse({ success: false, error: error.message });
-      }
-    })();
-    return true; // Keep channel open for async
-  }
+  // TOGGLE_FOCUS_MODE now handled by FocusTimeTracker coordinator
   
-  // Handle get focus mode state
-  if (message.type === 'GET_FOCUS_STATE') {
-    (async () => {
-      try {
-        const storage = await chrome.storage.local.get(['focusMode']);
-        const focusMode = storage.focusMode || false;
-        
-        sendResponse({ 
-          success: true, 
-          focusMode: focusMode,
-          data: { isActive: focusMode }
-        });
-      } catch (error) {
-        console.error('❌ Error getting focus state:', error);
-        sendResponse({ success: false, error: error.message });
-      }
-    })();
-    return true; // Keep channel open for async
-  }
+  // GET_FOCUS_STATE now handled by FocusTimeTracker coordinator
 
   // Handle user info request
   if (message.type === 'GET_USER_INFO') {
@@ -1276,102 +1309,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep channel open for async
   }
 
-  // Handle ENABLE_FOCUS_MODE from web app
-  if (message.type === 'ENABLE_FOCUS_MODE') {
-    (async () => {
-      try {
-        console.log('🔄 ENABLE_FOCUS_MODE received from web app');
-        
-        if (blockingManager) {
-          const result = await blockingManager.setFocusMode(true);
-          
-          if (result.success) {
-            console.log('✅ Focus mode enabled via web app sync');
-            sendResponse({ 
-              success: true, 
-              focusMode: true,
-              sessionId: result.sessionId,
-              message: 'Deep Focus mode enabled from web app'
-            });
-            
-            // Notify web app of successful sync
-            try {
-              chrome.tabs.query({url: ['*://app.make10000hours.com/*', '*://localhost:*/*']}, (tabs) => {
-                tabs.forEach(tab => {
-                  chrome.tabs.sendMessage(tab.id, {
-                    type: 'EXTENSION_FOCUS_STATE_CHANGED',
-                    payload: { isActive: true }
-                  }).catch(() => {
-                    console.debug('📝 Could not notify tab', tab.id, 'of focus state change');
-                  });
-                });
-              });
-            } catch (error) {
-              console.debug('📝 Could not notify web app tabs:', error.message);
-            }
-          } else {
-            throw new Error(result.error);
-          }
-        } else {
-          // BlockingManager is critical for Deep Focus - cannot proceed without it
-          console.error('❌ BlockingManager not available - Deep Focus cannot function');
-          throw new Error('BlockingManager not initialized - site blocking unavailable');
-        }
-      } catch (error) {
-        console.error('❌ Error enabling focus mode from web app:', error);
-        sendResponse({ success: false, error: error.message });
-      }
-    })();
-    return true;
-  }
+  // ENABLE_FOCUS_MODE now handled by FocusTimeTracker coordinator
 
-  // Handle DISABLE_FOCUS_MODE from web app
-  if (message.type === 'DISABLE_FOCUS_MODE') {
-    (async () => {
-      try {
-        console.log('🔄 DISABLE_FOCUS_MODE received from web app');
-        
-        if (blockingManager) {
-          const result = await blockingManager.setFocusMode(false);
-          
-          if (result.success) {
-            console.log('✅ Focus mode disabled via web app sync');
-            sendResponse({ 
-              success: true, 
-              focusMode: false,
-              message: 'Deep Focus mode disabled from web app'
-            });
-            
-            // Notify web app of successful sync
-            try {
-              chrome.tabs.query({url: ['*://app.make10000hours.com/*', '*://localhost:*/*']}, (tabs) => {
-                tabs.forEach(tab => {
-                  chrome.tabs.sendMessage(tab.id, {
-                    type: 'EXTENSION_FOCUS_STATE_CHANGED',
-                    payload: { isActive: false }
-                  }).catch(() => {
-                    console.debug('📝 Could not notify tab', tab.id, 'of focus state change');
-                  });
-                });
-              });
-            } catch (error) {
-              console.debug('📝 Could not notify web app tabs:', error.message);
-            }
-          } else {
-            throw new Error(result.error);
-          }
-        } else {
-          // BlockingManager is critical for Deep Focus - cannot proceed without it
-          console.error('❌ BlockingManager not available - Deep Focus cannot function');
-          throw new Error('BlockingManager not initialized - site blocking unavailable');
-        }
-      } catch (error) {
-        console.error('❌ Error disabling focus mode from web app:', error);
-        sendResponse({ success: false, error: error.message });
-      }
-    })();
-    return true;
-  }
+  // DISABLE_FOCUS_MODE now handled by FocusTimeTracker coordinator
 
   // Handle GET_BLOCKED_SITES request
   if (message.type === 'GET_BLOCKED_SITES') {
@@ -1622,25 +1562,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Handle GET_FOCUS_STATS - Get detailed focus statistics
-  if (message.type === 'GET_FOCUS_STATS') {
-    (async () => {
-      try {
-        if (blockingManager) {
-          const stats = blockingManager.getFocusStats();
-          console.log('📊 Focus stats requested:', stats);
-          sendResponse({ success: true, data: stats });
-        } else {
-          console.warn('⚠️ BlockingManager not available for focus stats');
-          sendResponse({ success: false, error: 'BlockingManager not available' });
-        }
-      } catch (error) {
-        console.error('❌ Error getting focus stats:', error);
-        sendResponse({ success: false, error: error.message });
-      }
-    })();
-    return true;
-  }
+  // GET_FOCUS_STATS now handled by FocusTimeTracker coordinator
 
   // Handle RESET_BLOCKING_STATE - Reset all blocking state (for debugging/testing)
   if (message.type === 'RESET_BLOCKING_STATE') {
@@ -1662,81 +1584,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Handle GET_LOCAL_DEEP_FOCUS_TIME - Get local deep focus session time
-  if (message.type === 'GET_LOCAL_DEEP_FOCUS_TIME') {
-    (async () => {
-      try {
-        if (storageManager) {
-          const sessionData = await storageManager.getLocalDeepFocusTime();
-          const timeMs = sessionData.minutes * 60 * 1000; // Convert minutes to milliseconds
-          console.log('⏱️ Local deep focus time:', sessionData.minutes, 'minutes,', sessionData.sessions, 'sessions');
-          sendResponse({ 
-            success: true, 
-            time: timeMs,
-            timeMinutes: sessionData.minutes,
-            sessions: sessionData.sessions,
-            date: sessionData.date
-          });
-        } else {
-          console.warn('⚠️ StorageManager not available for local deep focus time');
-          sendResponse({ success: false, error: 'StorageManager not available' });
-        }
-      } catch (error) {
-        console.error('❌ Error getting local deep focus time:', error);
-        sendResponse({ success: false, error: error.message });
-      }
-    })();
-    return true;
-  }
+  // GET_LOCAL_DEEP_FOCUS_TIME now handled by FocusTimeTracker coordinator
 
-  // Handle CREATE_DEEP_FOCUS_SESSION - Create new deep focus session
-  if (message.type === 'CREATE_DEEP_FOCUS_SESSION') {
-    (async () => {
-      try {
-        if (storageManager) {
-          const session = await storageManager.createDeepFocusSession();
-          console.log('🎯 Created deep focus session:', session.id);
-          sendResponse({ 
-            success: true, 
-            session: session,
-            message: 'Deep focus session created'
-          });
-        } else {
-          console.warn('⚠️ StorageManager not available for session creation');
-          sendResponse({ success: false, error: 'StorageManager not available' });
-        }
-      } catch (error) {
-        console.error('❌ Error creating deep focus session:', error);
-        sendResponse({ success: false, error: error.message });
-      }
-    })();
-    return true;
-  }
+  // CREATE_DEEP_FOCUS_SESSION now handled by FocusTimeTracker coordinator
 
-  // Handle COMPLETE_DEEP_FOCUS_SESSION - Complete current deep focus session
-  if (message.type === 'COMPLETE_DEEP_FOCUS_SESSION') {
-    (async () => {
-      try {
-        if (storageManager) {
-          const sessionData = message.payload || {};
-          const result = await storageManager.completeDeepFocusSession(sessionData.duration);
-          console.log('✅ Completed deep focus session:', result);
-          sendResponse({ 
-            success: true, 
-            result: result,
-            message: 'Deep focus session completed'
-          });
-        } else {
-          console.warn('⚠️ StorageManager not available for session completion');
-          sendResponse({ success: false, error: 'StorageManager not available' });
-        }
-      } catch (error) {
-        console.error('❌ Error completing deep focus session:', error);
-        sendResponse({ success: false, error: error.message });
-      }
-    })();
-    return true;
-  }
+  // COMPLETE_DEEP_FOCUS_SESSION now handled by FocusTimeTracker coordinator
 
   // For other messages, ensure initialization
   if (!isInitialized) {
