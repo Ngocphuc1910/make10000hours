@@ -936,7 +936,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Notify popup and other parts of extension
         try {
           chrome.runtime.sendMessage({
-            type: 'BLOCKED_SITES_UPDATED',
+            type: 'EXTENSION_BLOCKED_SITES_UPDATED',
             payload: { blockedSites }
           }).catch(() => {
             console.debug('📝 No listeners for blocked sites update');
@@ -1001,16 +1001,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('✅ ADD_BLOCKED_SITE: Added', cleanDomain);
         sendResponse({ success: true, domain: cleanDomain, message: 'Site blocked successfully' });
         
-        // Notify other parts of extension
+        // Notify content scripts in web app tabs
         try {
-          chrome.runtime.sendMessage({
-            type: 'BLOCKED_SITES_UPDATED',
-            payload: { blockedSites }
-          }).catch(() => {
-            console.debug('📝 No listeners for blocked sites update');
-          });
+          const tabs = await chrome.tabs.query({url: ['*://app.make10000hours.com/*', '*://localhost:*/*']});
+          for (const tab of tabs) {
+            chrome.tabs.sendMessage(tab.id, {
+              type: 'EXTENSION_BLOCKED_SITES_UPDATED',
+              payload: { blockedSites }
+            }).catch(() => {
+              console.debug('📝 Could not notify tab', tab.id, 'of blocked sites update');
+            });
+          }
+          console.log('✅ Notified', tabs.length, 'web app tabs of blocked sites update');
         } catch (error) {
-          console.debug('📝 Could not broadcast blocked sites update:', error.message);
+          console.debug('📝 Could not notify web app tabs:', error.message);
         }
         
       } catch (error) {
@@ -1052,16 +1056,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('✅ REMOVE_BLOCKED_SITE: Removed', cleanDomain);
         sendResponse({ success: true, domain: cleanDomain, message: 'Site unblocked successfully' });
         
-        // Notify other parts of extension
+        // Notify content scripts in web app tabs
         try {
-          chrome.runtime.sendMessage({
-            type: 'BLOCKED_SITES_UPDATED',
-            payload: { blockedSites }
-          }).catch(() => {
-            console.debug('📝 No listeners for blocked sites update');
-          });
+          const tabs = await chrome.tabs.query({url: ['*://app.make10000hours.com/*', '*://localhost:*/*']});
+          for (const tab of tabs) {
+            chrome.tabs.sendMessage(tab.id, {
+              type: 'EXTENSION_BLOCKED_SITES_UPDATED',
+              payload: { blockedSites }
+            }).catch(() => {
+              console.debug('📝 Could not notify tab', tab.id, 'of blocked sites update');
+            });
+          }
+          console.log('✅ Notified', tabs.length, 'web app tabs of blocked sites update');
         } catch (error) {
-          console.debug('📝 Could not broadcast blocked sites update:', error.message);
+          console.debug('📝 Could not notify web app tabs:', error.message);
         }
         
       } catch (error) {
