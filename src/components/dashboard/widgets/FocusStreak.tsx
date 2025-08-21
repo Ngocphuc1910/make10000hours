@@ -31,7 +31,7 @@ export const FocusStreak: React.FC = () => {
         const sessions = await getSessionsForYear(user.uid, selectedYear);
         setAllWorkSessions(sessions);
       } catch (error) {
-        console.error('Error loading Focus Streak data:', error);
+        console.error('Error loading Working Streak data:', error);
         setAllWorkSessions([]);
       }
     };
@@ -132,10 +132,10 @@ export const FocusStreak: React.FC = () => {
   );
 
   return (
-    <Card title="Focus Streak" action={yearNavigation}>
+    <Card title="Working Streak" action={yearNavigation}>
       {isLoading ? (
         <div className="flex items-center justify-center h-[200px]">
-          <div className="text-sm text-text-secondary">Loading contribution data...</div>
+          <div className="text-sm text-text-secondary">Loading streak data...</div>
         </div>
       ) : (
         <div className="h-[200px] flex flex-col overflow-hidden scrollbar-none">

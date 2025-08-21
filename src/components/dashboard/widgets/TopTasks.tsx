@@ -259,7 +259,7 @@ export const TopTasks: React.FC = React.memo(() => {
         };
       default:
         return {
-          text: 'Group by',
+          text: 'Group by time',
           icon: 'ri-function-line'
         };
     }
@@ -294,7 +294,7 @@ export const TopTasks: React.FC = React.memo(() => {
             <div className="w-4 h-4 flex items-center justify-center">
               {groupBy === 'none' && <i className="ri-check-line"></i>}
             </div>
-            <span>No grouping</span>
+            <span>Group by time</span>
           </button>
           <button 
             className={`w-full px-4 py-2 text-left text-sm hover:bg-background-container flex items-center space-x-2 ${
@@ -332,7 +332,7 @@ export const TopTasks: React.FC = React.memo(() => {
   if (isLoading) {
     return (
       <Card 
-        title="Top Tasks" 
+        title="Time Allocated By Tasks" 
         action={groupByDropdown}
       >
         <div className="flex items-center justify-center h-[360px]">
@@ -347,7 +347,7 @@ export const TopTasks: React.FC = React.memo(() => {
   if (displayTasks.length === 0) {
     return (
       <Card 
-        title="Top Tasks" 
+        title="Time Allocated By Tasks" 
         action={groupByDropdown}
       >
         <div className="flex items-center justify-center h-[360px]">
@@ -364,7 +364,7 @@ export const TopTasks: React.FC = React.memo(() => {
   
   return (
     <Card 
-      title="Top Tasks" 
+      title="Time Allocated By Tasks" 
       action={groupByDropdown}
     >
       <div className="space-y-2 h-[360px] overflow-y-auto pr-1 scrollbar-thin">
