@@ -1675,16 +1675,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // GET_LOCAL_OVERRIDE_TIME - Enhanced with OverrideSessionManager integration (restored from 3643c8e)
   if (message.type === 'GET_LOCAL_OVERRIDE_TIME') {
     (async () => {
       try {
-        const today = new Date().toDateString();
-        const storage = await chrome.storage.local.get([`overrideTime_${today}`]);
-        const overrideTimeMs = storage[`overrideTime_${today}`] || 0;
-        const overrideTimeMinutes = Math.floor(overrideTimeMs / (60 * 1000));
-        sendResponse({ success: true, data: { overrideTime: overrideTimeMinutes } });
+        if (overrideSessionManager) {
+          // Use OverrideSessionManager for sophisticated override tracking (working version from 3643c8e)
+          const overrideTimeResult = await overrideSessionManager.calculateTodayOverrideTime();
+          console.log('⏰ GET_LOCAL_OVERRIDE_TIME via OverrideSessionManager:', overrideTimeResult);
+          sendResponse({ 
+            success: true, 
+            data: { 
+              overrideTime: overrideTimeResult.minutes,
+              sessions: overrideTimeResult.sessions || 0
+            }
+          });
+        } else {
+          // Fallback to simple date-based storage
+          const today = new Date().toDateString();
+          const storage = await chrome.storage.local.get([`overrideTime_${today}`]);
+          const overrideTimeMs = storage[`overrideTime_${today}`] || 0;
+          const overrideTimeMinutes = Math.floor(overrideTimeMs / (60 * 1000));
+          console.log('⏰ GET_LOCAL_OVERRIDE_TIME fallback:', overrideTimeMinutes + ' minutes');
+          sendResponse({ success: true, data: { overrideTime: overrideTimeMinutes } });
+        }
       } catch (error) {
-        console.error('Error getting override time:', error);
+        console.error('❌ Error getting override time:', error);
         sendResponse({ success: false, error: error.message });
       }
     })();
@@ -1698,9 +1714,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (blockingManager) {
           // Use BlockingManager's sophisticated temporary override system (working version from 3643c8e)
           const domain = message.payload?.domain;
-          const duration = message.payload?.duration || 5; // Default 5 minutes
+          const duration = message.payload?.duration || 300000; // Default 5 minutes (300000ms)
           
-          console.log('⏰ OVERRIDE_BLOCK via BlockingManager:', { domain, duration });
+          console.log('⏰ OVERRIDE_BLOCK via BlockingManager:', { domain, duration: duration + 'ms' });
           const overrideResult = await blockingManager.setTemporaryOverride(domain, duration);
           sendResponse(overrideResult);
         } else {

@@ -512,6 +512,95 @@ class BlockingManager {
   }
 
   /**
+   * Cache URL for blocking screen (restored from 3643c8e)
+   */
+  cacheUrl(tabId, url) {
+    if (!this.cachedUrls) {
+      this.cachedUrls = new Map();
+    }
+    this.cachedUrls.set(tabId, url);
+    
+    // Also cache in simple storage as fallback
+    chrome.storage.local.set({ cachedBlockedUrl: url }).catch(error => {
+      console.error('Failed to cache URL in storage:', error);
+    });
+  }
+
+  /**
+   * Get cached URL for blocking screen (restored from 3643c8e)  
+   */
+  getCachedUrl(tabId) {
+    if (!this.cachedUrls) {
+      this.cachedUrls = new Map();
+    }
+    return this.cachedUrls.get(tabId) || null;
+  }
+
+  /**
+   * Clear cached URL for blocking screen (restored from 3643c8e)
+   */
+  clearCachedUrl(tabId) {
+    if (!this.cachedUrls) {
+      this.cachedUrls = new Map();
+    }
+    this.cachedUrls.delete(tabId);
+  }
+
+  /**
+   * Set temporary override for a domain (working version from 3643c8e)
+   * This method expects duration in milliseconds to maintain compatibility with blocked.js
+   */
+  async setTemporaryOverride(domain, duration = 300000) { // 5 minutes default
+    try {
+      const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+      const expiryTime = Date.now() + duration;
+      
+      this.temporaryOverrides.set(cleanDomain, expiryTime);
+      await this.saveState();
+      
+      // Update blocking rules to exclude this domain temporarily
+      if (this.focusMode) {
+        await this.updateBlockingRules();
+      }
+      
+      // Set timeout to remove override
+      setTimeout(() => {
+        this.temporaryOverrides.delete(cleanDomain);
+        if (this.focusMode) {
+          this.updateBlockingRules();
+        }
+      }, duration);
+      
+      console.log(`⏱️ Temporary override set for ${cleanDomain} for ${duration/1000}s`);
+      return { success: true, domain: cleanDomain, expiryTime };
+    } catch (error) {
+      console.error('❌ Error setting temporary override:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Check if a domain should be blocked (working version from 3643c8e)
+   */
+  shouldBlockDomain(domain) {
+    if (!this.focusMode) return false;
+    
+    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+    
+    // Check if there's a temporary override
+    if (this.temporaryOverrides.has(cleanDomain)) {
+      const expiryTime = this.temporaryOverrides.get(cleanDomain);
+      if (Date.now() < expiryTime) {
+        return false; // Override still active
+      } else {
+        this.temporaryOverrides.delete(cleanDomain); // Expired override
+      }
+    }
+    
+    return this.blockedSites.has(cleanDomain);
+  }
+
+  /**
    * Set focus mode directly (for web app sync)
    */
   async setFocusMode(newFocusMode) {
@@ -601,9 +690,12 @@ class BlockingManager {
     try {
       console.log('🔧 Updating blocking rules...');
       
-      // Get current blocked sites from storage
+      // Get current blocked sites from storage and merge with instance blockedSites
       const storage = await chrome.storage.local.get(['blockedSites']);
-      const blockedSites = storage.blockedSites || [];
+      const storageSites = storage.blockedSites || [];
+      
+      // Use instance blockedSites if available, otherwise use storage
+      const blockedSites = this.blockedSites.size > 0 ? Array.from(this.blockedSites) : storageSites;
       
       // Use the instance focusMode (this.focusMode) rather than storage 
       // because StateManager uses coordinatedFocusMode key to avoid conflicts
@@ -630,44 +722,70 @@ class BlockingManager {
       
       // Only add blocking rules if focus mode is active and we have sites to block
       if (focusMode && blockedSites.length > 0) {
-        // Generate collision-resistant IDs by checking existing rules
-        const existingIds = new Set(existingRules.map(rule => rule.id));
-        let nextRuleId = 2000; // Start from 2000 to avoid conflicts
-        
-        const newRules = blockedSites.map((domain, index) => {
-          // Find next available ID
-          while (existingIds.has(nextRuleId)) {
-            nextRuleId++;
-          }
+        // Filter out domains with active temporary overrides
+        const now = Date.now();
+        const activeDomains = blockedSites.filter(domain => {
+          const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
           
-          const rule = {
-            id: nextRuleId,
-            priority: 1,
-            action: {
-              type: 'redirect',
-              redirect: {
-                url: chrome.runtime.getURL('blocked.html') + '?domain=' + encodeURIComponent(domain)
-              }
-            },
-            condition: {
-              urlFilter: `*://*.${domain}/*`,
-              resourceTypes: ['main_frame']
+          // Check if there's an active temporary override
+          if (this.temporaryOverrides.has(cleanDomain)) {
+            const expiryTime = this.temporaryOverrides.get(cleanDomain);
+            if (now < expiryTime) {
+              console.log(`⏰ Skipping blocking rule for ${cleanDomain} (temporary override active until ${new Date(expiryTime).toLocaleTimeString()})`);
+              return false; // Skip this domain
+            } else {
+              // Remove expired override
+              this.temporaryOverrides.delete(cleanDomain);
             }
-          };
+          }
+          return true;
+        });
+        
+        console.log(`🔍 Domains to block: ${activeDomains.length}/${blockedSites.length} (${blockedSites.length - activeDomains.length} temporarily overridden)`);
+        
+        if (activeDomains.length > 0) {
+          // Generate collision-resistant IDs by checking existing rules
+          const existingIds = new Set(existingRules.map(rule => rule.id));
+          let nextRuleId = 2000; // Start from 2000 to avoid conflicts
           
-          existingIds.add(nextRuleId); // Mark this ID as used
-          nextRuleId++; // Increment for next rule
-          return rule;
-        });
-        
-        console.log('📋 Creating rules with IDs:', newRules.map(r => r.id));
-        
-        await chrome.declarativeNetRequest.updateDynamicRules({
-          addRules: newRules
-        });
-        
-        console.log('✅ Added', newRules.length, 'blocking rules for focus mode');
-        return { success: true, rulesAdded: newRules.length, ruleIds: newRules.map(r => r.id) };
+          const newRules = activeDomains.map((domain, index) => {
+            // Find next available ID
+            while (existingIds.has(nextRuleId)) {
+              nextRuleId++;
+            }
+            
+            const rule = {
+              id: nextRuleId,
+              priority: 1,
+              action: {
+                type: 'redirect',
+                redirect: {
+                  url: chrome.runtime.getURL('blocked.html') + '?domain=' + encodeURIComponent(domain)
+                }
+              },
+              condition: {
+                urlFilter: `*://*.${domain}/*`,
+                resourceTypes: ['main_frame']
+              }
+            };
+            
+            existingIds.add(nextRuleId); // Mark this ID as used
+            nextRuleId++; // Increment for next rule
+            return rule;
+          });
+          
+          console.log('📋 Creating rules with IDs:', newRules.map(r => r.id));
+          
+          await chrome.declarativeNetRequest.updateDynamicRules({
+            addRules: newRules
+          });
+          
+          console.log('✅ Added', newRules.length, 'blocking rules for focus mode');
+          return { success: true, rulesAdded: newRules.length, ruleIds: newRules.map(r => r.id) };
+        } else {
+          console.log('ℹ️ All domains have temporary overrides - no blocking rules added');
+          return { success: true, rulesAdded: 0 };
+        }
       } else {
         console.log('ℹ️ No blocking rules needed (focus mode:', focusMode, ', sites:', blockedSites.length, ')');
         return { success: true, rulesAdded: 0 };
@@ -845,6 +963,60 @@ class BlockingManager {
       console.error('❌ Error creating site override:', error);
       return { success: false, error: error.message };
     }
+  }
+
+  /**
+   * Set temporary override for a domain (working version from 3643c8e)
+   * This method expects duration in milliseconds to maintain compatibility with blocked.js
+   */
+  async setTemporaryOverride(domain, duration = 300000) { // 5 minutes default
+    try {
+      const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+      const expiryTime = Date.now() + duration;
+      
+      this.temporaryOverrides.set(cleanDomain, expiryTime);
+      await this.saveState();
+      
+      // Update blocking rules to exclude this domain temporarily
+      if (this.focusMode) {
+        await this.updateBlockingRules();
+      }
+      
+      // Set timeout to remove override
+      setTimeout(() => {
+        this.temporaryOverrides.delete(cleanDomain);
+        if (this.focusMode) {
+          this.updateBlockingRules();
+        }
+      }, duration);
+      
+      console.log(`⏱️ Temporary override set for ${cleanDomain} for ${duration/1000}s`);
+      return { success: true, domain: cleanDomain, expiryTime };
+    } catch (error) {
+      console.error('❌ Error setting temporary override:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Check if a domain should be blocked (working version from 3643c8e)
+   */
+  shouldBlockDomain(domain) {
+    if (!this.focusMode) return false;
+    
+    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+    
+    // Check if there's a temporary override
+    if (this.temporaryOverrides.has(cleanDomain)) {
+      const expiryTime = this.temporaryOverrides.get(cleanDomain);
+      if (Date.now() < expiryTime) {
+        return false; // Override still active
+      } else {
+        this.temporaryOverrides.delete(cleanDomain); // Expired override
+      }
+    }
+    
+    return this.blockedSites.has(cleanDomain);
   }
 
   /**

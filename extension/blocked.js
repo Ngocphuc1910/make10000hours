@@ -385,7 +385,8 @@ class BlockedPage {
           Processing...
         `;
         
-        const domain = document.getElementById('blockedSite').textContent;
+        // Use original URL if available, otherwise use domain text
+        const domain = this.originalUrl || document.getElementById('blockedSite').textContent;
         const response = await chrome.runtime.sendMessage({ 
           type: 'OVERRIDE_BLOCK', 
           payload: { domain, duration: 300000 } // 5 minutes
