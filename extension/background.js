@@ -106,6 +106,69 @@ class ChromeIdleHelper {
 // Global Chrome Idle Helper
 const chromeIdleHelper = new ChromeIdleHelper();
 
+// ExtensionEventBus - Critical for Deep Focus web app communication
+const ExtensionEventBus = {
+  EVENTS: {
+    DEEP_FOCUS_UPDATE: 'DEEP_FOCUS_TIME_UPDATED',
+    FOCUS_STATE_CHANGE: 'FOCUS_STATE_CHANGED'
+  },
+
+  async emit(eventName, payload) {
+    try {
+      const manifestData = chrome.runtime.getManifest();
+      
+      // Use a Promise wrapper to properly handle the async rejection
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({
+          type: eventName,
+          payload: {
+            ...payload,
+            _version: manifestData.version,
+            _timestamp: Date.now()
+          }
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            // Expected error when no listeners are connected
+            if (chrome.runtime.lastError.message?.includes('Could not establish connection') ||
+                chrome.runtime.lastError.message?.includes('Receiving end does not exist')) {
+              console.debug('📝 No listeners for event:', eventName);
+              resolve(); // Not an error, just no listeners
+            } else {
+              reject(new Error(chrome.runtime.lastError.message));
+            }
+          } else {
+            resolve(response);
+          }
+        });
+      });
+
+      // Also try to send to web app content scripts
+      try {
+        const tabs = await chrome.tabs.query({url: ['*://app.make10000hours.com/*', '*://localhost:*/*']});
+        for (const tab of tabs) {
+          chrome.tabs.sendMessage(tab.id, {
+            type: eventName,
+            payload: {
+              ...payload,
+              _version: manifestData.version,
+              _timestamp: Date.now(),
+              _source: 'extension_background'
+            }
+          }).catch(() => {
+            console.debug('📝 Could not notify tab', tab.id, 'of event:', eventName);
+          });
+        }
+        console.log('📡 ExtensionEventBus emitted:', eventName, 'to', tabs.length, 'web app tabs');
+      } catch (error) {
+        console.debug('📝 Could not notify web app tabs:', error.message);
+      }
+      
+    } catch (error) {
+      console.error('❌ ExtensionEventBus emit failed:', eventName, error);
+    }
+  }
+};
+
 // Global instances
 let blockingManager = null;
 let storageManager = null;
@@ -487,6 +550,21 @@ async function syncToFirebase() {
 }
 
 /**
+ * Trigger automatic Firebase sync for Deep Focus sessions
+ * Called when Deep Focus session completes
+ */
+async function triggerDeepFocusFirebaseSync() {
+  try {
+    console.log('🎯 Triggering automatic Deep Focus Firebase sync...');
+    await syncDeepFocusSessionsToFirebase();
+    
+  } catch (error) {
+    console.error('❌ Firebase sync error:', error);
+    trackingState.diagnostics.firebaseSyncFailures++;
+  }
+}
+
+/**
  * Sync Deep Focus sessions to Firebase
  */
 async function syncDeepFocusSessionsToFirebase() {
@@ -771,6 +849,24 @@ async function initializeExtension() {
 }
 
 // ===== MESSAGE HANDLING =====
+
+// Listen for Deep Focus updates to trigger Firebase sync
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Handle Deep Focus time updates (auto-sync trigger)
+  if (message.type === 'DEEP_FOCUS_TIME_UPDATED') {
+    console.log('🎯 Deep Focus time updated, checking for auto-sync...');
+    
+    // Trigger Firebase sync after a short delay (non-blocking)
+    setTimeout(() => {
+      triggerDeepFocusFirebaseSync().catch(error => {
+        console.warn('⚠️ Auto-sync failed:', error);
+      });
+    }, 2000); // 2 second delay to avoid blocking
+    
+    // Don't send response for this event
+    return false;
+  }
+});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('📨 Received message:', message.type);

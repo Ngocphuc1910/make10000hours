@@ -344,6 +344,9 @@ class BlockingManager {
           );
 
           console.log(`✅ Deep focus session completed: ${elapsedMinutes} minutes`);
+          
+          // Broadcast completion to web app
+          await this.broadcastDeepFocusTimeUpdate();
         }
       } else if (this.focusStartTime) {
         // Fallback to basic session completion
@@ -451,6 +454,41 @@ class BlockingManager {
       }
     } catch (error) {
       console.error('❌ Failed to load blocking manager state:', error);
+    }
+  }
+
+  /**
+   * Broadcast deep focus time update to all listeners
+   */
+  async broadcastDeepFocusTimeUpdate() {
+    try {
+      if (!this.storageManager) {
+        console.warn('⚠️ StorageManager not available for time broadcast');
+        return;
+      }
+
+      const sessionData = await this.storageManager.getLocalDeepFocusTime();
+      
+      // Send via chrome.runtime.sendMessage (for popup and other extension parts)
+      chrome.runtime.sendMessage({
+        type: 'DEEP_FOCUS_TIME_UPDATED',
+        payload: { minutes: sessionData.minutes }
+      }).catch(() => {
+        // Ignore errors when no listeners are connected
+        console.debug('📝 No listeners for deep focus time update');
+      });
+
+      // Send via ExtensionEventBus (for web app)
+      if (typeof ExtensionEventBus !== 'undefined') {
+        await ExtensionEventBus.emit(
+          ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE,
+          { minutes: sessionData.minutes }
+        );
+      }
+
+      console.log('📢 Broadcasted deep focus time update:', sessionData.minutes, 'minutes');
+    } catch (error) {
+      console.error('❌ Failed to broadcast deep focus time:', error);
     }
   }
 

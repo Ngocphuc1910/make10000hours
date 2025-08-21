@@ -104,6 +104,20 @@ class StorageManager {
       await chrome.storage.local.set({ deepFocusSession: allSessions });
 
       console.log('✅ Created Deep Focus session:', sessionId);
+      
+      // Broadcast session creation via ExtensionEventBus (if available)
+      if (typeof ExtensionEventBus !== 'undefined') {
+        try {
+          const totalMinutes = await this.getLocalDeepFocusTime();
+          await ExtensionEventBus.emit(
+            ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE,
+            { minutes: totalMinutes.minutes }
+          );
+        } catch (error) {
+          console.warn('⚠️ Failed to broadcast session creation:', error);
+        }
+      }
+      
       return sessionId;
     } catch (error) {
       console.error('❌ Error creating Deep Focus session:', error);
@@ -139,6 +153,20 @@ class StorageManager {
           await chrome.storage.local.set({ deepFocusSession: allSessions });
           
           console.log(`📊 Updated Deep Focus session ${sessionId}: ${minutes} minutes`);
+          
+          // Broadcast session update via ExtensionEventBus (if available)
+          if (typeof ExtensionEventBus !== 'undefined') {
+            try {
+              const totalMinutes = await this.getLocalDeepFocusTime();
+              await ExtensionEventBus.emit(
+                ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE,
+                { minutes: totalMinutes.minutes }
+              );
+            } catch (error) {
+              console.warn('⚠️ Failed to broadcast session update:', error);
+            }
+          }
+          
           break;
         }
       }
@@ -197,6 +225,20 @@ class StorageManager {
           await chrome.storage.local.set({ deepFocusSession: allSessions });
           
           console.log(`✅ Completed Deep Focus session ${sessionId}: ${session.duration} minutes`);
+          
+          // Broadcast session completion via ExtensionEventBus (if available)
+          if (typeof ExtensionEventBus !== 'undefined') {
+            try {
+              const totalMinutes = await this.getLocalDeepFocusTime();
+              await ExtensionEventBus.emit(
+                ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE,
+                { minutes: totalMinutes.minutes }
+              );
+            } catch (error) {
+              console.warn('⚠️ Failed to broadcast session completion:', error);
+            }
+          }
+          
           break;
         }
       }
