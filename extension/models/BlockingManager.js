@@ -3,75 +3,7 @@
  * Service Worker Compatible Version
  */
 
-// Inline ExtensionEventBus functionality for service worker compatibility
-const ExtensionEventBus = {
-  EVENTS: {
-    DEEP_FOCUS_UPDATE: 'DEEP_FOCUS_TIME_UPDATED',
-    FOCUS_STATE_CHANGE: 'FOCUS_STATE_CHANGED'
-  },
-
-  async emit(eventName, payload) {
-    try {
-      const manifestData = chrome.runtime.getManifest();
-      const start = performance.now();
-      
-      await chrome.runtime.sendMessage({
-        type: eventName,
-        payload: {
-          ...payload,
-          _version: manifestData.version,
-          _timestamp: Date.now()
-        }
-      });
-
-      const duration = performance.now() - start;
-      console.log(`📊 Event ${eventName} emission took:`, duration, 'ms');
-    } catch (error) {
-      console.warn(`⚠️ Event emission failed: ${eventName}`, error);
-      // Don't throw - follow existing pattern of catching runtime errors
-    }
-  },
-
-  subscribe(callback) {
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (Object.values(this.EVENTS).includes(message.type)) {
-        callback(message);
-      }
-      return true; // Keep message channel open
-    });
-  },
-
-  isExtensionContextValid: function() {
-    try {
-      return Boolean(chrome.runtime && chrome.runtime.id);
-    } catch (e) {
-      return false;
-    }
-  },
-
-  safeForwardMessage: async function(type, payload) {
-    if (!this.isExtensionContextValid()) {
-      return { success: false, error: 'Extension context invalid', recoverable: true };
-    }
-
-    try {
-      return await chrome.runtime.sendMessage({
-        type,
-        payload,
-        source: 'make10000hours-extension'
-      });
-    } catch (error) {
-      if (!error.message.includes('Extension context invalidated')) {
-        console.error(`Failed to forward ${type}:`, error);
-      }
-      return { 
-        success: false, 
-        error: error.message,
-        recoverable: error.message.includes('Extension context invalidated')
-      };
-    }
-  }
-};
+// ExtensionEventBus is loaded by background.js - no inline definition needed
 
 class BlockingManager {
   constructor() {
@@ -161,16 +93,16 @@ class BlockingManager {
     const originalFocusMode = this.focusMode;
     
     try {
-      // Validate storage manager availability
+      // Strict validation: StorageManager is required for Deep Focus
       if (!this.storageManager) {
-        console.warn('⚠️ StorageManager not available, using basic mode');
+        throw new Error('StorageManager is required for Deep Focus functionality');
       }
 
-      // If turning on focus mode, verify user state first
-      if (!this.focusMode && this.storageManager) {
+      // If turning on focus mode, strictly validate user state
+      if (!this.focusMode) {
         const userStateValid = await this.storageManager.validateAndRecoverUserState();
         if (!userStateValid) {
-          console.warn('⚠️ User ID not available, proceeding with basic focus mode');
+          throw new Error('Valid user state is required to enable Deep Focus mode');
         }
       }
 
@@ -184,11 +116,31 @@ class BlockingManager {
         await this.startLocalDeepFocusSession();
         // Enable blocking rules
         await this.updateBlockingRules();
+        
+        // Coordinate with StateManager if available
+        if (this.stateManager) {
+          await this.stateManager.dispatch({
+            type: 'FOCUS_MODE_CHANGED',
+            payload: { 
+              focusMode: true, 
+              sessionId: this.currentLocalSessionId,
+              focusStartTime: Date.now()
+            }
+          });
+        }
       } else {
         console.log('⏹️ Completing deep focus session...');
         await this.completeLocalDeepFocusSession();
         // Disable blocking rules
         await this.updateBlockingRules();
+        
+        // Coordinate with StateManager if available
+        if (this.stateManager) {
+          await this.stateManager.dispatch({
+            type: 'FOCUS_MODE_CHANGED',
+            payload: { focusMode: false }
+          });
+        }
       }
 
       // Save state
@@ -511,6 +463,19 @@ class BlockingManager {
     try {
       console.log(`🔄 BlockingManager.setFocusMode called with: ${newFocusMode} at ${new Date().toISOString()}`);
       
+      // Strict validation: StorageManager is required for Deep Focus
+      if (!this.storageManager) {
+        throw new Error('StorageManager is required for Deep Focus functionality');
+      }
+
+      // Validate user state when enabling focus mode
+      if (newFocusMode && !this.focusMode) {
+        const userStateValid = await this.storageManager.validateAndRecoverUserState();
+        if (!userStateValid) {
+          throw new Error('Valid user state is required to enable Deep Focus mode');
+        }
+      }
+      
       const previousMode = this.focusMode;
       console.log(`🔍 Current focus mode before change: ${previousMode}`);
       
@@ -523,11 +488,31 @@ class BlockingManager {
         console.log('🚀 Starting local deep focus session...');
         await this.startLocalDeepFocusSession();
         await this.updateBlockingRules();
+        
+        // Coordinate with StateManager if available
+        if (this.stateManager) {
+          await this.stateManager.dispatch({
+            type: 'FOCUS_MODE_CHANGED',
+            payload: { 
+              focusMode: true, 
+              sessionId: this.currentLocalSessionId,
+              focusStartTime: Date.now()
+            }
+          });
+        }
       } else if (!this.focusMode && previousMode) {
         // Turning off focus mode - complete session and disable blocking
         console.log('🏁 Completing local deep focus session...');
         await this.completeLocalDeepFocusSession();
         await this.updateBlockingRules();
+        
+        // Coordinate with StateManager if available
+        if (this.stateManager) {
+          await this.stateManager.dispatch({
+            type: 'FOCUS_MODE_CHANGED',
+            payload: { focusMode: false }
+          });
+        }
       }
       
       // Save the updated state
@@ -562,15 +547,18 @@ class BlockingManager {
       console.log('🔧 Updating blocking rules...');
       
       // Get current blocked sites from storage
-      const storage = await chrome.storage.local.get(['blockedSites', 'focusMode']);
+      const storage = await chrome.storage.local.get(['blockedSites']);
       const blockedSites = storage.blockedSites || [];
-      const focusMode = storage.focusMode || false;
       
-      console.log('🔍 Current storage state:', {
+      // Use the instance focusMode (this.focusMode) rather than storage 
+      // because StateManager uses coordinatedFocusMode key to avoid conflicts
+      const focusMode = this.focusMode;
+      
+      console.log('🔍 Current blocking state:', {
         blockedSites: blockedSites,
         blockedSitesLength: blockedSites.length,
         focusMode: focusMode,
-        internalFocusMode: this.focusMode
+        instanceFocusMode: this.focusMode
       });
       
       // Get existing rules to clean up - ONLY remove rules in our range (1000-9999)
@@ -886,6 +874,14 @@ class BlockingManager {
         await new Promise(resolve => setTimeout(resolve, backoffMs));
       }
     }
+  }
+
+  /**
+   * Set StateManager reference for coordination
+   */
+  setStateManager(stateManager) {
+    this.stateManager = stateManager;
+    console.log('✅ StateManager reference set in BlockingManager');
   }
 }
 
