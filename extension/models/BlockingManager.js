@@ -327,18 +327,25 @@ class BlockingManager {
    */
   async saveState() {
     try {
+      console.log('💾 [BLOCKING-DEBUG] saveState() called at', new Date().toISOString());
+      console.log('🔍 [BLOCKING-DEBUG] Current BlockingManager properties before save:');
+      console.log('  - this.focusMode:', this.focusMode);
+      console.log('  - this.currentLocalSessionId:', this.currentLocalSessionId);
+      console.log('  - this.focusStartTime:', this.focusStartTime);
+      
       const state = {
         focusMode: this.focusMode,
         currentLocalSessionId: this.currentLocalSessionId,
         lastUpdated: Date.now()
       };
       
+      console.log('📦 [BLOCKING-DEBUG] Internal state object to save:', JSON.stringify(state));
+      
       // Convert Sets and Maps to serializable formats
       const blockedSitesArray = Array.from(this.blockedSites);
       const temporaryOverridesObj = Object.fromEntries(this.temporaryOverrides);
       
-      // Save all state including enhanced Deep Focus properties
-      await chrome.storage.local.set({ 
+      const storageData = { 
         blockingManagerState: state,
         focusMode: this.focusMode,
         blockedSites: blockedSitesArray,
@@ -346,10 +353,25 @@ class BlockingManager {
         blockedAttempts: this.blockedAttempts,
         focusStats: this.focusStats,
         temporaryOverrides: temporaryOverridesObj
-      });
-      console.log('💾 Blocking manager state saved (internal + main keys + Deep Focus state)');
+      };
+      
+      console.log('💾 [BLOCKING-DEBUG] Complete storage data to save:');
+      console.log('  - blockingManagerState:', JSON.stringify(storageData.blockingManagerState));
+      console.log('  - focusMode (direct key):', storageData.focusMode);
+      console.log('  - blockedSites count:', storageData.blockedSites.length);
+      
+      // Save all state including enhanced Deep Focus properties
+      await chrome.storage.local.set(storageData);
+      console.log('✅ [BLOCKING-DEBUG] Blocking manager state saved successfully');
+      
+      // Verify what was actually saved
+      const verifyResult = await chrome.storage.local.get(['blockingManagerState', 'focusMode']);
+      console.log('🔍 [BLOCKING-DEBUG] Verification - what was actually saved:');
+      console.log('  - blockingManagerState from storage:', JSON.stringify(verifyResult.blockingManagerState));
+      console.log('  - focusMode from storage:', verifyResult.focusMode);
+      
     } catch (error) {
-      console.error('❌ Failed to save blocking manager state:', error);
+      console.error('❌ [BLOCKING-DEBUG] Failed to save blocking manager state:', error);
       // Don't throw error to prevent blocking other operations
     }
   }
@@ -359,22 +381,51 @@ class BlockingManager {
    */
   async loadState() {
     try {
+      console.log('📂 [BLOCKING-DEBUG] loadState() called at', new Date().toISOString());
+      console.log('🔍 [BLOCKING-DEBUG] Current BlockingManager properties before load:');
+      console.log('  - this.focusMode:', this.focusMode);
+      console.log('  - this.currentLocalSessionId:', this.currentLocalSessionId);
+      
       // Load both the internal state and the main storage keys + enhanced Deep Focus state
       const result = await chrome.storage.local.get([
         'blockingManagerState', 'focusMode', 'blockedSites',
         'focusStartTime', 'blockedAttempts', 'focusStats', 'temporaryOverrides'
       ]);
       
+      console.log('📥 [BLOCKING-DEBUG] Raw storage result:', JSON.stringify({
+        blockingManagerState: result.blockingManagerState,
+        focusMode: result.focusMode,
+        blockedSitesLength: result.blockedSites ? result.blockedSites.length : 0
+      }));
+      
       if (result.blockingManagerState) {
         const state = result.blockingManagerState;
+        console.log('🔄 [BLOCKING-DEBUG] Loading from internal blockingManagerState:');
+        console.log('  - state.focusMode:', state.focusMode);
+        console.log('  - state.currentLocalSessionId:', state.currentLocalSessionId);
+        
         this.focusMode = state.focusMode || false;
         this.currentLocalSessionId = state.currentLocalSessionId || null;
         
+        console.log('✅ [BLOCKING-DEBUG] After loading internal state:');
+        console.log('  - this.focusMode:', this.focusMode);
         console.log('📂 Blocking manager internal state loaded:', state);
+      } else {
+        console.log('⚠️ [BLOCKING-DEBUG] No blockingManagerState found in storage, using defaults');
+        // If no internal state exists, check if there's a legacy direct focusMode key
+        if (result.focusMode !== undefined) {
+          console.log('🔄 [BLOCKING-DEBUG] Using legacy focusMode from direct storage key:', result.focusMode);
+          this.focusMode = result.focusMode;
+        } else {
+          console.log('🔄 [BLOCKING-DEBUG] No state found, keeping default focusMode:', this.focusMode);
+        }
       }
       
-      // Load main storage keys and ensure consistency
-      this.focusMode = result.focusMode !== undefined ? result.focusMode : this.focusMode;
+      // FIXED: The internal blockingManagerState is now the single source of truth
+      // No longer overwriting with potentially stale direct storage key
+      console.log('✅ [BLOCKING-DEBUG] BUGFIX APPLIED: Using internal state as single source of truth');
+      console.log('  - Final this.focusMode:', this.focusMode);
+      console.log('  - Ignored potentially stale result.focusMode:', result.focusMode);
       
       // Load blocked sites and convert to Set
       const blockedSitesArray = result.blockedSites || [];
@@ -393,19 +444,23 @@ class BlockingManager {
       const overrides = result.temporaryOverrides || {};
       this.temporaryOverrides = new Map(Object.entries(overrides));
       
-      console.log('🔍 Final loaded state - Focus mode:', this.focusMode, 'Blocked sites:', this.blockedSites.size, 'Focus session active:', !!this.focusStartTime);
+      console.log('🔍 [BLOCKING-DEBUG] Final loaded state:');
+      console.log('  - Focus mode:', this.focusMode);
+      console.log('  - Blocked sites:', this.blockedSites.size);
+      console.log('  - Focus session active:', !!this.focusStartTime);
+      console.log('  - currentLocalSessionId:', this.currentLocalSessionId);
       
       // If focus mode is active, restart the timer
       if (this.focusMode && this.focusStartTime) {
         try {
           this.startSessionTimer();
-          console.log('🔄 Restored session timer for active deep focus session');
+          console.log('🔄 [BLOCKING-DEBUG] Restored session timer for active deep focus session');
         } catch (error) {
-          console.warn('⚠️ Error starting session timer during state load:', error);
+          console.warn('⚠️ [BLOCKING-DEBUG] Error starting session timer during state load:', error);
         }
       }
     } catch (error) {
-      console.error('❌ Failed to load blocking manager state:', error);
+      console.error('❌ [BLOCKING-DEBUG] Failed to load blocking manager state:', error);
     }
   }
 

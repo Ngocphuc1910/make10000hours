@@ -1167,20 +1167,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_CURRENT_STATE') {
     (async () => {
       try {
-        const storage = await chrome.storage.local.get(['focusMode']);
-        const focusMode = storage.focusMode || false;
+        console.log('📨 [BACKGROUND-DEBUG] GET_CURRENT_STATE received');
+        
+        // Get actual focus mode from BlockingManager instead of stale storage
+        const actualFocusMode = blockingManager ? blockingManager.focusMode : false;
+        console.log('🔍 [BACKGROUND-DEBUG] blockingManager.focusMode:', actualFocusMode);
         
         const currentState = {
-          focusMode: focusMode,
+          focusMode: actualFocusMode,
           isInitialized: isInitialized,
           currentDomain: trackingState.currentDomain,
           lastHeartbeat: trackingState.lastHeartbeat
         };
         
-        console.log('✅ GET_CURRENT_STATE:', currentState);
+        console.log('📤 [BACKGROUND-DEBUG] Responding with focusMode:', actualFocusMode);
+        console.log('✅ GET_CURRENT_STATE - using BlockingManager focusMode:', actualFocusMode);
+        
         sendResponse({ success: true, data: currentState });
       } catch (error) {
-        console.error('❌ Error getting current state:', error);
+        console.error('❌ [BACKGROUND-DEBUG] Error getting current state:', error);
         sendResponse({ success: false, error: error.message });
       }
     })();

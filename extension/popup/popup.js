@@ -467,20 +467,29 @@ class PopupManager {
    */
   async initializeCore() {
     try {
+      console.log('🚀 [POPUP-DEBUG] initializeCore() started - initial coreState focusMode:', this.coreState.focusMode);
+      
       // Only get critical state first with shorter timeout
+      console.log('📨 [POPUP-DEBUG] Sending GET_CURRENT_STATE message...');
       const stateResult = await this.sendMessageWithRetry(
         'GET_CURRENT_STATE',
         {},
         1, // Reduced retries for faster core load
         { timeout: 1500 } // Reduced from 5000ms to 1500ms for faster popup
       );
+      
+      console.log('📥 [POPUP-DEBUG] GET_CURRENT_STATE response - success:', stateResult?.success, 'focusMode:', stateResult?.data?.focusMode);
 
       if (stateResult?.success) {
+        const previousCoreState = { ...this.coreState };
         this.coreState = {
           ...this.coreState,
           ...stateResult.data
         };
+        console.log('🔄 [POPUP-DEBUG] coreState updated - Focus mode:', previousCoreState.focusMode, '→', this.coreState.focusMode);
         console.log('🔄 Popup initialized with focus mode:', this.coreState.focusMode, 'at', new Date().toISOString());
+      } else {
+        console.error('❌ [POPUP-DEBUG] GET_CURRENT_STATE failed:', stateResult);
       }
 
       // Initialize analytics UI if available
@@ -489,11 +498,13 @@ class PopupManager {
       }
 
       // Show basic UI immediately
+      console.log('🎨 [POPUP-DEBUG] About to call updateCoreUI() with focusMode:', this.coreState.focusMode);
       this.updateCoreUI();
+      console.log('✅ [POPUP-DEBUG] updateCoreUI() completed');
       
       return true;
     } catch (error) {
-      console.error('Core initialization failed:', error);
+      console.error('❌ [POPUP-DEBUG] Core initialization failed:', error);
       this.showError('Basic functionality unavailable');
       return false;
     }
@@ -872,11 +883,15 @@ class PopupManager {
    * Update core UI elements
    */
   updateCoreUI() {
+    console.log('🎨 [POPUP-DEBUG] updateCoreUI() called - desired focusMode:', this.coreState.focusMode);
+    
     // Get current UI state for comparison
     const focusToggle = document.querySelector('#focus-mode-toggle');
     const currentUIState = {
       focusMode: focusToggle ? focusToggle.checked : false
     };
+    
+    console.log('🔍 [POPUP-DEBUG] Toggle state - current:', currentUIState.focusMode, 'desired:', this.coreState.focusMode);
     
     // Compare with desired state to prevent unnecessary updates
     const needsUpdate = (
@@ -884,13 +899,19 @@ class PopupManager {
       currentUIState.focusMode !== this.coreState.focusMode
     );
     
+    console.log('🔍 [POPUP-DEBUG] needsUpdate:', needsUpdate, '(state changed)');    
+    
     if (needsUpdate) {
-      console.log('🔄 Updating core UI - state changed');
+      console.log('🔄 [POPUP-DEBUG] Updating core UI - state changed');
       
       // Update focus mode toggle
       if (focusToggle) {
+        console.log('🔧 [POPUP-DEBUG] Setting toggle checked to:', this.coreState.focusMode);
         focusToggle.checked = this.coreState.focusMode;
         this.updateFocusModeSwitch();
+        console.log('✅ [POPUP-DEBUG] Toggle updated successfully');
+      } else {
+        console.warn('⚠️ [POPUP-DEBUG] Focus toggle element not found! Cannot update UI.');
       }
 
       // Setup tabs (core functionality)
@@ -899,8 +920,10 @@ class PopupManager {
       // Store current state for next comparison
       this.lastCoreUIState = { ...currentUIState };
     } else {
-      console.log('📱 Core UI unchanged, skipping update');
+      console.log('📱 [POPUP-DEBUG] Core UI unchanged, skipping update');
     }
+    
+    console.log('✅ [POPUP-DEBUG] updateCoreUI() completed');
   }
 
   /**

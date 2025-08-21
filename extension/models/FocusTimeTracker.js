@@ -267,11 +267,21 @@ class FocusTimeTracker {
       const state = this.stateManager.getState();
       const blockingState = this.blockingManager.getFocusStats();
       
+      // Use BlockingManager as the source of truth for focusMode
+      const actualFocusMode = this.blockingManager.focusMode;
+      
+      console.log('🔍 GET_FOCUS_STATE - State comparison:', {
+        stateManagerFocusMode: state.focusMode,
+        blockingManagerFocusMode: actualFocusMode,
+        usingActualFocusMode: actualFocusMode
+      });
+      
       sendResponse({
         success: true,
-        focusMode: state.focusMode,
+        focusMode: actualFocusMode,
         data: {
-          isActive: state.focusMode,
+          focusMode: actualFocusMode,  // Popup expects this field
+          isActive: actualFocusMode,   // Keep for compatibility
           sessionId: state.currentSessionId,
           focusStartTime: state.focusStartTime,
           focusTime: blockingState.focusTime || 0
