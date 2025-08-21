@@ -1,10 +1,79 @@
 /**
  * BlockingManager class for handling site blocking functionality
+ * Service Worker Compatible Version
  */
 
-import { ExtensionEventBus } from '../utils/ExtensionEventBus.js';
+// Inline ExtensionEventBus functionality for service worker compatibility
+const ExtensionEventBus = {
+  EVENTS: {
+    DEEP_FOCUS_UPDATE: 'DEEP_FOCUS_TIME_UPDATED',
+    FOCUS_STATE_CHANGE: 'FOCUS_STATE_CHANGED'
+  },
 
-export class BlockingManager {
+  async emit(eventName, payload) {
+    try {
+      const manifestData = chrome.runtime.getManifest();
+      const start = performance.now();
+      
+      await chrome.runtime.sendMessage({
+        type: eventName,
+        payload: {
+          ...payload,
+          _version: manifestData.version,
+          _timestamp: Date.now()
+        }
+      });
+
+      const duration = performance.now() - start;
+      console.log(`📊 Event ${eventName} emission took:`, duration, 'ms');
+    } catch (error) {
+      console.warn(`⚠️ Event emission failed: ${eventName}`, error);
+      // Don't throw - follow existing pattern of catching runtime errors
+    }
+  },
+
+  subscribe(callback) {
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (Object.values(this.EVENTS).includes(message.type)) {
+        callback(message);
+      }
+      return true; // Keep message channel open
+    });
+  },
+
+  isExtensionContextValid: function() {
+    try {
+      return Boolean(chrome.runtime && chrome.runtime.id);
+    } catch (e) {
+      return false;
+    }
+  },
+
+  safeForwardMessage: async function(type, payload) {
+    if (!this.isExtensionContextValid()) {
+      return { success: false, error: 'Extension context invalid', recoverable: true };
+    }
+
+    try {
+      return await chrome.runtime.sendMessage({
+        type,
+        payload,
+        source: 'make10000hours-extension'
+      });
+    } catch (error) {
+      if (!error.message.includes('Extension context invalidated')) {
+        console.error(`Failed to forward ${type}:`, error);
+      }
+      return { 
+        success: false, 
+        error: error.message,
+        recoverable: error.message.includes('Extension context invalidated')
+      };
+    }
+  }
+};
+
+class BlockingManager {
   constructor() {
     this.storageManager = null;
     this.initialized = false;
@@ -32,7 +101,8 @@ export class BlockingManager {
       // Load saved state first
       await this.loadState();
       
-      // Initialize blocking rules
+      // Initialize blocking rules based on current state
+      console.log('🔧 Initializing blocking rules on startup...');
       await this.updateBlockingRules();
       
       this.initialized = true;
@@ -101,9 +171,13 @@ export class BlockingManager {
       if (this.focusMode) {
         console.log('🎯 Starting deep focus session...');
         await this.startLocalDeepFocusSession();
+        // Enable blocking rules
+        await this.updateBlockingRules();
       } else {
         console.log('⏹️ Completing deep focus session...');
         await this.completeLocalDeepFocusSession();
+        // Disable blocking rules
+        await this.updateBlockingRules();
       }
 
       // Save state
@@ -273,8 +347,13 @@ export class BlockingManager {
         lastUpdated: Date.now()
       };
       
-      await chrome.storage.local.set({ blockingManagerState: state });
-      console.log('💾 Blocking manager state saved');
+      // Save both the internal state and the main storage keys that updateBlockingRules() uses
+      await chrome.storage.local.set({ 
+        blockingManagerState: state,
+        focusMode: this.focusMode,
+        blockedSites: this.blockedSites || []
+      });
+      console.log('💾 Blocking manager state saved (internal + main keys)');
     } catch (error) {
       console.error('❌ Failed to save blocking manager state:', error);
       // Don't throw error to prevent blocking other operations
@@ -286,31 +365,39 @@ export class BlockingManager {
    */
   async loadState() {
     try {
-      const result = await chrome.storage.local.get(['blockingManagerState']);
+      // Load both the internal state and the main storage keys
+      const result = await chrome.storage.local.get(['blockingManagerState', 'focusMode', 'blockedSites']);
+      
       if (result.blockingManagerState) {
         const state = result.blockingManagerState;
         this.focusMode = state.focusMode || false;
         this.currentLocalSessionId = state.currentLocalSessionId || null;
         this.blockedSites = state.blockedSites || [];
         
-        // If focus mode is active and we have a session ID, restart the timer
-        if (this.focusMode && this.currentLocalSessionId && this.storageManager) {
-          try {
-            const activeSession = await this.storageManager.getActiveDeepFocusSession();
-            if (activeSession) {
-              this.startSessionTimer();
-              console.log('🔄 Restored session timer for active deep focus session');
-            } else {
-              // Session doesn't exist anymore, clear the ID
-              this.currentLocalSessionId = null;
-              console.log('🔍 No active session found, cleared session ID');
-            }
-          } catch (error) {
-            console.warn('⚠️ Error checking active session during state load:', error);
+        console.log('📂 Blocking manager internal state loaded:', state);
+      }
+      
+      // Also load from main storage keys and ensure consistency
+      this.focusMode = result.focusMode !== undefined ? result.focusMode : this.focusMode;
+      this.blockedSites = result.blockedSites || this.blockedSites || [];
+      
+      console.log('🔍 Final loaded state - Focus mode:', this.focusMode, 'Blocked sites:', this.blockedSites.length);
+      
+      // If focus mode is active and we have a session ID, restart the timer
+      if (this.focusMode && this.currentLocalSessionId && this.storageManager) {
+        try {
+          const activeSession = await this.storageManager.getActiveDeepFocusSession();
+          if (activeSession) {
+            this.startSessionTimer();
+            console.log('🔄 Restored session timer for active deep focus session');
+          } else {
+            // Session doesn't exist anymore, clear the ID
+            this.currentLocalSessionId = null;
+            console.log('🔍 No active session found, cleared session ID');
           }
+        } catch (error) {
+          console.warn('⚠️ Error checking active session during state load:', error);
         }
-        
-        console.log('📂 Blocking manager state loaded:', state);
       }
     } catch (error) {
       console.error('❌ Failed to load blocking manager state:', error);
@@ -344,13 +431,15 @@ export class BlockingManager {
       
       // Handle session management based on the new state
       if (this.focusMode && !previousMode) {
-        // Turning on focus mode - start session
+        // Turning on focus mode - start session and enable blocking
         console.log('🚀 Starting local deep focus session...');
         await this.startLocalDeepFocusSession();
+        await this.updateBlockingRules();
       } else if (!this.focusMode && previousMode) {
-        // Turning off focus mode - complete session
+        // Turning off focus mode - complete session and disable blocking
         console.log('🏁 Completing local deep focus session...');
         await this.completeLocalDeepFocusSession();
+        await this.updateBlockingRules();
       }
       
       // Save the updated state
@@ -377,6 +466,129 @@ export class BlockingManager {
   }
 
   /**
+   * Update blocking rules using chrome.declarativeNetRequest
+   * This is the core blocking engine that was missing
+   */
+  async updateBlockingRules() {
+    try {
+      console.log('🔧 Updating blocking rules...');
+      
+      // Get current blocked sites from storage
+      const storage = await chrome.storage.local.get(['blockedSites', 'focusMode']);
+      const blockedSites = storage.blockedSites || [];
+      const focusMode = storage.focusMode || false;
+      
+      console.log('🔍 Current storage state:', {
+        blockedSites: blockedSites,
+        blockedSitesLength: blockedSites.length,
+        focusMode: focusMode,
+        internalFocusMode: this.focusMode
+      });
+      
+      // Get existing rules to clean up
+      const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+      const existingRuleIds = existingRules.map(rule => rule.id);
+      
+      // Remove all existing blocking rules
+      if (existingRuleIds.length > 0) {
+        await chrome.declarativeNetRequest.updateDynamicRules({
+          removeRuleIds: existingRuleIds
+        });
+        console.log('🧹 Removed', existingRuleIds.length, 'existing blocking rules');
+      }
+      
+      // Only add blocking rules if focus mode is active and we have sites to block
+      if (focusMode && blockedSites.length > 0) {
+        const newRules = blockedSites.map((domain, index) => ({
+          id: index + 1, // Rule IDs must be > 0
+          priority: 1,
+          action: {
+            type: 'redirect',
+            redirect: {
+              url: chrome.runtime.getURL('blocked.html') + '?domain=' + encodeURIComponent(domain)
+            }
+          },
+          condition: {
+            urlFilter: `*://*.${domain}/*`,
+            resourceTypes: ['main_frame']
+          }
+        }));
+        
+        await chrome.declarativeNetRequest.updateDynamicRules({
+          addRules: newRules
+        });
+        
+        console.log('✅ Added', newRules.length, 'blocking rules for focus mode');
+        return { success: true, rulesAdded: newRules.length };
+      } else {
+        console.log('ℹ️ No blocking rules needed (focus mode:', focusMode, ', sites:', blockedSites.length, ')');
+        return { success: true, rulesAdded: 0 };
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to update blocking rules:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Enable blocking for specific sites
+   */
+  async enableBlocking(sites = []) {
+    try {
+      console.log('🛡️ Enabling blocking for sites:', sites);
+      
+      // Update storage
+      await chrome.storage.local.set({ 
+        blockedSites: sites, 
+        focusMode: true 
+      });
+      
+      this.focusMode = true;
+      this.blockedSites = sites;
+      
+      // Update blocking rules
+      const result = await this.updateBlockingRules();
+      
+      if (result.success) {
+        console.log('✅ Blocking enabled successfully');
+        return { success: true, blockedSites: sites.length };
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('❌ Failed to enable blocking:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Disable all blocking
+   */
+  async disableBlocking() {
+    try {
+      console.log('🔓 Disabling all blocking...');
+      
+      // Update storage
+      await chrome.storage.local.set({ focusMode: false });
+      this.focusMode = false;
+      
+      // Update blocking rules (will remove all rules since focusMode is false)
+      const result = await this.updateBlockingRules();
+      
+      if (result.success) {
+        console.log('✅ Blocking disabled successfully');
+        return { success: true };
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('❌ Failed to disable blocking:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Helper method to retry operations with backoff
    */
   async retryOperation(operation, operationName, maxRetries = 3) {
@@ -391,4 +603,7 @@ export class BlockingManager {
       }
     }
   }
-} 
+}
+
+// Make BlockingManager globally available for service worker
+self.BlockingManager = BlockingManager; 

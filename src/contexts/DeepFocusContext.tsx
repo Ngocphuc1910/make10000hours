@@ -71,7 +71,9 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
     isDeepFocusActive,
     syncCompleteFocusState,
     recordOverrideSession,
-    loadOverrideSessions
+    loadOverrideSessions,
+    checkRecoveryTimeout,
+    resetRecoveryFlag
   } = useDeepFocusStore();
   
   const { isInitialized: isUserInitialized, user } = useUserStore();
@@ -452,8 +454,28 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
     };
   }, [syncFocusStatus, loadFocusStatus, isUserInitialized, hasInitialized, syncCompleteFocusState]);
 
+  // Periodic recovery timeout checker
+  useEffect(() => {
+    if (!isUserInitialized) return;
+    
+    const recoveryTimeoutChecker = setInterval(() => {
+      const wasReset = checkRecoveryTimeout();
+      if (wasReset) {
+        console.log('🔄 Context: Periodic check - Recovery flag was stuck and has been reset');
+      }
+    }, 10000); // Check every 10 seconds
+    
+    return () => clearInterval(recoveryTimeoutChecker);
+  }, [isUserInitialized, checkRecoveryTimeout]);
+
   // Enhanced session guards with comprehensive checking
   const enableDeepFocus = useCallback(async (source?: Source) => {
+    // Check for stuck recovery flag first
+    const wasReset = checkRecoveryTimeout();
+    if (wasReset) {
+      console.log('🔄 Context: Recovery flag was stuck and has been reset');
+    }
+    
     const state = useDeepFocusStore.getState();
     
     // Authentication guard

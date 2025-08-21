@@ -424,14 +424,18 @@ class ExtensionDataService {
   }
 
   static async enableFocusMode(): Promise<void> {
+    console.log('🟢 ExtensionDataService: Enabling focus mode...');
     const response = await this.sendMessage({ type: 'ENABLE_FOCUS_MODE' });
+    console.log('🟢 ExtensionDataService: Enable focus mode response:', response);
     if (!response?.success) {
       throw new Error(response?.error || 'Failed to enable focus mode');
     }
   }
 
   static async disableFocusMode(): Promise<void> {
+    console.log('🔴 ExtensionDataService: Disabling focus mode...');
     const response = await this.sendMessage({ type: 'DISABLE_FOCUS_MODE' });
+    console.log('🔴 ExtensionDataService: Disable focus mode response:', response);
     if (!response?.success) {
       throw new Error(response?.error || 'Failed to disable focus mode');
     }

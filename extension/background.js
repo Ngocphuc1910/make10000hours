@@ -106,6 +106,22 @@ class ChromeIdleHelper {
 // Global Chrome Idle Helper
 const chromeIdleHelper = new ChromeIdleHelper();
 
+// Global BlockingManager instance
+let blockingManager = null;
+
+// Load BlockingManager
+try {
+  importScripts('./models/BlockingManager.js');
+  console.log('✅ BlockingManager script loaded successfully');
+  if (typeof BlockingManager !== 'undefined') {
+    console.log('✅ BlockingManager class is available');
+  } else {
+    console.error('❌ BlockingManager class not found after import');
+  }
+} catch (error) {
+  console.error('❌ Failed to load BlockingManager:', error);
+}
+
 /**
  * Get default blocked sites list for new users
  * Same list as used in the web app for consistency
@@ -604,6 +620,27 @@ async function initializeExtension() {
     // Initialize Chrome Idle API
     await chromeIdleHelper.initialize();
     
+    // Initialize BlockingManager
+    if (typeof BlockingManager !== 'undefined') {
+      try {
+        console.log('🚀 Creating BlockingManager instance...');
+        blockingManager = new BlockingManager();
+        console.log('🔧 Initializing BlockingManager...');
+        await blockingManager.initialize();
+        console.log('✅ BlockingManager initialized successfully');
+        
+        // Test the blocking engine immediately
+        console.log('🧪 Testing blocking engine...');
+        const testResult = await blockingManager.updateBlockingRules();
+        console.log('🧪 Blocking engine test result:', testResult);
+      } catch (error) {
+        console.error('❌ BlockingManager initialization failed:', error);
+        blockingManager = null;
+      }
+    } else {
+      console.warn('⚠️ BlockingManager not available');
+    }
+    
     // Start master timer
     startMasterTimer();
     
@@ -794,21 +831,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'TOGGLE_FOCUS_MODE') {
     (async () => {
       try {
-        // Get current focus mode state from storage
-        const storage = await chrome.storage.local.get(['focusMode']);
-        const currentFocusMode = storage.focusMode || false;
-        const newFocusMode = !currentFocusMode;
-        
-        // Update focus mode state in storage
-        await chrome.storage.local.set({ focusMode: newFocusMode });
-        
-        console.log(`🎯 Focus mode toggled: ${currentFocusMode} → ${newFocusMode}`);
-        
-        sendResponse({ 
-          success: true, 
-          focusMode: newFocusMode,
-          message: newFocusMode ? 'Deep Focus mode activated' : 'Deep Focus mode deactivated'
-        });
+        if (blockingManager) {
+          // Use BlockingManager for comprehensive focus mode toggle
+          const result = await blockingManager.toggleFocusMode();
+          
+          if (result.success) {
+            console.log(`🎯 Focus mode toggled via BlockingManager: ${result.focusMode}`);
+            
+            // Notify web app of focus mode change
+            try {
+              chrome.tabs.query({url: ['*://app.make10000hours.com/*', '*://localhost:*/*']}, (tabs) => {
+                tabs.forEach(tab => {
+                  chrome.tabs.sendMessage(tab.id, {
+                    type: 'EXTENSION_FOCUS_STATE_CHANGED',
+                    payload: { 
+                      isActive: result.focusMode,
+                      sessionId: result.sessionId,
+                      source: 'extension_toggle'
+                    }
+                  }).catch(() => {
+                    console.debug('📝 Could not notify tab', tab.id, 'of focus state change');
+                  });
+                });
+                console.log('📡 Notified', tabs.length, 'web app tabs of focus state change');
+              });
+            } catch (error) {
+              console.debug('📝 Could not notify web app tabs:', error.message);
+            }
+            
+            sendResponse({ 
+              success: true, 
+              focusMode: result.focusMode,
+              sessionId: result.sessionId,
+              message: result.focusMode ? 'Deep Focus mode activated' : 'Deep Focus mode deactivated'
+            });
+          } else {
+            throw new Error(result.error);
+          }
+        } else {
+          // BlockingManager is critical for Deep Focus - cannot proceed without it
+          console.error('❌ BlockingManager not available - Deep Focus cannot function');
+          throw new Error('BlockingManager not initialized - site blocking unavailable');
+        }
       } catch (error) {
         console.error('❌ Error toggling focus mode:', error);
         sendResponse({ success: false, error: error.message });
@@ -972,6 +1036,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await chrome.storage.local.set({ blockedSites });
         console.log('✅ Blocked sites synced from web app:', blockedSites);
         
+        // Update blocking rules if BlockingManager is available
+        if (blockingManager) {
+          try {
+            await blockingManager.updateBlockingRules();
+            console.log('🔧 Blocking rules updated after site sync');
+          } catch (error) {
+            console.warn('⚠️ Failed to update blocking rules after site sync:', error);
+          }
+        }
+        
         // Notify popup and other parts of extension
         try {
           chrome.runtime.sendMessage({
@@ -991,6 +1065,103 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     })();
     return true; // Keep channel open for async
+  }
+
+  // Handle ENABLE_FOCUS_MODE from web app
+  if (message.type === 'ENABLE_FOCUS_MODE') {
+    (async () => {
+      try {
+        console.log('🔄 ENABLE_FOCUS_MODE received from web app');
+        
+        if (blockingManager) {
+          const result = await blockingManager.setFocusMode(true);
+          
+          if (result.success) {
+            console.log('✅ Focus mode enabled via web app sync');
+            sendResponse({ 
+              success: true, 
+              focusMode: true,
+              sessionId: result.sessionId,
+              message: 'Deep Focus mode enabled from web app'
+            });
+            
+            // Notify web app of successful sync
+            try {
+              chrome.tabs.query({url: ['*://app.make10000hours.com/*', '*://localhost:*/*']}, (tabs) => {
+                tabs.forEach(tab => {
+                  chrome.tabs.sendMessage(tab.id, {
+                    type: 'EXTENSION_FOCUS_STATE_CHANGED',
+                    payload: { isActive: true }
+                  }).catch(() => {
+                    console.debug('📝 Could not notify tab', tab.id, 'of focus state change');
+                  });
+                });
+              });
+            } catch (error) {
+              console.debug('📝 Could not notify web app tabs:', error.message);
+            }
+          } else {
+            throw new Error(result.error);
+          }
+        } else {
+          // BlockingManager is critical for Deep Focus - cannot proceed without it
+          console.error('❌ BlockingManager not available - Deep Focus cannot function');
+          throw new Error('BlockingManager not initialized - site blocking unavailable');
+        }
+      } catch (error) {
+        console.error('❌ Error enabling focus mode from web app:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // Handle DISABLE_FOCUS_MODE from web app
+  if (message.type === 'DISABLE_FOCUS_MODE') {
+    (async () => {
+      try {
+        console.log('🔄 DISABLE_FOCUS_MODE received from web app');
+        
+        if (blockingManager) {
+          const result = await blockingManager.setFocusMode(false);
+          
+          if (result.success) {
+            console.log('✅ Focus mode disabled via web app sync');
+            sendResponse({ 
+              success: true, 
+              focusMode: false,
+              message: 'Deep Focus mode disabled from web app'
+            });
+            
+            // Notify web app of successful sync
+            try {
+              chrome.tabs.query({url: ['*://app.make10000hours.com/*', '*://localhost:*/*']}, (tabs) => {
+                tabs.forEach(tab => {
+                  chrome.tabs.sendMessage(tab.id, {
+                    type: 'EXTENSION_FOCUS_STATE_CHANGED',
+                    payload: { isActive: false }
+                  }).catch(() => {
+                    console.debug('📝 Could not notify tab', tab.id, 'of focus state change');
+                  });
+                });
+              });
+            } catch (error) {
+              console.debug('📝 Could not notify web app tabs:', error.message);
+            }
+          } else {
+            throw new Error(result.error);
+          }
+        } else {
+          // BlockingManager is critical for Deep Focus - cannot proceed without it
+          console.error('❌ BlockingManager not available - Deep Focus cannot function');
+          throw new Error('BlockingManager not initialized - site blocking unavailable');
+        }
+      } catch (error) {
+        console.error('❌ Error disabling focus mode from web app:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
   }
 
   // Handle GET_BLOCKED_SITES request
@@ -1062,6 +1233,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     })();
     return true; // Keep channel open for async
+  }
+
+  // Handle TEST_BLOCKING request
+  if (message.type === 'TEST_BLOCKING') {
+    (async () => {
+      try {
+        console.log('🧪 TEST_BLOCKING: Manual blocking test requested');
+        
+        if (!blockingManager) {
+          sendResponse({ success: false, error: 'BlockingManager not available' });
+          return;
+        }
+        
+        // Get current storage state
+        const storage = await chrome.storage.local.get(['focusMode', 'blockedSites']);
+        console.log('🧪 Current storage state:', storage);
+        
+        // Force focus mode on and test blocking
+        await chrome.storage.local.set({ focusMode: true });
+        const result = await blockingManager.updateBlockingRules();
+        
+        // Get current rules from Chrome
+        const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
+        
+        console.log('🧪 Test results:', {
+          updateResult: result,
+          currentRules: currentRules.length,
+          rules: currentRules
+        });
+        
+        sendResponse({ 
+          success: true, 
+          result: result,
+          rulesCount: currentRules.length,
+          rules: currentRules.map(r => ({ id: r.id, domain: r.condition.urlFilter }))
+        });
+      } catch (error) {
+        console.error('❌ Test blocking failed:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
   }
 
   // Handle REMOVE_BLOCKED_SITE request
