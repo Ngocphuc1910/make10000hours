@@ -177,7 +177,7 @@ class BlockedPage {
       
       // Fallback to URL params if cache miss
       const urlParams = new URLSearchParams(window.location.search);
-      const blockedUrl = cachedUrl || urlParams.get('url') || 'Unknown Site';
+      const blockedUrl = cachedUrl || urlParams.get('domain') || urlParams.get('url') || 'Unknown Site';
       const domain = this.extractDomain(blockedUrl);
       
       // Store for override handler

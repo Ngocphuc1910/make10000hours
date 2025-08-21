@@ -190,6 +190,7 @@ const ExtensionEventBus = {
 let blockingManager = null;
 let storageManager = null;
 let focusTimeTracker = null;
+let overrideSessionManager = null;
 
 // Load scripts in proper dependency order to prevent initialization issues
 
@@ -243,6 +244,19 @@ try {
   }
 } catch (error) {
   console.error('❌ Failed to load FocusTimeTracker:', error);
+}
+
+// Load OverrideSessionManager for blocking screen override handling (restored from 3643c8e)
+try {
+  importScripts('./utils/overrideSessionManager.js');
+  console.log('✅ OverrideSessionManager script loaded successfully');
+  if (typeof OverrideSessionManager !== 'undefined') {
+    console.log('✅ OverrideSessionManager class is available');
+  } else {
+    console.error('❌ OverrideSessionManager class not found after import');
+  }
+} catch (error) {
+  console.error('❌ Failed to load OverrideSessionManager:', error);
 }
 
 /**
@@ -799,6 +813,27 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
   }
 });
 
+// ===== URL CACHING INTEGRATION (restored from 3643c8e) =====
+
+// Navigation events for URL caching - CRITICAL for blocking screen to show correct URL
+chrome.webNavigation.onBeforeNavigate.addListener((details) => {
+  if (details.frameId === 0) { // Main frame only
+    if (blockingManager && typeof blockingManager.cacheUrl === 'function') {
+      // Use BlockingManager's sophisticated URL caching (working version from 3643c8e)
+      blockingManager.cacheUrl(details.tabId, details.url);
+      console.log('🔗 URL cached via BlockingManager for tab', details.tabId, ':', details.url);
+    } else {
+      // Fallback: Simple URL caching for blocking screen
+      if (details.url && !details.url.startsWith('chrome-extension://') && !details.url.startsWith('chrome://')) {
+        chrome.storage.local.set({ cachedBlockedUrl: details.url }).catch(error => {
+          console.error('❌ Failed to cache URL fallback:', error);
+        });
+        console.log('🔗 URL cached via fallback:', details.url);
+      }
+    }
+  }
+});
+
 // ===== EXTENSION INITIALIZATION =====
 
 let isInitialized = false;
@@ -833,6 +868,20 @@ async function initializeExtension() {
     
     // Initialize Chrome Idle API
     await chromeIdleHelper.initialize();
+    
+    // Initialize OverrideSessionManager (restored from 3643c8e)
+    if (typeof OverrideSessionManager !== 'undefined') {
+      try {
+        console.log('🚀 Creating OverrideSessionManager instance...');
+        overrideSessionManager = new OverrideSessionManager();
+        console.log('✅ OverrideSessionManager initialized successfully');
+      } catch (error) {
+        console.error('❌ OverrideSessionManager initialization failed:', error);
+        overrideSessionManager = null;
+      }
+    } else {
+      console.warn('⚠️ OverrideSessionManager not available - override tracking will be limited');
+    }
     
     // Initialize StorageManager
     if (typeof StorageManager !== 'undefined') {
@@ -991,28 +1040,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
   
-  // Handle get stats (original handler) - FIXED: Convert seconds to milliseconds
+  // Handle get stats - Enhanced with StorageManager integration
   if (message.type === 'GET_STATS') {
-    const today = DateUtils.getLocalDateString();
-    chrome.storage.local.get(['site_usage_sessions']).then(storage => {
-      const sessions = storage.site_usage_sessions?.[today] || [];
-      const stats = {
-        totalTime: sessions.reduce((sum, s) => sum + (s.duration || 0), 0) * 1000, // Convert seconds to milliseconds
-        sitesVisited: sessions.length,
-        sites: {}
-      };
-      
-      sessions.forEach(session => {
-        stats.sites[session.domain] = {
-          time: (session.duration || 0) * 1000, // Convert seconds to milliseconds
-          visits: session.visits || 0
-        };
-      });
-      
-      sendResponse({ success: true, data: stats });
-    }).catch(error => {
-      sendResponse({ success: false, error: error.message });
-    });
+    (async () => {
+      try {
+        if (storageManager) {
+          const stats = await storageManager.getTodayStats();
+          sendResponse({ success: true, data: stats });
+        } else {
+          // Fallback to simple storage if StorageManager unavailable
+          const today = DateUtils.getLocalDateString();
+          const storage = await chrome.storage.local.get(['site_usage_sessions']);
+          const sessions = storage.site_usage_sessions?.[today] || [];
+          const stats = {
+            totalTime: sessions.reduce((sum, s) => sum + (s.duration || 0), 0) * 1000,
+            sitesVisited: sessions.length,
+            sites: {}
+          };
+          
+          sessions.forEach(session => {
+            stats.sites[session.domain] = {
+              time: (session.duration || 0) * 1000,
+              visits: session.visits || 0
+            };
+          });
+          
+          sendResponse({ success: true, data: stats });
+        }
+      } catch (error) {
+        console.error('❌ Error getting stats:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
     return true; // Keep channel open
   }
   
@@ -1583,6 +1642,187 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       } catch (error) {
         console.error('❌ Error resetting blocking state:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // GET_TODAY_STATS - Enhanced blocking screen handler with StorageManager integration
+  if (message.type === 'GET_TODAY_STATS') {
+    (async () => {
+      try {
+        if (storageManager) {
+          // Use StorageManager for comprehensive stats (working version from 3643c8e)
+          const stats = await storageManager.getTodayStats();
+          console.log('📊 GET_TODAY_STATS via StorageManager:', stats);
+          sendResponse({ success: true, data: stats });
+        } else {
+          // Fallback to domain-based tracking system
+          const today = DateUtils.getLocalDateString();
+          const storage = await chrome.storage.local.get(['site_usage_sessions']);
+          const sessions = storage.site_usage_sessions?.[today] || [];
+          const totalTime = sessions.reduce((sum, s) => sum + (s.duration || 0), 0) * 1000; // Convert to milliseconds
+          
+          console.log('📊 GET_TODAY_STATS fallback - totalTime:', totalTime + 'ms');
+          sendResponse({ success: true, data: { totalTime, sitesVisited: sessions.length } });
+        }
+      } catch (error) {
+        console.error('❌ Error getting today stats:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'GET_LOCAL_OVERRIDE_TIME') {
+    (async () => {
+      try {
+        const today = new Date().toDateString();
+        const storage = await chrome.storage.local.get([`overrideTime_${today}`]);
+        const overrideTimeMs = storage[`overrideTime_${today}`] || 0;
+        const overrideTimeMinutes = Math.floor(overrideTimeMs / (60 * 1000));
+        sendResponse({ success: true, data: { overrideTime: overrideTimeMinutes } });
+      } catch (error) {
+        console.error('Error getting override time:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // OVERRIDE_BLOCK - Enhanced with BlockingManager integration (restored from 3643c8e)
+  if (message.type === 'OVERRIDE_BLOCK') {
+    (async () => {
+      try {
+        if (blockingManager) {
+          // Use BlockingManager's sophisticated temporary override system (working version from 3643c8e)
+          const domain = message.payload?.domain;
+          const duration = message.payload?.duration || 5; // Default 5 minutes
+          
+          console.log('⏰ OVERRIDE_BLOCK via BlockingManager:', { domain, duration });
+          const overrideResult = await blockingManager.setTemporaryOverride(domain, duration);
+          sendResponse(overrideResult);
+        } else {
+          // Fallback to simple override logic
+          const overrideDuration = 5 * 60 * 1000; // 5 minutes
+          const overrideUntil = Date.now() + overrideDuration;
+          
+          await chrome.storage.local.set({ overrideUntil });
+          
+          // Track override time
+          const today = new Date().toDateString();
+          const storage = await chrome.storage.local.get([`overrideTime_${today}`]);
+          const currentOverrideTime = storage[`overrideTime_${today}`] || 0;
+          await chrome.storage.local.set({
+            [`overrideTime_${today}`]: currentOverrideTime + overrideDuration
+          });
+          
+          console.log('⏰ OVERRIDE_BLOCK fallback - override until:', new Date(overrideUntil));
+          sendResponse({ success: true, overrideUntil });
+        }
+      } catch (error) {
+        console.error('❌ Error setting override:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'CHECK_AUTO_REDIRECT') {
+    (async () => {
+      try {
+        const storage = await chrome.storage.local.get(['coordinatedFocusMode', 'overrideUntil']);
+        const focusMode = storage.coordinatedFocusMode || false;
+        const overrideUntil = storage.overrideUntil || 0;
+        
+        const shouldRedirect = !focusMode || (overrideUntil > Date.now());
+        
+        if (shouldRedirect && message.url) {
+          // Navigate to the original URL
+          try {
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tabs[0]) {
+              chrome.tabs.update(tabs[0].id, { url: message.url });
+            }
+          } catch (error) {
+            console.error('Error redirecting:', error);
+          }
+        }
+        
+        sendResponse({ success: true, shouldRedirect });
+      } catch (error) {
+        console.error('Error checking auto redirect:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // GET_CACHED_URL - Enhanced with BlockingManager tab-aware caching (restored from 3643c8e)
+  if (message.type === 'GET_CACHED_URL') {
+    (async () => {
+      try {
+        if (blockingManager && sender.tab?.id) {
+          // Use BlockingManager's sophisticated tab-aware URL caching (working version from 3643c8e)
+          const cachedUrl = blockingManager.getCachedUrl(sender.tab.id);
+          console.log('🔗 GET_CACHED_URL via BlockingManager for tab', sender.tab.id, ':', cachedUrl);
+          sendResponse({ success: true, data: { url: cachedUrl } });
+        } else {
+          // Fallback to simple storage approach
+          const storage = await chrome.storage.local.get(['cachedBlockedUrl']);
+          const url = storage.cachedBlockedUrl || null;
+          console.log('🔗 GET_CACHED_URL fallback:', url);
+          sendResponse({ success: true, data: { url } });
+        }
+      } catch (error) {
+        console.error('❌ Error getting cached URL:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // CLEAR_CACHED_URL - Enhanced with BlockingManager integration (restored from 3643c8e)
+  if (message.type === 'CLEAR_CACHED_URL') {
+    (async () => {
+      try {
+        if (blockingManager && sender.tab?.id) {
+          // Use BlockingManager's tab-aware URL clearing (working version from 3643c8e)
+          blockingManager.clearCachedUrl(sender.tab.id);
+          console.log('🧹 CLEAR_CACHED_URL via BlockingManager for tab', sender.tab.id);
+        } else {
+          // Fallback to simple storage clearing
+          await chrome.storage.local.remove(['cachedBlockedUrl']);
+          console.log('🧹 CLEAR_CACHED_URL fallback');
+        }
+        sendResponse({ success: true });
+      } catch (error) {
+        console.error('❌ Error clearing cached URL:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // GET_FOCUS_STATUS - Enhanced with BlockingManager integration (restored from 3643c8e)
+  if (message.type === 'GET_FOCUS_STATUS') {
+    (async () => {
+      try {
+        if (blockingManager) {
+          // Use BlockingManager's live state (working version from 3643c8e)
+          const focusMode = blockingManager.focusMode;
+          console.log('🎯 GET_FOCUS_STATUS via BlockingManager:', focusMode);
+          sendResponse({ success: true, data: { focusMode } });
+        } else {
+          // Fallback to storage-based approach
+          const storage = await chrome.storage.local.get(['coordinatedFocusMode']);
+          const focusMode = storage.coordinatedFocusMode || false;
+          console.log('🎯 GET_FOCUS_STATUS fallback:', focusMode);
+          sendResponse({ success: true, data: { focusMode } });
+        }
+      } catch (error) {
+        console.error('❌ Error getting focus status:', error);
         sendResponse({ success: false, error: error.message });
       }
     })();

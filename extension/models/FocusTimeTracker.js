@@ -368,6 +368,7 @@ class FocusTimeTracker {
         success: true,
         time: timeMs,
         timeMinutes: sessionData.minutes,
+        data: { minutes: sessionData.minutes },
         sessions: sessionData.sessions,
         date: sessionData.date
       });
