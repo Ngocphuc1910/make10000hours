@@ -82,8 +82,24 @@ async function testDeepFocus() {
     }
     */
     
-    // Test 7: Test new Deep Focus message handlers
-    console.log('\n📋 Test 7: New Deep Focus message handlers');
+    // Test 7: Test StorageManager availability
+    console.log('\n📋 Test 7: StorageManager availability');
+    if (typeof StorageManager !== 'undefined') {
+      console.log('✅ StorageManager class is available');
+    } else {
+      console.error('❌ StorageManager class not found');
+    }
+    
+    if (storageManager) {
+      console.log('✅ Global storageManager instance exists');
+      console.log('🔍 StorageManager initialized:', storageManager.initialized);
+      console.log('🔍 Current user ID:', storageManager.currentUserId);
+    } else {
+      console.error('❌ Global storageManager instance not found');
+    }
+    
+    // Test 8: Test new Deep Focus message handlers
+    console.log('\n📋 Test 8: New Deep Focus message handlers');
     
     try {
       // Test GET_FOCUS_STATS
@@ -99,6 +115,35 @@ async function testDeepFocus() {
       console.log('✅ GET_SESSION_TIME response:', timeResponse);
     } catch (error) {
       console.error('❌ GET_SESSION_TIME failed:', error);
+    }
+    
+    // Test 9: Test Deep Focus session management
+    console.log('\n📋 Test 9: Deep Focus session management');
+    
+    try {
+      // Test GET_LOCAL_DEEP_FOCUS_TIME
+      const localTimeResponse = await chrome.runtime.sendMessage({type: 'GET_LOCAL_DEEP_FOCUS_TIME'});
+      console.log('✅ GET_LOCAL_DEEP_FOCUS_TIME response:', localTimeResponse);
+    } catch (error) {
+      console.error('❌ GET_LOCAL_DEEP_FOCUS_TIME failed:', error);
+    }
+    
+    try {
+      // Test CREATE_DEEP_FOCUS_SESSION
+      const sessionResponse = await chrome.runtime.sendMessage({type: 'CREATE_DEEP_FOCUS_SESSION'});
+      console.log('✅ CREATE_DEEP_FOCUS_SESSION response:', sessionResponse);
+      
+      // If session created successfully, test completion
+      if (sessionResponse.success && sessionResponse.session) {
+        console.log('🔗 Testing session completion...');
+        const completeResponse = await chrome.runtime.sendMessage({
+          type: 'COMPLETE_DEEP_FOCUS_SESSION',
+          payload: { duration: 5 } // 5 minutes test session
+        });
+        console.log('✅ COMPLETE_DEEP_FOCUS_SESSION response:', completeResponse);
+      }
+    } catch (error) {
+      console.error('❌ Deep Focus session management failed:', error);
     }
     
     console.log('\n🎉 Deep Focus End-to-End Test Complete!');

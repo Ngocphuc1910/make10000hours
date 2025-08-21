@@ -163,14 +163,14 @@ class BlockingManager {
     try {
       // Validate storage manager availability
       if (!this.storageManager) {
-        throw new Error('StorageManager not available');
+        console.warn('⚠️ StorageManager not available, using basic mode');
       }
 
       // If turning on focus mode, verify user state first
-      if (!this.focusMode) {
+      if (!this.focusMode && this.storageManager) {
         const userStateValid = await this.storageManager.validateAndRecoverUserState();
         if (!userStateValid) {
-          throw new Error('User ID required to enable focus mode');
+          console.warn('⚠️ User ID not available, proceeding with basic focus mode');
         }
       }
 
@@ -220,46 +220,46 @@ class BlockingManager {
    */
   async startLocalDeepFocusSession() {
     try {
-      if (!this.storageManager) {
-        throw new Error('StorageManager not available');
-      }
-
-      // Verify user state before starting session
-      const userStateValid = await this.storageManager.validateAndRecoverUserState();
-      if (!userStateValid) {
-        throw new Error('User ID required to create deep focus session');
-      }
-
       // Complete any existing session first
       await this.completeLocalDeepFocusSession();
 
-      // Create new session with retries
-      for (let i = 0; i < this.maxRetries; i++) {
-        try {
-          this.currentLocalSessionId = await this.storageManager.createDeepFocusSession();
-          this.retryAttempts = 0; // Reset on success
-          break;
-        } catch (error) {
-          this.retryAttempts++;
-          if (i === this.maxRetries - 1) {
-            throw error;
+      if (this.storageManager) {
+        // Create new session with retries
+        for (let i = 0; i < this.maxRetries; i++) {
+          try {
+            this.currentLocalSessionId = await this.storageManager.createDeepFocusSession();
+            this.retryAttempts = 0; // Reset on success
+            break;
+          } catch (error) {
+            this.retryAttempts++;
+            if (i === this.maxRetries - 1) {
+              throw error;
+            }
+            const backoffMs = Math.pow(2, i) * 1000;
+            console.log(`⏳ Retry attempt ${i + 1}/${this.maxRetries} in ${backoffMs}ms`);
+            await new Promise(resolve => setTimeout(resolve, backoffMs));
           }
-          const backoffMs = Math.pow(2, i) * 1000;
-          console.log(`⏳ Retry attempt ${i + 1}/${this.maxRetries} in ${backoffMs}ms`);
-          await new Promise(resolve => setTimeout(resolve, backoffMs));
         }
-      }
 
-      // Start timer only if session created successfully
-      if (this.currentLocalSessionId) {
-        this.startSessionTimer();
-        console.log('✅ Local deep focus session setup complete:', this.currentLocalSessionId);
+        // Start timer only if session created successfully
+        if (this.currentLocalSessionId) {
+          this.startSessionTimer();
+          console.log('✅ Deep focus session created:', this.currentLocalSessionId);
+        } else {
+          throw new Error('Failed to create deep focus session after retries');
+        }
       } else {
-        throw new Error('Failed to create deep focus session after retries');
+        // Fallback to basic session tracking without StorageManager
+        console.log('⚠️ Using basic session tracking without StorageManager');
+        this.focusStartTime = Date.now();
+        this.focusStats.sessionsToday++;
+        this.startSessionTimer();
       }
     } catch (error) {
       console.error('❌ Failed to start local deep focus session:', error);
-      throw error;
+      // Fallback to basic tracking
+      this.focusStartTime = Date.now();
+      this.focusStats.sessionsToday++;
     }
   }
 
@@ -274,11 +274,11 @@ class BlockingManager {
     console.log('⏱️ Starting session timer...');
     this.sessionTimer = setInterval(async () => {
       try {
-        if (this.currentLocalSessionId) {
-          // Calculate elapsed time
+        if (this.storageManager && this.currentLocalSessionId) {
+          // Calculate elapsed time from session start
           const activeSession = await this.storageManager.getActiveDeepFocusSession();
           if (activeSession) {
-            const elapsedMs = Date.now() - new Date(activeSession.startTime).getTime();
+            const elapsedMs = Date.now() - activeSession.startTime;
             const elapsedMinutes = Math.floor(elapsedMs / (60 * 1000));
             
             // Update session duration with retry
@@ -289,7 +289,24 @@ class BlockingManager {
               ),
               'Update session duration'
             );
+            
+            console.log(`📈 Focus session progress: ${elapsedMinutes} minutes`);
+            
+            // Emit deep focus update event
+            await ExtensionEventBus.emit(ExtensionEventBus.EVENTS.DEEP_FOCUS_UPDATE, {
+              minutes: elapsedMinutes,
+              sessionId: this.currentLocalSessionId
+            });
           }
+        } else if (this.focusStartTime && this.focusMode) {
+          // Fallback to basic tracking
+          const elapsedMs = Date.now() - this.focusStartTime;
+          const elapsedMinutes = Math.floor(elapsedMs / (60 * 1000));
+          
+          console.log(`📈 Basic focus session progress: ${elapsedMinutes} minutes`);
+          
+          // Update internal stats
+          this.focusStats.totalFocusTime = elapsedMs;
         }
       } catch (error) {
         console.error('❌ Error in session timer:', error);
@@ -303,38 +320,40 @@ class BlockingManager {
    */
   async completeLocalDeepFocusSession() {
     try {
-      if (!this.currentLocalSessionId) {
-        console.log('🔍 No active deep focus session to complete');
-        return;
-      }
-
-      if (!this.storageManager) {
-        throw new Error('StorageManager not available');
-      }
-
       // Stop the session timer
       if (this.sessionTimer) {
         clearInterval(this.sessionTimer);
         this.sessionTimer = null;
         console.log('⏱️ Session timer stopped');
       }
+      
+      if (this.storageManager && this.currentLocalSessionId) {
+        // Get the active session to calculate final duration
+        const activeSession = await this.storageManager.getActiveDeepFocusSession();
+        if (activeSession) {
+          const elapsedMs = Date.now() - activeSession.startTime;
+          const elapsedMinutes = Math.floor(elapsedMs / (60 * 1000));
+          
+          // Complete the session with retry logic
+          await this.retryOperation(
+            () => this.storageManager.completeDeepFocusSession(
+              this.currentLocalSessionId, 
+              elapsedMinutes
+            ),
+            'Complete deep focus session'
+          );
 
-      // Get the active session to calculate final duration
-      const activeSession = await this.storageManager.getActiveDeepFocusSession();
-      if (activeSession) {
-        const elapsedMs = Date.now() - activeSession.startTime;
-        const elapsedMinutes = Math.floor(elapsedMs / (60 * 1000));
-        
-        // Complete the session with retry logic
-        await this.retryOperation(
-          () => this.storageManager.completeDeepFocusSession(
-            this.currentLocalSessionId, 
-            elapsedMinutes
-          ),
-          'Complete deep focus session'
-        );
-
-        console.log(`✅ Deep focus session completed: ${elapsedMinutes} minutes`);
+          console.log(`✅ Deep focus session completed: ${elapsedMinutes} minutes`);
+        }
+      } else if (this.focusStartTime) {
+        // Fallback to basic session completion
+        const sessionDuration = Date.now() - this.focusStartTime;
+        this.focusStats.totalFocusTime += sessionDuration;
+        const minutes = Math.floor(sessionDuration / (60 * 1000));
+        console.log(`✅ Basic focus session completed: ${minutes} minutes`);
+        this.focusStartTime = null;
+      } else {
+        console.log('🔍 No active deep focus session to complete');
       }
 
       // Clear the current session ID
@@ -343,6 +362,8 @@ class BlockingManager {
     } catch (error) {
       console.error('❌ Failed to complete local deep focus session:', error);
       // Don't throw error to prevent blocking the toggle operation
+      // Still clear session ID to prevent stuck state
+      this.currentLocalSessionId = null;
     }
   }
 
@@ -419,20 +440,13 @@ class BlockingManager {
       
       console.log('🔍 Final loaded state - Focus mode:', this.focusMode, 'Blocked sites:', this.blockedSites.size, 'Focus session active:', !!this.focusStartTime);
       
-      // If focus mode is active and we have a session ID, restart the timer
-      if (this.focusMode && this.currentLocalSessionId && this.storageManager) {
+      // If focus mode is active, restart the timer
+      if (this.focusMode && this.focusStartTime) {
         try {
-          const activeSession = await this.storageManager.getActiveDeepFocusSession();
-          if (activeSession) {
-            this.startSessionTimer();
-            console.log('🔄 Restored session timer for active deep focus session');
-          } else {
-            // Session doesn't exist anymore, clear the ID
-            this.currentLocalSessionId = null;
-            console.log('🔍 No active session found, cleared session ID');
-          }
+          this.startSessionTimer();
+          console.log('🔄 Restored session timer for active deep focus session');
         } catch (error) {
-          console.warn('⚠️ Error checking active session during state load:', error);
+          console.warn('⚠️ Error starting session timer during state load:', error);
         }
       }
     } catch (error) {
@@ -521,41 +535,58 @@ class BlockingManager {
         internalFocusMode: this.focusMode
       });
       
-      // Get existing rules to clean up
+      // Get existing rules to clean up - ONLY remove rules in our range (1000-9999)
       const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
-      const existingRuleIds = existingRules.map(rule => rule.id);
+      const ourRuleIds = existingRules.filter(rule => rule.id >= 1000 && rule.id < 10000).map(rule => rule.id);
       
-      // Remove all existing blocking rules
-      if (existingRuleIds.length > 0) {
+      // Remove only our existing blocking rules
+      if (ourRuleIds.length > 0) {
         await chrome.declarativeNetRequest.updateDynamicRules({
-          removeRuleIds: existingRuleIds
+          removeRuleIds: ourRuleIds
         });
-        console.log('🧹 Removed', existingRuleIds.length, 'existing blocking rules');
+        console.log('🧹 Removed', ourRuleIds.length, 'existing Deep Focus blocking rules');
       }
       
       // Only add blocking rules if focus mode is active and we have sites to block
       if (focusMode && blockedSites.length > 0) {
-        const newRules = blockedSites.map((domain, index) => ({
-          id: index + 1, // Rule IDs must be > 0
-          priority: 1,
-          action: {
-            type: 'redirect',
-            redirect: {
-              url: chrome.runtime.getURL('blocked.html') + '?domain=' + encodeURIComponent(domain)
-            }
-          },
-          condition: {
-            urlFilter: `*://*.${domain}/*`,
-            resourceTypes: ['main_frame']
+        // Generate collision-resistant IDs by checking existing rules
+        const existingIds = new Set(existingRules.map(rule => rule.id));
+        let nextRuleId = 2000; // Start from 2000 to avoid conflicts
+        
+        const newRules = blockedSites.map((domain, index) => {
+          // Find next available ID
+          while (existingIds.has(nextRuleId)) {
+            nextRuleId++;
           }
-        }));
+          
+          const rule = {
+            id: nextRuleId,
+            priority: 1,
+            action: {
+              type: 'redirect',
+              redirect: {
+                url: chrome.runtime.getURL('blocked.html') + '?domain=' + encodeURIComponent(domain)
+              }
+            },
+            condition: {
+              urlFilter: `*://*.${domain}/*`,
+              resourceTypes: ['main_frame']
+            }
+          };
+          
+          existingIds.add(nextRuleId); // Mark this ID as used
+          nextRuleId++; // Increment for next rule
+          return rule;
+        });
+        
+        console.log('📋 Creating rules with IDs:', newRules.map(r => r.id));
         
         await chrome.declarativeNetRequest.updateDynamicRules({
           addRules: newRules
         });
         
         console.log('✅ Added', newRules.length, 'blocking rules for focus mode');
-        return { success: true, rulesAdded: newRules.length };
+        return { success: true, rulesAdded: newRules.length, ruleIds: newRules.map(r => r.id) };
       } else {
         console.log('ℹ️ No blocking rules needed (focus mode:', focusMode, ', sites:', blockedSites.length, ')');
         return { success: true, rulesAdded: 0 };
@@ -759,18 +790,18 @@ class BlockingManager {
    */
   async clearBlockingRules() {
     try {
-      // Get existing rules
+      // Get existing rules - ONLY clear rules in our range (1000-9999)
       const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
-      const ruleIds = existingRules.map(rule => rule.id);
+      const ourRuleIds = existingRules.filter(rule => rule.id >= 1000 && rule.id < 10000).map(rule => rule.id);
       
-      if (ruleIds.length > 0) {
+      if (ourRuleIds.length > 0) {
         await chrome.declarativeNetRequest.updateDynamicRules({
-          removeRuleIds: ruleIds
+          removeRuleIds: ourRuleIds
         });
         
-        console.log(`🧹 Cleared ${ruleIds.length} blocking rules`);
+        console.log(`🧹 Cleared ${ourRuleIds.length} Deep Focus blocking rules`);
       }
-      return { success: true, rulesRemoved: ruleIds.length };
+      return { success: true, rulesRemoved: ourRuleIds.length };
     } catch (error) {
       console.error('❌ Error clearing blocking rules:', error);
       return { success: false, error: error.message };

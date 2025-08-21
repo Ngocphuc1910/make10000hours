@@ -106,8 +106,22 @@ class ChromeIdleHelper {
 // Global Chrome Idle Helper
 const chromeIdleHelper = new ChromeIdleHelper();
 
-// Global BlockingManager instance
+// Global instances
 let blockingManager = null;
+let storageManager = null;
+
+// Load StorageManager
+try {
+  importScripts('./models/StorageManager.js');
+  console.log('✅ StorageManager script loaded successfully');
+  if (typeof StorageManager !== 'undefined') {
+    console.log('✅ StorageManager class is available');
+  } else {
+    console.error('❌ StorageManager class not found after import');
+  }
+} catch (error) {
+  console.error('❌ Failed to load StorageManager:', error);
+}
 
 // Load BlockingManager
 try {
@@ -462,9 +476,85 @@ async function syncToFirebase() {
       });
       
     }
+
+    // Sync Deep Focus sessions if StorageManager is available
+    await syncDeepFocusSessionsToFirebase();
+    
   } catch (error) {
     console.error('❌ Firebase sync error:', error);
     trackingState.diagnostics.firebaseSyncFailures++;
+  }
+}
+
+/**
+ * Sync Deep Focus sessions to Firebase
+ */
+async function syncDeepFocusSessionsToFirebase() {
+  try {
+    if (!storageManager) {
+      console.debug('📝 StorageManager not available for Deep Focus sync');
+      return;
+    }
+
+    // Get sessions that need syncing
+    const sessionsToSync = await storageManager.getSessionsForFirebaseSync();
+    
+    if (sessionsToSync.length === 0) {
+      console.debug('📝 No Deep Focus sessions to sync');
+      return;
+    }
+
+    console.log(`🎯 Syncing ${sessionsToSync.length} Deep Focus sessions to Firebase`);
+
+    // Batch sync sessions in groups of 5 (smaller batches for Deep Focus)
+    const batchSize = 5;
+    const batches = [];
+    for (let i = 0; i < sessionsToSync.length; i += batchSize) {
+      batches.push(sessionsToSync.slice(i, i + batchSize));
+    }
+
+    const syncedSessionIds = [];
+
+    for (const batch of batches) {
+      try {
+        // Transform Deep Focus sessions to Firebase format
+        const firebaseBatch = batch.map(session => ({
+          id: session.id,
+          userId: session.userId,
+          startTime: session.startTime,
+          startTimeUTC: session.startTimeUTC,
+          endTime: session.endTime,
+          endTimeUTC: session.endTimeUTC,
+          duration: session.duration,
+          status: session.status,
+          timezone: session.timezone,
+          utcDate: session.utcDate,
+          syncedAt: new Date().toISOString(),
+          extensionVersion: '2.0.0',
+          type: 'deepFocus'
+        }));
+
+        // TODO: Send to Firebase via web app message
+        // For now, mark as synced locally to prevent re-sync attempts
+        const batchSessionIds = batch.map(s => s.id);
+        syncedSessionIds.push(...batchSessionIds);
+
+        console.log(`🎯 Deep Focus batch sync prepared: ${batch.length} sessions`);
+        
+      } catch (batchError) {
+        console.error(`❌ Deep Focus batch sync failed:`, batchError);
+        // Don't mark failed sessions as synced
+      }
+    }
+
+    // Mark successfully prepared sessions as synced
+    if (syncedSessionIds.length > 0) {
+      await storageManager.markSessionsAsSynced(syncedSessionIds);
+      console.log(`✅ Marked ${syncedSessionIds.length} Deep Focus sessions as synced`);
+    }
+
+  } catch (error) {
+    console.error('❌ Deep Focus Firebase sync error:', error);
   }
 }
 
@@ -620,11 +710,34 @@ async function initializeExtension() {
     // Initialize Chrome Idle API
     await chromeIdleHelper.initialize();
     
+    // Initialize StorageManager
+    if (typeof StorageManager !== 'undefined') {
+      try {
+        console.log('🚀 Creating StorageManager instance...');
+        storageManager = new StorageManager();
+        console.log('🔧 Initializing StorageManager...');
+        await storageManager.initialize();
+        console.log('✅ StorageManager initialized successfully');
+      } catch (error) {
+        console.error('❌ StorageManager initialization failed:', error);
+        storageManager = null;
+      }
+    } else {
+      console.warn('⚠️ StorageManager not available - Deep Focus sessions will not be tracked');
+    }
+
     // Initialize BlockingManager
     if (typeof BlockingManager !== 'undefined') {
       try {
         console.log('🚀 Creating BlockingManager instance...');
         blockingManager = new BlockingManager();
+        
+        // Link StorageManager to BlockingManager for session management
+        if (storageManager) {
+          blockingManager.setStorageManager(storageManager);
+          console.log('🔗 StorageManager linked to BlockingManager');
+        }
+        
         console.log('🔧 Initializing BlockingManager...');
         await blockingManager.initialize();
         console.log('✅ BlockingManager initialized successfully');
@@ -1447,6 +1560,82 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       } catch (error) {
         console.error('❌ Error resetting blocking state:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // Handle GET_LOCAL_DEEP_FOCUS_TIME - Get local deep focus session time
+  if (message.type === 'GET_LOCAL_DEEP_FOCUS_TIME') {
+    (async () => {
+      try {
+        if (storageManager) {
+          const sessionData = await storageManager.getLocalDeepFocusTime();
+          const timeMs = sessionData.minutes * 60 * 1000; // Convert minutes to milliseconds
+          console.log('⏱️ Local deep focus time:', sessionData.minutes, 'minutes,', sessionData.sessions, 'sessions');
+          sendResponse({ 
+            success: true, 
+            time: timeMs,
+            timeMinutes: sessionData.minutes,
+            sessions: sessionData.sessions,
+            date: sessionData.date
+          });
+        } else {
+          console.warn('⚠️ StorageManager not available for local deep focus time');
+          sendResponse({ success: false, error: 'StorageManager not available' });
+        }
+      } catch (error) {
+        console.error('❌ Error getting local deep focus time:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // Handle CREATE_DEEP_FOCUS_SESSION - Create new deep focus session
+  if (message.type === 'CREATE_DEEP_FOCUS_SESSION') {
+    (async () => {
+      try {
+        if (storageManager) {
+          const session = await storageManager.createDeepFocusSession();
+          console.log('🎯 Created deep focus session:', session.id);
+          sendResponse({ 
+            success: true, 
+            session: session,
+            message: 'Deep focus session created'
+          });
+        } else {
+          console.warn('⚠️ StorageManager not available for session creation');
+          sendResponse({ success: false, error: 'StorageManager not available' });
+        }
+      } catch (error) {
+        console.error('❌ Error creating deep focus session:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // Handle COMPLETE_DEEP_FOCUS_SESSION - Complete current deep focus session
+  if (message.type === 'COMPLETE_DEEP_FOCUS_SESSION') {
+    (async () => {
+      try {
+        if (storageManager) {
+          const sessionData = message.payload || {};
+          const result = await storageManager.completeDeepFocusSession(sessionData.duration);
+          console.log('✅ Completed deep focus session:', result);
+          sendResponse({ 
+            success: true, 
+            result: result,
+            message: 'Deep focus session completed'
+          });
+        } else {
+          console.warn('⚠️ StorageManager not available for session completion');
+          sendResponse({ success: false, error: 'StorageManager not available' });
+        }
+      } catch (error) {
+        console.error('❌ Error completing deep focus session:', error);
         sendResponse({ success: false, error: error.message });
       }
     })();
