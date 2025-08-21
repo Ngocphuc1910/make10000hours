@@ -1045,6 +1045,12 @@ class PopupManager {
       } else if (message.type === 'OVERRIDE_DATA_UPDATED') {
         console.log('🔄 Override data updated, refreshing display');
         this.updateLocalOverrideTime();
+      } else if (message.type === 'EXTENSION_BLOCKED_SITES_UPDATED') {
+        console.log('📱 Received blocked sites update:', message.payload);
+        // Refresh blocked sites list if on that tab
+        if (this.currentTab === 'blocking-sites') {
+          this.updateBlockedSitesList();
+        }
       } else if (message.type === 'FORCE_STATE_REFRESH') {
         console.log('🔄 Forced state refresh received:', message.payload);
         // Force refresh the current state from background

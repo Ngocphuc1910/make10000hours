@@ -171,7 +171,7 @@ if (typeof window !== 'undefined') {
       // Get the store instance and call the handler
       const store = useDeepFocusStore.getState();
       if (store.handleExtensionBlockedSitesUpdate) {
-        store.handleExtensionBlockedSitesUpdate(event.data.payload.sites).catch(error => {
+        store.handleExtensionBlockedSitesUpdate(event.data.payload.blockedSites).catch(error => {
           console.error('❌ Failed to handle extension blocked sites update:', error);
         });
       }
