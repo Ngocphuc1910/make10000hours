@@ -828,11 +828,31 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       enableDeepFocus: async (source?: Source) => {
         const state = get();
         
-        // Check for stuck recovery flag first
-        get().checkRecoveryTimeout();
+        // Check for stuck recovery flag first and reset if needed
+        const wasReset = get().checkRecoveryTimeout();
+        if (wasReset) {
+          console.log('🔄 Recovery flag was reset during enableDeepFocus');
+        }
+        
+        // If user is explicitly trying to enable and recovery has been ongoing for more than 10 seconds,
+        // clear recovery state to allow user action
+        if (state.recoveryInProgress && state.recoveryStartTime) {
+          const recoveryDuration = Date.now() - state.recoveryStartTime;
+          if (recoveryDuration > 10000) {
+            console.log('⚠️ Store: Recovery in progress too long during user action, clearing');
+            set({ 
+              recoveryInProgress: false, 
+              recoveryStartTime: null,
+              deepFocusSyncError: null 
+            });
+          }
+        }
+        
+        // Get fresh state after potential recovery clear
+        const currentState = get();
         
         // Guard against double enable
-        if (state.isDeepFocusActive) {
+        if (currentState.isDeepFocusActive) {
           console.log('🟢 Deep Focus already active, skipping enable');
           return;
         }
@@ -1778,7 +1798,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           if (state.recoveryInProgress && state.recoveryStartTime) {
             const now = Date.now();
             const recoveryDuration = now - state.recoveryStartTime;
-            const timeoutMs = 30000; // 30 seconds timeout
+            const timeoutMs = 120000; // 2 minutes timeout (increased from 30s)
             
             if (recoveryDuration > timeoutMs) {
               console.warn(`⚠️ Recovery flag stuck for ${Math.round(recoveryDuration/1000)}s, auto-resetting`);

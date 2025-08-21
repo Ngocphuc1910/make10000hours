@@ -470,7 +470,7 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
 
   // Enhanced session guards with comprehensive checking
   const enableDeepFocus = useCallback(async (source?: Source) => {
-    // Check for stuck recovery flag first
+    // Check for stuck recovery flag first - always do this
     const wasReset = checkRecoveryTimeout();
     if (wasReset) {
       console.log('🔄 Context: Recovery flag was stuck and has been reset');
@@ -484,6 +484,19 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
       return;
     }
     
+    // Check for recovery in progress AFTER checking for stuck recovery flag
+    if (state.recoveryInProgress && state.recoveryStartTime) {
+      const recoveryDuration = Date.now() - state.recoveryStartTime;
+      // Be more lenient - allow user actions after 10 seconds of recovery
+      if (recoveryDuration > 10000) {
+        console.log('⚠️ Context: Recovery in progress for too long, forcing clear for user action');
+        resetRecoveryFlag();
+      } else {
+        console.log('🟡 Context: enableDeepFocus ignored - recovery in progress (recent)');
+        return;
+      }
+    }
+    
     // Comprehensive guards to prevent duplicate sessions
     if (state.isDeepFocusActive) {
       console.log('🟢 Context: enableDeepFocus ignored - already active');
@@ -495,11 +508,6 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
       return;
     }
     
-    if (state.recoveryInProgress) {
-      console.log('🟢 Context: enableDeepFocus ignored - recovery in progress');
-      return;
-    }
-    
     console.log('🟢 Context: enableDeepFocus called for user:', user.uid);
     
     try {
@@ -508,7 +516,7 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
       console.error('❌ Context: Failed to enable deep focus:', error);
       throw error;
     }
-  }, [user?.uid]);
+  }, [user?.uid, checkRecoveryTimeout, resetRecoveryFlag]);
 
   const disableDeepFocus = useCallback(async () => {
     if (!user?.uid) {
