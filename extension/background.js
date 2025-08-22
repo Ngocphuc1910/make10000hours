@@ -1774,8 +1774,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_LOCAL_OVERRIDE_TIME') {
     (async () => {
       try {
-        if (overrideSessionManager) {
-          // Use OverrideSessionManager for sophisticated override tracking (working version from 3643c8e)
+        // FIXED: Always use override_sessions storage format for consistency
+        // OverrideSessionManager uses different storage key ('overrideSessions' vs 'override_sessions')
+        if (false) { // Disable OverrideSessionManager temporarily due to storage key mismatch
           const overrideTimeResult = await overrideSessionManager.calculateTodayOverrideTime();
           console.log('⏰ GET_LOCAL_OVERRIDE_TIME via OverrideSessionManager:', overrideTimeResult);
           sendResponse({ 
