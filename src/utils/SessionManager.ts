@@ -14,6 +14,8 @@ export interface ExtensionSiteUsageSession {
   status: 'completed' | 'active' | 'suspended';
   utcDate: string; // YYYY-MM-DD
   userId: string;
+  type?: 'site_usage' | 'override'; // Optional type field to distinguish session types
+  url?: string; // Optional URL field for override sessions
 }
 
 // Firebase session schema
@@ -37,7 +39,6 @@ export interface SiteUsageSession {
   favicon?: string;
   url?: string;
   category?: string;
-  visits?: number;
 }
 
 /**
@@ -70,7 +71,6 @@ export class SessionManager {
       userId: ext.userId,
       domain: ext.domain,
       startTimeUTC: ext.startTimeUTC,
-      endTimeUTC: ext.endTimeUTC,
       duration: ext.duration, // keep seconds
       visits: ext.visits || 1, // preserve visit count from extension, default to 1
       utcDate: ext.utcDate,
@@ -98,6 +98,7 @@ export class SessionManager {
       startTimeUTC: startTime.toISOString(),
       endTimeUTC: undefined,
       duration: 0,
+      visits: 1,
       utcDate: this.getUtcDateString(startTime),
       status: 'active',
       createdAt: now,
@@ -225,7 +226,8 @@ export class SessionManager {
       typeof session.startTimeUTC === 'string' &&
       typeof session.utcDate === 'string' &&
       typeof session.userId === 'string' &&
-      ['active', 'completed', 'suspended'].includes(session.status)
+      ['active', 'completed', 'suspended'].includes(session.status) &&
+      (session.type === undefined || ['site_usage', 'override'].includes(session.type))
     );
   }
 }

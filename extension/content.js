@@ -147,14 +147,27 @@ class ExtensionCommunicator {
    * Handle extension context invalidation gracefully
    */
   handleContextInvalidation() {
-    console.debug('🔌 Extension context invalidated - stopping all message attempts');
+    console.debug('🔌 Extension context invalidated - initiating recovery');
     this.connectionState.valid = false;
-    this.isShuttingDown = true;
-    this.lastValidationTime = Date.now();
+    this.lastValidationTime = 0; // Force validation on next attempt
     
-    // Clear the message queue to prevent further attempts
-    if (this.messageQueue && this.messageQueue.clearQueue) {
-      this.messageQueue.clearQueue();
+    // Try recovery instead of immediately shutting down
+    if (this.messageQueue && this.messageQueue.initiateContextRecovery) {
+      this.messageQueue.initiateContextRecovery().then(recovered => {
+        if (!recovered) {
+          console.debug('❌ Context recovery failed, shutting down');
+          this.isShuttingDown = true;
+        } else {
+          console.log('✅ Context recovery successful');
+          this.connectionState.valid = true;
+        }
+      }).catch(error => {
+        console.error('❌ Context recovery error:', error);
+        this.isShuttingDown = true;
+      });
+    } else {
+      // Fallback: shut down if recovery not available
+      this.isShuttingDown = true;
     }
   }
   
@@ -162,8 +175,8 @@ class ExtensionCommunicator {
    * Enhanced message sending with queue management
    */
   async sendMessage(message, options = {}) {
-    // Don't send messages if extension is shutting down
-    if (this.isShuttingDown) {
+    // Don't send messages if extension is shutting down (but allow recovery messages)
+    if (this.isShuttingDown && message.type !== 'PING') {
       console.debug('🔌 Extension shutting down, not sending message:', message.type);
       return options.fallback || { success: false, error: 'Extension shutting down' };
     }
@@ -175,10 +188,17 @@ class ExtensionCommunicator {
     
     const { timeout = this.messageTimeout, retries = this.maxRetries, fallback = null } = options;
     
-    // Pre-check: Don't even attempt to send if extension context is invalid
+    // Pre-check: Validate context, but allow recovery during validation
     if (!await this.validateContext()) {
-      console.debug('🔌 Extension context invalid, not sending message:', message.type);
-      return fallback || { success: false, error: 'Extension context invalid' };
+      // Check if recovery is in progress
+      if (this.messageQueue && this.messageQueue.recoveryState && 
+          this.messageQueue.recoveryState.state === 'RECOVERING') {
+        console.debug('⏳ Extension context recovering, queuing message:', message.type);
+        // Message will be handled by the queue manager's recovery process
+      } else {
+        console.debug('🔌 Extension context invalid, not sending message:', message.type);
+        return fallback || { success: false, error: 'Extension context invalid' };
+      }
     }
     
     try {
@@ -195,11 +215,15 @@ class ExtensionCommunicator {
     } catch (error) {
       console.error('❌ Message failed after all retries:', error.message);
       
-      // If extension context was invalidated, stop trying
+      // If extension context was invalidated, try recovery
       if (error.message && (error.message.includes('Extension context invalidated') || 
                            error.message.includes('Could not establish connection') ||
                            error.message.includes('receiving end does not exist'))) {
-        this.handleContextInvalidation();
+        
+        // Only trigger recovery if not already shutting down
+        if (!this.isShuttingDown) {
+          this.handleContextInvalidation();
+        }
       }
       
       return fallback || { success: false, error: error.message };
@@ -600,6 +624,34 @@ class ActivityDetector {
           return;
         }
 
+        // Handle SYNC_USER_AUTH messages (from debug script)
+        if (type === 'SYNC_USER_AUTH') {
+          console.log('🔄 Received SYNC_USER_AUTH from web app:', payload);
+          
+          const message = {
+            type: 'SYNC_USER_AUTH',
+            payload
+          };
+
+          try {
+            const response = await this.sendMessageSafely(message, {
+              timeout: 15000,
+              maxRetries: 3,
+              fallback: { 
+                success: false, 
+                error: 'Extension temporarily unavailable',
+                queued: false 
+              }
+            });
+            
+            console.log('✅ SYNC_USER_AUTH response:', response);
+            // Note: No sendResponse needed for postMessage-based communication
+            
+          } catch (error) {
+            console.error('❌ Failed to process SYNC_USER_AUTH:', error);
+          }
+        }
+
         // Handle SET_USER_ID messages
         if (type === 'SET_USER_ID') {
           console.log('🔄 Received SET_USER_ID from web app:', payload);
@@ -731,6 +783,32 @@ class ActivityDetector {
               queued: false
             });
           }
+        }
+
+        // Handle ADD_TEST_OVERRIDE_SESSIONS messages (for debugging)
+        if (type === 'ADD_TEST_OVERRIDE_SESSIONS') {
+          console.log('🔄 Received ADD_TEST_OVERRIDE_SESSIONS from web app:', payload);
+          
+          try {
+            const response = await this.sendMessageSafely({
+              type: 'ADD_TEST_OVERRIDE_SESSIONS',
+              payload
+            }, {
+              timeout: 10000,
+              maxRetries: 2,
+              fallback: { 
+                success: false, 
+                error: 'Extension temporarily unavailable',
+                queued: false 
+              }
+            });
+            
+            console.log('✅ ADD_TEST_OVERRIDE_SESSIONS response:', response);
+            
+          } catch (error) {
+            console.error('❌ Failed to process ADD_TEST_OVERRIDE_SESSIONS:', error);
+          }
+          return;
         }
 
         // Handle REQUEST_SITE_USAGE_SESSIONS messages (site usage data sync)
@@ -926,6 +1004,21 @@ class ActivityDetector {
           window.postMessage({
             type: 'EXTENSION_BLOCKED_SITES_UPDATED',
             payload: message.payload
+          }, '*');
+          
+          sendResponse({ success: true });
+        } else if (message.type === 'EXTENSION_SITE_USAGE_SESSION_BATCH') {
+          console.log('📨 Received session batch from extension:', {
+            sessionCount: message.payload?.sessions?.length || 0,
+            hasUserId: !!message.payload?.userId,
+            timestamp: message.payload?.timestamp
+          });
+          
+          // Forward session batch to web app  
+          window.postMessage({
+            type: 'EXTENSION_SITE_USAGE_SESSION_BATCH',
+            payload: message.payload,
+            source: 'extension'
           }, '*');
           
           sendResponse({ success: true });

@@ -9,6 +9,8 @@ import { useDeepFocusDashboardStore } from '../../store/deepFocusDashboardStore'
 import { useUserStore } from '../../store/userStore';
 import { DeepFocusDisplayService, type SessionDisplayData } from '../../services/deepFocusDisplayService';
 import { timezoneUtils } from '../../utils/timezoneUtils';
+import { RobustTimezoneUtils } from '../../utils/robustTimezoneUtils';
+import { siteUsageSessionService } from '../../api/siteUsageSessionService';
 import { useUIStore } from '../../store/uiStore';
 import { useExtensionSync } from '../../hooks/useExtensionSync';
 import { Icon } from '../ui/Icon';
@@ -21,6 +23,7 @@ import type { ComparisonMetrics } from '../../types/deepFocus';
 
 import '../../utils/debugOverrideSession'; // Import for console access
 import '../../utils/debugExtensionCommunication'; // Import debug extension utility
+import '../../utils/debugOverrideSync'; // Import override sync debug utility
 
 import UsageLineChart from '../charts/UsageLineChart';
 import UsagePieChart from '../charts/UsagePieChart';
@@ -118,7 +121,7 @@ const DeepFocusPage: React.FC = () => {
   // Flag to prevent automatic closing
   const [isInitializing, setIsInitializing] = useState(false);
 
-  const { timeMetrics, dailyUsage, siteUsage, siteUsageData, onScreenTime, isLoading: isDashboardLoading, loadExtensionData, loadAllTimeExtensionData, loadSessionData } = useDeepFocusDashboardStore();
+  const { timeMetrics, dailyUsage, siteUsage, siteUsageData, onScreenTime, isLoading: isDashboardLoading, loadDashboardData, loadAllTimeData, loadSessionData } = useDeepFocusDashboardStore();
   
   // Loading timeout state to prevent indefinite loading
   const [loadingTimeout, setLoadingTimeout] = useState(false);
@@ -164,12 +167,12 @@ const DeepFocusPage: React.FC = () => {
         // Reload data after sync
         console.log('🔄 Reloading data after smart sync...');
         if (selectedRange.rangeType === 'all time') {
-          loadAllTimeExtensionData();
+          loadAllTimeData();
         } else {
           const startDate = selectedRange.startDate || new Date();
           const endDate = selectedRange.endDate || new Date();
           if (startDate && endDate) {
-            loadExtensionData(startDate, endDate);
+            loadDashboardData(startDate, endDate);
           }
         }
         console.log('✅ Data reloaded after smart sync');
@@ -193,12 +196,12 @@ const DeepFocusPage: React.FC = () => {
         // Reload data after sync
         console.log('🔄 Reloading data after last 10 sync...');
         if (selectedRange.rangeType === 'all time') {
-          loadAllTimeExtensionData();
+          loadAllTimeData();
         } else {
           const startDate = selectedRange.startDate || new Date();
           const endDate = selectedRange.endDate || new Date();
           if (startDate && endDate) {
-            loadExtensionData(startDate, endDate);
+            loadDashboardData(startDate, endDate);
           }
         }
         console.log('✅ Data reloaded after last 10 sync');
@@ -227,10 +230,70 @@ const DeepFocusPage: React.FC = () => {
       debugSessionSync: 'function (NEW SESSION-BASED)',
       debugExtensionData: 'function (EXTENSION DATA)',
       debugActiveSyncs: 'function (FIND CONFLICTS)',
+      debugOverrideSync: 'function (OVERRIDE SYNC DIAGNOSTICS)',
+      debugQuickOverrideSync: 'function (QUICK OVERRIDE SYNC TEST)',
       debugUser: user?.uid || 'No user',
       resetExtensionConnection: 'function (CIRCUIT BREAKER FIX)'
     });
   }, [user]);
+
+  // Expose debugging tools
+  React.useEffect(() => {
+    (window as any).debugTimezoneFiltering = () => {
+      const userTimezone = RobustTimezoneUtils.getUserTimezone();
+      const browserTimezone = RobustTimezoneUtils.getBrowserTimezone();
+      const todayInUserTz = RobustTimezoneUtils.getTodayInUserTimezone(userTimezone);
+
+      console.log('🌍 TIMEZONE DEBUG REPORT:');
+      console.table({
+        'User Setting Timezone': userTimezone,
+        'Browser Detected Timezone': browserTimezone,
+        'Queries Use': userTimezone,
+        'Today in User TZ': todayInUserTz,
+        'Today in Browser TZ': new Date().toISOString().split('T')[0],
+        'Match?': todayInUserTz === new Date().toISOString().split('T')[0] ? '✅' : '❌'
+      });
+    };
+
+    (window as any).testSingaporeScenario = async () => {
+      console.log('🧪 TESTING: Singapore user in New York scenario');
+
+      // Simulate Singapore timezone setting
+      const singaporeTimezone = 'Asia/Singapore';
+      const testDate = new Date(); // Current browser date
+
+      const startUtc = RobustTimezoneUtils.convertUserDateToUTCBoundaries(
+        testDate,
+        singaporeTimezone,
+        'start'
+      );
+      const endUtc = RobustTimezoneUtils.convertUserDateToUTCBoundaries(
+        testDate,
+        singaporeTimezone,
+        'end'
+      );
+
+      console.log('Singapore Today Query Range:');
+      console.log(`Start UTC: ${startUtc}`);
+      console.log(`End UTC: ${endUtc}`);
+
+      // Test actual query
+      const userId = user?.uid;
+      if (userId) {
+        const sessions = await siteUsageSessionService.getSessionsByUserTimezone(
+          userId,
+          testDate,
+          testDate,
+          singaporeTimezone
+        );
+        console.log(`Found ${sessions.length} sessions for Singapore today`);
+      }
+    };
+
+    console.log('🔧 Debug tools available:');
+    console.log('- debugTimezoneFiltering()');
+    console.log('- testSingaporeScenario()');
+  }, []);
   
   const dateFilterRef = useRef<HTMLDivElement>(null);
   const dateRangeInputRef = useRef<HTMLInputElement>(null);
@@ -266,24 +329,22 @@ const DeepFocusPage: React.FC = () => {
       }
     }
     
-    // Always reload data after sync to show latest information
+    // Load data with timezone awareness
     if (selectedRange.rangeType === 'all time') {
-      console.log('🔄 Reloading all time data after sync...');
-      loadAllTimeExtensionData();
+      console.log('🔄 Loading all time data...');
+      loadAllTimeData();
     } else {
-      // Load data for the selected range
       const startDate = selectedRange.startDate || new Date();
       const endDate = selectedRange.endDate || new Date();
-      
-      // Ensure we load data only if dates are valid
+
       if (startDate && endDate) {
-        console.log('🔄 Reloading range data after sync...', { startDate, endDate });
-        loadExtensionData(startDate, endDate);
+        console.log('🔄 Loading range data with timezone awareness...', { startDate, endDate });
+        loadDashboardData(startDate, endDate);
       }
     }
-    
-    // Load session-based data for new metrics display
-    console.log('🔄 Loading session-based data...');
+
+    // Load session-based data
+    console.log('🔄 Loading timezone-aware session data...');
     await loadSessionData();
   }
 
@@ -381,12 +442,12 @@ const DeepFocusPage: React.FC = () => {
           // Reload data after sync to show latest information
           console.log('🔄 Reloading data after initial sync...');
           if (selectedRange.rangeType === 'all time') {
-            loadAllTimeExtensionData();
+            loadAllTimeData();
           } else {
             const startDate = selectedRange.startDate || new Date();
             const endDate = selectedRange.endDate || new Date();
             if (startDate && endDate) {
-              loadExtensionData(startDate, endDate);
+              loadDashboardData(startDate, endDate);
             }
           }
           
@@ -562,48 +623,60 @@ const DeepFocusPage: React.FC = () => {
 
   // Handle date range selection
   const handleDateRangeSelect = (range: string) => {
-    // Create robust today dates using local timezone
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    const end = new Date(today);
-    end.setHours(23, 59, 59, 999); // Set to end of today
-    const start = new Date(today);
-    start.setHours(0, 0, 0, 0); // Set to start of today
-    
-    let type: RangeType = 'today';
-    
+    const userTimezone = RobustTimezoneUtils.getUserTimezone();
+
+    console.log(`🌍 Date selection using SETTING timezone: ${userTimezone}`);
+
     switch(range) {
-      case 'Today':
-        type = 'today';
-        
-        setSelectedRange({ startDate: start, endDate: end, rangeType: type });
+      case 'Today': {
+        // Get today in user's SETTING timezone, not browser timezone
+        const todayStr = RobustTimezoneUtils.getTodayInUserTimezone(userTimezone);
+        const todayDate = new Date(`${todayStr}T12:00:00`); // Midday to avoid edge cases
+
+        setSelectedRange({
+          startDate: todayDate,
+          endDate: todayDate,
+          rangeType: 'today'
+        });
         break;
+      }
       case 'Yesterday': {
+        const todayStr = RobustTimezoneUtils.getTodayInUserTimezone(userTimezone);
+        const today = new Date(`${todayStr}T12:00:00`);
         const yesterday = new Date(today);
         yesterday.setDate(today.getDate() - 1);
-        const yesterdayStart = new Date(yesterday);
-        yesterdayStart.setHours(0, 0, 0, 0);
-        const yesterdayEnd = new Date(yesterday);
-        yesterdayEnd.setHours(23, 59, 59, 999);
-        type = 'yesterday';
-        setSelectedRange({ startDate: yesterdayStart, endDate: yesterdayEnd, rangeType: type });
+
+        setSelectedRange({
+          startDate: yesterday,
+          endDate: yesterday,
+          rangeType: 'yesterday'
+        });
         break;
       }
       case 'Last 7 Days': {
-        const start7 = new Date(today);
-        start7.setDate(today.getDate() - 6); // -6 to include today = 7 days
-        start7.setHours(0, 0, 0, 0);
-        type = 'last 7 days';
-        setSelectedRange({ startDate: start7, endDate: end, rangeType: type });
+        const todayStr = RobustTimezoneUtils.getTodayInUserTimezone(userTimezone);
+        const today = new Date(`${todayStr}T12:00:00`);
+        const weekAgo = new Date(today);
+        weekAgo.setDate(today.getDate() - 6); // -6 to include today = 7 days
+
+        setSelectedRange({
+          startDate: weekAgo,
+          endDate: today,
+          rangeType: 'last 7 days'
+        });
         break;
       }
       case 'Last 30 Days': {
-        const start30 = new Date(today);
-        start30.setDate(today.getDate() - 29); // -29 to include today = 30 days
-        start30.setHours(0, 0, 0, 0);
-        type = 'last 30 days';
-        setSelectedRange({ startDate: start30, endDate: end, rangeType: type });
+        const todayStr = RobustTimezoneUtils.getTodayInUserTimezone(userTimezone);
+        const today = new Date(`${todayStr}T12:00:00`);
+        const monthAgo = new Date(today);
+        monthAgo.setDate(today.getDate() - 29); // -29 to include today = 30 days
+
+        setSelectedRange({
+          startDate: monthAgo,
+          endDate: today,
+          rangeType: 'last 30 days'
+        });
         break;
       }
       case 'Custom Range':
@@ -611,11 +684,14 @@ const DeepFocusPage: React.FC = () => {
         setShowDateFilter(false);
         return; // Don't update dateRange yet
       default:
-        // For 'All time', set null dates to indicate no filtering
-        type = 'all time';
-        setSelectedRange({ startDate: null, endDate: null, rangeType: type });
+        // All time
+        setSelectedRange({
+          startDate: null,
+          endDate: null,
+          rangeType: 'all time'
+        });
     }
-    
+
     setShowDateFilter(false);
   };
   

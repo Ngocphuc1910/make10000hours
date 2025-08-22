@@ -16,7 +16,17 @@
       this.validationCache = {
         isValid: true,
         lastChecked: Date.now(),
-        cacheTime: 30000 // Increased from 5000 to 30 seconds
+        cacheTime: 3000 // Reduced to 3 seconds for faster detection
+      };
+      
+      // Context recovery state
+      this.recoveryState = {
+        state: 'HEALTHY', // HEALTHY, RECOVERING, FAILED
+        attempts: 0,
+        maxAttempts: 10,
+        lastRecoveryAttempt: 0,
+        recoveryTimeout: 3000, // Start with 3s timeout during recovery
+        normalTimeout: 800 // Normal operation timeout
       };
       this.stats = {
         totalMessages: 0,
@@ -29,12 +39,68 @@
     /**
      * Clears the message queue and rejects all pending messages
      */
-    clearQueue() {
+    clearQueue(reason = 'Extension context invalidated') {
+      console.log(`🧹 Clearing message queue: ${reason}`);
       for (const [messageId, item] of this.queue) {
-        item.reject(new Error('Extension context invalidated'));
+        item.reject(new Error(reason));
       }
       this.queue.clear();
       this.processing = false;
+      this.recoveryState.state = 'FAILED';
+    }
+    
+    /**
+     * Initiates context recovery process
+     */
+    async initiateContextRecovery() {
+      if (this.recoveryState.state === 'RECOVERING') {
+        return false; // Already recovering
+      }
+      
+      console.log('🔄 Initiating extension context recovery...');
+      this.recoveryState.state = 'RECOVERING';
+      this.recoveryState.attempts = 0;
+      this.recoveryState.lastRecoveryAttempt = Date.now();
+      
+      // Invalidate validation cache to force fresh validation
+      this.validationCache.isValid = false;
+      this.validationCache.lastChecked = 0;
+      
+      return this.attemptContextRecovery();
+    }
+    
+    /**
+     * Attempts to recover extension context with progressive retry
+     */
+    async attemptContextRecovery() {
+      if (this.recoveryState.attempts >= this.recoveryState.maxAttempts) {
+        console.error('❌ Context recovery failed after max attempts');
+        this.clearQueue('Context recovery failed - extension may be disabled');
+        return false;
+      }
+      
+      this.recoveryState.attempts++;
+      const backoffTime = Math.min(1000 * Math.pow(2, this.recoveryState.attempts - 1), 10000);
+      
+      console.log(`🔄 Context recovery attempt ${this.recoveryState.attempts}/${this.recoveryState.maxAttempts}`);
+      
+      // Wait before attempting recovery
+      if (this.recoveryState.attempts > 1) {
+        await new Promise(r => setTimeout(r, backoffTime));
+      }
+      
+      // Use longer timeout during recovery
+      const isValid = await this.validateContextWithTimeout(this.recoveryState.recoveryTimeout);
+      
+      if (isValid) {
+        console.log('✅ Extension context recovered successfully!');
+        this.recoveryState.state = 'HEALTHY';
+        this.recoveryState.attempts = 0;
+        return true;
+      }
+      
+      // Retry recovery
+      return this.attemptContextRecovery();
     }
 
     /**
@@ -91,9 +157,35 @@
             if (error.message && (error.message.includes('Extension context invalidated') || 
                                  error.message.includes('receiving end does not exist') ||
                                  error.message.includes('Could not establish connection'))) {
-              console.warn('🔄 Extension context invalidated - clearing message queue');
-              this.clearQueue();
-              return;
+              
+              // Try context recovery instead of immediately clearing queue
+              if (this.recoveryState.state === 'HEALTHY') {
+                console.warn('🔄 Extension context invalidated - attempting recovery...');
+                
+                try {
+                  const recovered = await this.initiateContextRecovery();
+                  if (recovered) {
+                    console.log('✅ Context recovered, continuing with queue processing');
+                    continue; // Continue processing the queue
+                  }
+                } catch (recoveryError) {
+                  console.error('❌ Context recovery failed:', recoveryError);
+                }
+                
+                // If recovery failed, clear the queue
+                this.clearQueue('Context recovery failed');
+                return;
+              } else if (this.recoveryState.state === 'RECOVERING') {
+                // Already recovering, wait a bit and continue
+                console.log('⏳ Context recovery in progress, waiting...');
+                await new Promise(r => setTimeout(r, 2000));
+                continue;
+              } else {
+                // Recovery already failed, clear queue
+                console.warn('❌ Context permanently invalid, clearing queue');
+                this.clearQueue('Extension context permanently invalid');
+                return;
+              }
             }
             
             console.warn(`Message retry attempt ${item.attempts + 1} failed:`, error);
@@ -136,6 +228,16 @@
      * Validates extension context with caching
      */
     async validateContext() {
+      // Use appropriate timeout based on recovery state
+      const timeout = this.recoveryState.state === 'RECOVERING' ? 
+        this.recoveryState.recoveryTimeout : this.recoveryState.normalTimeout;
+      return this.validateContextWithTimeout(timeout);
+    }
+    
+    /**
+     * Validates extension context with custom timeout
+     */
+    async validateContextWithTimeout(timeoutMs) {
       const now = Date.now();
       
       // Use cached result if within cache time
@@ -160,22 +262,45 @@
               if (!resolved) {
                 resolved = true;
                 if (chrome.runtime.lastError) {
-                  console.warn('PING validation error:', chrome.runtime.lastError);
+                  const errorMsg = chrome.runtime.lastError.message;
+                  console.debug('🔌 PING validation failed:', errorMsg);
+                  
+                  // Check if error indicates context invalidation vs temporary issue
+                  if (errorMsg && (errorMsg.includes('Extension context invalidated') ||
+                      errorMsg.includes('Could not establish connection'))) {
+                    // Trigger recovery if we're not already recovering
+                    if (this.recoveryState.state === 'HEALTHY') {
+                      console.log('🔄 Context invalidation detected during PING, will attempt recovery');
+                    }
+                  }
                   resolve(false);
                 } else {
-                  resolve(response?.success === true);
+                  const valid = response?.success === true;
+                  
+                  // Additional validation - check if response has expected structure
+                  if (valid && response?.contextInfo?.canReceiveMessages) {
+                    console.debug('✅ PING validation successful with full context info');
+                  } else if (valid) {
+                    console.debug('✅ PING validation successful (basic response)');
+                  } else {
+                    console.debug('⚠️ PING response received but not valid:', response);
+                  }
+                  
+                  resolve(valid);
                 }
               }
             });
             
-            // Set a reasonable timeout that matches the validation purpose
+            // Set timeout based on current state - longer during recovery
             setTimeout(() => {
               if (!resolved) {
                 resolved = true;
-                console.warn('PING validation timeout');
+                const contextInfo = this.recoveryState.state === 'RECOVERING' ? 
+                  `(recovery attempt ${this.recoveryState.attempts})` : '';
+                console.warn(`PING validation timeout ${contextInfo}`);
                 resolve(false);
               }
-            }, 800); // Reduced from 3000ms to 800ms for faster popup
+            }, timeoutMs);
           } catch (e) {
             if (!resolved) {
               resolved = true;
@@ -187,6 +312,14 @@
 
         this.validationCache.isValid = response;
         this.validationCache.lastChecked = now;
+        
+        // Update recovery state if validation successful
+        if (response && this.recoveryState.state === 'RECOVERING') {
+          console.log('✅ Context validation successful during recovery');
+          this.recoveryState.state = 'HEALTHY';
+          this.recoveryState.attempts = 0;
+        }
+        
         return response;
       } catch (e) {
         console.warn('validateContext error:', e);
@@ -285,6 +418,7 @@
         queueSize: this.queue.size,
         processing: this.processing,
         validationCache: this.validationCache,
+        recoveryState: this.recoveryState,
         successRate: this.stats.totalMessages > 0 ? 
           (this.stats.successfulMessages / this.stats.totalMessages * 100).toFixed(1) + '%' : '0%'
       };

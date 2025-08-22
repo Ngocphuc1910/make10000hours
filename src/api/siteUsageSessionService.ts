@@ -25,6 +25,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { SiteUsageSession } from '../utils/SessionManager';
+import { RobustTimezoneUtils } from '../utils/robustTimezoneUtils';
 
 export interface SessionQueryOptions {
   userId: string;
@@ -88,10 +89,13 @@ class SiteUsageSessionService {
     try {
       console.log(`🔄 [RACE-PROTECTION] Starting protected bulk sync for ${sessions.length} sessions`);
       
-      // Validate sessions and filter out invalid ones
-      const validSessions = sessions.filter(session => {
+      // CRITICAL FIX: Sanitize sessions BEFORE validation to prevent data loss
+      const sanitizedSessions = sessions.map(session => this.sanitizeSessionData(session));
+      
+      // Validate sessions and filter out invalid ones (after sanitization)
+      const validSessions = sanitizedSessions.filter(session => {
         if (!session.extensionSessionId || !session.userId) {
-          console.warn('⚠️ Session missing required fields, skipping:', {
+          console.warn('⚠️ Session missing required fields after sanitization, skipping:', {
             extensionSessionId: session.extensionSessionId,
             userId: session.userId,
             domain: session.domain
@@ -206,6 +210,7 @@ class SiteUsageSessionService {
     let skipped = 0;
 
     for (const session of sessions) {
+      // Session is already sanitized at this point
       const existingSession = existingSessionsMap.get(session.extensionSessionId);
       
       if (existingSession) {
@@ -213,7 +218,6 @@ class SiteUsageSessionService {
         const hasChanges = (
           existingSession.duration !== session.duration ||
           existingSession.status !== session.status ||
-          existingSession.endTimeUTC !== session.endTimeUTC ||
           existingSession.startTimeUTC !== session.startTimeUTC
         );
         
@@ -283,7 +287,8 @@ class SiteUsageSessionService {
       return snapshot.docs.map(doc => this.convertFirestoreToSession(doc.data()));
     } catch (error) {
       console.error('❌ Failed to get sessions for date range:', error);
-      throw error;
+      console.log('🔄 getSessionsForDateRange -> falling back to timezone-aware method');
+      return this.getSessionsForDateRangeTimezone(userId, startDate, endDate);
     }
   }
   
@@ -301,28 +306,11 @@ class SiteUsageSessionService {
 
   /**
    * Get sessions for today only (specific method for dashboard)
+   * UPDATED: Now uses timezone-aware method for consistent results
    */
-  async getSessionsForToday(userId: string): Promise<SiteUsageSession[]> {
-    const today = new Date().toISOString().split('T')[0];
-    
-    try {
-      const q = query(
-        collection(db, this.collectionName),
-        where('userId', '==', userId),
-        where('utcDate', '==', today),
-        where('status', '==', 'completed'),
-        orderBy('startTimeUTC', 'desc')
-      );
-      
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      } as SiteUsageSession));
-    } catch (error) {
-      console.error('❌ Failed to get today\'s sessions:', error);
-      return [];
-    }
+  async getSessionsForToday(userId: string, userTimezone?: string): Promise<SiteUsageSession[]> {
+    console.log('🔄 getSessionsForToday -> delegating to timezone-aware method');
+    return this.getSessionsForTodayTimezone(userId, userTimezone);
   }
   
   /**
@@ -472,6 +460,29 @@ class SiteUsageSessionService {
   }
   
   /**
+   * Sanitize session data for Firebase compatibility
+   * Removes undefined fields and ensures required field mappings
+   */
+  private sanitizeSessionData(session: any): any {
+    // Create a copy to avoid modifying original
+    const sanitized = { ...session };
+    
+    // Remove ALL undefined fields to prevent Firebase write errors
+    Object.keys(sanitized).forEach(key => {
+      if (sanitized[key] === undefined) {
+        delete sanitized[key];
+      }
+    });
+    
+    // Ensure extensionSessionId exists (required by Firebase service)
+    if (!sanitized.extensionSessionId && sanitized.id) {
+      sanitized.extensionSessionId = sanitized.id;
+    }
+    
+    return sanitized;
+  }
+
+  /**
    * Convert Firestore document to SiteUsageSession
    */
   private convertFirestoreToSession(data: any): SiteUsageSession {
@@ -479,7 +490,6 @@ class SiteUsageSessionService {
       ...data,
       // Keep timestamps as strings in new schema
       startTimeUTC: data.startTimeUTC,
-      endTimeUTC: data.endTimeUTC || undefined,
       createdAt: data.createdAt
     } as SiteUsageSession;
   }
@@ -512,6 +522,112 @@ class SiteUsageSessionService {
   cleanup(): void {
     this.activeSessionListeners.forEach(unsubscribe => unsubscribe());
     this.activeSessionListeners.clear();
+  }
+
+  /**
+   * UNIFIED method for all date-based session queries
+   * Uses user's SETTING timezone for proper "Today" interpretation
+   * Replaces: getTodaySessions, getSessionsForDateRange, etc.
+   */
+  async getSessionsByUserTimezone(
+    userId: string,
+    startDate: Date,
+    endDate: Date,
+    userTimezone?: string,
+    options: {
+      status?: 'active' | 'completed' | 'suspended';
+      includeAllStatuses?: boolean;
+    } = {}
+  ): Promise<SiteUsageSession[]> {
+    try {
+      // Get effective timezone (user setting with fallback)
+      const effectiveTimezone = userTimezone || RobustTimezoneUtils.getUserTimezone();
+
+      // Convert user's date selection to precise UTC boundaries using their SETTING timezone
+      const startOfRangeUtc = RobustTimezoneUtils.convertUserDateToUTCBoundaries(
+        startDate,
+        effectiveTimezone,
+        'start'
+      );
+      const endOfRangeUtc = RobustTimezoneUtils.convertUserDateToUTCBoundaries(
+        endDate,
+        effectiveTimezone,
+        'end'
+      );
+
+      console.log(`🌍 Session query using SETTING timezone: ${effectiveTimezone}`);
+      console.log(`📅 User date range: ${startDate.toDateString()} to ${endDate.toDateString()}`);
+      console.log(`🔄 UTC boundaries: ${startOfRangeUtc} to ${endOfRangeUtc}`);
+
+      // Build Firebase query with startTimeUTC (precise timestamp filtering)
+      let queryBuilder = query(
+        collection(db, this.collectionName),
+        where('userId', '==', userId),
+        where('startTimeUTC', '>=', startOfRangeUtc),
+        where('startTimeUTC', '<=', endOfRangeUtc),
+        orderBy('startTimeUTC', 'desc')
+      );
+
+      // Add status filter if specified (requires composite index)
+      if (options.status && !options.includeAllStatuses) {
+        queryBuilder = query(
+          collection(db, this.collectionName),
+          where('userId', '==', userId),
+          where('startTimeUTC', '>=', startOfRangeUtc),
+          where('startTimeUTC', '<=', endOfRangeUtc),
+          where('status', '==', options.status),
+          orderBy('startTimeUTC', 'desc')
+        );
+      }
+
+      const snapshot = await getDocs(queryBuilder);
+      let sessions = snapshot.docs.map(doc => this.convertFirestoreToSession(doc.data()));
+
+      // Filter status in memory if needed (to avoid complex indexes)
+      if (!options.includeAllStatuses && !options.status) {
+        sessions = sessions.filter(session => session.status === 'completed');
+      }
+
+      console.log(`📊 Retrieved ${sessions.length} sessions for user timezone range`);
+
+      return sessions;
+
+    } catch (error) {
+      console.error('❌ Failed to get sessions by user timezone:', error);
+      console.error('Input parameters:', { userId, startDate, endDate, userTimezone, options });
+
+      // Fallback: return empty array rather than crashing
+      return [];
+    }
+  }
+
+  /**
+   * Get today's sessions using user's SETTING timezone
+   */
+  async getSessionsForTodayTimezone(userId: string, userTimezone?: string): Promise<SiteUsageSession[]> {
+    const effectiveTimezone = userTimezone || RobustTimezoneUtils.getUserTimezone();
+    const todayStr = RobustTimezoneUtils.getTodayInUserTimezone(effectiveTimezone);
+    const today = new Date(`${todayStr}T12:00:00`);
+
+    return this.getSessionsByUserTimezone(userId, today, today, effectiveTimezone, {
+      status: 'completed'
+    });
+  }
+
+  /**
+   * Get sessions for date range using user's SETTING timezone
+   */
+  async getSessionsForDateRangeTimezone(
+    userId: string,
+    startDate: Date,
+    endDate: Date,
+    userTimezone?: string
+  ): Promise<SiteUsageSession[]> {
+    const effectiveTimezone = userTimezone || RobustTimezoneUtils.getUserTimezone();
+
+    return this.getSessionsByUserTimezone(userId, startDate, endDate, effectiveTimezone, {
+      includeAllStatuses: true
+    });
   }
 }
 
