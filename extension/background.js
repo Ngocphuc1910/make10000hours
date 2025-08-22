@@ -2048,6 +2048,453 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // COMPLETE_DEEP_FOCUS_SESSION now handled by FocusTimeTracker coordinator
 
+  // Handle SYNC_USER_AUTH - Sync user authentication from web app to extension
+  if (message.type === 'SYNC_USER_AUTH') {
+    (async () => {
+      try {
+        console.log('🔄 SYNC_USER_AUTH received:', message.payload);
+        
+        // Store user authentication info
+        const userInfo = {
+          uid: message.payload.userId,
+          userId: message.payload.userId,
+          email: message.payload.email,
+          lastSynced: Date.now(),
+          syncSource: 'web_app'
+        };
+        
+        await chrome.storage.local.set({ userInfo });
+        console.log('✅ User authentication synced to extension:', userInfo);
+        
+        sendResponse({ 
+          success: true, 
+          message: 'User authentication synced successfully',
+          userId: userInfo.userId
+        });
+      } catch (error) {
+        console.error('❌ Error syncing user authentication:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async
+  }
+
+  // Handle ADD_TEST_OVERRIDE_SESSIONS - Add test sessions for debugging
+  if (message.type === 'ADD_TEST_OVERRIDE_SESSIONS') {
+    (async () => {
+      try {
+        console.log('📝 ADD_TEST_OVERRIDE_SESSIONS received:', message.payload);
+        
+        const { sessions, userId, today } = message.payload;
+        
+        // Add sessions to override_sessions storage
+        const storage = await chrome.storage.local.get(['override_sessions']);
+        const allOverrideSessions = storage.override_sessions || {};
+        
+        if (!allOverrideSessions[today]) {
+          allOverrideSessions[today] = [];
+        }
+        
+        // Add test sessions
+        allOverrideSessions[today].push(...sessions);
+        
+        await chrome.storage.local.set({ override_sessions: allOverrideSessions });
+        
+        console.log('✅ Added test override sessions:', {
+          date: today,
+          sessionsAdded: sessions.length,
+          totalForToday: allOverrideSessions[today].length,
+          allDates: Object.keys(allOverrideSessions)
+        });
+        
+        sendResponse({ 
+          success: true, 
+          message: 'Test sessions added',
+          sessionsAdded: sessions.length,
+          totalSessions: allOverrideSessions[today].length
+        });
+      } catch (error) {
+        console.error('❌ Error adding test sessions:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async
+  }
+
+  // Handle ANALYZE_SESSION_STORAGE - Debug storage contents
+  if (message.type === 'ANALYZE_SESSION_STORAGE') {
+    (async () => {
+      try {
+        console.log('🔍 ANALYZE_SESSION_STORAGE received:', message.payload);
+        
+        const { userId, today } = message.payload;
+        
+        // Get all storage data
+        const storage = await chrome.storage.local.get(['site_usage_sessions', 'override_sessions', 'userInfo']);
+        
+        console.log('📊 [STORAGE-ANALYSIS] Complete storage contents:', {
+          hasSiteUsage: !!storage.site_usage_sessions,
+          hasOverrideSessions: !!storage.override_sessions,
+          hasUserInfo: !!storage.userInfo,
+          siteUsageKeys: Object.keys(storage.site_usage_sessions || {}),
+          overrideKeys: Object.keys(storage.override_sessions || {}),
+          userInfo: storage.userInfo,
+          todayOverrideSessions: storage.override_sessions?.[today] || [],
+          todaySiteUsage: storage.site_usage_sessions?.[today] || []
+        });
+        
+        // Detailed filtering analysis
+        const overrideSessions = storage.override_sessions || {};
+        const todaySessions = overrideSessions[today] || [];
+        
+        console.log('📊 [FILTERING-ANALYSIS] Override session analysis:', {
+          totalStorageDays: Object.keys(overrideSessions).length,
+          todayKey: today,
+          todaySessionsCount: todaySessions.length,
+          todaySessionsDetails: todaySessions.map(s => ({
+            id: s.id,
+            domain: s.domain,
+            duration: s.duration,
+            userId: s.userId,
+            type: s.type,
+            passesFilter: s.duration > 0
+          })),
+          filteredSessions: todaySessions.filter(s => s.duration > 0)
+        });
+        
+        sendResponse({ 
+          success: true, 
+          analysis: 'Complete storage analysis logged'
+        });
+      } catch (error) {
+        console.error('❌ Error analyzing storage:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async
+  }
+
+  // Handle REQUEST_SITE_USAGE_SESSIONS - Send session data to web app for Firebase sync
+  if (message.type === 'REQUEST_SITE_USAGE_SESSIONS') {
+    (async () => {
+      try {
+        console.log('🔄 REQUEST_SITE_USAGE_SESSIONS received from web app');
+        
+        // Get user context with enhanced debugging
+        const userStorage = await chrome.storage.local.get(['userInfo']);
+        const userInfo = userStorage.userInfo || {};
+        console.log('🔍 REQUEST_SITE_USAGE_SESSIONS - User storage debug:', {
+          hasUserInfo: !!userStorage.userInfo,
+          userInfoKeys: Object.keys(userInfo),
+          userInfo: userInfo
+        });
+        
+        const currentUserId = userInfo.uid || userInfo.userId || null;
+        
+        if (!currentUserId) {
+          console.warn('⚠️ No user ID available for session sync');
+          console.warn('🔍 Available userInfo:', userInfo);
+          sendResponse({ success: false, error: 'No user ID available' });
+          return;
+        }
+        
+        console.log('✅ Found user ID:', currentUserId);
+        
+        // Get all session data from storage
+        const storage = await chrome.storage.local.get(['site_usage_sessions', 'override_sessions']);
+        const siteUsageSessions = storage.site_usage_sessions || {};
+        const overrideSessions = storage.override_sessions || {};
+        
+        console.log('🔍 SESSION STORAGE DEBUG:', {
+          hasSiteUsage: !!storage.site_usage_sessions,
+          hasOverrideSessions: !!storage.override_sessions,
+          siteUsageDays: Object.keys(siteUsageSessions).length,
+          overrideDays: Object.keys(overrideSessions).length,
+          siteUsageKeys: Object.keys(siteUsageSessions),
+          overrideKeys: Object.keys(overrideSessions)
+        });
+        
+        // Convert site usage sessions to extension format
+        const allSessions = [];
+        
+        // Add site usage sessions
+        Object.keys(siteUsageSessions).forEach(date => {
+          const daySessions = siteUsageSessions[date] || [];
+          daySessions.forEach(session => {
+            if (session.duration > 0) { // Only include sessions with actual time
+              allSessions.push({
+                id: session.id || `${session.domain}_${date}_${currentUserId}`,
+                userId: currentUserId,
+                type: 'site_usage',
+                domain: session.domain,
+                url: session.domain, // Use domain as URL for compatibility
+                startTimeUTC: session.startTimeUTC || new Date(session.startTime).toISOString(),
+                endTimeUTC: session.endTimeUTC,
+                duration: session.duration, // In seconds
+                visits: session.visits || 1,
+                utcDate: session.utcDate || date,
+                status: session.status || 'completed',
+                timezone: session.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+                createdAt: session.createdAt || session.startTimeUTC,
+                updatedAt: session.updatedAt || session.startTimeUTC
+              });
+            }
+          });
+        });
+        
+        // Add override sessions
+        console.log('🎯 Processing override sessions:');
+        const overrideDates = Object.keys(overrideSessions);
+        console.log(`  - Found ${overrideDates.length} override dates: ${overrideDates.join(', ')}`);
+        
+        Object.keys(overrideSessions).forEach(date => {
+          const daySessions = overrideSessions[date] || [];
+          console.log(`  - Processing ${daySessions.length} override sessions for ${date}`);
+          
+          daySessions.forEach((session, index) => {
+            console.log(`    ${index + 1}. ${session.domain}: ${session.duration} minutes (stored format)`);
+            
+            if (session.duration > 0) { // Only include sessions with actual time
+              const convertedSession = {
+                id: session.id || `override_${session.domain}_${date}_${currentUserId}`,
+                userId: currentUserId,
+                type: 'override',
+                domain: session.domain,
+                url: session.domain, // Use domain as URL for compatibility
+                startTimeUTC: new Date(session.startTime || session.timestamp).toISOString(),
+                endTimeUTC: undefined, // Override sessions don't have end times
+                duration: session.duration * 60, // Convert minutes to seconds for consistency
+                visits: 1, // Override sessions are always single visits
+                utcDate: session.date,
+                status: 'completed',
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                createdAt: new Date(session.startTime || session.timestamp).toISOString(),
+                updatedAt: new Date(session.startTime || session.timestamp).toISOString()
+              };
+              
+              console.log(`       -> Converted: ${convertedSession.domain}, ${convertedSession.duration}s, type: ${convertedSession.type}`);
+              allSessions.push(convertedSession);
+            } else {
+              console.log(`       -> Skipped (0 duration): ${session.domain}`);
+            }
+          });
+        });
+        
+        console.log(`🎯 Total override sessions added: ${allSessions.filter(s => s.type === 'override').length}`);
+        
+        console.log(`📤 Sending ${allSessions.length} sessions to web app (${siteUsageSessions ? Object.keys(siteUsageSessions).length : 0} site usage days, ${overrideSessions ? Object.keys(overrideSessions).length : 0} override days)`);
+        
+        // Final session breakdown for debugging
+        const sessionTypeBreakdown = {};
+        allSessions.forEach(session => {
+          sessionTypeBreakdown[session.type] = (sessionTypeBreakdown[session.type] || 0) + 1;
+        });
+        console.log('📊 Final session type breakdown:', sessionTypeBreakdown);
+        console.log('🎯 Override sessions in final payload:', allSessions.filter(s => s.type === 'override').map(s => ({ domain: s.domain, duration: s.duration, id: s.id })));
+        
+        // Send sessions to web app via postMessage
+        try {
+          const tabs = await chrome.tabs.query({url: ['*://app.make10000hours.com/*', '*://localhost:*/*']});
+          let messageSent = false;
+          
+          for (const tab of tabs) {
+            try {
+              // Send via content script postMessage
+              await chrome.tabs.sendMessage(tab.id, {
+                type: 'EXTENSION_SITE_USAGE_SESSION_BATCH',
+                payload: {
+                  sessions: allSessions,
+                  timestamp: Date.now(),
+                  source: 'extension',
+                  userId: currentUserId
+                }
+              });
+              messageSent = true;
+              console.log(`📤 Sessions sent to web app tab ${tab.id}`);
+            } catch (tabError) {
+              console.warn(`⚠️ Failed to send to tab ${tab.id}:`, tabError.message);
+            }
+          }
+          
+          if (messageSent) {
+            sendResponse({ 
+              success: true, 
+              sessionCount: allSessions.length,
+              message: 'Sessions sent to web app'
+            });
+          } else {
+            console.warn('⚠️ No web app tabs available to receive sessions');
+            sendResponse({ 
+              success: false, 
+              error: 'No web app tabs found',
+              sessionCount: allSessions.length
+            });
+          }
+        } catch (error) {
+          console.error('❌ Failed to send sessions to web app:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+        
+      } catch (error) {
+        console.error('❌ Error handling REQUEST_SITE_USAGE_SESSIONS:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async
+  }
+
+  // Handle test messages for debugging
+  if (message.type === 'PING_EXTENSION') {
+    console.log('🏓 PING_EXTENSION received');
+    sendResponse({ type: 'PONG_EXTENSION', success: true, timestamp: Date.now() });
+    return false;
+  }
+  
+  if (message.type === 'SYNC_USER_DATA') {
+    (async () => {
+      try {
+        console.log('🧪 SYNC_USER_DATA test message received:', message.payload);
+        
+        const userInfo = {
+          uid: message.payload.userId,
+          userId: message.payload.userId,
+          email: message.payload.email,
+          lastUpdated: Date.now()
+        };
+        
+        await chrome.storage.local.set({ userInfo });
+        console.log('✅ Test user data synced to extension storage:', userInfo);
+        
+        sendResponse({ success: true, message: 'User data synced' });
+      } catch (error) {
+        console.error('❌ Error syncing test user data:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+  
+  if (message.type === 'INJECT_TEST_SESSIONS') {
+    (async () => {
+      try {
+        console.log('🧪 INJECT_TEST_SESSIONS received:', message.payload);
+        
+        const { sessions, userId } = message.payload;
+        const today = DateUtils.getLocalDateString();
+        
+        // Separate sessions by type - CRITICAL FIX
+        const siteUsageSessions = sessions.filter(s => s.type !== 'override');
+        const overrideSessions = sessions.filter(s => s.type === 'override');
+        
+        console.log(`🔧 Injecting ${siteUsageSessions.length} site usage sessions and ${overrideSessions.length} override sessions`);
+        
+        // Handle site usage sessions
+        if (siteUsageSessions.length > 0) {
+          const storage = await chrome.storage.local.get(['site_usage_sessions']);
+          const existingSessions = storage.site_usage_sessions || {};
+          
+          if (!existingSessions[today]) {
+            existingSessions[today] = [];
+          }
+          
+          for (const session of siteUsageSessions) {
+            console.log(`💉 Injecting site usage session: ${session.domain}`);
+            existingSessions[today].push(session);
+          }
+          
+          await chrome.storage.local.set({ site_usage_sessions: existingSessions });
+        }
+        
+        // Handle override sessions - Store in separate override_sessions storage
+        if (overrideSessions.length > 0) {
+          const overrideStorage = await chrome.storage.local.get(['override_sessions']);
+          const existingOverrides = overrideStorage.override_sessions || {};
+          
+          if (!existingOverrides[today]) {
+            existingOverrides[today] = [];
+          }
+          
+          for (const session of overrideSessions) {
+            console.log(`💉 Injecting override session: ${session.domain} (${Math.round(session.duration/60)} min)`);
+            
+            // Convert to override session format expected by extension
+            const overrideSession = {
+              id: session.id,
+              domain: session.domain,
+              duration: Math.round(session.duration / 60), // Convert seconds to minutes
+              startTime: session.startTimeUTC,
+              timestamp: session.startTimeUTC,
+              date: today,
+              visits: 1
+            };
+            
+            existingOverrides[today].push(overrideSession);
+          }
+          
+          await chrome.storage.local.set({ override_sessions: existingOverrides });
+        }
+        
+        console.log(`✅ Injected ${sessions.length} test sessions into extension storage`);
+        sendResponse({ success: true, count: sessions.length });
+        
+      } catch (error) {
+        console.error('❌ Error injecting test sessions:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+  
+  if (message.type === 'CHECK_STORAGE_DIRECT') {
+    (async () => {
+      try {
+        console.log('🧪 CHECK_STORAGE_DIRECT received for userId:', message.payload?.userId);
+        
+        const today = DateUtils.getLocalDateString();
+        const allStorage = await chrome.storage.local.get(null);
+        
+        console.log('📊 Complete extension storage:', {
+          keys: Object.keys(allStorage),
+          userInfo: allStorage.userInfo,
+          hasSiteUsageSessions: !!allStorage.site_usage_sessions,
+          todaySessions: allStorage.site_usage_sessions?.[today]?.length || 0
+        });
+        
+        const todaySessions = allStorage.site_usage_sessions?.[today] || [];
+        const todayOverrideSessions = allStorage.override_sessions?.[today] || [];
+        
+        console.log('🔍 Storage structure analysis:', {
+          hasSiteUsageSessions: !!allStorage.site_usage_sessions,
+          hasOverrideSessions: !!allStorage.override_sessions,
+          todaySiteUsageCount: todaySessions.length,
+          todayOverrideCount: todayOverrideSessions.length,
+          overrideStorageKeys: allStorage.override_sessions ? Object.keys(allStorage.override_sessions) : []
+        });
+        
+        // Look for override sessions in the correct location
+        const overrideSessions = todayOverrideSessions;
+        
+        console.log(`🔍 Found ${overrideSessions.length} override sessions for today in override_sessions storage`);
+        overrideSessions.forEach(session => {
+          console.log(`  - ${session.domain}: ${session.duration}min (stored as minutes)`);
+        });
+        
+        sendResponse({ 
+          success: true, 
+          storage: allStorage,
+          todaySessionCount: todaySessions.length,
+          overrideSessionCount: overrideSessions.length,
+          overrideSessions
+        });
+        
+      } catch (error) {
+        console.error('❌ Error checking storage:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
   // For other messages, ensure initialization
   if (!isInitialized) {
     console.log('⚠️ Extension not initialized, initializing now...');

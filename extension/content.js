@@ -600,6 +600,34 @@ class ActivityDetector {
           return;
         }
 
+        // Handle SYNC_USER_AUTH messages (from debug script)
+        if (type === 'SYNC_USER_AUTH') {
+          console.log('🔄 Received SYNC_USER_AUTH from web app:', payload);
+          
+          const message = {
+            type: 'SYNC_USER_AUTH',
+            payload
+          };
+
+          try {
+            const response = await this.sendMessageSafely(message, {
+              timeout: 15000,
+              maxRetries: 3,
+              fallback: { 
+                success: false, 
+                error: 'Extension temporarily unavailable',
+                queued: false 
+              }
+            });
+            
+            console.log('✅ SYNC_USER_AUTH response:', response);
+            // Note: No sendResponse needed for postMessage-based communication
+            
+          } catch (error) {
+            console.error('❌ Failed to process SYNC_USER_AUTH:', error);
+          }
+        }
+
         // Handle SET_USER_ID messages
         if (type === 'SET_USER_ID') {
           console.log('🔄 Received SET_USER_ID from web app:', payload);
@@ -731,6 +759,32 @@ class ActivityDetector {
               queued: false
             });
           }
+        }
+
+        // Handle ADD_TEST_OVERRIDE_SESSIONS messages (for debugging)
+        if (type === 'ADD_TEST_OVERRIDE_SESSIONS') {
+          console.log('🔄 Received ADD_TEST_OVERRIDE_SESSIONS from web app:', payload);
+          
+          try {
+            const response = await this.sendMessageSafely({
+              type: 'ADD_TEST_OVERRIDE_SESSIONS',
+              payload
+            }, {
+              timeout: 10000,
+              maxRetries: 2,
+              fallback: { 
+                success: false, 
+                error: 'Extension temporarily unavailable',
+                queued: false 
+              }
+            });
+            
+            console.log('✅ ADD_TEST_OVERRIDE_SESSIONS response:', response);
+            
+          } catch (error) {
+            console.error('❌ Failed to process ADD_TEST_OVERRIDE_SESSIONS:', error);
+          }
+          return;
         }
 
         // Handle REQUEST_SITE_USAGE_SESSIONS messages (site usage data sync)
