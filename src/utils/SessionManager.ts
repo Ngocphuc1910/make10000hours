@@ -72,7 +72,6 @@ export class SessionManager {
       userId: ext.userId,
       domain: ext.domain,
       startTimeUTC: ext.startTimeUTC,
-      endTimeUTC: ext.endTimeUTC,
       duration: ext.duration, // keep seconds
       visits: ext.visits || 1, // preserve visit count from extension, default to 1
       utcDate: ext.utcDate,

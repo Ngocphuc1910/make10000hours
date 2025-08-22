@@ -88,10 +88,13 @@ class SiteUsageSessionService {
     try {
       console.log(`🔄 [RACE-PROTECTION] Starting protected bulk sync for ${sessions.length} sessions`);
       
-      // Validate sessions and filter out invalid ones
-      const validSessions = sessions.filter(session => {
+      // CRITICAL FIX: Sanitize sessions BEFORE validation to prevent data loss
+      const sanitizedSessions = sessions.map(session => this.sanitizeSessionData(session));
+      
+      // Validate sessions and filter out invalid ones (after sanitization)
+      const validSessions = sanitizedSessions.filter(session => {
         if (!session.extensionSessionId || !session.userId) {
-          console.warn('⚠️ Session missing required fields, skipping:', {
+          console.warn('⚠️ Session missing required fields after sanitization, skipping:', {
             extensionSessionId: session.extensionSessionId,
             userId: session.userId,
             domain: session.domain
@@ -206,6 +209,7 @@ class SiteUsageSessionService {
     let skipped = 0;
 
     for (const session of sessions) {
+      // Session is already sanitized at this point
       const existingSession = existingSessionsMap.get(session.extensionSessionId);
       
       if (existingSession) {
@@ -213,7 +217,6 @@ class SiteUsageSessionService {
         const hasChanges = (
           existingSession.duration !== session.duration ||
           existingSession.status !== session.status ||
-          existingSession.endTimeUTC !== session.endTimeUTC ||
           existingSession.startTimeUTC !== session.startTimeUTC
         );
         
@@ -472,6 +475,29 @@ class SiteUsageSessionService {
   }
   
   /**
+   * Sanitize session data for Firebase compatibility
+   * Removes undefined fields and ensures required field mappings
+   */
+  private sanitizeSessionData(session: any): any {
+    // Create a copy to avoid modifying original
+    const sanitized = { ...session };
+    
+    // Remove ALL undefined fields to prevent Firebase write errors
+    Object.keys(sanitized).forEach(key => {
+      if (sanitized[key] === undefined) {
+        delete sanitized[key];
+      }
+    });
+    
+    // Ensure extensionSessionId exists (required by Firebase service)
+    if (!sanitized.extensionSessionId && sanitized.id) {
+      sanitized.extensionSessionId = sanitized.id;
+    }
+    
+    return sanitized;
+  }
+
+  /**
    * Convert Firestore document to SiteUsageSession
    */
   private convertFirestoreToSession(data: any): SiteUsageSession {
@@ -479,7 +505,6 @@ class SiteUsageSessionService {
       ...data,
       // Keep timestamps as strings in new schema
       startTimeUTC: data.startTimeUTC,
-      endTimeUTC: data.endTimeUTC || undefined,
       createdAt: data.createdAt
     } as SiteUsageSession;
   }
