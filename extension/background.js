@@ -74,8 +74,8 @@ class ChromeIdleHelper {
       return false;
     }
     
-    chrome.idle.setDetectionInterval(60);
-    chrome.idle.queryState(60, (state) => {
+    chrome.idle.setDetectionInterval(600); // 10 minutes
+    chrome.idle.queryState(600, (state) => {
       this.currentState = state;
       console.log('🎯 Chrome Idle initialized:', state);
     });
