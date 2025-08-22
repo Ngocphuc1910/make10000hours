@@ -14,6 +14,8 @@ export interface ExtensionSiteUsageSession {
   status: 'completed' | 'active' | 'suspended';
   utcDate: string; // YYYY-MM-DD
   userId: string;
+  type?: 'site_usage' | 'override'; // Optional type field to distinguish session types
+  url?: string; // Optional URL field for override sessions
 }
 
 // Firebase session schema
@@ -225,7 +227,8 @@ export class SessionManager {
       typeof session.startTimeUTC === 'string' &&
       typeof session.utcDate === 'string' &&
       typeof session.userId === 'string' &&
-      ['active', 'completed', 'suspended'].includes(session.status)
+      ['active', 'completed', 'suspended'].includes(session.status) &&
+      (session.type === undefined || ['site_usage', 'override'].includes(session.type))
     );
   }
 }

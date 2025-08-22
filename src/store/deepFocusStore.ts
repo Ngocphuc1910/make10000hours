@@ -89,8 +89,12 @@ interface DeepFocusStore extends DeepFocusData {
   // new flag
   hasRecoveredSession: boolean;
   recoveryInProgress: boolean;
+  recoveryStartTime: number | null;
   isReloading: boolean;
   setReloading: (isReloading: boolean) => void;
+  // Manual recovery reset functions
+  resetRecoveryFlag: () => void;
+  checkRecoveryTimeout: () => void;
   // Comparison data
   comparisonData: ComparisonData | null;
   isLoadingComparison: boolean;
@@ -200,6 +204,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       unsubscribe: null,
       hasRecoveredSession: false,
       recoveryInProgress: false,
+      recoveryStartTime: null,
       // Removed - web app no longer manages sessions directly
       isBackingUp: false,
       lastBackupTime: null,
@@ -432,7 +437,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           
           // Clean up orphaned sessions without changing the focus state
           if (currentLocalState && !get().recoveryInProgress) {
-            set({recoveryInProgress: true});
+            set({recoveryInProgress: true, recoveryStartTime: Date.now()});
             try {
               const { useUserStore } = await import('./userStore');
               const user = useUserStore.getState().user;
@@ -447,10 +452,20 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
                 
                 console.log('🔄 Session cleanup completed, maintaining focus state');
               }
-            } catch (error) {
-              console.error('❌ Failed to handle session cleanup:', error);
+            } catch (recoveryError) {
+              console.error('❌ Failed to handle session cleanup during loadFocusStatus:', recoveryError);
+              set({
+                recoveryInProgress: false, 
+                recoveryStartTime: null,
+                deepFocusSyncError: `Session cleanup failed: ${recoveryError instanceof Error ? recoveryError.message : 'Unknown error'}`
+              });
             } finally {
-              set({recoveryInProgress: false});
+              // Ensure recovery flag is always cleared
+              const currentState = get();
+              if (currentState.recoveryInProgress) {
+                console.warn('⚠️ Recovery flag still set after session cleanup, forcing clear');
+                set({recoveryInProgress: false, recoveryStartTime: null});
+              }
             }
           }
           
@@ -475,12 +490,15 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
 
       // New method for initial sync that respects persisted state
       initializeFocusSync: async () => {
+        // Check for stuck recovery flag first
+        get().checkRecoveryTimeout();
+        
         // Prevent concurrent initialization
         if (get().recoveryInProgress) {
           return;
         }
         
-        set({ recoveryInProgress: true });
+        set({ recoveryInProgress: true, recoveryStartTime: Date.now() });
         
         try {
           const currentLocalState = get().isDeepFocusActive;
@@ -488,7 +506,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           // Check if extension is available
           if (!ExtensionDataService.isExtensionInstalled()) {
             console.log('📱 Extension not available, using local state only');
-            set({ recoveryInProgress: false });
+            set({ recoveryInProgress: false, recoveryStartTime: null });
             return;
           }
           
@@ -506,7 +524,7 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
             ]);
           } catch (error) {
             console.warn('⚠️ Failed to get extension focus status, using local state');
-            set({ recoveryInProgress: false });
+            set({ recoveryInProgress: false, recoveryStartTime: null });
             return;
           }
           
@@ -584,8 +602,19 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           console.log('✅ Focus sync completed');
         } catch (error) {
           console.error('❌ Focus sync failed:', error);
+          // On any error, ensure recovery flag is cleared
+          set({ 
+            recoveryInProgress: false, 
+            recoveryStartTime: null,
+            deepFocusSyncError: `Focus sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+          });
         } finally {
-          set({ recoveryInProgress: false });
+          // Ensure recovery flag is always cleared
+          const state = get();
+          if (state.recoveryInProgress) {
+            console.warn('⚠️ Recovery flag still set after operation, forcing clear');
+            set({ recoveryInProgress: false, recoveryStartTime: null });
+          }
         }
       },
 
@@ -799,8 +828,31 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       enableDeepFocus: async (source?: Source) => {
         const state = get();
         
+        // Check for stuck recovery flag first and reset if needed
+        const wasReset = get().checkRecoveryTimeout();
+        if (wasReset) {
+          console.log('🔄 Recovery flag was reset during enableDeepFocus');
+        }
+        
+        // If user is explicitly trying to enable and recovery has been ongoing for more than 10 seconds,
+        // clear recovery state to allow user action
+        if (state.recoveryInProgress && state.recoveryStartTime) {
+          const recoveryDuration = Date.now() - state.recoveryStartTime;
+          if (recoveryDuration > 10000) {
+            console.log('⚠️ Store: Recovery in progress too long during user action, clearing');
+            set({ 
+              recoveryInProgress: false, 
+              recoveryStartTime: null,
+              deepFocusSyncError: null 
+            });
+          }
+        }
+        
+        // Get fresh state after potential recovery clear
+        const currentState = get();
+        
         // Guard against double enable
-        if (state.isDeepFocusActive) {
+        if (currentState.isDeepFocusActive) {
           console.log('🟢 Deep Focus already active, skipping enable');
           return;
         }
@@ -1728,6 +1780,45 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
         } catch (error) {
           console.warn('Failed to load deep focus sessions for comparison:', error);
           return 0;
+        }
+      },
+
+      // Recovery flag management functions
+      resetRecoveryFlag: () => {
+        console.log('🔄 Manual recovery flag reset');
+        set({ 
+          recoveryInProgress: false, 
+          recoveryStartTime: null 
+        });
+      },
+
+      checkRecoveryTimeout: () => {
+        try {
+          const state = get();
+          if (state.recoveryInProgress && state.recoveryStartTime) {
+            const now = Date.now();
+            const recoveryDuration = now - state.recoveryStartTime;
+            const timeoutMs = 120000; // 2 minutes timeout (increased from 30s)
+            
+            if (recoveryDuration > timeoutMs) {
+              console.warn(`⚠️ Recovery flag stuck for ${Math.round(recoveryDuration/1000)}s, auto-resetting`);
+              set({ 
+                recoveryInProgress: false, 
+                recoveryStartTime: null,
+                deepFocusSyncError: null // Clear any sync errors during recovery
+              });
+              return true; // Flag was reset
+            }
+          }
+          return false; // No reset needed
+        } catch (error) {
+          console.error('❌ Error in checkRecoveryTimeout:', error);
+          // Force reset on any error
+          set({ 
+            recoveryInProgress: false, 
+            recoveryStartTime: null 
+          });
+          return true; // Flag was reset due to error
         }
       }
     }),
