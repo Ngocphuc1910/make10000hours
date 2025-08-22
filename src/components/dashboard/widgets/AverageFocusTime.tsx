@@ -128,7 +128,7 @@ export const AverageFocusTime: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Card title="Overal Insights">
+      <Card title="Overall Insights">
         <div className="flex items-center justify-center h-[200px]">
           <div className="text-text-secondary">Loading focus statistics...</div>
         </div>
@@ -150,7 +150,7 @@ export const AverageFocusTime: React.FC = () => {
             <div className="text-2xl font-bold text-text-primary">
               {stats.totalFocus.hours}h {stats.totalFocus.minutes}m
             </div>
-            <p className="text-sm text-text-secondary mt-1">Total focus time</p>
+            <p className="text-sm text-text-secondary mt-1">Total working time</p>
           </div>
         </div>
 

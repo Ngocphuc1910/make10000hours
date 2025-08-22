@@ -19,7 +19,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         <p className="font-medium text-text-primary">{label}</p>
         <p className="text-sm text-text-secondary">
           <span className="inline-block w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
-          Focus Time: {formatMinutesToHoursAndMinutes(value)}
+          Work Time: {formatMinutesToHoursAndMinutes(value)}
         </p>
       </div>
     );
@@ -646,7 +646,7 @@ export const FocusTimeTrend: React.FC = React.memo(() => {
   );
 
   return (
-    <Card title="Focus Time Trend" action={timeUnitSwitch}>
+    <Card title="Daily Progress" action={timeUnitSwitch}>
       
       <div className="h-[20rem]">
         {chartData.length === 0 ? (
