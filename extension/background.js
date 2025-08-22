@@ -807,16 +807,16 @@ function startMasterTimer() {
       
       // 3. Periodic update for current domain
       if (trackingState.currentDomain && chromeIdleHelper.shouldTrackTime()) {
-        await updateDomainSession(trackingState.currentDomain, 15); // Add 15 seconds
+        await updateDomainSession(trackingState.currentDomain, 5); // Add 5 seconds
       }
       
-      // 4. Firebase sync (every 20 cycles = 5 minutes)
-      if (Date.now() % 300000 < 15000) { // Approximate 5-minute intervals
+      // 4. Firebase sync (every 60 cycles = 5 minutes)
+      if (Date.now() % 300000 < 5000) { // Approximate 5-minute intervals
         await syncToFirebase();
       }
       
-      // 5. Diagnostic reporting (every 40 cycles = 10 minutes)
-      if (Date.now() % 600000 < 15000) { // Approximate 10-minute intervals
+      // 5. Diagnostic reporting (every 120 cycles = 10 minutes)
+      if (Date.now() % 600000 < 5000) { // Approximate 10-minute intervals
         console.log('📊 TAB SWITCH DIAGNOSTICS REPORT:', {
           immediateSaves: trackingState.diagnostics.immediateSaves,
           tabSwitches: trackingState.diagnostics.tabSwitches,
@@ -831,9 +831,9 @@ function startMasterTimer() {
     } catch (error) {
       console.error('❌ Master timer error:', error);
     }
-  }, 15000); // 15 seconds
+  }, 5000); // 5 seconds
   
-  console.log('⏰ Master timer started (15s interval)');
+  console.log('⏰ Master timer started (5s interval)');
 }
 
 // ===== CHROME EXTENSION EVENT HANDLERS =====
