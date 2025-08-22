@@ -21,6 +21,7 @@ import type { ComparisonMetrics } from '../../types/deepFocus';
 
 import '../../utils/debugOverrideSession'; // Import for console access
 import '../../utils/debugExtensionCommunication'; // Import debug extension utility
+import '../../utils/debugOverrideSync'; // Import override sync debug utility
 
 import UsageLineChart from '../charts/UsageLineChart';
 import UsagePieChart from '../charts/UsagePieChart';
@@ -227,6 +228,8 @@ const DeepFocusPage: React.FC = () => {
       debugSessionSync: 'function (NEW SESSION-BASED)',
       debugExtensionData: 'function (EXTENSION DATA)',
       debugActiveSyncs: 'function (FIND CONFLICTS)',
+      debugOverrideSync: 'function (OVERRIDE SYNC DIAGNOSTICS)',
+      debugQuickOverrideSync: 'function (QUICK OVERRIDE SYNC TEST)',
       debugUser: user?.uid || 'No user',
       resetExtensionConnection: 'function (CIRCUIT BREAKER FIX)'
     });

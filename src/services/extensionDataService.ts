@@ -424,14 +424,36 @@ class ExtensionDataService {
   }
 
   static async enableFocusMode(): Promise<void> {
-    const response = await this.sendMessage({ type: 'ENABLE_FOCUS_MODE' });
-    if (!response?.success) {
-      throw new Error(response?.error || 'Failed to enable focus mode');
+    console.log('🟢 ExtensionDataService: Enabling focus mode...');
+    try {
+      const response = await this.sendMessage({ type: 'ENABLE_FOCUS_MODE' });
+      console.log('🟢 ExtensionDataService: Enable focus mode response:', response);
+      
+      if (!response) {
+        throw new Error('No response received from extension');
+      }
+      
+      if (response.success === false) {
+        throw new Error(response.error || 'Extension returned failure status');
+      }
+      
+      // Consider success if response exists and success is not explicitly false
+      if (typeof response === 'object') {
+        console.log('✅ ExtensionDataService: Focus mode enabled successfully');
+        return;
+      }
+      
+      throw new Error('Invalid response format from extension');
+    } catch (error) {
+      console.error('❌ ExtensionDataService: Enable focus mode failed:', error);
+      throw error;
     }
   }
 
   static async disableFocusMode(): Promise<void> {
+    console.log('🔴 ExtensionDataService: Disabling focus mode...');
     const response = await this.sendMessage({ type: 'DISABLE_FOCUS_MODE' });
+    console.log('🔴 ExtensionDataService: Disable focus mode response:', response);
     if (!response?.success) {
       throw new Error(response?.error || 'Failed to disable focus mode');
     }
@@ -758,7 +780,7 @@ class ExtensionDataService {
         console.log('⚡ Circuit breaker open, attempting bypass for quick check');
         // For rapid toggles, bypass circuit breaker and try direct connection
         try {
-          const response = await this.sendMessageViaContentScript({ type: 'PING' }, 300);
+          const response = await this.sendMessageViaContentScript({ type: 'PING' }, 500); // Increased timeout
           const isAvailable = response && response.success !== false;
           if (isAvailable) {
             // If successful, reset circuit breaker since extension is actually working
@@ -767,7 +789,7 @@ class ExtensionDataService {
           }
           return isAvailable;
         } catch (bypassError) {
-          console.log('⚡ Bypass attempt failed, extension truly unavailable');
+          console.log('⚡ Bypass attempt failed, extension truly unavailable:', bypassError.message);
           return false;
         }
       }
@@ -782,13 +804,19 @@ class ExtensionDataService {
         return true;
       }
       
-      // Single very fast test with minimal timeout
-      const response = await this.sendMessage({ type: 'PING' }, 300); // 300ms only
+      // Single very fast test with slightly increased timeout for reliability
+      const response = await this.sendMessage({ type: 'PING' }, 500); // Increased from 300ms to 500ms
       const isAvailable = response && response.success !== false;
       console.log('⚡ Quick check result:', isAvailable);
       
       return isAvailable;
     } catch (error) {
+      // Be more lenient with timeout errors
+      if (error.message.includes('timeout')) {
+        console.log('⚡ Quick check timeout, assuming extension might be busy but available');
+        return true; // Assume available on timeout to prevent blocking user
+      }
+      
       // Don't fail on debounce errors for quick checks
       if (error.message.includes('debounced')) {
         console.log('⚡ Quick check hit debounce, assuming extension available');

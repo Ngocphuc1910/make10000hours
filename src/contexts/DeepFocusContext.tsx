@@ -71,7 +71,9 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
     isDeepFocusActive,
     syncCompleteFocusState,
     recordOverrideSession,
-    loadOverrideSessions
+    loadOverrideSessions,
+    checkRecoveryTimeout,
+    resetRecoveryFlag
   } = useDeepFocusStore();
   
   const { isInitialized: isUserInitialized, user } = useUserStore();
@@ -452,14 +454,47 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
     };
   }, [syncFocusStatus, loadFocusStatus, isUserInitialized, hasInitialized, syncCompleteFocusState]);
 
+  // Periodic recovery timeout checker
+  useEffect(() => {
+    if (!isUserInitialized) return;
+    
+    const recoveryTimeoutChecker = setInterval(() => {
+      const wasReset = checkRecoveryTimeout();
+      if (wasReset) {
+        console.log('🔄 Context: Periodic check - Recovery flag was stuck and has been reset');
+      }
+    }, 10000); // Check every 10 seconds
+    
+    return () => clearInterval(recoveryTimeoutChecker);
+  }, [isUserInitialized, checkRecoveryTimeout]);
+
   // Enhanced session guards with comprehensive checking
   const enableDeepFocus = useCallback(async (source?: Source) => {
+    // Check for stuck recovery flag first - always do this
+    const wasReset = checkRecoveryTimeout();
+    if (wasReset) {
+      console.log('🔄 Context: Recovery flag was stuck and has been reset');
+    }
+    
     const state = useDeepFocusStore.getState();
     
     // Authentication guard
     if (!user?.uid) {
       console.warn('⚠️ Context: User not authenticated - cannot enable deep focus');
       return;
+    }
+    
+    // Check for recovery in progress AFTER checking for stuck recovery flag
+    if (state.recoveryInProgress && state.recoveryStartTime) {
+      const recoveryDuration = Date.now() - state.recoveryStartTime;
+      // Be more lenient - allow user actions after 10 seconds of recovery
+      if (recoveryDuration > 10000) {
+        console.log('⚠️ Context: Recovery in progress for too long, forcing clear for user action');
+        resetRecoveryFlag();
+      } else {
+        console.log('🟡 Context: enableDeepFocus ignored - recovery in progress (recent)');
+        return;
+      }
     }
     
     // Comprehensive guards to prevent duplicate sessions
@@ -473,11 +508,6 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
       return;
     }
     
-    if (state.recoveryInProgress) {
-      console.log('🟢 Context: enableDeepFocus ignored - recovery in progress');
-      return;
-    }
-    
     console.log('🟢 Context: enableDeepFocus called for user:', user.uid);
     
     try {
@@ -486,7 +516,7 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
       console.error('❌ Context: Failed to enable deep focus:', error);
       throw error;
     }
-  }, [user?.uid]);
+  }, [user?.uid, checkRecoveryTimeout, resetRecoveryFlag]);
 
   const disableDeepFocus = useCallback(async () => {
     if (!user?.uid) {
