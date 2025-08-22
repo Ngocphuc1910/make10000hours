@@ -1118,9 +1118,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
   }
   
-  // Handle ping messages
+  // Handle ping messages with enhanced context information
   if (message.type === 'PING') {
-    sendResponse({ success: true, initialized: isInitialized });
+    sendResponse({ 
+      success: true, 
+      initialized: isInitialized,
+      timestamp: Date.now(),
+      ready: isInitialized && !!trackingState,
+      contextInfo: {
+        canReceiveMessages: true,
+        initializationComplete: isInitialized,
+        backgroundReady: true
+      }
+    });
     return false;
   }
   
@@ -2343,10 +2353,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep channel open for async
   }
 
-  // Handle test messages for debugging
+  // Handle test messages for debugging with enhanced context
   if (message.type === 'PING_EXTENSION') {
     console.log('🏓 PING_EXTENSION received');
-    sendResponse({ type: 'PONG_EXTENSION', success: true, timestamp: Date.now() });
+    sendResponse({ 
+      type: 'PONG_EXTENSION', 
+      success: true, 
+      timestamp: Date.now(),
+      initialized: isInitialized,
+      ready: isInitialized && !!trackingState,
+      contextInfo: {
+        canReceiveMessages: true,
+        initializationComplete: isInitialized,
+        backgroundReady: true,
+        extensionId: chrome.runtime.id
+      }
+    });
     return false;
   }
   
