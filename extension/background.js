@@ -286,56 +286,36 @@ let overrideSessionManager = null;
 
 // Load scripts in proper dependency order to prevent initialization issues
 
-// Load StorageManager first (base dependency)
+// Load StorageManager first (optional - core tracking works without it)
 try {
   importScripts('./models/StorageManager.js');
   console.log('✅ StorageManager script loaded successfully');
-  if (typeof StorageManager !== 'undefined') {
-    console.log('✅ StorageManager class is available');
-  } else {
-    console.error('❌ StorageManager class not found after import');
-  }
 } catch (error) {
-  console.error('❌ Failed to load StorageManager:', error);
+  console.warn('⚠️ StorageManager not available (optional):', error.message);
 }
 
-// Load StateManager second (base dependency)
+// Load StateManager second (optional - core tracking works without it)
 try {
   importScripts('./models/StateManager.js');
   console.log('✅ StateManager script loaded successfully');
-  if (typeof StateManager !== 'undefined') {
-    console.log('✅ StateManager class is available');
-  } else {
-    console.error('❌ StateManager class not found after import');
-  }
 } catch (error) {
-  console.error('❌ Failed to load StateManager:', error);
+  console.warn('⚠️ StateManager not available (optional):', error.message);
 }
 
-// Load BlockingManager third (depends on ExtensionEventBus which is now properly defined)
+// Load BlockingManager third (optional - core tracking works without it)
 try {
   importScripts('./models/BlockingManager.js');
   console.log('✅ BlockingManager script loaded successfully');
-  if (typeof BlockingManager !== 'undefined') {
-    console.log('✅ BlockingManager class is available');
-  } else {
-    console.error('❌ BlockingManager class not found after import');
-  }
 } catch (error) {
-  console.error('❌ Failed to load BlockingManager:', error);
+  console.warn('⚠️ BlockingManager not available (optional):', error.message);
 }
 
-// Load FocusTimeTracker last (depends on all the above)
+// Load FocusTimeTracker last (optional - core tracking works without it)
 try {
   importScripts('./models/FocusTimeTracker.js');
   console.log('✅ FocusTimeTracker script loaded successfully');
-  if (typeof FocusTimeTracker !== 'undefined') {
-    console.log('✅ FocusTimeTracker class is available');
-  } else {
-    console.error('❌ FocusTimeTracker class not found after import');
-  }
 } catch (error) {
-  console.error('❌ Failed to load FocusTimeTracker:', error);
+  console.warn('⚠️ FocusTimeTracker not available (optional):', error.message);
 }
 
 // Load OverrideSessionManager for blocking screen override handling (restored from 3643c8e)
@@ -383,7 +363,7 @@ function getDefaultBlockedSites() {
  */
 const trackingState = {
   currentDomain: null,
-  currentDate: null,
+  currentDate: DateUtils.getLocalDateString(),
   lastHeartbeat: Date.now(),
   lastTabSwitchTime: 0,
   sessions: {}, // domain_date_userId -> session object
@@ -1131,6 +1111,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         backgroundReady: true
       }
     });
+    return false;
+  }
+  
+  // Handle enhanced activity detection from content script
+  if (message.type === 'ENHANCED_ACTIVITY_DETECTED') {
+    try {
+      const { payload } = message;
+      if (payload && payload.domain && payload.url) {
+        // Update current domain for tracking
+        const domain = payload.domain;
+        const currentDomain = trackingState.currentDomain;
+        
+        // If domain changed, handle tab switch
+        if (currentDomain !== domain) {
+          console.log(`🔄 Domain change detected: ${currentDomain} → ${domain}`);
+          handleTabSwitch(domain);
+        }
+        
+        // Update heartbeat
+        trackingState.lastHeartbeat = Date.now();
+        
+        console.log(`📊 Activity detected on ${domain}`);
+      }
+      
+      sendResponse({ success: true });
+    } catch (error) {
+      console.error('❌ Error handling activity detection:', error);
+      sendResponse({ success: false, error: error.message });
+    }
     return false;
   }
   
