@@ -301,13 +301,15 @@ class BlockedPage {
 
   async loadOnScreenTime() {
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_TODAY_STATS' });
+      // Use same data source as popup.js for consistency
+      const response = await chrome.runtime.sendMessage({ type: 'GET_REALTIME_STATS' });
       if (response && response.success) {
-        const totalTime = response.data.totalTime || 0;
+        const totalTime = response.data.totalTime || 0; // FIXED: Access data.totalTime instead of totalTime
         document.getElementById('screenTime').textContent = this.formatTime(totalTime);
         console.log('✅ Loaded on screen time:', totalTime + 'ms');
       } else {
         document.getElementById('screenTime').textContent = this.formatTime(0);
+        console.log('❌ GET_REALTIME_STATS failed:', response);
       }
     } catch (error) {
       console.error('Error loading on screen time:', error);
@@ -335,15 +337,22 @@ class BlockedPage {
   async loadLocalOverrideTime() {
     try {
       const response = await chrome.runtime.sendMessage({ type: 'GET_LOCAL_OVERRIDE_TIME' });
+      console.log('🔍 GET_LOCAL_OVERRIDE_TIME response:', response);
+      
       if (response && response.success) {
         const overrideMinutes = response.data.overrideTime || 0;
         const overrideMilliseconds = overrideMinutes * 60 * 1000;
         document.getElementById('overrideTime').textContent = this.formatTime(overrideMilliseconds);
         
-        console.log('✅ Loaded override time from localStorage:', overrideMinutes + ' minutes');
+        console.log('✅ Loaded override time from localStorage:', {
+          overrideMinutes,
+          sessions: response.data.sessions,
+          formatted: this.formatTime(overrideMilliseconds)
+        });
       } else {
         // Fallback to web app data
         document.getElementById('overrideTime').textContent = this.formatTime(0);
+        console.log('❌ GET_LOCAL_OVERRIDE_TIME failed or returned no data:', response);
       }
     } catch (error) {
       console.error('Error loading local override time:', error);

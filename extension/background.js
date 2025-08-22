@@ -229,6 +229,55 @@ async function cleanupRedundantOverrideStorage() {
   }
 }
 
+/**
+ * Forward message to web app for Firebase sync (restored from 3643c8e)
+ */
+async function forwardToWebApp(messageType, payload) {
+  try {
+    // Find web app tabs (localhost or production)
+    const tabs = await chrome.tabs.query({
+      url: ['*://app.make10000hours.com/*', '*://localhost:*/*']
+    });
+    
+    if (tabs.length === 0) {
+      console.log('📡 No web app tabs found for Firebase sync');
+      return { success: false, reason: 'No web app tabs found' };
+    }
+    
+    const enhancedPayload = {
+      ...payload,
+      timestamp: Date.now(),
+      source: 'extension',
+      messageType
+    };
+    
+    // Send to all web app tabs
+    const results = [];
+    for (const tab of tabs) {
+      try {
+        const response = await chrome.tabs.sendMessage(tab.id, {
+          type: messageType,
+          payload: enhancedPayload
+        });
+        results.push({ tabId: tab.id, success: true, response });
+        console.log(`📡 Forwarded ${messageType} to web app tab ${tab.id}`);
+      } catch (error) {
+        console.warn(`⚠️ Failed to forward to tab ${tab.id}:`, error);
+        results.push({ tabId: tab.id, success: false, error: error.message });
+      }
+    }
+    
+    return { 
+      success: results.some(r => r.success), 
+      results,
+      tabsFound: tabs.length 
+    };
+  } catch (error) {
+    console.error('❌ Error forwarding to web app:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 // Global instances
 let blockingManager = null;
 let storageManager = null;
@@ -1748,8 +1797,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const overrideTimeMinutes = todaySessions.reduce((total, session) => total + (session.duration || 0), 0);
           
           console.log('⏰ GET_LOCAL_OVERRIDE_TIME from sessions:', {
+            todayKey: today,
             sessions: todaySessions.length,
-            totalMinutes: overrideTimeMinutes
+            totalMinutes: overrideTimeMinutes,
+            sessionDetails: todaySessions,
+            allStoredSessions: sessions
           });
           
           sendResponse({ 
@@ -1916,6 +1968,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
+        // Get user context for Firebase sync (restored from 3643c8e)
+        const userStorage = await chrome.storage.local.get(['userInfo']);
+        const userInfo = userStorage.userInfo || {};
+        const currentUserId = userInfo.uid || null;
+
         // Create override session record
         const overrideSession = {
           id: `override_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -1925,7 +1982,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           durationMs: duration * 60 * 1000,
           date: DateUtils.getLocalDateString(),
           timestamp: Date.now(),
-          type: 'override'
+          type: 'override',
+          userId: currentUserId // Add user context for Firebase
         };
 
         // Store in localStorage with OverrideSessionManager format (from 3643c8e)
@@ -1940,14 +1998,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sessions[today].push(overrideSession);
         await chrome.storage.local.set({ override_sessions: sessions });
 
-        console.log('📝 Override session recorded:', overrideSession);
+        console.log('📝 Override session recorded:', {
+          session: overrideSession,
+          todayKey: today,
+          totalSessions: sessions[today].length,
+          allSessions: sessions
+        });
         
         // Broadcast update to UI components (restored from 3643c8e)
         if (typeof broadcastOverrideUpdate === 'function') {
           broadcastOverrideUpdate();
         }
         
-        sendResponse({ success: true, session: overrideSession });
+        // Forward to web app for Firebase sync (restored from 3643c8e)
+        const enhancedPayload = {
+          ...message.payload,
+          session: overrideSession,
+          userId: currentUserId,
+          timestamp: Date.now(),
+          source: 'extension'
+        };
+        
+        try {
+          const forwardResult = await forwardToWebApp('RECORD_OVERRIDE_SESSION', enhancedPayload);
+          console.log('📡 Override session forwarded to web app:', forwardResult);
+        } catch (error) {
+          console.warn('⚠️ Failed to forward override session to web app:', error);
+          // Don't fail the whole operation if Firebase sync fails
+        }
+        
+        sendResponse({ 
+          success: true, 
+          session: overrideSession,
+          localStorage: true,
+          firebaseSync: true // Indicates sync was attempted
+        });
       } catch (error) {
         console.error('❌ Error recording override session:', error);
         sendResponse({ success: false, error: error.message });

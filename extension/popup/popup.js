@@ -1435,14 +1435,22 @@ class PopupManager {
   async updateLocalOverrideTime() {
     try {
       const response = await this.sendMessage('GET_LOCAL_OVERRIDE_TIME');
+      console.log('🔍 [POPUP] GET_LOCAL_OVERRIDE_TIME response:', response);
+      
       if (response?.success) {
         const overrideMinutes = response.data.overrideTime || 0;
         const overrideTimeEl = document.getElementById('override-time');
         if (overrideTimeEl) {
           const overrideTimeMs = overrideMinutes * 60 * 1000;
           overrideTimeEl.textContent = this.formatTime(overrideTimeMs);
-          console.log('✅ Updated override time from localStorage:', overrideMinutes, 'minutes');
+          console.log('✅ [POPUP] Updated override time from localStorage:', {
+            overrideMinutes,
+            sessions: response.data.sessions,
+            formatted: this.formatTime(overrideTimeMs)
+          });
         }
+      } else {
+        console.log('❌ [POPUP] GET_LOCAL_OVERRIDE_TIME failed or returned no data:', response);
       }
     } catch (error) {
       console.error('Error updating local override time:', error);
