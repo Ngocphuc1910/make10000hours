@@ -339,7 +339,29 @@ async function initializeExtension() {
   try {
     console.log('🔄 Initializing extension components...');
     
-    // Initialize FocusTimeTracker if available
+    // Initialize StorageManager first
+    if (typeof StorageManager !== 'undefined' && !storageManager) {
+      storageManager = new StorageManager();
+      await storageManager.initialize();
+      console.log('✅ StorageManager initialized');
+    }
+    
+    // Initialize BlockingManager second (requires StorageManager)
+    if (typeof BlockingManager !== 'undefined' && !blockingManager) {
+      blockingManager = new BlockingManager();
+      if (storageManager && typeof blockingManager.setStorageManager === 'function') {
+        blockingManager.setStorageManager(storageManager);
+      }
+      await blockingManager.initialize();
+      console.log('✅ BlockingManager initialized');
+    }
+    
+    // Initialize FocusTimeTracker last (requires both managers)
+    if (typeof FocusTimeTracker !== 'undefined' && !focusTimeTracker) {
+      focusTimeTracker = new FocusTimeTracker();
+      console.log('✅ FocusTimeTracker instance created');
+    }
+    
     if (focusTimeTracker && typeof focusTimeTracker.initialize === 'function') {
       await focusTimeTracker.initialize();
       console.log('✅ FocusTimeTracker initialized');
