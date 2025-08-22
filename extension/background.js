@@ -186,6 +186,49 @@ const ExtensionEventBus = {
   }
 };
 
+/**
+ * Broadcast override update to UI components (restored from 3643c8e)
+ */
+function broadcastOverrideUpdate() {
+  try {
+    // Notify popup and other UI components
+    chrome.runtime.sendMessage({
+      type: 'OVERRIDE_DATA_UPDATED',
+      timestamp: Date.now()
+    }).catch(() => {
+      // Ignore if no listeners
+    });
+    
+    console.log('📡 Override data update broadcasted');
+  } catch (error) {
+    console.error('❌ Error broadcasting override update:', error);
+  }
+}
+
+/**
+ * Clean up redundant override storage keys (one-time cleanup)
+ */
+async function cleanupRedundantOverrideStorage() {
+  try {
+    const storage = await chrome.storage.local.get();
+    const keysToRemove = [];
+    
+    // Find all overrideTime_* keys 
+    for (const key in storage) {
+      if (key.startsWith('overrideTime_')) {
+        keysToRemove.push(key);
+      }
+    }
+    
+    if (keysToRemove.length > 0) {
+      await chrome.storage.local.remove(keysToRemove);
+      console.log('🧹 Cleaned up redundant override storage keys:', keysToRemove);
+    }
+  } catch (error) {
+    console.error('❌ Error cleaning up redundant storage:', error);
+  }
+}
+
 // Global instances
 let blockingManager = null;
 let storageManager = null;
@@ -843,6 +886,9 @@ async function initializeExtension() {
   
   try {
     console.log('🚀 Starting ultra-simple extension initialization...');
+    
+    // Clean up redundant override storage (one-time cleanup)
+    await cleanupRedundantOverrideStorage();
     
     // Initialize Chrome storage
     const storage = await chrome.storage.local.get(['site_usage_sessions', 'blockedSites', 'defaultSitesApplied']);
@@ -1691,13 +1737,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
           });
         } else {
-          // Fallback to simple date-based storage
-          const today = new Date().toDateString();
-          const storage = await chrome.storage.local.get([`overrideTime_${today}`]);
-          const overrideTimeMs = storage[`overrideTime_${today}`] || 0;
-          const overrideTimeMinutes = Math.floor(overrideTimeMs / (60 * 1000));
-          console.log('⏰ GET_LOCAL_OVERRIDE_TIME fallback:', overrideTimeMinutes + ' minutes');
-          sendResponse({ success: true, data: { overrideTime: overrideTimeMinutes } });
+          // Use override_sessions as primary source (simplified from 3643c8e)
+          const today = DateUtils.getLocalDateString();
+          
+          const sessionsStorage = await chrome.storage.local.get(['override_sessions']);
+          const sessions = sessionsStorage.override_sessions || {};
+          const todaySessions = sessions[today] || [];
+          
+          // Calculate total override time from sessions
+          const overrideTimeMinutes = todaySessions.reduce((total, session) => total + (session.duration || 0), 0);
+          
+          console.log('⏰ GET_LOCAL_OVERRIDE_TIME from sessions:', {
+            sessions: todaySessions.length,
+            totalMinutes: overrideTimeMinutes
+          });
+          
+          sendResponse({ 
+            success: true, 
+            data: { 
+              overrideTime: overrideTimeMinutes,
+              sessions: todaySessions.length 
+            } 
+          });
         }
       } catch (error) {
         console.error('❌ Error getting override time:', error);
@@ -1839,6 +1900,56 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       } catch (error) {
         console.error('❌ Error getting focus status:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // RECORD_OVERRIDE_SESSION - Record override session to localStorage (restored from 3643c8e)
+  if (message.type === 'RECORD_OVERRIDE_SESSION') {
+    (async () => {
+      try {
+        const { domain, duration } = message.payload || {};
+        if (!domain || !duration) {
+          sendResponse({ success: false, error: 'Missing domain or duration' });
+          return;
+        }
+
+        // Create override session record
+        const overrideSession = {
+          id: `override_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          domain: domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0],
+          startTime: Date.now(),
+          duration: duration, // in minutes
+          durationMs: duration * 60 * 1000,
+          date: DateUtils.getLocalDateString(),
+          timestamp: Date.now(),
+          type: 'override'
+        };
+
+        // Store in localStorage with OverrideSessionManager format (from 3643c8e)
+        const today = DateUtils.getLocalDateString();
+        const storage = await chrome.storage.local.get(['override_sessions']);
+        const sessions = storage.override_sessions || {};
+        
+        if (!sessions[today]) {
+          sessions[today] = [];
+        }
+        
+        sessions[today].push(overrideSession);
+        await chrome.storage.local.set({ override_sessions: sessions });
+
+        console.log('📝 Override session recorded:', overrideSession);
+        
+        // Broadcast update to UI components (restored from 3643c8e)
+        if (typeof broadcastOverrideUpdate === 'function') {
+          broadcastOverrideUpdate();
+        }
+        
+        sendResponse({ success: true, session: overrideSession });
+      } catch (error) {
+        console.error('❌ Error recording override session:', error);
         sendResponse({ success: false, error: error.message });
       }
     })();
