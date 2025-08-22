@@ -284,6 +284,9 @@ let storageManager = null;
 let focusTimeTracker = null;
 let overrideSessionManager = null;
 
+// Extension initialization state
+let isInitialized = false;
+
 // Load scripts in proper dependency order to prevent initialization issues
 
 // Load StorageManager first (optional - core tracking works without it)
@@ -330,6 +333,30 @@ try {
 } catch (error) {
   console.error('❌ Failed to load OverrideSessionManager:', error);
 }
+
+// Initialize extension after all components are loaded
+async function initializeExtension() {
+  try {
+    console.log('🔄 Initializing extension components...');
+    
+    // Initialize FocusTimeTracker if available
+    if (focusTimeTracker && typeof focusTimeTracker.initialize === 'function') {
+      await focusTimeTracker.initialize();
+      console.log('✅ FocusTimeTracker initialized');
+    }
+    
+    // Mark as initialized
+    isInitialized = true;
+    console.log('✅ Extension initialization completed');
+    
+  } catch (error) {
+    console.error('❌ Extension initialization failed:', error);
+    isInitialized = false;
+  }
+}
+
+// Initialize as soon as the service worker starts
+initializeExtension();
 
 /**
  * Get default blocked sites list for new users
