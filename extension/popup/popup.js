@@ -509,6 +509,9 @@ class PopupManager {
       // 3. Get ALL data in one call
       const statsResult = await this.getCompleteStats();
       
+      // Also get focus state during initialization
+      const focusResult = await this.loadFocusState();
+      
       if (statsResult.success) {
         // 4. Update all UI elements at once with complete data
         await this.updateAllStatsUI(statsResult.data);
@@ -518,6 +521,16 @@ class PopupManager {
         // 5. Show error state if data loading failed
         this.showDataErrorState(statsResult.error);
         console.error('❌ Popup initialization failed:', statsResult.error);
+      }
+      
+      // Update focus UI if focus state loaded
+      if (focusResult.success) {
+        // Update core state with focus mode from loaded data
+        this.coreState.focusMode = focusResult.data.focusMode || false;
+        this.updateEnhancedUI('focus');
+        // Trigger UI update to reflect focus state
+        this.updateCoreUI();
+        console.log('✅ Focus state loaded during initialization:', this.coreState.focusMode);
       }
       
       // 6. Load user info immediately (not in background)
@@ -885,10 +898,45 @@ class PopupManager {
    * Set up event listeners for UI elements
    */
   setupEventListeners() {
-    // REMOVED: Real-time message handlers that caused race conditions
-    // Popup will now load fresh data only when opened, preventing data corruption
-    // Background script continues working normally, just doesn't push updates to popup
-    console.log('🔄 Popup using fresh-data-on-open approach - no real-time updates');
+    // Listen for updates from background
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === 'SITE_USAGE_UPDATED') {
+        this.enhancedState.todayStats = message.payload;
+        this.updateEnhancedUI('stats');
+      } else if (message.type === 'EXTENSION_FOCUS_STATE_CHANGED') {
+        console.log('📱 Popup received FOCUS_STATE_CHANGED:', message.payload, 'at', new Date().toISOString());
+        const previousFocusMode = this.coreState.focusMode;
+        this.coreState.focusMode = message.payload.isActive;
+        console.log(`📱 Popup focus mode updated: ${previousFocusMode} → ${this.coreState.focusMode}`);
+        this.updateCoreUI();
+        console.log('📱 Popup UI updated after focus state change');
+      } else if (message.type === 'USER_INFO_UPDATED') {
+        console.log('📱 Received user info update:', message.payload);
+        this.enhancedState.userInfo = message.payload;
+        // Save to local storage as backup
+        chrome.storage.local.set({ userInfo: message.payload });
+        this.updateEnhancedUI('user');
+      } else if (message.type === 'OVERRIDE_DATA_UPDATED') {
+        console.log('🔄 Override data updated, refreshing display');
+        this.updateLocalOverrideTime();
+      } else if (message.type === 'EXTENSION_BLOCKED_SITES_UPDATED') {
+        console.log('📱 Received blocked sites update:', message.payload);
+        // Refresh blocked sites list if on that tab
+        if (this.currentTab === 'blocking-sites') {
+          this.updateBlockedSitesList();
+        }
+      } else if (message.type === 'FORCE_STATE_REFRESH') {
+        console.log('🔄 Forced state refresh received:', message.payload);
+        // Force refresh the current state from background
+        this.refreshState().then(() => {
+          console.log('✅ Forced state refresh completed');
+        }).catch(error => {
+          console.error('❌ Forced state refresh failed:', error);
+        });
+      }
+      sendResponse({ success: true });
+      return true;
+    });
 
     // Focus mode toggle (new switch in header)
     const focusModeSwitch = document.querySelector('#focus-mode-toggle');
