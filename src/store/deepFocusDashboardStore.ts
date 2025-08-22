@@ -13,6 +13,7 @@ import { workSessionService } from '../api/workSessionService';
 import { DailySiteUsage } from '../api/siteUsageService';
 import { SiteUsageSession } from '../utils/SessionManager';
 import { convertSessionsToSiteUsage, calculateOnScreenTime, SiteUsageData } from '../utils/SessionConverter';
+import { RobustTimezoneUtils } from '../utils/robustTimezoneUtils';
 
 // Helper function to convert session data to daily site usage format
 const convertSessionsToDailySiteUsage = (sessions: SiteUsageSession[]): DailySiteUsage[] => {
@@ -87,12 +88,11 @@ interface DeepFocusDashboardStore {
   siteUsageData: SiteUsageData[];
   onScreenTime: number; // seconds
 
-  loadExtensionData: (startDate: Date, endDate: Date) => Promise<void>;
-  loadAllTimeExtensionData: () => Promise<void>;
+  // UNIFIED: Single data loader with timezone support
+  loadDashboardData: (startDate?: Date, endDate?: Date, userTimezone?: string) => Promise<void>;
+  loadAllTimeData: (userTimezone?: string) => Promise<void>;
+  loadSessionData: (userTimezone?: string) => Promise<void>;
   loadComparisonData: (startDate: Date, endDate: Date) => Promise<void>;
-  
-  // New session-based loader
-  loadSessionData: () => Promise<void>;
 };
 
 export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
@@ -114,102 +114,132 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
       siteUsageData: [],
       onScreenTime: 0,
 
-      loadExtensionData: async (startDate: Date, endDate: Date) => {
+      // UNIFIED dashboard data loader
+      loadDashboardData: async (startDate?: Date, endDate?: Date, userTimezone?: string) => {
+        const userStore = useUserStore.getState();
+        if (!userStore.user?.uid) {
+          console.warn('⚠️ User not authenticated');
+          return;
+        }
+
+        set({ isLoading: true });
+
         try {
-          if (!ExtensionDataService.isExtensionInstalled()) {
-            console.warn('⚠️ Extension not installed - skipping data load');
-            return;
-          }
-          
-          // Note: Extension sync is now handled at page level to prevent race conditions
-          console.log('🔄 Loading data (extension sync handled by page-level sync)...');
-          
-          const user = useUserStore.getState().user;
-          if (!user?.uid) {
-            console.warn('⚠️ User not authenticated - skipping extension data load');
-            return;
-          }
+          const userId = userStore.user.uid;
+          const effectiveTimezone = userTimezone || RobustTimezoneUtils.getUserTimezone();
+          const queryStartDate = startDate || new Date();
+          const queryEndDate = endDate || new Date();
 
-          set({ isLoading: true });
-          console.log('🔄 Loading data for deep focus dashboard using SESSION-BASED approach');
-          console.log('📅 Date range:', startDate.toISOString(), 'to', endDate.toISOString());
-          
-          const userId = user.uid;
-          const workSessions = await workSessionService.getWorkSessionsForRange(userId, startDate, endDate);
-          
-          // 🎯 NEW: Use session-based data for On Screen Time
-          const siteUsageSessions = await siteUsageSessionService.getSessionsForDateRange(
+          console.log(`🔄 Loading dashboard data using SETTING timezone: ${effectiveTimezone}`);
+          console.log(`📅 Date range: ${queryStartDate.toDateString()} to ${queryEndDate.toDateString()}`);
+
+          // Get session data using unified method with user's SETTING timezone
+          const siteUsageSessions = await siteUsageSessionService.getSessionsByUserTimezone(
             userId,
-            startDate,
-            endDate
+            queryStartDate,
+            queryEndDate,
+            effectiveTimezone
           );
-          console.log('📊 Retrieved', siteUsageSessions.length, 'site usage sessions');
-          
-          // Convert sessions to daily usage format for existing stats composition
-          const dailySiteUsages = convertSessionsToDailySiteUsage(siteUsageSessions);
-          console.log('📈 Converted to', dailySiteUsages.length, 'daily usage records');
-          
-          const deepFocusSessions = await deepFocusSessionService.getUserSessions(userId, startDate, endDate);
-          const overrideSessions = await overrideSessionService.getUserOverrides(userId, startDate, endDate);
 
-          const mappedData = composeDeepFocusData({ workSessions, dailySiteUsages, deepFocusSessions, overrideSessions });
+          console.log(`📊 Retrieved ${siteUsageSessions.length} sessions for user timezone`);
+
+          // Process session data for dashboard
+          const siteUsageData = convertSessionsToSiteUsage(siteUsageSessions);
+          const onScreenTimeSeconds = calculateOnScreenTime(siteUsageSessions);
+          const dailySiteUsages = convertSessionsToDailySiteUsage(siteUsageSessions);
+
+          // Get other data types (work sessions, deep focus, overrides)
+          const workSessions = await workSessionService.getWorkSessionsForRange(
+            userId, queryStartDate, queryEndDate
+          );
+          const deepFocusSessions = await deepFocusSessionService.getUserSessions(
+            userId, queryStartDate, queryEndDate
+          );
+          const overrideSessions = await overrideSessionService.getUserOverrides(
+            userId, queryStartDate, queryEndDate
+          );
+
+          // Compose unified dashboard data
+          const mappedData = composeDeepFocusData({
+            workSessions,
+            dailySiteUsages,
+            deepFocusSessions,
+            overrideSessions
+          });
+
           set({
             timeMetrics: mappedData.timeMetrics,
             dailyUsage: mappedData.dailyUsage,
             siteUsage: mappedData.siteUsage,
+            siteUsageData,
+            onScreenTime: onScreenTimeSeconds,
+            isLoading: false
           });
+
+          console.log(`✅ Dashboard data loaded successfully`);
+
         } catch (error) {
-          console.error('Extension data loading failed:', error);
-        } finally {
+          console.error('❌ Dashboard data loading failed:', error);
           set({ isLoading: false });
         }
       },
 
-      loadAllTimeExtensionData: async () => {
-        try {
-          if (!ExtensionDataService.isExtensionInstalled()) {
-            console.warn('⚠️ Extension not installed - skipping all time data load');
-            return;
-          }
-          const user = useUserStore.getState().user;
-          if (!user?.uid) {
-            console.warn('⚠️ User not authenticated - skipping all time extension data load');
-            return;
-          }
+      // All-time data loader
+      loadAllTimeData: async (userTimezone?: string) => {
+        const userStore = useUserStore.getState();
+        if (!userStore.user?.uid) {
+          console.warn('⚠️ User not authenticated');
+          return;
+        }
 
-          set({ isLoading: true });
-          console.log('🔄 Loading ALL TIME data for deep focus dashboard using SESSION-BASED approach');
-          
-          const userId = user.uid;
-          const workSessions = await workSessionService.getAllWorkSessions(userId);
-          
-          // 🎯 NEW: Use session-based data for On Screen Time (all time)
-          // For all time, use a very wide date range
+        set({ isLoading: true });
+
+        try {
+          const userId = userStore.user.uid;
+          const effectiveTimezone = userTimezone || RobustTimezoneUtils.getUserTimezone();
+
+          console.log(`🔄 Loading all-time data using SETTING timezone: ${effectiveTimezone}`);
+
+          // For all-time, use wide date range
           const startDate = new Date('2020-01-01');
           const endDate = new Date();
-          const siteUsageSessions = await siteUsageSessionService.getSessionsForDateRange(
+
+          const siteUsageSessions = await siteUsageSessionService.getSessionsByUserTimezone(
             userId,
             startDate,
-            endDate
+            endDate,
+            effectiveTimezone
           );
-          console.log('📊 Retrieved', siteUsageSessions.length, 'site usage sessions (all time)');
-          
-          // Convert sessions to daily usage format for existing stats composition
+
+          // Process and set data similar to loadDashboardData
+          const siteUsageData = convertSessionsToSiteUsage(siteUsageSessions);
+          const onScreenTimeSeconds = calculateOnScreenTime(siteUsageSessions);
           const dailySiteUsages = convertSessionsToDailySiteUsage(siteUsageSessions);
-          console.log('📈 Converted to', dailySiteUsages.length, 'daily usage records (all time)');
-          
+
+          const workSessions = await workSessionService.getAllWorkSessions(userId);
           const deepFocusSessions = await deepFocusSessionService.getUserSessions(userId);
           const overrideSessions = await overrideSessionService.getUserOverrides(userId);
-          const mappedData = composeDeepFocusData({ workSessions, dailySiteUsages, deepFocusSessions, overrideSessions });
-          
+
+          const mappedData = composeDeepFocusData({
+            workSessions,
+            dailySiteUsages,
+            deepFocusSessions,
+            overrideSessions
+          });
+
           set({
             timeMetrics: mappedData.timeMetrics,
-            siteUsage: mappedData.siteUsage,
             dailyUsage: mappedData.dailyUsage,
+            siteUsage: mappedData.siteUsage,
+            siteUsageData,
+            onScreenTime: onScreenTimeSeconds,
+            isLoading: false
           });
+
+          console.log(`✅ All-time data loaded successfully`);
+
         } catch (error) {
-          console.error('Extension data all time loading failed:', error);
-        } finally {
+          console.error('❌ All-time data loading failed:', error);
           set({ isLoading: false });
         }
       },
@@ -218,8 +248,8 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
         return;
       },
 
-      // New session-based data loader
-      loadSessionData: async () => {
+      // Session data loader (for right panel compatibility)
+      loadSessionData: async (userTimezone?: string) => {
         const userStore = useUserStore.getState();
         if (!userStore.user?.uid) {
           console.warn('⚠️ No authenticated user, cannot load session data');
@@ -229,34 +259,37 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
         set({ isLoading: true });
 
         try {
-          console.log('🔄 Loading session-based data for dashboard...');
-          
-          const sessions = await siteUsageSessionService.getSessionsForToday(userStore.user.uid);
-          console.log(`📊 Retrieved ${sessions.length} sessions for today`);
-          
-          // If no sessions found, suggest data population
+          const effectiveTimezone = userTimezone || RobustTimezoneUtils.getUserTimezone();
+
+          console.log(`🔄 Loading session data using SETTING timezone: ${effectiveTimezone}`);
+
+          const sessions = await siteUsageSessionService.getSessionsForTodayTimezone(
+            userStore.user.uid,
+            effectiveTimezone
+          );
+
+          console.log(`📊 Retrieved ${sessions.length} sessions for today (user timezone)`);
+
           if (sessions.length === 0) {
-            console.log('⚠️ No sessions found in siteUsageSessions collection');
-            console.log('💡 Run: populateNewCollection() to migrate/create session data');
-            
-            set({ 
+            console.log('⚠️ No sessions found for today in user timezone');
+            set({
               siteUsageData: [],
               onScreenTime: 0,
-              isLoading: false 
+              isLoading: false
             });
             return;
           }
-          
+
           const siteUsageData = convertSessionsToSiteUsage(sessions);
           const onScreenTimeSeconds = calculateOnScreenTime(sessions);
-          
-          console.log(`✅ Converted to ${siteUsageData.length} site usage entries`);
+
+          console.log(`✅ Processed ${siteUsageData.length} site usage entries`);
           console.log(`📱 Total on-screen time: ${Math.round(onScreenTimeSeconds / 60)} minutes`);
-          
-          set({ 
+
+          set({
             siteUsageData,
             onScreenTime: onScreenTimeSeconds,
-            isLoading: false 
+            isLoading: false
           });
         } catch (error) {
           console.error('❌ Failed to load session data:', error);

@@ -39,7 +39,6 @@ export interface SiteUsageSession {
   favicon?: string;
   url?: string;
   category?: string;
-  visits?: number;
 }
 
 /**
@@ -99,6 +98,7 @@ export class SessionManager {
       startTimeUTC: startTime.toISOString(),
       endTimeUTC: undefined,
       duration: 0,
+      visits: 1,
       utcDate: this.getUtcDateString(startTime),
       status: 'active',
       createdAt: now,
