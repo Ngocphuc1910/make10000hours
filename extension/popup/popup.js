@@ -636,6 +636,9 @@ class PopupManager {
       // 3. Get ALL data in one call
       const statsResult = await this.getCompleteStats();
       
+      // Also get focus state during initialization
+      const focusResult = await this.loadFocusState();
+      
       if (statsResult.success) {
         // 4. Update all UI elements at once with complete data
         await this.updateAllStatsUI(statsResult.data);
@@ -645,6 +648,16 @@ class PopupManager {
         // 5. Show error state if data loading failed
         this.showDataErrorState(statsResult.error);
         console.error('❌ Popup initialization failed:', statsResult.error);
+      }
+      
+      // Update focus UI if focus state loaded
+      if (focusResult.success) {
+        // Update core state with focus mode from loaded data
+        this.coreState.focusMode = focusResult.data.focusMode || false;
+        this.updateEnhancedUI('focus');
+        // Trigger UI update to reflect focus state
+        this.updateCoreUI();
+        console.log('✅ Focus state loaded during initialization:', this.coreState.focusMode);
       }
       
       // 6. Load user info immediately (not in background)
@@ -1047,7 +1060,7 @@ class PopupManager {
       if (message.type === 'SITE_USAGE_UPDATED') {
         this.enhancedState.todayStats = message.payload;
         this.updateEnhancedUI('stats');
-      } else if (message.type === 'FOCUS_STATE_CHANGED') {
+      } else if (message.type === 'EXTENSION_FOCUS_STATE_CHANGED') {
         console.log('📱 Popup received FOCUS_STATE_CHANGED:', message.payload, 'at', new Date().toISOString());
         const previousFocusMode = this.coreState.focusMode;
         this.coreState.focusMode = message.payload.isActive;
