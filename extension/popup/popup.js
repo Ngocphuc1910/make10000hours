@@ -996,12 +996,7 @@ class PopupManager {
         }
       }, 60000); // 1 minute fallback for critical state
       
-      // Statistics updates - periodic for time-sensitive but not critical data
-      this.statsInterval = setInterval(() => {
-        if (document.visibilityState === 'visible' && this.currentTab === 'site-usage') {
-          this.refreshStatistics();
-        }
-      }, 30000); // 30 seconds for statistics
+      // REMOVED: Statistics updates - no more periodic refreshes to prevent race conditions
       
       // Enhanced visibility handler - rely more on events
       document.addEventListener('visibilitychange', () => {
