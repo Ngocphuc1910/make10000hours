@@ -573,6 +573,39 @@ class PopupManager {
       }
     } catch (error) {
       console.error('❌ Error getting complete stats:', error);
+      
+      // Fallback: Try to load stats directly from storage
+      try {
+        console.log('🔄 Trying direct storage fallback for stats...');
+        const storage = await chrome.storage.local.get(['site_usage_sessions']);
+        if (storage.site_usage_sessions) {
+          // Process the raw session data into stats format
+          const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
+          const todaySessions = storage.site_usage_sessions[today] || [];
+          
+          let totalTime = 0;
+          const sites = {};
+          
+          todaySessions.forEach(session => {
+            if (session.duration) {
+              totalTime += session.duration * 1000; // Convert to milliseconds
+              if (!sites[session.domain]) {
+                sites[session.domain] = { totalTime: 0, sessions: 0 };
+              }
+              sites[session.domain].totalTime += session.duration * 1000;
+              sites[session.domain].sessions += 1;
+            }
+          });
+          
+          const fallbackData = { totalTime, sites };
+          this.enhancedState.todayStats = fallbackData;
+          console.log('✅ Fallback stats loaded from storage:', fallbackData);
+          return { success: true, data: fallbackData };
+        }
+      } catch (fallbackError) {
+        console.warn('❌ Storage fallback also failed:', fallbackError);
+      }
+      
       return { success: false, error: error.message };
     }
   }
@@ -594,7 +627,7 @@ class PopupManager {
       
       if (statsResult.success) {
         // 4. Update all UI elements at once with complete data
-        this.updateAllStatsUI(statsResult.data);
+        await this.updateAllStatsUI(statsResult.data);
         this.hideDataLoadingState();
         console.log('✅ Popup initialization complete with data');
       } else {
@@ -657,18 +690,25 @@ class PopupManager {
     
     const totalTimeEl = document.getElementById('total-time');
     if (totalTimeEl) {
-      totalTimeEl.textContent = 'Error';
-      totalTimeEl.style.color = '#dc2626';
+      totalTimeEl.textContent = '0m';  // Show 0 instead of "Error"
+      totalTimeEl.style.color = '#999'; // Muted color to indicate no data
     }
     
     const sitesContainer = document.querySelector('.sites-container');
     if (sitesContainer) {
-      sitesContainer.innerHTML = `<div class="error-sites">Unable to load data: ${error}</div>`;
+      // Show friendly message instead of technical error
+      sitesContainer.innerHTML = `
+        <div class="empty-state" style="text-align: center; padding: 2rem 1rem; color: #666;">
+          <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+          <div style="font-size: 0.875rem;">No usage data available yet</div>
+          <div style="font-size: 0.75rem; margin-top: 0.25rem; opacity: 0.7;">Visit some websites to start tracking</div>
+        </div>
+      `;
     }
   }
 
   // NEW: Update all UI with complete data in single operation  
-  updateAllStatsUI(data) {
+  async updateAllStatsUI(data) {
     console.log('🔄 Updating all UI with complete stats:', data);
     
     // Update total screen time
@@ -680,7 +720,7 @@ class PopupManager {
     
     // Update sites list if we're on the site-usage tab
     if (this.currentTab === 'site-usage' && data.sites) {
-      this.updateTopSitesFromData(data.sites);
+      await this.updateTopSitesFromData(data.sites);
     }
     
     // Update other stats displays
@@ -689,7 +729,7 @@ class PopupManager {
   }
 
   // NEW: Update sites list from provided data
-  updateTopSitesFromData(sites) {
+  async updateTopSitesFromData(sites) {
     if (!sites || typeof sites !== 'object') {
       console.warn('⚠️ Invalid sites data provided');
       return;
@@ -723,22 +763,23 @@ class PopupManager {
         // Calculate total time from current sites data to prevent race conditions
         const totalTime = sitesArray.reduce((sum, site) => sum + site.timeSpent, 0);
         
-        // Create site items using existing method
-        sitesArray.forEach(async (site) => {
+        // Create site items using existing method - use for loop to preserve order
+        for (const site of sitesArray) {
           const siteItem = await this.createSiteItem(site, totalTime);
           if (siteItem) {
             sitesListEl.appendChild(siteItem);
           }
-        });
+        }
       } else {
         // Show empty state
         const emptyState = document.createElement('div');
         emptyState.className = 'loading-state';
         
         const icon = document.createElement('div');
-        icon.style.fontSize = '2rem';
-        icon.style.marginBottom = '0.5rem';
-        icon.textContent = '📊';
+        icon.style.fontSize = '2.5rem';
+        icon.style.marginBottom = '0.75rem';
+        icon.style.opacity = '0.6';
+        icon.textContent = '🔍';
         
         const text = document.createElement('div');
         text.style.color = 'var(--text-muted)';
@@ -871,8 +912,10 @@ class PopupManager {
         if (this.enhancedState.todayStats) {
           // DISABLED: this.updateStatsOverview(); // This was overriding our new updateAllStatsUI method
           // Always update top sites when stats are loaded, regardless of container state
-          if (this.currentTab === 'site-usage') {
-            this.updateTopSites();
+          if (this.currentTab === 'site-usage' && this.enhancedState.todayStats.sites) {
+            this.updateTopSitesFromData(this.enhancedState.todayStats.sites).catch(error => {
+              console.error('❌ Error updating sites from refresh:', error);
+            });
           }
         }
         break;
@@ -1002,6 +1045,12 @@ class PopupManager {
       } else if (message.type === 'OVERRIDE_DATA_UPDATED') {
         console.log('🔄 Override data updated, refreshing display');
         this.updateLocalOverrideTime();
+      } else if (message.type === 'EXTENSION_BLOCKED_SITES_UPDATED') {
+        console.log('📱 Received blocked sites update:', message.payload);
+        // Refresh blocked sites list if on that tab
+        if (this.currentTab === 'blocking-sites') {
+          this.updateBlockedSitesList();
+        }
       } else if (message.type === 'FORCE_STATE_REFRESH') {
         console.log('🔄 Forced state refresh received:', message.payload);
         // Force refresh the current state from background
@@ -1140,7 +1189,9 @@ class PopupManager {
       }
       
       // Initialize new tab content
-      this.initializeTabContent(tabName);
+      this.initializeTabContent(tabName).catch(error => {
+        console.error('❌ Error initializing tab content:', error);
+      });
       
       // Set up new intervals if switching to site-usage
       if (tabName === 'site-usage') {
@@ -1169,10 +1220,20 @@ class PopupManager {
   /**
    * Initialize specific tab content
    */
-  initializeTabContent(tabName) {
+  async initializeTabContent(tabName) {
     switch (tabName) {
       case 'site-usage':
-        this.updateTopSites();
+        // Use existing data if available, otherwise fetch fresh data
+        if (this.enhancedState.todayStats && this.enhancedState.todayStats.sites) {
+          console.log('🔄 Using cached data for tab switch');
+          await this.updateTopSitesFromData(this.enhancedState.todayStats.sites);
+        } else {
+          console.log('🔄 Fetching fresh data for tab switch');
+          const statsResult = await this.getCompleteStats();
+          if (statsResult.success && statsResult.data.sites) {
+            await this.updateTopSitesFromData(statsResult.data.sites);
+          }
+        }
         break;
       case 'blocking-sites':
         this.updateBlockedSitesList();
@@ -1195,8 +1256,10 @@ class PopupManager {
     
     // Only update tab content if it's the site-usage tab and we have valid data
     // Don't reinitialize tab content automatically to prevent duplication
-    if (this.currentTab === 'site-usage' && this.enhancedState.todayStats) {
-      this.updateTopSites();
+    if (this.currentTab === 'site-usage' && this.enhancedState.todayStats && this.enhancedState.todayStats.sites) {
+      this.updateTopSitesFromData(this.enhancedState.todayStats.sites).catch(error => {
+        console.error('❌ Error updating sites from UI refresh:', error);
+      });
     }
   }
 
@@ -1846,9 +1909,10 @@ class PopupManager {
         emptyState.className = 'loading-state';
         
         const icon = document.createElement('div');
-        icon.style.fontSize = '2rem';
-        icon.style.marginBottom = '0.5rem';
-        icon.textContent = '🛡️';
+        icon.style.fontSize = '2.5rem';
+        icon.style.marginBottom = '0.75rem';
+        icon.style.opacity = '0.6';
+        icon.textContent = '🔒';
         
         const text = document.createElement('div');
         text.style.color = 'var(--text-muted)';

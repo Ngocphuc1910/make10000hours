@@ -494,7 +494,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                 className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
                   showTimeSelector ? 'shadow-sm' : 'bg-background-container'
                 }`}
-                style={showTimeSelector ? { backgroundColor: THEME.primary } : {}}
+                style={showTimeSelector ? { backgroundColor: THEME.switchGreen } : {}}
               >
                 <div 
                   className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 shadow-sm ${

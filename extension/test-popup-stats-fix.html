@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Popup Stats Fix</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-result {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Popup Stats Fix</h1>
+    <p>This test verifies that the new message handlers (GET_REALTIME_STATS and GET_COMPLETE_STATS) work correctly.</p>
+
+    <div class="test-container">
+        <h2>Test GET_REALTIME_STATS</h2>
+        <button onclick="testRealtimeStats()">Test GET_REALTIME_STATS</button>
+        <div id="realtime-result" class="test-result loading">Click button to test</div>
+    </div>
+
+    <div class="test-container">
+        <h2>Test GET_COMPLETE_STATS</h2>
+        <button onclick="testCompleteStats()">Test GET_COMPLETE_STATS</button>
+        <div id="complete-result" class="test-result loading">Click button to test</div>
+    </div>
+
+    <div class="test-container">
+        <h2>Test Original GET_STATS</h2>
+        <button onclick="testOriginalStats()">Test GET_STATS</button>
+        <div id="original-result" class="test-result loading">Click button to test</div>
+    </div>
+
+    <script>
+        function showResult(elementId, success, data, error = null) {
+            const element = document.getElementById(elementId);
+            element.className = `test-result ${success ? 'success' : 'error'}`;
+            
+            if (success) {
+                element.innerHTML = `
+                    <strong>✅ SUCCESS</strong><br>
+                    <strong>Total Time:</strong> ${data.totalTime}s (${Math.round(data.totalTime/60)}m)<br>
+                    <strong>Sites Visited:</strong> ${data.sitesVisited}<br>
+                    <strong>Sites Count:</strong> ${Object.keys(data.sites || {}).length}<br>
+                    <strong>Raw Data:</strong><br>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } else {
+                element.innerHTML = `
+                    <strong>❌ ERROR</strong><br>
+                    ${error || 'Unknown error'}
+                `;
+            }
+        }
+
+        async function testRealtimeStats() {
+            try {
+                console.log('🧪 Testing GET_REALTIME_STATS...');
+                const response = await chrome.runtime.sendMessage({ type: 'GET_REALTIME_STATS' });
+                console.log('📥 GET_REALTIME_STATS response:', response);
+                
+                if (response?.success) {
+                    showResult('realtime-result', true, response.data);
+                } else {
+                    showResult('realtime-result', false, null, response?.error || 'Failed to get stats');
+                }
+            } catch (error) {
+                console.error('❌ GET_REALTIME_STATS error:', error);
+                showResult('realtime-result', false, null, error.message);
+            }
+        }
+
+        async function testCompleteStats() {
+            try {
+                console.log('🧪 Testing GET_COMPLETE_STATS...');
+                const response = await chrome.runtime.sendMessage({ type: 'GET_COMPLETE_STATS' });
+                console.log('📥 GET_COMPLETE_STATS response:', response);
+                
+                if (response?.success) {
+                    showResult('complete-result', true, response.data);
+                } else {
+                    showResult('complete-result', false, null, response?.error || 'Failed to get stats');
+                }
+            } catch (error) {
+                console.error('❌ GET_COMPLETE_STATS error:', error);
+                showResult('complete-result', false, null, error.message);
+            }
+        }
+
+        async function testOriginalStats() {
+            try {
+                console.log('🧪 Testing GET_STATS...');
+                const response = await chrome.runtime.sendMessage({ type: 'GET_STATS' });
+                console.log('📥 GET_STATS response:', response);
+                
+                if (response?.success) {
+                    showResult('original-result', true, response.data);
+                } else {
+                    showResult('original-result', false, null, response?.error || 'Failed to get stats');
+                }
+            } catch (error) {
+                console.error('❌ GET_STATS error:', error);
+                showResult('original-result', false, null, error.message);
+            }
+        }
+
+        // Test all handlers on load to see initial state
+        window.addEventListener('load', async () => {
+            console.log('🎯 Running initial tests...');
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for extension to initialize
+            
+            testRealtimeStats();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            testCompleteStats();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            testOriginalStats();
+        });
+    </script>
+</body>
+</html>
