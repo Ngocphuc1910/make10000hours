@@ -13,6 +13,16 @@ function checkForSecrets() {
 
   // Whitelist of safe storage keys and variable names
   const safePatterns = [
+    // Documentation placeholders - safe
+    'REPLACE_WITH_PRODUCTION_KEY',
+    'REPLACE_WITH_WEBHOOK_SECRET', 
+    'REPLACE_WITH_YOUR_API_KEY',
+    'REPLACE_WITH_YOUR_KEY',
+    'your-production-key',
+    'your-webhook-secret',
+    'your-api-key',
+    'your-key',
+    // Application storage keys
     'storageKey = \'extensionConfig\'',
     'storageKey = \'overrideSessions\'',
     'storageKey = \'timeData\'',
