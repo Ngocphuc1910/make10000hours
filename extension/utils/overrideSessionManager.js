@@ -61,14 +61,17 @@ class OverrideSessionManager {
       const currentDate = this.getCurrentDate();
       const sessionId = this.generateId();
       
-      // Create override session object
+      // Create override session object - NEW FORMAT REQUIRED
+      const now = new Date();
       const overrideSession = {
         id: sessionId,
+        extensionSessionId: sessionId, // NEW FORMAT REQUIREMENT - for deduplication
         userId: data.userId || 'anonymous',
         domain: data.domain,
         url: data.url || null,
         duration: data.duration, // in minutes
         createdAt: Date.now(),
+        startTimeUTC: now.toISOString(), // NEW FORMAT REQUIREMENT - for date filtering
         reason: data.reason || 'manual_override',
         metadata: {
           extensionVersion: this.version,
