@@ -5,7 +5,41 @@
  */
 
 // Enhanced CSS loading with font detection and debugging
-// Font loading functions removed - using static CSS includes for better performance and clarity
+function loadCSS() {
+  console.log('🎨 [POPUP] Starting CSS loading...');
+  
+  // Load CSS files
+  Promise.all([
+    loadSingleCSS('assets/fonts/fonts.css'),
+    loadSingleCSS('assets/icons/remixicon.css')
+  ]).then(() => {
+    console.log('✅ [POPUP] CSS files loaded');
+  }).catch(error => {
+    console.error('❌ [POPUP] CSS loading failed:', error);
+    injectFallbackStyles();
+  });
+}
+
+function loadSingleCSS(path) {
+  return new Promise((resolve, reject) => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    const url = chrome.runtime.getURL(path);
+    link.href = url;
+    console.log(`📁 [POPUP] Loading CSS: ${url}`);
+    
+    link.onload = () => {
+      console.log(`✅ [POPUP] CSS loaded: ${path}`);
+      resolve(path);
+    };
+    link.onerror = () => {
+      console.error(`❌ [POPUP] CSS failed: ${path}`);
+      reject(new Error(`Failed to load ${path}`));
+    };
+    
+    document.head.appendChild(link);
+  });
+}
 
 function injectFallbackStyles() {
   console.log('🆘 [POPUP] Injecting fallback styles for instant display...');
@@ -2760,10 +2794,12 @@ let popupManager = null;
 // Wait for DOM to be fully loaded before initializing
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
+    loadCSS(); // Load CSS first
     popupManager = new PopupManager();
   });
 } else {
   // DOM already loaded
+  loadCSS(); // Load CSS first
   popupManager = new PopupManager();
 }
 
