@@ -164,82 +164,37 @@ export const DeepFocusProvider: React.FC<DeepFocusProviderProps> = ({ children }
         // Handle both Chrome extension messages and window messages
         const messageData = event.data || event;
         
-        // Only handle override session recording messages
+        // CRITICAL FIX: Do NOT handle RECORD_OVERRIDE_SESSION here to prevent duplicates
+        // This was the main source of the override session duplication problem:
+        // 1. Extension creates session with proper extensionSessionId/startTimeUTC
+        // 2. Extension forwards message via content script to web app  
+        // 3. This context intercepts and creates ANOTHER session without extension fields (legacy format)
+        // 4. extensionSyncListener ALSO processes the same message with proper deduplication
+        // 5. Result: Multiple duplicate sessions per click, many missing proper new format fields
+        
+        // The correct flow is: Extension → extensionSyncListener (with proper deduplication)
+        // This context should NOT create sessions - let the extensionSyncListener handle it
+        
         if (messageData?.type === 'RECORD_OVERRIDE_SESSION' && 
             (messageData?.source?.includes('make10000hours') || 
              messageData?.source?.includes('extension'))) {
           
-          console.log('🌐 GLOBAL: RECORD_OVERRIDE_SESSION received in DeepFocusContext:', messageData);
-          console.log('🌐 GLOBAL: Current page:', window.location.pathname);
-          console.log('🌐 GLOBAL: User state:', { user: user?.uid, isLoggedIn: !!user });
+          console.log('🚫 GLOBAL: RECORD_OVERRIDE_SESSION intercepted - NOT creating duplicate session');
+          console.log('🔄 GLOBAL: Letting extensionSyncListener handle this message properly');
           
-          const { domain, duration, userId: incomingUserId, timestamp, extensionTimestamp } = messageData.payload || {};
-          
-          // Create unique message ID to prevent duplicate processing
-          const messageId = `${domain}_${duration}_${extensionTimestamp || timestamp || Date.now()}`;
-          
-          if (globalProcessedMessages.has(messageId)) {
-            console.log('🔄 GLOBAL: Skipping duplicate override session message:', messageId);
-            return;
-          }
-          
-          // Mark message as processed globally
-          globalProcessedMessages.add(messageId);
-          
-          // Clean up old processed messages (keep only last 100)
-          if (globalProcessedMessages.size > 100) {
-            const array = Array.from(globalProcessedMessages);
-            const toKeep = array.slice(-50); // Keep only last 50
-            globalProcessedMessages.clear();
-            toKeep.forEach(id => globalProcessedMessages.add(id));
-          }
-          
-          // Use incoming userId or fallback to current user
+          // Just broadcast UI event without creating a session
+          const { domain, duration, userId: incomingUserId } = messageData.payload || {};
           const effectiveUserId = incomingUserId || user?.uid;
           
-          console.log('🌐 GLOBAL: Override session data validation:', {
-            domain,
-            duration,
-            incomingUserId,
-            currentUserUid: user?.uid,
-            effectiveUserId,
-            timestamp,
-            hasUser: !!user
-          });
-
-          if (!effectiveUserId) {
-            console.error('❌ GLOBAL: No user ID available for override session');
-            return;
-          }
-
-          if (!domain || !duration) {
-            console.error('❌ GLOBAL: Missing required override session data:', { domain, duration });
-            return;
-          }
-
-          try {
-            console.log('📝 GLOBAL: Recording override session from extension:', domain, duration, 'for user:', effectiveUserId);
-            
-            // Record the override session using the store function
-            await recordOverrideSession(domain, duration);
-            console.log('✅ GLOBAL: Override session recorded successfully');
-            
-            // Broadcast custom event to notify any listening components (like DeepFocusPage)
+          if (domain && duration && effectiveUserId) {
+            // Notify UI that a session will be/was recorded by the extension sync system
             window.dispatchEvent(new CustomEvent('overrideSessionRecorded', {
               detail: { domain, duration, userId: effectiveUserId, timestamp: Date.now() }
             }));
-            
-          } catch (error) {
-            console.error('❌ GLOBAL: Failed to record override session:', error);
-            console.error('🔍 GLOBAL: Override session error details:', {
-              name: (error as Error)?.name,
-              message: (error as Error)?.message,
-              stack: (error as Error)?.stack,
-              domain,
-              duration,
-              userId: effectiveUserId
-            });
+            console.log('📡 GLOBAL: Broadcasted UI update event for override session');
           }
+          
+          return; // Exit early - let extensionSyncListener handle the actual session creation
         }
         
         // Handle timezone coordination requests from extension

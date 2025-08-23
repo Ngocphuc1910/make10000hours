@@ -69,7 +69,11 @@ interface DeepFocusStore extends DeepFocusData {
   setAutoSessionManagement: (enabled: boolean) => void;
   // Override sessions
   overrideSessions: OverrideSession[];
-  recordOverrideSession: (domain: string, duration: number) => Promise<void>;
+  recordOverrideSession: (domain: string, duration: number, extensionData?: { 
+    extensionSessionId?: string; 
+    startTimeUTC?: string;
+    timestamp?: number;
+  }) => Promise<void>;
   loadOverrideSessions: (userId: string, startDate?: Date, endDate?: Date) => Promise<void>;
   // Manual retry method for users
   retryBackup: () => Promise<void>;
@@ -1550,7 +1554,11 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
       },
 
       // Override session methods
-      recordOverrideSession: async (domain: string, duration: number) => {
+      recordOverrideSession: async (domain: string, duration: number, extensionData?: { 
+        extensionSessionId?: string; 
+        startTimeUTC?: string;
+        timestamp?: number;
+      }) => {
         try {
           const { useUserStore } = await import('./userStore');
           const user = useUserStore.getState().user;
@@ -1562,7 +1570,13 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
             return;
           }
           
-          console.log('🎯 Recording override session:', { domain, duration, userId: user.uid });
+          console.log('🎯 Recording override session:', { 
+            domain, 
+            duration, 
+            userId: user.uid, 
+            hasExtensionData: !!extensionData,
+            extensionSessionId: extensionData?.extensionSessionId 
+          });
           
           // Create temporary local override session for immediate UI update
           const tempOverride = {
@@ -1580,15 +1594,34 @@ export const useDeepFocusStore = create<DeepFocusStore>()(
           }));
           
           try {
-            // Try to save to Firebase
+            // Determine session ID and timestamp based on whether extension data is available
+            const now = new Date();
+            let sessionId: string;
+            let startTimeUTC: string;
+            
+            if (extensionData?.extensionSessionId) {
+              // Use extension-provided data for proper deduplication
+              sessionId = extensionData.extensionSessionId;
+              startTimeUTC = extensionData.startTimeUTC || now.toISOString();
+              console.log('🔄 Using extension-provided session ID for deduplication:', sessionId);
+            } else {
+              // Fallback to web app generated ID (for manual/direct calls)
+              sessionId = `override_${Date.now()}_webapp_${Math.random().toString(36).substr(2, 9)}`;
+              startTimeUTC = now.toISOString();
+              console.log('📝 Using web app generated session ID:', sessionId);
+            }
+            
             const docId = await overrideSessionService.createOverrideSession({
               userId: user.uid,
               domain,
               duration,
-              deepFocusSessionId: undefined // Web app no longer manages sessions
+              deepFocusSessionId: undefined, // Web app no longer manages sessions
+              extensionSessionId: sessionId,  // Use proper session ID for deduplication
+              startTimeUTC: startTimeUTC,     // Use proper timestamp
+              reason: 'manual_override'
             });
             
-            console.log('✅ Override session saved to Firebase:', docId);
+            console.log('✅ Override session saved to Firebase:', { docId, sessionId, extensionProvided: !!extensionData });
             
             // Replace temp with real data
             set(state => ({

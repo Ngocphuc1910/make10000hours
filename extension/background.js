@@ -1909,17 +1909,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const userInfo = userStorage.userInfo || {};
         const currentUserId = userInfo.uid || null;
 
-        // Create override session record
+        // Create override session record - NEW FORMAT REQUIRED
+        const now = new Date();
+        const sessionId = `override_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const overrideSession = {
-          id: `override_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: sessionId,
+          extensionSessionId: sessionId, // NEW FORMAT REQUIREMENT - for deduplication
           domain: domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0],
-          startTime: Date.now(),
+          startTime: now.getTime(),
+          startTimeUTC: now.toISOString(), // NEW FORMAT REQUIREMENT - for date filtering
           duration: duration, // in minutes
           durationMs: duration * 60 * 1000,
           date: DateUtils.getLocalDateString(),
           timestamp: Date.now(),
           type: 'override',
-          userId: currentUserId // Add user context for Firebase
+          userId: currentUserId, // Add user context for Firebase
+          reason: 'manual_override' // Standard reason for extension overrides
         };
 
         // Store in localStorage with OverrideSessionManager format (from 3643c8e)
@@ -2182,33 +2187,63 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const overrideDates = Object.keys(overrideSessions);
         console.log(`  - Found ${overrideDates.length} override dates: ${overrideDates.join(', ')}`);
         
+        let totalOverrideSessions = 0;
+        let legacyFilteredSessions = 0;
+        
         Object.keys(overrideSessions).forEach(date => {
           const daySessions = overrideSessions[date] || [];
+          totalOverrideSessions += daySessions.length;
           console.log(`  - Processing ${daySessions.length} override sessions for ${date}`);
           
           daySessions.forEach((session, index) => {
             console.log(`    ${index + 1}. ${session.domain}: ${session.duration} minutes (stored format)`);
             
+            // CRITICAL FIX: STRICT NEW FORMAT VALIDATION - NO CONVERSION ALLOWED
+            // Only process sessions that were created with the complete new format
+            const hasRequiredNewFormatFields = session.startTimeUTC && 
+                                             session.extensionSessionId && 
+                                             session.id && 
+                                             session.id.startsWith('override_') &&
+                                             session.reason;
+            
+            if (!hasRequiredNewFormatFields) {
+              legacyFilteredSessions++;
+              console.log(`🚫 [STRICT-LEGACY-FILTER] Rejecting old format override session: ${session.domain}`, {
+                hasStartTimeUTC: !!session.startTimeUTC,
+                hasExtensionSessionId: !!session.extensionSessionId,
+                hasId: !!session.id,
+                hasReason: !!session.reason,
+                idFormat: session.id || 'missing',
+                legacyFields: {
+                  hasOldStartTime: !!session.startTime,
+                  hasTimestamp: !!session.timestamp
+                }
+              });
+              return; // COMPLETE REJECTION - NO CONVERSION
+            }
+            
             if (session.duration > 0) { // Only include sessions with actual time
-              const convertedSession = {
-                id: session.id || `override_${session.domain}_${date}_${currentUserId}`,
+              // NO CONVERSION - use the session data as-is since it's already in new format
+              const validatedSession = {
+                id: session.extensionSessionId, // Use extensionSessionId as the main ID
                 userId: currentUserId,
                 type: 'override',
                 domain: session.domain,
-                url: session.domain, // Use domain as URL for compatibility
-                startTimeUTC: new Date(session.startTime || session.timestamp).toISOString(),
+                url: session.url || session.domain,
+                startTimeUTC: session.startTimeUTC, // NO CONVERSION - already in correct format
                 endTimeUTC: undefined, // Override sessions don't have end times
                 duration: session.duration * 60, // Convert minutes to seconds for consistency
                 visits: 1, // Override sessions are always single visits
                 utcDate: session.date,
                 status: 'completed',
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                createdAt: new Date(session.startTime || session.timestamp).toISOString(),
-                updatedAt: new Date(session.startTime || session.timestamp).toISOString()
+                createdAt: session.startTimeUTC, // Use the actual creation time
+                updatedAt: session.startTimeUTC,
+                extensionSessionId: session.extensionSessionId // Preserve for deduplication
               };
               
-              console.log(`       -> Converted: ${convertedSession.domain}, ${convertedSession.duration}s, type: ${convertedSession.type}`);
-              allSessions.push(convertedSession);
+              console.log(`       -> Validated NEW FORMAT session: ${validatedSession.domain}, ${validatedSession.duration}s, extensionId: ${validatedSession.extensionSessionId}`);
+              allSessions.push(validatedSession);
             } else {
               console.log(`       -> Skipped (0 duration): ${session.domain}`);
             }
@@ -2216,6 +2251,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         
         console.log(`🎯 Total override sessions added: ${allSessions.filter(s => s.type === 'override').length}`);
+        console.log(`🚫 Legacy override sessions filtered out: ${legacyFilteredSessions} out of ${totalOverrideSessions} total`);
         
         console.log(`📤 Sending ${allSessions.length} sessions to web app (${siteUsageSessions ? Object.keys(siteUsageSessions).length : 0} site usage days, ${overrideSessions ? Object.keys(overrideSessions).length : 0} override days)`);
         
