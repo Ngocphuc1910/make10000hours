@@ -125,6 +125,10 @@ body {
   /* FORCE IMMEDIATE VISIBILITY - No gradual appearance */
   visibility: visible !important;
   opacity: 1 !important;
+  /* High-DPI font rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* INSTANT VISIBILITY - No gradual appearance animations */
@@ -973,6 +977,32 @@ body {
 .progress-fill.purple { background: var(--accent-purple); }
 .progress-fill.green { background: var(--accent-green); }
 .progress-fill.orange { background: var(--accent-orange); }
+
+/* High-DPI Display Optimization */
+@media (-webkit-min-device-pixel-ratio: 2),
+       (min-resolution: 192dpi),
+       (min-resolution: 2dppx) {
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  
+  .popup-container {
+    transform: scale(1);
+    transform-origin: top left;
+  }
+  
+  .site-icon, .stat-icon i, .site-card-icon {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+  
+  /* Ensure crisp borders on high-DPI */
+  .stat-card, .site-card, .tab-btn, .btn {
+    border-width: 0.5px;
+  }
+}
 
 /* Responsive Design */
 @media (max-width: 380px) {

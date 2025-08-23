@@ -5,114 +5,7 @@
  */
 
 // Enhanced CSS loading with font detection and debugging
-function loadCSS() {
-  console.log('🎨 [POPUP] Starting CSS loading (non-blocking)...');
-  
-  // Load CSS files without blocking - fire and forget
-  Promise.all([
-    loadSingleCSS('assets/fonts/fonts.css'),
-    loadSingleCSS('assets/icons/remixicon.css')
-  ]).then(() => {
-    console.log('✅ [POPUP] CSS files loaded in background');
-    // Don't wait for fonts - let them load in background
-    waitForFonts().catch(() => {});
-  }).catch(error => {
-    console.error('❌ [POPUP] CSS loading failed:', error);
-    // Fallback to inline styles
-    injectFallbackStyles();
-  });
-  
-  // Return immediately resolved promise
-  return Promise.resolve();
-}
-
-function loadSingleCSS(path) {
-  return new Promise((resolve, reject) => {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    const url = chrome.runtime.getURL(path);
-    link.href = url;
-    console.log(`📁 [POPUP] Loading CSS: ${url}`);
-    
-    link.onload = () => {
-      console.log(`✅ [POPUP] CSS loaded: ${path}`);
-      
-      // Fix RemixIcon font URLs after CSS is loaded
-      if (path.includes('remixicon.css')) {
-        fixRemixIconFontUrl();
-      }
-      
-      resolve(path);
-    };
-    link.onerror = () => {
-      console.error(`❌ [POPUP] CSS failed: ${path}`);
-      reject(new Error(`Failed to load ${path}`));
-    };
-    
-    document.head.appendChild(link);
-  });
-}
-
-function fixRemixIconFontUrl() {
-  console.log('🔧 [POPUP] Fixing RemixIcon font URL...');
-  
-  // Get the correct font URL for the extension
-  const fontUrl = chrome.runtime.getURL('assets/icons/remixicon.woff2');
-  console.log('📁 [POPUP] Font URL:', fontUrl);
-  
-  // Create a new style element with the correct font face
-  const style = document.createElement('style');
-  style.textContent = `
-    @font-face {
-      font-family: remixicon;
-      src: url('${fontUrl}') format("woff2");
-      font-display: swap;
-    }
-  `;
-  
-  // Add to head
-  document.head.appendChild(style);
-  console.log('✅ [POPUP] RemixIcon font URL fixed');
-}
-
-function waitForFonts() {
-  // Completely non-blocking font loading - just log and continue
-  console.log('🎉 [POPUP] Font loading in background (non-blocking)');
-  
-  // Load fonts in background without blocking UI
-  if (document.fonts) {
-    document.fonts.ready.then(() => {
-      console.log('✅ [POPUP] Fonts loaded in background');
-    }).catch(() => {
-      console.log('🚨 [POPUP] Font loading failed, using system fallbacks');
-    });
-  }
-  
-  return Promise.resolve();
-}
-
-function debugFontLoading() {
-  if (document.fonts) {
-    console.log('📊 [POPUP] Available fonts:', Array.from(document.fonts.values()).map(f => `${f.family} (${f.status})`));
-    
-    const remixIconLoaded = document.fonts.check('1em remixicon');
-    console.log('🔍 [POPUP] RemixIcon check result:', remixIconLoaded);
-    
-    // Test an actual icon element
-    const testIcon = document.createElement('div');
-    testIcon.className = 'ri-computer-line';
-    testIcon.style.position = 'absolute';
-    testIcon.style.left = '-9999px';
-    document.body.appendChild(testIcon);
-    
-    setTimeout(() => {
-      const computedStyle = window.getComputedStyle(testIcon);
-      console.log('🧪 [POPUP] Test icon font-family:', computedStyle.fontFamily);
-      console.log('🧪 [POPUP] Test icon content:', computedStyle.content);
-      document.body.removeChild(testIcon);
-    }, 100);
-  }
-}
+// Font loading functions removed - using static CSS includes for better performance and clarity
 
 function injectFallbackStyles() {
   console.log('🆘 [POPUP] Injecting fallback styles for instant display...');
@@ -207,28 +100,8 @@ function forceReloadRemixIcon() {
   }, 100);
 }
 
-// Enhanced initialization - non-blocking
-function initializeCSS() {
-  console.log('🚀 [POPUP] Initializing CSS loading (non-blocking)...');
-  
-  // Load CSS in background - don't wait for it
-  loadCSS().then(() => {
-    console.log('🎉 [POPUP] CSS loaded in background');
-  }).catch(error => {
-    console.warn('CSS loading failed, using fallbacks');
-    injectFallbackStyles();
-  });
-  
-  // Return immediately - don't block UI
-  console.log('✅ [POPUP] CSS initialization started (non-blocking)');
-}
-
-// Load CSS when DOM is ready with enhanced error handling
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeCSS);
-} else {
-  initializeCSS();
-}
+// Simplified initialization - CSS loaded via HTML
+console.log('🚀 [POPUP] Using static CSS includes - no dynamic initialization needed');
 
 /**
  * Chrome Native Favicon API Helper
