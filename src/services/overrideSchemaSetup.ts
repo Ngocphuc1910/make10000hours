@@ -21,8 +21,10 @@ interface OverrideSessionSchema {
   // Timestamps
   createdAt: Timestamp | Date | FieldValue;
   updatedAt?: Timestamp | Date | FieldValue;
+  startTimeUTC?: string;        // NEW - for date filtering consistency
   
-  // Deep Focus integration
+  // Extension integration
+  extensionSessionId?: string;  // NEW - for deduplication
   deepFocusSessionId?: string;
   
   // Additional context
@@ -77,7 +79,21 @@ class OverrideSchemaSetup {
   } {
     const errors: string[] = [];
     
-    // Check required fields
+    // CRITICAL: NEW FORMAT VALIDATION - Block all old format sessions at schema level
+    if (!data.extensionSessionId) {
+      errors.push('🚫 [SCHEMA-PROTECTION] Missing required field: extensionSessionId (old format rejected)');
+    }
+    
+    if (!data.startTimeUTC) {
+      errors.push('🚫 [SCHEMA-PROTECTION] Missing required field: startTimeUTC (old format rejected)');
+    }
+    
+    // Validate extensionSessionId format
+    if (data.extensionSessionId && !data.extensionSessionId.startsWith('override_')) {
+      errors.push('🚫 [SCHEMA-PROTECTION] Invalid extensionSessionId format - must start with "override_"');
+    }
+    
+    // Check traditional required fields
     OverrideSessionValidation.required.forEach(field => {
       if (!data[field as keyof OverrideSessionSchema]) {
         errors.push(`Missing required field: ${field}`);
@@ -126,6 +142,15 @@ class OverrideSchemaSetup {
     
     if (data.deepFocusSessionId) {
       sanitizedData.deepFocusSessionId = data.deepFocusSessionId;
+    }
+    
+    // NEW: Preserve extension integration fields
+    if (data.extensionSessionId) {
+      sanitizedData.extensionSessionId = data.extensionSessionId;
+    }
+    
+    if (data.startTimeUTC) {
+      sanitizedData.startTimeUTC = data.startTimeUTC;
     }
     
     if (data.deviceInfo) {
