@@ -21,9 +21,6 @@ import { formatComparisonResult } from '../../utils/comparisonUtils';
 import { getProgressBarColor, extractDomain } from '../../utils/colorUtils';
 import type { ComparisonMetrics } from '../../types/deepFocus';
 
-import '../../utils/debugOverrideSession'; // Import for console access
-import '../../utils/debugExtensionCommunication'; // Import debug extension utility
-import '../../utils/debugOverrideSync'; // Import override sync debug utility
 
 import UsageLineChart from '../charts/UsageLineChart';
 import UsagePieChart from '../charts/UsagePieChart';

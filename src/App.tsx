@@ -39,50 +39,19 @@ import DataSyncPage from './components/pages/DataSyncPage';
 import PrivacyPolicyPage from './components/pages/PrivacyPolicyPage';
 import { PricingModal } from './components/pricing/PricingModal';
 import { ChatIntegrationService } from './services/chatIntegration';
-import { DebugMarkdown } from './debug-markdown';
 // LemonSqueezyClient removed - checkout now handled securely server-side
 import { usePricingStore } from './store/pricingStore';
 import { useDeepFocusStore } from './store/deepFocusStore';
 import { DeepFocusProvider, useDeepFocusContext } from './contexts/DeepFocusContext';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import SettingsDialogWrapper from './components/settings/SettingsDialogWrapper';
-import { testDeepFocusFixes } from './utils/testDeepFocusFix';
 import DeepFocusCleanup from './utils/deepFocusCleanup';
 import { useSimpleGoogleCalendarAuth } from './hooks/useSimpleGoogleCalendarAuth';
 import OAuthCallbackPage from './components/auth/OAuthCallbackPage';
 import './utils/resetMonitoring'; // Make resetUTCMonitoring available globally
 
-// Import test utilities in development mode
-if (process.env.NODE_ENV === 'development') {
-  import('./utils/testTaskDeletion');
-  import('./utils/authDebug'); // Import auth debugging utilities
-  import('./utils/debugTransitionService'); // Import transition service debugging
-  import('./utils/testEnhancedLegacySystem'); // Import enhanced legacy system testing
-}
-
 // Import cleanup utility for orphaned sessions
 import('./utils/cleanupSessions');
-
-// Import debug utilities in development
-if (process.env.NODE_ENV === 'development') {
-  import('./utils/debugCheckout');
-  import('./utils/testFirebaseFunction');
-  import('./utils/debugSessionSync'); // Import session sync debug tools
-  import('./utils/debugActiveSyncs'); // Import active sync debug tools
-  import('./utils/debugExtensionData'); // Import extension data debug tools
-  import('./utils/migrateToSessionData'); // Import migration utilities
-  import('./utils/debugFirebaseWrite'); // Import Firebase write debug tools
-  import('./utils/testFirebaseConnectivity'); // Import Firebase connectivity tests
-  import('./utils/debugExtensionStorage'); // Import extension storage debug tools
-  import('./utils/testExtensionProtocol'); // Import extension protocol testing
-  import('./utils/debugExtensionDataFlow'); // Import comprehensive extension debug tools
-}
-
-// Import auth guard test utilities in development mode
-if (process.env.NODE_ENV === 'development') {
-  import('./utils/testAuthGuard');
-  import('./utils/optimizationMonitor'); // Import database optimization monitor
-}
 
 // Feature flag controlled timer implementation
 const USE_WORKER_TIMERS = process.env.REACT_APP_USE_WORKER_TIMERS !== 'false';
@@ -123,10 +92,6 @@ const GlobalTabTitleUpdater: React.FC = () => {
       window.format = format;
       console.log('🔧 Debug modules exposed to window for timezone debugging');
       
-      // Load extension testing utilities
-      import('./utils/testExtensionPresence').catch(console.error);
-      import('./utils/debugExtensionDataFlow').catch(console.error);
-      import('./utils/debugExtensionStorage').catch(console.error);
     }
   }, []);
 
@@ -966,17 +931,6 @@ const App: React.FC = () => {
   }
 
   // Make test utility available globally for console debugging in development only
-  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-    (window as any).testDeepFocusFixes = testDeepFocusFixes;
-    
-    // Import debug functions and make them available globally in development
-    import('./utils/checkoutDebugger').then(({ debugCheckoutIssues, quickAuthCheck, manualCheckoutTest }) => {
-      (window as any).debugCheckout = debugCheckoutIssues;
-      (window as any).quickAuthCheck = quickAuthCheck;
-      (window as any).manualCheckoutTest = manualCheckoutTest;
-      console.log('🔍 Debug functions loaded! Try: debugCheckout(), quickAuthCheck(), or manualCheckoutTest()');
-    });
-  }
 
   return (
     <SettingsProvider>
@@ -997,7 +951,6 @@ const App: React.FC = () => {
               <Route path="support" element={<SupportPageWithLayout />} />
               <Route path="privacy-policy" element={<PrivacyPolicyPageWithLayout />} />
               <Route path="oauth/callback" element={<OAuthCallbackPage />} />
-              <Route path="debug-markdown" element={<DebugMarkdown />} />
             </Routes>
           </AnalyticsWrapper>
           <ToastContainer />
