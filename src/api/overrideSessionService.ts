@@ -22,6 +22,8 @@ export interface OverrideSession {
   createdAt: Date;
   url?: string;
   reason?: 'manual_override' | 'emergency' | 'break_time';
+  extensionSessionId?: string;  // NEW - for deduplication
+  startTimeUTC?: string;        // NEW - for date filtering
 }
 
 class OverrideSessionService {
@@ -34,7 +36,33 @@ class OverrideSessionService {
     deepFocusSessionId?: string;
     url?: string;
     reason?: 'manual_override' | 'emergency' | 'break_time';
+    extensionSessionId?: string;  // NEW - for deduplication
+    startTimeUTC?: string;        // NEW - for date filtering
   }): Promise<string> {
+    // SERVICE-LEVEL LEGACY PROTECTION - Block all old format sessions
+    // This prevents legacy sessions from ANY entry point reaching Firebase
+    const isLegacySession = !data.extensionSessionId || !data.startTimeUTC;
+    
+    if (isLegacySession) {
+      const errorMessage = `🚫 [LEGACY-PROTECTION] Rejected old format override session for ${data.domain} - missing required fields`;
+      console.warn(errorMessage, {
+        domain: data.domain,
+        hasExtensionSessionId: !!data.extensionSessionId,
+        hasStartTimeUTC: !!data.startTimeUTC,
+        reason: data.reason || 'manual_override'
+      });
+      throw new Error(errorMessage);
+    }
+
+    // Verify extensionSessionId format for extra protection
+    if (data.extensionSessionId && !data.extensionSessionId.startsWith('override_')) {
+      const errorMessage = `🚫 [FORMAT-PROTECTION] Invalid extensionSessionId format for ${data.domain}`;
+      console.warn(errorMessage, { extensionSessionId: data.extensionSessionId });
+      throw new Error(errorMessage);
+    }
+
+    console.log(`✅ [NEW-FORMAT] Processing valid override session: ${data.extensionSessionId}`);
+
     // Use the validated schema setup
     const result = await overrideSchemaSetup.createValidatedOverrideSession(data);
     
@@ -49,7 +77,7 @@ class OverrideSessionService {
 
   async getUserOverrides(userId: string, startDate?: Date, endDate?: Date): Promise<OverrideSession[]> {
     try {
-      let q = query(
+      const q = query(
         collection(db, this.collectionName),
         where('userId', '==', userId),
         orderBy('createdAt', 'desc')

@@ -7,6 +7,8 @@ import { siteUsageSessionService } from '../api/siteUsageSessionService';
 import { overrideSessionService } from '../api/overrideSessionService';
 import { useUserStore } from '../store/userStore';
 import { SiteUsageSession, ExtensionSiteUsageSession, SessionManager } from '../utils/SessionManager';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../api/firebase';
 
 class ExtensionSyncListener {
   private isInitialized = false;
@@ -103,13 +105,33 @@ class ExtensionSyncListener {
 
       // Separate override sessions from site usage sessions
       const siteUsageSessions = validExtensionSessions.filter(session => session.type !== 'override');
-      const overrideSessions = validExtensionSessions.filter(session => session.type === 'override');
+      const allOverrideSessions = validExtensionSessions.filter(session => session.type === 'override');
       
-      console.log(`📊 [SYNC-PROTECTION] Found ${siteUsageSessions.length} site usage sessions and ${overrideSessions.length} override sessions`);
+      // Filter out old format override sessions - only process sessions with new format
+      const overrideSessions = allOverrideSessions.filter(session => {
+        const hasNewFormat = session.startTimeUTC && session.id;
+        if (!hasNewFormat) {
+          console.log('🚫 [LEGACY-FILTER] Skipping old format override session:', {
+            domain: session.domain,
+            hasStartTimeUTC: !!session.startTimeUTC,
+            hasId: !!session.id,
+            hasOldStartTime: !!session.startTime
+          });
+        }
+        return hasNewFormat;
+      });
+      
+      console.log(`📊 [SYNC-PROTECTION] Found ${siteUsageSessions.length} site usage sessions and ${overrideSessions.length} new format override sessions (${allOverrideSessions.length - overrideSessions.length} legacy filtered)`);
       
       // Debug: Log session types for troubleshooting
       if (overrideSessions.length > 0) {
-        console.log('🔍 Override sessions to sync:', overrideSessions.map(s => ({ domain: s.domain, duration: s.duration, type: s.type })));
+        console.log('🔍 New format override sessions to sync:', overrideSessions.map(s => ({ 
+          domain: s.domain, 
+          duration: s.duration, 
+          type: s.type,
+          hasStartTimeUTC: !!s.startTimeUTC,
+          id: s.id 
+        })));
       }
 
       // Process site usage sessions
@@ -127,9 +149,44 @@ class ExtensionSyncListener {
       if (overrideSessions.length > 0) {
         console.log(`📊 Syncing ${overrideSessions.length} override sessions to Firebase`);
         
+        // DIAGNOSTIC: Check for duplicates in sync payload
+        console.log('🔍 [DIAGNOSTIC] Processing override sessions:', {
+          count: overrideSessions.length,
+          sessionIds: overrideSessions.map(s => s.id || 'NO_ID'),
+          extensionSessionIds: overrideSessions.map(s => s.extensionSessionId || 'NO_EXT_ID'),
+          domains: overrideSessions.map(s => s.domain),
+          startTimes: overrideSessions.map(s => s.startTime || 'NO_START_TIME'),
+          fullSessions: overrideSessions.map(s => ({
+            id: s.id,
+            extensionSessionId: s.extensionSessionId,
+            domain: s.domain,
+            startTime: s.startTime,
+            duration: s.duration
+          }))
+        });
+        
+        // Database-level deduplication - check Firebase before creating
+        let duplicateCount = 0;
+        let createdCount = 0;
+
         for (const overrideSession of overrideSessions) {
           try {
-            const durationMinutes = Math.round(overrideSession.duration / 60); // Convert seconds to minutes
+            // Check if extensionSessionId already exists in Firebase
+            const existingQuery = query(
+              collection(db, 'overrideSessions'),
+              where('extensionSessionId', '==', overrideSession.id),
+              where('userId', '==', overrideSession.userId)
+            );
+            
+            const existingDocs = await getDocs(existingQuery);
+            if (!existingDocs.empty) {
+              duplicateCount++;
+              console.log('🔄 [DEDUP] Override session already exists in Firebase:', overrideSession.id);
+              continue;
+            }
+
+            // Create new session with all required fields
+            const durationMinutes = Math.round(overrideSession.duration / 60);
             console.log(`🔄 Creating override session for ${overrideSession.domain} (${durationMinutes} minutes)`);
             
             const docId = await overrideSessionService.createOverrideSession({
@@ -137,16 +194,25 @@ class ExtensionSyncListener {
               domain: overrideSession.domain,
               duration: durationMinutes,
               url: overrideSession.url || overrideSession.domain,
-              reason: 'manual_override'
+              reason: 'manual_override',
+              extensionSessionId: overrideSession.id,
+              startTimeUTC: overrideSession.startTimeUTC
             });
             
-            console.log(`✅ Synced override session for ${overrideSession.domain} to Firebase (doc ID: ${docId})`);
+            createdCount++;
+            console.log(`✅ [SYNC] Override session created: ${overrideSession.id} (doc ID: ${docId})`);
           } catch (error) {
-            console.error(`❌ Failed to sync override session for ${overrideSession.domain}:`, error);
+            console.error(`❌ [SYNC] Failed to process override session: ${overrideSession.id}`, error);
           }
         }
-        
-        console.log(`✅ Successfully processed ${overrideSessions.length} override sessions`);
+
+        console.log(`📊 [DEDUP] Results: ${createdCount} created, ${duplicateCount} duplicates prevented out of ${overrideSessions.length} total`);
+      }
+
+      // Log legacy filtering results
+      const legacyFilteredCount = allOverrideSessions.length - overrideSessions.length;
+      if (legacyFilteredCount > 0) {
+        console.log(`🚫 [LEGACY-PROTECTION] Filtered out ${legacyFilteredCount} old format override sessions to prevent duplicates`);
       }
       
       console.log(`✅ [SYNC-PROTECTION] Successfully synced all sessions to Firebase`);
