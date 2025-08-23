@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>10000Hours - Deep Focus</title>
+  <link rel="stylesheet" href="popup.css">
+  <!-- CSS will be loaded dynamically to ensure correct paths -->
+  
+  <!-- Load dateUtils first -->
+  <script src="../utils/dateUtils.js"></script>
+  <!-- Load ExtensionEventBus -->
+  <script src="../utils/ExtensionEventBus.js"></script>
+  <script src="../utils/MessageQueueManager.js"></script>
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="title-focus-container">
+        <div class="logo-text animated-title">10000Hours</div>
+        <label class="deep-focus-switch">
+          <input type="checkbox" id="focus-mode-toggle">
+          <div class="switch-container">
+            <span class="switch-text">Deep Focus</span>
+          </div>
+          <div class="switch-toggle"></div>
+        </label>
+      </div>
+    </header>
+
+    <!-- Divider -->
+    <div class="divider"></div>
+
+    <!-- User Info Section -->
+    <div class="user-info-section">
+      <div id="user-info" class="user-info hidden">
+        <div class="user-details-container">
+          <div class="user-details-text">
+            <span id="user-name">Ngoc phuc</span>'s today usage:
+          </div>
+          <button id="view-all-btn-logged-in" class="link-button">
+            Detail Progress
+            <i class="ri-arrow-right-s-line"></i>
+          </button>
+        </div>
+      </div>
+      <div id="no-user-info" class="no-user-info">
+        <div class="user-details-container">
+          <div class="user-details-text">Anonymous's today usage:</div>
+          <button id="view-all-btn-anonymous" class="link-button">
+            Sign Up
+            <i class="ri-arrow-right-s-line"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats Overview -->
+    <section class="stats-overview">
+      <div class="stat-card blue">
+        <div class="stat-icon">
+          <i class="ri-computer-line"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-label">On Screen Time</div>
+          <div id="total-time" class="stat-value">0h 0m</div>
+        </div>
+      </div>
+      
+      <div class="stat-card red">
+        <div class="stat-icon">
+          <i class="ri-focus-3-line"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-label">Deep Focus Time</div>
+          <div id="deep-focus-time" class="stat-value">0m</div>
+        </div>
+      </div>
+      
+      <div class="stat-card orange">
+        <div class="stat-icon">
+          <i class="ri-time-line"></i>
+        </div>
+                  <div class="stat-content">
+          <div class="stat-label">Override&#10;Time</div>
+          <div id="override-time" class="stat-value">0m</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab Navigation -->
+    <nav class="tab-navigation">
+      <button class="tab-btn active" data-tab="site-usage">
+        <i class="ri-bar-chart-2-line"></i>
+        <span>Site Usage</span>
+      </button>
+      <button class="tab-btn" data-tab="blocking-sites">
+        <i class="ri-shield-line"></i>
+        <span>Blocking Sites</span>
+      </button>
+    </nav>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+      <!-- Site Usage Tab -->
+      <div id="site-usage-tab" class="tab-pane active">
+        <div class="tab-content-wrapper">
+          <div id="top-sites-list" class="sites-list">
+            <!-- Site cards will be populated by JavaScript -->
+            <div class="loading-state hidden">
+              <div class="loading-spinner"></div>
+              <div class="loading-text">Loading stats...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Blocking Sites Tab -->
+      <div id="blocking-sites-tab" class="tab-pane">
+        <div class="tab-content-wrapper">
+          <div id="blocked-sites-list" class="blocked-sites-list">
+            <!-- Blocked sites will be populated by JavaScript -->
+          </div>
+          <button id="block-current-site" class="add-site-btn current-site">
+            <i class="ri-shield-line"></i>
+            <span>Block Current Site</span>
+          </button>
+          <button id="add-site-btn" class="add-site-btn">
+            <i class="ri-add-line"></i>
+            <span>Add to Blocking Sites</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden Elements for Functionality -->
+    <div class="hidden-elements">
+      <!-- These elements are needed for existing JavaScript functionality -->
+      <div id="tracking-status" class="status-indicator">
+        <span class="status-dot"></span>
+        <span class="status-text">Tracking</span>
+      </div>
+      <div id="focus-mode-indicator" class="status-indicator hidden">
+        <span class="focus-icon">🔒</span>
+        <span class="status-text">Focus Mode</span>
+      </div>
+      <div id="user-avatar-text" class="avatar-text">?</div>
+      <div id="user-email" class="user-email">No user connected</div>
+      <div id="sync-indicator" class="sync-dot"></div>
+      <div id="sites-visited" class="stat-value">0</div>
+      <div id="productivity-score" class="stat-value">0%</div>
+      <div id="session-timer" class="session-timer">00:00</div>
+      <div id="current-site" class="current-site">
+        <div class="site-info">
+          <div class="site-icon">🌐</div>
+          <div class="site-details">
+            <div class="site-name">No active site</div>
+            <div class="site-time">Not tracking</div>
+          </div>
+        </div>
+      </div>
+      <div id="activity-status" class="activity-status">
+        <div class="activity-indicator">
+          <span id="activity-dot" class="activity-dot active"></span>
+          <span id="activity-text" class="activity-text">Active</span>
+        </div>
+        <div id="pause-info" class="pause-info hidden">
+          <span class="pause-icon">⏸️</span>
+          <span id="pause-duration" class="pause-duration">Paused for 0s</span>
+        </div>
+      </div>
+      <input type="checkbox" id="auto-management-toggle" checked>
+      <button id="settings-btn" class="secondary-btn">Settings</button>
+      <button id="export-data-btn" class="secondary-btn">Export Data</button>
+      <button id="help-btn" class="footer-link">Help</button>
+      <button id="feedback-btn" class="footer-link">Feedback</button>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Modal Title</h3>
+        <button id="modal-close" class="modal-close">×</button>
+      </div>
+      <div id="modal-content" class="modal-content">
+        <!-- Dynamic content -->
+      </div>
+      <div class="modal-footer">
+        <button id="modal-cancel" class="btn secondary">Cancel</button>
+        <button id="modal-confirm" class="btn primary">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div id="loading-overlay" class="loading-overlay hidden">
+    <div class="loading-spinner large"></div>
+    <div class="loading-text">Processing...</div>
+  </div>
+
+  <!-- Firebase integration removed for Chrome Web Store compliance -->
+
+  <!-- Component Scripts -->
+  <script src="/components/chartComponents.js"></script>
+  <script src="/components/analyticsUI.js"></script>
+  
+  <!-- Load fixes first -->
+  <script src="favicon-fix.js"></script>
+  <script src="icon-fix.js"></script>
+  
+  <!-- Load application scripts after all dependencies -->
+  <script src="popup.js"></script>
+  
+  <!-- Load favicon hybrid test script -->
+  <script src="test-favicon-hybrid.js"></script>
+
+  <!-- Site Usage Item Template -->
+  <template id="site-item-template">
+    <div class="site-item">
+      <div class="site-item-header">
+        <div class="site-icon-container">
+          <img class="site-icon" src="" alt="" loading="lazy">
+          <div class="site-icon-fallback hidden">
+            <i class="ri-global-line"></i>
+          </div>
+        </div>
+        <div class="site-info">
+          <div class="site-name"></div>
+          <div class="site-sessions"></div>
+        </div>
+        <div class="site-stats">
+          <div class="site-duration"></div>
+          <div class="site-percentage"></div>
+        </div>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill"></div>
+      </div>
+    </div>
+  </template>
+</body>
+</html> 

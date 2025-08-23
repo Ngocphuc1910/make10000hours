@@ -194,18 +194,50 @@ class ExtensionSyncListener {
   private async performSync(): Promise<void> {
     try {
       console.log('🔄 Requesting extension sync via postMessage...');
-      // Use postMessage to communicate with extension
+      // Use postMessage to communicate with extension for site usage
       window.postMessage({ 
         type: 'REQUEST_SITE_USAGE_SESSIONS', 
         source: 'web-app',
         timestamp: new Date().toISOString()
       }, '*');
       
+      // Also trigger deep focus sync manually since extension doesn't have automatic batch messages
+      console.log('🎯 Triggering deep focus sync...');
+      await this.triggerDeepFocusSync();
+      
       // Give extension time to respond
       await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (error) {
       console.warn('⚠️ Could not trigger extension sync:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Manually trigger deep focus session sync
+   */
+  private async triggerDeepFocusSync(): Promise<void> {
+    try {
+      const userStore = await import('../store/userStore');
+      const user = userStore.useUserStore.getState().user;
+      
+      if (!user?.uid) {
+        console.log('⚠️ No authenticated user for deep focus sync');
+        return;
+      }
+      
+      console.log('🎯 Starting deep focus sync for user:', user.uid);
+      const { DeepFocusSync } = await import('../services/deepFocusSync');
+      const result = await DeepFocusSync.smartSync(user.uid, 'today');
+      
+      if (result.success) {
+        console.log(`✅ Deep focus sync completed: ${result.syncedSessions} sessions synced`);
+      } else {
+        console.warn('⚠️ Deep focus sync failed:', result.error);
+      }
+      
+    } catch (error) {
+      console.error('❌ Deep focus sync error:', error);
     }
   }
 

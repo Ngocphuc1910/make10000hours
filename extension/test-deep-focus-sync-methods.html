@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Focus Sync Methods Test</title>
+    <style>
+        body { 
+            font-family: monospace; 
+            padding: 20px; 
+            background: #1a1a1a; 
+            color: #fff;
+        }
+        .test-result { 
+            margin: 10px 0; 
+            padding: 10px; 
+            border-radius: 5px; 
+        }
+        .pass { background: #2d4a2d; }
+        .fail { background: #4a2d2d; }
+        .info { background: #2d3a4a; }
+        pre { 
+            background: #2a2a2a; 
+            padding: 10px; 
+            border-radius: 3px; 
+            overflow-x: auto;
+        }
+        button {
+            background: #4a90e2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover { background: #357abd; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Deep Focus Sync Methods Test</h1>
+    <div id="status">Initializing...</div>
+    
+    <div>
+        <button onclick="runAllTests()">Run All Tests</button>
+        <button onclick="testValidation()">Test Validation</button>
+        <button onclick="testBackup()">Test Backup</button>
+        <button onclick="testRestore()">Test Restore</button>
+        <button onclick="testSyncStatus()">Test Sync Status</button>
+        <button onclick="testDiagnostics()">Test Diagnostics</button>
+        <button onclick="testReset()">Test Reset</button>
+    </div>
+
+    <div id="results"></div>
+
+    <!-- Load the StorageManager -->
+    <script src="utils/storage.js"></script>
+    
+    <script>
+        let storageManager;
+        let testResults = [];
+
+        function log(message, type = 'info') {
+            console.log(message);
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            document.getElementById('results').appendChild(div);
+        }
+
+        function logResult(testName, success, details = '') {
+            const status = success ? '✅ PASS' : '❌ FAIL';
+            const type = success ? 'pass' : 'fail';
+            log(`${status}: ${testName}${details ? '<br><pre>' + JSON.stringify(details, null, 2) + '</pre>' : ''}`, type);
+            testResults.push({ testName, success, details });
+        }
+
+        async function initializeStorageManager() {
+            try {
+                // Mock chrome.storage.local for testing
+                if (typeof chrome === 'undefined') {
+                    window.chrome = {
+                        storage: {
+                            local: {
+                                data: {},
+                                get: function(keys) {
+                                    return new Promise((resolve) => {
+                                        if (!keys) {
+                                            resolve(this.data);
+                                        } else if (Array.isArray(keys)) {
+                                            const result = {};
+                                            keys.forEach(key => {
+                                                if (key in this.data) {
+                                                    result[key] = this.data[key];
+                                                }
+                                            });
+                                            resolve(result);
+                                        } else if (typeof keys === 'object') {
+                                            const result = {};
+                                            Object.keys(keys).forEach(key => {
+                                                result[key] = this.data[key] || keys[key];
+                                            });
+                                            resolve(result);
+                                        } else {
+                                            const result = {};
+                                            if (keys in this.data) {
+                                                result[keys] = this.data[keys];
+                                            }
+                                            resolve(result);
+                                        }
+                                    });
+                                },
+                                set: function(items) {
+                                    return new Promise((resolve) => {
+                                        Object.assign(this.data, items);
+                                        resolve();
+                                    });
+                                },
+                                remove: function(keys) {
+                                    return new Promise((resolve) => {
+                                        if (Array.isArray(keys)) {
+                                            keys.forEach(key => delete this.data[key]);
+                                        } else {
+                                            delete this.data[keys];
+                                        }
+                                        resolve();
+                                    });
+                                }
+                            }
+                        },
+                        runtime: {
+                            id: 'test-extension-id'
+                        }
+                    };
+                }
+
+                // Set up test data
+                await chrome.storage.local.set({
+                    userInfo: {
+                        uid: 'test-user-123',
+                        email: 'test@example.com',
+                        timezone: 'America/New_York'
+                    },
+                    deepFocusSession: {
+                        '2025-08-22': [{
+                            id: 'test-session-123',
+                            userId: 'test-user-123',
+                            startTime: Date.now() - 3600000,
+                            startTimeUTC: new Date(Date.now() - 3600000).toISOString(),
+                            timezone: 'America/New_York',
+                            utcDate: '2025-08-22',
+                            duration: 30,
+                            status: 'completed',
+                            createdAt: Date.now() - 3600000,
+                            updatedAt: Date.now()
+                        }]
+                    }
+                });
+
+                storageManager = new StorageManager();
+                await storageManager.initialize();
+                
+                log('✅ StorageManager initialized successfully', 'pass');
+                document.getElementById('status').textContent = 'Ready - StorageManager initialized';
+                return true;
+            } catch (error) {
+                log(`❌ StorageManager initialization failed: ${error.message}`, 'fail');
+                document.getElementById('status').textContent = `Error: ${error.message}`;
+                return false;
+            }
+        }
+
+        async function testValidation() {
+            try {
+                log('🔍 Testing VALIDATE_DEEP_FOCUS_DATA...', 'info');
+                const result = await storageManager.validateDeepFocusData();
+                
+                logResult('validateDeepFocusData method exists', typeof storageManager.validateDeepFocusData === 'function');
+                logResult('validateDeepFocusData returns result', !!result);
+                logResult('validateDeepFocusData success', result.success === true);
+                logResult('validateDeepFocusData has validation object', !!result.validation);
+                
+                if (result.validation) {
+                    logResult('Validation finds test session', result.validation.stats.totalSessions > 0, result.validation.stats);
+                }
+                
+                return result;
+            } catch (error) {
+                logResult('validateDeepFocusData', false, error.message);
+                return null;
+            }
+        }
+
+        async function testBackup() {
+            try {
+                log('💾 Testing BACKUP_DEEP_FOCUS_DATA...', 'info');
+                const result = await storageManager.backupDeepFocusData();
+                
+                logResult('backupDeepFocusData method exists', typeof storageManager.backupDeepFocusData === 'function');
+                logResult('backupDeepFocusData returns result', !!result);
+                logResult('backupDeepFocusData success', result.success === true);
+                logResult('backupDeepFocusData has backupKey', !!result.backupKey);
+                
+                if (result.backupKey) {
+                    // Verify backup was stored
+                    const storage = await chrome.storage.local.get([result.backupKey]);
+                    logResult('Backup stored in chrome storage', !!storage[result.backupKey]);
+                    
+                    // Store backup key for restore test
+                    window.testBackupKey = result.backupKey;
+                }
+                
+                return result;
+            } catch (error) {
+                logResult('backupDeepFocusData', false, error.message);
+                return null;
+            }
+        }
+
+        async function testRestore() {
+            try {
+                log('🔄 Testing RESTORE_DEEP_FOCUS_DATA...', 'info');
+                
+                if (!window.testBackupKey) {
+                    log('⚠️ No backup key available, creating backup first...', 'info');
+                    await testBackup();
+                }
+                
+                const result = await storageManager.restoreDeepFocusData(window.testBackupKey);
+                
+                logResult('restoreDeepFocusData method exists', typeof storageManager.restoreDeepFocusData === 'function');
+                logResult('restoreDeepFocusData returns result', !!result);
+                logResult('restoreDeepFocusData success', result.success === true);
+                logResult('restoreDeepFocusData has restoredItems', !!result.restoredItems);
+                
+                return result;
+            } catch (error) {
+                logResult('restoreDeepFocusData', false, error.message);
+                return null;
+            }
+        }
+
+        async function testSyncStatus() {
+            try {
+                log('📊 Testing SYNC_DEEP_FOCUS_STATUS...', 'info');
+                const result = await storageManager.syncDeepFocusStatus();
+                
+                logResult('syncDeepFocusStatus method exists', typeof storageManager.syncDeepFocusStatus === 'function');
+                logResult('syncDeepFocusStatus returns result', !!result);
+                logResult('syncDeepFocusStatus success', result.success === true);
+                logResult('syncDeepFocusStatus has status', !!result.status);
+                
+                if (result.status) {
+                    logResult('Sync status shows authenticated user', result.status.user.authenticated === true, result.status);
+                }
+                
+                return result;
+            } catch (error) {
+                logResult('syncDeepFocusStatus', false, error.message);
+                return null;
+            }
+        }
+
+        async function testDiagnostics() {
+            try {
+                log('🔧 Testing GET_DEEP_FOCUS_DIAGNOSTICS...', 'info');
+                const result = await storageManager.getDeepFocusDiagnostics();
+                
+                logResult('getDeepFocusDiagnostics method exists', typeof storageManager.getDeepFocusDiagnostics === 'function');
+                logResult('getDeepFocusDiagnostics returns result', !!result);
+                logResult('getDeepFocusDiagnostics success', result.success === true);
+                logResult('getDeepFocusDiagnostics has diagnostics', !!result.diagnostics);
+                
+                if (result.diagnostics) {
+                    logResult('Diagnostics shows health status', !!result.diagnostics.health.status, result.diagnostics.health);
+                }
+                
+                return result;
+            } catch (error) {
+                logResult('getDeepFocusDiagnostics', false, error.message);
+                return null;
+            }
+        }
+
+        async function testReset() {
+            try {
+                log('🗑️ Testing RESET_DEEP_FOCUS_STORAGE...', 'info');
+                
+                // First test without confirmation code
+                const result1 = await storageManager.resetDeepFocusStorage();
+                logResult('resetDeepFocusStorage method exists', typeof storageManager.resetDeepFocusStorage === 'function');
+                logResult('resetDeepFocusStorage requires confirmation', result1.success === false);
+                logResult('resetDeepFocusStorage provides confirmation code', !!result1.confirmationCodeRequired);
+                
+                // Test with force bypass
+                const result2 = await storageManager.resetDeepFocusStorage('FORCE_RESET_CONFIRMED');
+                logResult('resetDeepFocusStorage works with bypass', result2.success === true);
+                logResult('resetDeepFocusStorage creates backup', !!result2.finalBackup);
+                
+                return result2;
+            } catch (error) {
+                logResult('resetDeepFocusStorage', false, error.message);
+                return null;
+            }
+        }
+
+        async function runAllTests() {
+            testResults = [];
+            document.getElementById('results').innerHTML = '';
+            
+            log('🚀 Starting comprehensive Deep Focus sync methods test...', 'info');
+            
+            const initSuccess = await initializeStorageManager();
+            if (!initSuccess) return;
+            
+            await testValidation();
+            await testBackup();
+            await testRestore();
+            await testSyncStatus();
+            await testDiagnostics();
+            await testReset();
+            
+            // Summary
+            const passed = testResults.filter(r => r.success).length;
+            const failed = testResults.filter(r => !r.success).length;
+            const total = testResults.length;
+            
+            log(`🎯 TEST SUMMARY: ${passed}/${total} passed (${failed} failed)`, 
+                failed === 0 ? 'pass' : 'fail');
+                
+            if (failed === 0) {
+                log('🎉 ALL TESTS PASSED - Deep Focus sync methods are working correctly!', 'pass');
+            } else {
+                log('❌ Some tests failed - review the results above', 'fail');
+            }
+        }
+
+        // Initialize when page loads
+        window.onload = async function() {
+            await initializeStorageManager();
+        };
+    </script>
+</body>
+</html>

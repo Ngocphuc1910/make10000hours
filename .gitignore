@@ -238,6 +238,19 @@ extension-dist/
 *.crx
 *.xpi
 
+# Test and backup artifacts
+extension/test-*.html
+extension/test-*.js
+*.backup-*
+*-backup-*
+backups/
+rollback-scripts/
+deep-focus-sync-rollback.sh
+
+# Deep Focus specific backups
+deepFocusBackup_*
+deep-focus-backup-*
+
 # Mobile builds
 *.ipa
 *.apk

@@ -70,7 +70,17 @@ function checkForSecrets() {
     'const weekKey =',
     'const monthKey =',
     'refreshToken: \'BACKEND_MANAGED\'',
-    'accessToken: \'BACKEND_MANAGED\''
+    'accessToken: \'BACKEND_MANAGED\'',
+    // Deep Focus specific safe patterns
+    'backupKey: "deepFocusBackup_',  // Documentation examples
+    'expectedKey = \'RESET_DEEP_FOCUS_\'',  // Dynamic key construction
+    'backupKey: \'test-backup-key\'',  // Test mock values
+    'RESET_DEEP_FOCUS_',  // Reset confirmation prefix
+    'deepFocusBackup_',  // Backup key prefix
+    'test-backup',  // Test file patterns
+    'mock-',  // Mock data prefixes
+    'example-',  // Example values
+    'sample-'  // Sample values
   ];
 
   try {

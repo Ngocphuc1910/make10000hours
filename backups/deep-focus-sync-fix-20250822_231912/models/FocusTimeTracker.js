@@ -170,55 +170,6 @@ class FocusTimeTracker {
           await this.handleDeleteDeepFocusSession(message, sendResponse);
           break;
 
-        case 'VALIDATE_DEEP_FOCUS_DATA':
-          await this.handleValidateDeepFocusData(message, sendResponse);
-          break;
-
-        case 'BACKUP_DEEP_FOCUS_DATA':
-          await this.handleBackupDeepFocusData(message, sendResponse);
-          break;
-
-        case 'RESTORE_DEEP_FOCUS_DATA':
-          await this.handleRestoreDeepFocusData(message, sendResponse);
-          break;
-
-        case 'SYNC_DEEP_FOCUS_STATUS':
-          await this.handleSyncDeepFocusStatus(message, sendResponse);
-          break;
-
-        case 'RESET_DEEP_FOCUS_STORAGE':
-          await this.handleResetDeepFocusStorage(message, sendResponse);
-          break;
-
-        case 'GET_DEEP_FOCUS_DIAGNOSTICS':
-          await this.handleGetDeepFocusDiagnostics(message, sendResponse);
-          break;
-
-        // SURGICAL FIXES: Add missing handlers for ExtensionDataService integration
-        case 'GET_DEEP_FOCUS_SESSIONS_DATE_RANGE':
-          await this.handleGetDeepFocusSessionsDateRange(message, sendResponse);
-          break;
-
-        case 'GET_TODAY_DEEP_FOCUS_SESSIONS':
-          await this.handleGetTodayDeepFocusSessions(message, sendResponse);
-          break;
-
-        case 'GET_ACTIVE_DEEP_FOCUS_SESSION':
-          await this.handleGetActiveDeepFocusSession(message, sendResponse);
-          break;
-
-        case 'GET_ALL_DEEP_FOCUS_SESSIONS':
-          await this.handleGetAllDeepFocusSessions(message, sendResponse);
-          break;
-
-        case 'GET_RECENT_7_DAYS_DEEP_FOCUS_SESSIONS':
-          await this.handleGetRecent7DaysDeepFocusSessions(message, sendResponse);
-          break;
-
-        case 'GET_LAST_10_DEEP_FOCUS_SESSIONS':
-          await this.handleGetLast10DeepFocusSessions(message, sendResponse);
-          break;
-
         default:
           // Not a Deep Focus message, ignore
           return false;
@@ -381,7 +332,8 @@ class FocusTimeTracker {
 
       sendResponse({
         success: true,
-        session: sessionId,
+        sessionId: sessionId,
+        data: { sessionId },
         message: 'Deep focus session created'
       });
     } catch (error) {
@@ -408,7 +360,8 @@ class FocusTimeTracker {
 
       sendResponse({
         success: true,
-        result: result,
+        completed: result,
+        data: { completed: result },
         message: 'Deep focus session completed'
       });
     } catch (error) {
@@ -429,12 +382,198 @@ class FocusTimeTracker {
         success: true,
         time: timeMs,
         timeMinutes: sessionData.minutes,
-        data: { minutes: sessionData.minutes },
-        sessions: sessionData.sessions,
-        date: sessionData.date
+        data: { 
+          minutes: sessionData.minutes,
+          sessions: sessionData.sessions,
+          date: sessionData.date 
+        },
+        message: 'Local deep focus time retrieved successfully'
       });
     } catch (error) {
       console.error('❌ Get local deep focus time error:', error);
+      sendResponse({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Handle UPDATE_DEEP_FOCUS_SESSION - Update session duration in real-time
+   */
+  async handleUpdateDeepFocusSession(message, sendResponse) {
+    try {
+      const { sessionId, duration } = message.payload || {};
+      
+      // Validate input
+      if (!sessionId) {
+        return sendResponse({ success: false, error: 'Session ID is required' });
+      }
+      
+      if (typeof duration !== 'number' || duration < 0) {
+        return sendResponse({ success: false, error: 'Duration must be a non-negative number' });
+      }
+      
+      // Update the session duration
+      const updated = await this.storageManager.updateDeepFocusSessionDuration(sessionId, Math.floor(duration));
+      
+      if (updated) {
+        // Update central state
+        await this.stateManager.dispatch({
+          type: 'SESSION_UPDATED',
+          payload: { sessionId, duration }
+        });
+        
+        sendResponse({
+          success: true,
+          sessionId: sessionId,
+          duration: Math.floor(duration),
+          message: 'Deep focus session updated successfully'
+        });
+      } else {
+        sendResponse({ success: false, error: 'Session not found or update failed' });
+      }
+      
+    } catch (error) {
+      console.error('❌ Update deep focus session error:', error);
+      sendResponse({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Handle GET_DEEP_FOCUS_SESSIONS - Retrieve sessions by date range
+   */
+  async handleGetDeepFocusSessions(message, sendResponse) {
+    try {
+      const { startDate, endDate, includeActive = false } = message.payload || {};
+      
+      let sessions = [];
+      
+      if (startDate && endDate) {
+        // Get sessions by date range
+        sessions = await this.storageManager.getSessionsByDateRange(startDate, endDate);
+      } else if (startDate) {
+        // Get sessions for a specific date
+        sessions = await this.storageManager.getDeepFocusSessionsForDate(startDate);
+      } else {
+        // Get today's sessions by default
+        const today = new Date().toISOString().split('T')[0];
+        sessions = await this.storageManager.getDeepFocusSessionsForDate(today);
+      }
+      
+      // Filter active sessions if requested
+      if (includeActive) {
+        const activeSessions = await this.storageManager.getAllActiveSessions();
+        // Merge and deduplicate
+        const allSessions = [...sessions];
+        activeSessions.forEach(activeSession => {
+          if (!allSessions.find(s => s.id === activeSession.id)) {
+            allSessions.push(activeSession);
+          }
+        });
+        sessions = allSessions;
+      }
+      
+      // Calculate summary statistics
+      const totalDuration = sessions.reduce((sum, session) => sum + (session.duration || 0), 0);
+      const completedSessions = sessions.filter(s => s.status === 'completed');
+      const activeSessions = sessions.filter(s => s.status === 'active');
+      
+      sendResponse({
+        success: true,
+        sessions: sessions,
+        totalSessions: sessions.length,
+        totalDuration: totalDuration,
+        completedSessions: completedSessions.length,
+        activeSessions: activeSessions.length,
+        dateRange: startDate && endDate ? { start: startDate, end: endDate } : null,
+        message: `Retrieved ${sessions.length} deep focus sessions`
+      });
+      
+    } catch (error) {
+      console.error('❌ Get deep focus sessions error:', error);
+      sendResponse({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Handle DELETE_DEEP_FOCUS_SESSION - Remove invalid/test sessions
+   */
+  async handleDeleteDeepFocusSession(message, sendResponse) {
+    try {
+      const { sessionId, reason = 'manual_deletion' } = message.payload || {};
+      
+      // Validate input
+      if (!sessionId) {
+        return sendResponse({ success: false, error: 'Session ID is required' });
+      }
+      
+      // Security check - only allow deletion of certain types of sessions
+      const validReasons = ['test_session', 'corrupted_data', 'manual_deletion', 'admin_cleanup'];
+      if (!validReasons.includes(reason)) {
+        return sendResponse({ success: false, error: 'Invalid deletion reason' });
+      }
+      
+      // Get current sessions to find the target session
+      const storage = await chrome.storage.local.get(['deepFocusSession']);
+      const allSessions = storage.deepFocusSession || {};
+      
+      let sessionFound = false;
+      let deletedSession = null;
+      
+      // Find and remove the session
+      for (const date in allSessions) {
+        const sessions = allSessions[date];
+        const sessionIndex = sessions.findIndex(s => s.id === sessionId);
+        
+        if (sessionIndex !== -1) {
+          deletedSession = sessions[sessionIndex];
+          
+          // Additional security checks
+          if (deletedSession.status === 'active' && reason !== 'admin_cleanup') {
+            return sendResponse({ success: false, error: 'Cannot delete active sessions without admin privileges' });
+          }
+          
+          // Remove the session
+          sessions.splice(sessionIndex, 1);
+          
+          // Remove the date entry if no sessions remain
+          if (sessions.length === 0) {
+            delete allSessions[date];
+          }
+          
+          sessionFound = true;
+          break;
+        }
+      }
+      
+      if (!sessionFound) {
+        return sendResponse({ success: false, error: 'Session not found' });
+      }
+      
+      // Save updated sessions
+      await chrome.storage.local.set({ deepFocusSession: allSessions });
+      
+      // Update central state
+      await this.stateManager.dispatch({
+        type: 'SESSION_DELETED',
+        payload: { sessionId, reason }
+      });
+      
+      console.log(`🗑️ Deleted deep focus session ${sessionId} (reason: ${reason})`);
+      
+      sendResponse({
+        success: true,
+        sessionId: sessionId,
+        deletedSession: {
+          id: deletedSession.id,
+          duration: deletedSession.duration,
+          status: deletedSession.status,
+          startTime: deletedSession.startTime
+        },
+        reason: reason,
+        message: 'Deep focus session deleted successfully'
+      });
+      
+    } catch (error) {
+      console.error('❌ Delete deep focus session error:', error);
       sendResponse({ success: false, error: error.message });
     }
   }
@@ -495,332 +634,6 @@ class FocusTimeTracker {
     // Fallback to StateManager if available
     const userInfo = this.stateManager?.getStateProperty('userInfo');
     return userInfo?.userId || null;
-  }
-
-  /**
-   * Handle UPDATE_DEEP_FOCUS_SESSION
-   */
-  async handleUpdateDeepFocusSession(message, sendResponse) {
-    try {
-      const { sessionId, updates } = message.payload || {};
-      if (!sessionId) {
-        throw new Error('Session ID required');
-      }
-
-      const result = await this.storageManager.updateDeepFocusSessionDuration(sessionId, updates.duration);
-      sendResponse({
-        success: true,
-        message: 'Deep focus session updated',
-        result
-      });
-    } catch (error) {
-      console.error('❌ Update session error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  /**
-   * Handle GET_DEEP_FOCUS_SESSIONS
-   */
-  async handleGetDeepFocusSessions(message, sendResponse) {
-    try {
-      const { date, dateRange } = message.payload || {};
-      
-      let sessions;
-      if (dateRange) {
-        sessions = await this.storageManager.getDeepFocusSessionsForDateRange(dateRange.start, dateRange.end);
-      } else if (date) {
-        sessions = await this.storageManager.getDeepFocusSessionsForDate(date);
-      } else {
-        // Get all sessions if no specific date requested (SURGICAL FIX)
-        sessions = await this.storageManager.getAllDeepFocusSessions();
-      }
-
-      sendResponse({
-        success: true,
-        sessions: sessions || [],
-        message: 'Deep focus sessions retrieved'
-      });
-    } catch (error) {
-      console.error('❌ Get sessions error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  /**
-   * Handle DELETE_DEEP_FOCUS_SESSION
-   */
-  async handleDeleteDeepFocusSession(message, sendResponse) {
-    try {
-      const { sessionId } = message.payload || {};
-      if (!sessionId) {
-        throw new Error('Session ID required');
-      }
-
-      // Note: StorageManager doesn't have delete method yet, so we'll implement a basic one
-      const storage = await chrome.storage.local.get(['deepFocusSession']);
-      const allSessions = storage.deepFocusSession || {};
-      
-      let found = false;
-      for (const [date, sessions] of Object.entries(allSessions)) {
-        const sessionIndex = sessions.findIndex(s => s.id === sessionId);
-        if (sessionIndex !== -1) {
-          sessions.splice(sessionIndex, 1);
-          found = true;
-          break;
-        }
-      }
-
-      if (found) {
-        await chrome.storage.local.set({ deepFocusSession: allSessions });
-        sendResponse({
-          success: true,
-          message: 'Deep focus session deleted'
-        });
-      } else {
-        sendResponse({
-          success: false,
-          error: 'Session not found'
-        });
-      }
-    } catch (error) {
-      console.error('❌ Delete session error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  /**
-   * Handle VALIDATE_DEEP_FOCUS_DATA
-   */
-  async handleValidateDeepFocusData(message, sendResponse) {
-    try {
-      const result = await this.storageManager.validateDeepFocusData();
-      sendResponse({
-        success: result.success,
-        validation: result.validation,
-        error: result.error,
-        message: 'Deep focus data validation completed'
-      });
-    } catch (error) {
-      console.error('❌ Validate data error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  /**
-   * Handle BACKUP_DEEP_FOCUS_DATA
-   */
-  async handleBackupDeepFocusData(message, sendResponse) {
-    try {
-      const result = await this.storageManager.backupDeepFocusData();
-      sendResponse({
-        success: result.success,
-        backupKey: result.backupKey,
-        metadata: result.metadata,
-        timestamp: result.timestamp,
-        error: result.error,
-        message: 'Deep focus data backup completed'
-      });
-    } catch (error) {
-      console.error('❌ Backup data error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  /**
-   * Handle RESTORE_DEEP_FOCUS_DATA
-   */
-  async handleRestoreDeepFocusData(message, sendResponse) {
-    try {
-      const { backupKey, options } = message.payload || {};
-      const result = await this.storageManager.restoreDeepFocusData(backupKey, options);
-      sendResponse({
-        success: result.success,
-        backupKey: result.backupKey,
-        restoredItems: result.restoredItems,
-        mergeMode: result.mergeMode,
-        metadata: result.metadata,
-        timestamp: result.timestamp,
-        error: result.error,
-        message: 'Deep focus data restoration completed'
-      });
-    } catch (error) {
-      console.error('❌ Restore data error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  /**
-   * Handle SYNC_DEEP_FOCUS_STATUS
-   */
-  async handleSyncDeepFocusStatus(message, sendResponse) {
-    try {
-      const result = await this.storageManager.getSyncDeepFocusStatus();
-      sendResponse({
-        success: result.success,
-        status: result.status,
-        error: result.error,
-        message: 'Deep focus sync status retrieved'
-      });
-    } catch (error) {
-      console.error('❌ Get sync status error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  /**
-   * Handle RESET_DEEP_FOCUS_STORAGE
-   */
-  async handleResetDeepFocusStorage(message, sendResponse) {
-    try {
-      const { confirmationCode } = message.payload || {};
-      const result = await this.storageManager.resetDeepFocusStorage(confirmationCode);
-      sendResponse({
-        success: result.success,
-        itemsRemoved: result.itemsRemoved,
-        finalBackup: result.finalBackup,
-        confirmationCodeRequired: result.confirmationCodeRequired,
-        timestamp: result.timestamp,
-        error: result.error,
-        message: 'Deep focus storage reset completed'
-      });
-    } catch (error) {
-      console.error('❌ Reset storage error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  /**
-   * Handle GET_DEEP_FOCUS_DIAGNOSTICS
-   */
-  async handleGetDeepFocusDiagnostics(message, sendResponse) {
-    try {
-      const result = await this.storageManager.getDeepFocusDiagnostics();
-      sendResponse({
-        success: result.success,
-        diagnostics: result.diagnostics,
-        timestamp: result.timestamp,
-        error: result.error,
-        message: 'Deep focus diagnostics completed'
-      });
-    } catch (error) {
-      console.error('❌ Get diagnostics error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  // SURGICAL FIXES: Add missing handler implementations for ExtensionDataService integration
-
-  /**
-   * Handle GET_DEEP_FOCUS_SESSIONS_DATE_RANGE
-   */
-  async handleGetDeepFocusSessionsDateRange(message, sendResponse) {
-    try {
-      const { startDate, endDate } = message.payload || {};
-      if (!startDate || !endDate) {
-        throw new Error('Start date and end date are required');
-      }
-
-      const sessions = await this.storageManager.getSessionsByDateRange(startDate, endDate);
-      const sessionsArray = sessions || [];
-      sendResponse({
-        success: true,
-        data: sessionsArray,
-        message: `Retrieved ${sessionsArray.length} sessions for date range`
-      });
-    } catch (error) {
-      console.error('❌ Get sessions date range error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  /**
-   * Handle GET_TODAY_DEEP_FOCUS_SESSIONS
-   */
-  async handleGetTodayDeepFocusSessions(message, sendResponse) {
-    try {
-      const sessions = await this.storageManager.getTodayDeepFocusSessions();
-      const sessionsArray = sessions || [];
-      sendResponse({
-        success: true,
-        data: sessionsArray,
-        message: `Retrieved ${sessionsArray.length} sessions for today`
-      });
-    } catch (error) {
-      console.error('❌ Get today sessions error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  /**
-   * Handle GET_ACTIVE_DEEP_FOCUS_SESSION
-   */
-  async handleGetActiveDeepFocusSession(message, sendResponse) {
-    try {
-      const activeSession = await this.storageManager.getActiveDeepFocusSession();
-      sendResponse({
-        success: true,
-        data: activeSession,
-        message: activeSession ? 'Active session found' : 'No active session'
-      });
-    } catch (error) {
-      console.error('❌ Get active session error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  /**
-   * Handle GET_ALL_DEEP_FOCUS_SESSIONS
-   */
-  async handleGetAllDeepFocusSessions(message, sendResponse) {
-    try {
-      const sessions = await this.storageManager.getAllDeepFocusSessions();
-      const sessionsArray = sessions || [];
-      sendResponse({
-        success: true,
-        data: sessionsArray,
-        message: `Retrieved ${sessionsArray.length} total sessions`
-      });
-    } catch (error) {
-      console.error('❌ Get all sessions error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  /**
-   * Handle GET_RECENT_7_DAYS_DEEP_FOCUS_SESSIONS
-   */
-  async handleGetRecent7DaysDeepFocusSessions(message, sendResponse) {
-    try {
-      const sessions = await this.storageManager.getRecent7DaysDeepFocusSessions();
-      const sessionsArray = sessions || [];
-      sendResponse({
-        success: true,
-        data: sessionsArray,
-        message: `Retrieved ${sessionsArray.length} sessions from last 7 days`
-      });
-    } catch (error) {
-      console.error('❌ Get recent 7 days sessions error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  /**
-   * Handle GET_LAST_10_DEEP_FOCUS_SESSIONS
-   */
-  async handleGetLast10DeepFocusSessions(message, sendResponse) {
-    try {
-      const sessions = await this.storageManager.getLast10DeepFocusSessions();
-      const sessionsArray = sessions || [];
-      sendResponse({
-        success: true,
-        data: sessionsArray,
-        message: `Retrieved ${sessionsArray.length} of last 10 sessions`
-      });
-    } catch (error) {
-      console.error('❌ Get last 10 sessions error:', error);
-      sendResponse({ success: false, error: error.message });
-    }
   }
 }
 

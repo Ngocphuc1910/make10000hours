@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Focus Message Routing Test</title>
+    <style>
+        body { 
+            font-family: monospace; 
+            padding: 20px; 
+            background: #1a1a1a; 
+            color: #fff;
+            font-size: 14px;
+        }
+        .test-result { 
+            margin: 5px 0; 
+            padding: 8px; 
+            border-radius: 3px; 
+            border-left: 4px solid #555;
+        }
+        .pass { background: #2d4a2d; border-left-color: #5cb85c; }
+        .fail { background: #4a2d2d; border-left-color: #d9534f; }
+        .info { background: #2d3a4a; border-left-color: #5bc0de; }
+        pre { 
+            background: #2a2a2a; 
+            padding: 8px; 
+            border-radius: 3px; 
+            overflow-x: auto;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        button {
+            background: #4a90e2;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        button:hover { background: #357abd; }
+        .section { margin: 20px 0; padding: 10px; border: 1px solid #555; border-radius: 5px; }
+        .message-test { margin: 10px 0; padding: 5px; background: #333; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <h1>🔄 Deep Focus Message Routing Test</h1>
+    <div id="status">Initializing...</div>
+    
+    <div>
+        <button onclick="runFullMessageTest()">Run Full Message Test</button>
+        <button onclick="clearResults()">Clear Results</button>
+    </div>
+
+    <div class="section">
+        <h3>Message Handler Tests</h3>
+        <div id="message-results"></div>
+    </div>
+
+    <!-- Load all required components -->
+    <script src="utils/storage.js"></script>
+    <script src="models/StateManager.js"></script>
+    <script src="models/FocusTimeTracker.js"></script>
+    
+    <script>
+        let storageManager;
+        let focusTimeTracker;
+        let messageResults = [];
+
+        function log(message, type = 'info', containerId = 'message-results') {
+            console.log(message);
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            document.getElementById(containerId).appendChild(div);
+        }
+
+        function logResult(testName, success, details = '', containerId = 'message-results') {
+            const status = success ? '✅ PASS' : '❌ FAIL';
+            const type = success ? 'pass' : 'fail';
+            const detailsStr = details ? '<br><pre>' + (typeof details === 'string' ? details : JSON.stringify(details, null, 2)) + '</pre>' : '';
+            log(`${status}: ${testName}${detailsStr}`, type, containerId);
+            messageResults.push({ testName, success, details });
+        }
+
+        async function setupMockEnvironment() {
+            try {
+                // Mock chrome APIs
+                if (typeof chrome === 'undefined') {
+                    window.chrome = {
+                        storage: {
+                            local: {
+                                data: {},
+                                get: function(keys) {
+                                    return new Promise((resolve) => {
+                                        if (!keys) {
+                                            resolve(this.data);
+                                        } else if (Array.isArray(keys)) {
+                                            const result = {};
+                                            keys.forEach(key => {
+                                                if (key in this.data) result[key] = this.data[key];
+                                            });
+                                            resolve(result);
+                                        } else if (typeof keys === 'object') {
+                                            const result = {};
+                                            Object.keys(keys).forEach(key => {
+                                                result[key] = this.data[key] || keys[key];
+                                            });
+                                            resolve(result);
+                                        } else {
+                                            const result = {};
+                                            if (keys in this.data) result[keys] = this.data[keys];
+                                            resolve(result);
+                                        }
+                                    });
+                                },
+                                set: function(items) {
+                                    return new Promise((resolve) => {
+                                        Object.assign(this.data, items);
+                                        resolve();
+                                    });
+                                },
+                                remove: function(keys) {
+                                    return new Promise((resolve) => {
+                                        if (Array.isArray(keys)) {
+                                            keys.forEach(key => delete this.data[key]);
+                                        } else {
+                                            delete this.data[keys];
+                                        }
+                                        resolve();
+                                    });
+                                }
+                            }
+                        },
+                        runtime: {
+                            id: 'test-extension-id'
+                        }
+                    };
+                }
+
+                // Mock global variables that background.js expects
+                window.storageManager = null;
+                window.blockingManager = {
+                    focusMode: false,
+                    initialized: true,
+                    setStateManager: () => {}
+                };
+
+                // Set up test data
+                await chrome.storage.local.set({
+                    userInfo: {
+                        uid: 'test-user-123',
+                        email: 'test@example.com',
+                        timezone: 'America/New_York'
+                    },
+                    deepFocusSession: {
+                        '2025-08-22': [{
+                            id: 'test-session-123',
+                            userId: 'test-user-123',
+                            startTime: Date.now() - 3600000,
+                            startTimeUTC: new Date(Date.now() - 3600000).toISOString(),
+                            timezone: 'America/New_York',
+                            utcDate: '2025-08-22',
+                            duration: 30,
+                            status: 'completed',
+                            createdAt: Date.now() - 3600000,
+                            updatedAt: Date.now()
+                        }]
+                    }
+                });
+
+                // Initialize StorageManager
+                storageManager = new StorageManager();
+                await storageManager.initialize();
+                window.storageManager = storageManager;
+
+                // Initialize FocusTimeTracker
+                focusTimeTracker = new FocusTimeTracker();
+                await focusTimeTracker.initialize();
+
+                log('✅ Mock environment and components initialized successfully', 'pass');
+                document.getElementById('status').textContent = 'Ready - All components initialized';
+                return true;
+            } catch (error) {
+                log(`❌ Setup failed: ${error.message}`, 'fail');
+                document.getElementById('status').textContent = `Error: ${error.message}`;
+                return false;
+            }
+        }
+
+        async function testMessage(messageType, payload = {}) {
+            return new Promise((resolve) => {
+                const message = { type: messageType, payload };
+                
+                log(`📨 Testing message: ${messageType}`, 'info');
+                
+                // Mock sender
+                const sender = { id: 'test-extension-id' };
+                
+                // Mock sendResponse
+                const sendResponse = (response) => {
+                    logResult(
+                        `${messageType} message handling`,
+                        response.success === true,
+                        `Response: ${JSON.stringify(response, null, 2)}`
+                    );
+                    resolve(response);
+                };
+                
+                // Send message through FocusTimeTracker
+                focusTimeTracker.handleMessage(message, sender, sendResponse)
+                    .then((handled) => {
+                        if (!handled) {
+                            logResult(`${messageType} message routing`, false, 'Message not handled by FocusTimeTracker');
+                            resolve({ success: false, error: 'Not handled' });
+                        }
+                    })
+                    .catch((error) => {
+                        logResult(`${messageType} message error`, false, error.message);
+                        resolve({ success: false, error: error.message });
+                    });
+            });
+        }
+
+        async function runFullMessageTest() {
+            messageResults = [];
+            document.getElementById('message-results').innerHTML = '';
+            
+            log('🚀 Starting comprehensive message routing test...', 'info');
+            
+            const setupSuccess = await setupMockEnvironment();
+            if (!setupSuccess) return;
+            
+            // Test all 6 new message types
+            const messageTests = [
+                { type: 'VALIDATE_DEEP_FOCUS_DATA', payload: {} },
+                { type: 'BACKUP_DEEP_FOCUS_DATA', payload: {} },
+                { type: 'RESTORE_DEEP_FOCUS_DATA', payload: { backupKey: 'test-backup-key' } },
+                { type: 'SYNC_DEEP_FOCUS_STATUS', payload: {} },
+                { type: 'GET_DEEP_FOCUS_DIAGNOSTICS', payload: {} },
+                { type: 'RESET_DEEP_FOCUS_STORAGE', payload: { confirmationCode: 'FORCE_RESET_CONFIRMED' } }
+            ];
+            
+            let backupKey = null;
+            
+            for (const messageTest of messageTests) {
+                try {
+                    // Special handling for restore test
+                    if (messageTest.type === 'RESTORE_DEEP_FOCUS_DATA' && backupKey) {
+                        messageTest.payload.backupKey = backupKey;
+                    }
+                    
+                    const response = await testMessage(messageTest.type, messageTest.payload);
+                    
+                    // Store backup key for restore test
+                    if (messageTest.type === 'BACKUP_DEEP_FOCUS_DATA' && response.backupKey) {
+                        backupKey = response.backupKey;
+                        log(`💾 Stored backup key: ${backupKey}`, 'info');
+                    }
+                    
+                } catch (error) {
+                    logResult(`${messageTest.type} test`, false, error.message);
+                }
+                
+                // Add small delay between tests
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            // Summary
+            const passed = messageResults.filter(r => r.success).length;
+            const failed = messageResults.filter(r => !r.success).length;
+            const total = messageResults.length;
+            
+            log(`🎯 MESSAGE TEST SUMMARY: ${passed}/${total} passed (${failed} failed)`, 
+                failed === 0 ? 'pass' : 'fail');
+                
+            if (failed === 0) {
+                log('🎉 ALL MESSAGE ROUTING TESTS PASSED!', 'pass');
+            } else {
+                log('❌ Some message tests failed - review the results above', 'fail');
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('message-results').innerHTML = '';
+            messageResults = [];
+        }
+
+        // Initialize when page loads
+        window.onload = async function() {
+            await setupMockEnvironment();
+        };
+    </script>
+</body>
+</html>
