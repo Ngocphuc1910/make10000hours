@@ -1,1 +1,0 @@
-(()=>{"use strict";console.log("Firebase integration disabled for Chrome Web Store compliance")})();
