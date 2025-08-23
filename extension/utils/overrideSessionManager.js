@@ -6,7 +6,7 @@
 // DateUtils will be available globally
 class OverrideSessionManager {
   constructor() {
-    this.storageKey = 'overrideSessions';
+    this.storageKey = 'override_sessions'; // FIXED: Use consistent storage key with background.js
     this.version = '1.0.0';
   }
 
