@@ -87,7 +87,10 @@ class StateManager {
           break;
 
         case 'BLOCKED_SITES_UPDATED':
-          this.state.blockedSites = payload.blockedSites || [];
+          // BUGFIX: Only update if payload has valid blockedSites to prevent accidental clearing
+          if (payload.blockedSites !== undefined && payload.blockedSites !== null) {
+            this.state.blockedSites = payload.blockedSites;
+          }
           break;
 
         case 'USER_INFO_UPDATED':

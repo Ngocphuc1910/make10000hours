@@ -333,42 +333,45 @@ class BlockingManager {
       console.log('  - this.currentLocalSessionId:', this.currentLocalSessionId);
       console.log('  - this.focusStartTime:', this.focusStartTime);
       
-      const state = {
-        focusMode: this.focusMode,
-        currentLocalSessionId: this.currentLocalSessionId,
-        lastUpdated: Date.now()
-      };
-      
-      console.log('📦 [BLOCKING-DEBUG] Internal state object to save:', JSON.stringify(state));
-      
-      // Convert Sets and Maps to serializable formats
+      // Phase 4: Unified storage - save everything in blockingManagerState
       const blockedSitesArray = Array.from(this.blockedSites);
       const temporaryOverridesObj = Object.fromEntries(this.temporaryOverrides);
       
-      const storageData = { 
-        blockingManagerState: state,
+      const unifiedState = {
         focusMode: this.focusMode,
+        currentLocalSessionId: this.currentLocalSessionId,
         blockedSites: blockedSitesArray,
         focusStartTime: this.focusStartTime,
         blockedAttempts: this.blockedAttempts,
         focusStats: this.focusStats,
-        temporaryOverrides: temporaryOverridesObj
+        temporaryOverrides: temporaryOverridesObj,
+        lastUpdated: Date.now()
       };
       
-      console.log('💾 [BLOCKING-DEBUG] Complete storage data to save:');
-      console.log('  - blockingManagerState:', JSON.stringify(storageData.blockingManagerState));
-      console.log('  - focusMode (direct key):', storageData.focusMode);
-      console.log('  - blockedSites count:', storageData.blockedSites.length);
+      console.log('📦 [PHASE-4] Unified state object to save:', JSON.stringify({
+        focusMode: unifiedState.focusMode,
+        blockedSitesCount: unifiedState.blockedSites.length,
+        hasSession: !!unifiedState.currentLocalSessionId
+      }));
       
-      // Save all state including enhanced Deep Focus properties
-      await chrome.storage.local.set(storageData);
-      console.log('✅ [BLOCKING-DEBUG] Blocking manager state saved successfully');
+      const storageData = { 
+        blockingManagerState: unifiedState
+        // Phase 4: No longer saving individual keys - everything unified
+      };
       
-      // Verify what was actually saved
-      const verifyResult = await chrome.storage.local.get(['blockingManagerState', 'focusMode']);
-      console.log('🔍 [BLOCKING-DEBUG] Verification - what was actually saved:');
-      console.log('  - blockingManagerState from storage:', JSON.stringify(verifyResult.blockingManagerState));
-      console.log('  - focusMode from storage:', verifyResult.focusMode);
+      console.log('💾 [PHASE-4] Unified storage data to save:');
+      console.log('  - blockingManagerState only (no individual keys)');
+      console.log('  - unified focusMode:', unifiedState.focusMode);
+      console.log('  - unified blockedSites count:', unifiedState.blockedSites.length);
+      
+      // Phase 5: Use atomic write for consistency  
+      await this.atomicWrite(storageData);
+      console.log('✅ [PHASE-5] Unified blocking manager state saved atomically');
+      
+      // Phase 5: Verify using atomic read
+      const verifyResult = await this.atomicRead(['blockingManagerState']);
+      console.log('🔍 [PHASE-5] Verification - unified state saved:');
+      console.log('  - blockingManagerState saved successfully:', !!verifyResult.blockingManagerState);
       
     } catch (error) {
       console.error('❌ [BLOCKING-DEBUG] Failed to save blocking manager state:', error);
@@ -381,13 +384,14 @@ class BlockingManager {
    */
   async loadState() {
     try {
-      console.log('📂 [BLOCKING-DEBUG] loadState() called at', new Date().toISOString());
+      console.log('📂 [LOAD-STATE-DEBUG] loadState() called at', new Date().toISOString());
+      console.log('📂 [LOAD-STATE-DEBUG] Call stack:', new Error().stack);
       console.log('🔍 [BLOCKING-DEBUG] Current BlockingManager properties before load:');
       console.log('  - this.focusMode:', this.focusMode);
       console.log('  - this.currentLocalSessionId:', this.currentLocalSessionId);
       
-      // Load both the internal state and the main storage keys + enhanced Deep Focus state
-      const result = await chrome.storage.local.get([
+      // Phase 5: Use atomic read for consistency
+      const result = await this.atomicRead([
         'blockingManagerState', 'focusMode', 'blockedSites',
         'focusStartTime', 'blockedAttempts', 'focusStats', 'temporaryOverrides'
       ]);
@@ -400,49 +404,105 @@ class BlockingManager {
       
       if (result.blockingManagerState) {
         const state = result.blockingManagerState;
-        console.log('🔄 [BLOCKING-DEBUG] Loading from internal blockingManagerState:');
+        console.log('🔄 [PHASE-4] Loading from unified blockingManagerState:');
         console.log('  - state.focusMode:', state.focusMode);
         console.log('  - state.currentLocalSessionId:', state.currentLocalSessionId);
         
+        // Load all properties from unified state
         this.focusMode = state.focusMode || false;
         this.currentLocalSessionId = state.currentLocalSessionId || null;
+        this.focusStartTime = state.focusStartTime || null;
+        this.blockedAttempts = state.blockedAttempts || 0;
+        this.focusStats = state.focusStats || {
+          totalFocusTime: 0,
+          sessionsToday: 0,
+          blockedAttemptsToday: 0
+        };
         
-        console.log('✅ [BLOCKING-DEBUG] After loading internal state:');
-        console.log('  - this.focusMode:', this.focusMode);
-        console.log('📂 Blocking manager internal state loaded:', state);
-      } else {
-        console.log('⚠️ [BLOCKING-DEBUG] No blockingManagerState found in storage, using defaults');
-        // If no internal state exists, check if there's a legacy direct focusMode key
-        if (result.focusMode !== undefined) {
-          console.log('🔄 [BLOCKING-DEBUG] Using legacy focusMode from direct storage key:', result.focusMode);
-          this.focusMode = result.focusMode;
+        // Load blocked sites from unified state
+        let blockedSitesArray = state.blockedSites || [];
+        
+        // BUGFIX: Only initialize defaults if this is a fresh install
+        // Check if unified state was ever populated (has lastUpdated) to prevent overwriting user data
+        const isFreshInstall = !state.lastUpdated && blockedSitesArray.length === 0;
+        
+        if (isFreshInstall) {
+          console.log('🔧 [PHASE-2] Fresh install detected, initializing with default sites...');
+          try {
+            const defaultSites = await this.getDefaultSites();
+            blockedSitesArray = defaultSites;
+            console.log('✅ [PHASE-2] Default sites prepared for fresh install:', defaultSites.length);
+          } catch (error) {
+            console.error('❌ [PHASE-2] Error initializing default sites:', error);
+            blockedSitesArray = ['facebook.com', 'x.com', 'instagram.com', 'youtube.com', 'tiktok.com'];
+          }
+        } else if (blockedSitesArray.length === 0) {
+          console.log('🚨 [PHASE-2-FIX] Preventing default initialization - unified state exists but empty sites');
+          console.log('🚨 [PHASE-2-FIX] This suggests user may have manually cleared sites or there is a bug');
+          console.log('🚨 [PHASE-2-FIX] state.lastUpdated:', state.lastUpdated);
+          console.log('🚨 [PHASE-2-FIX] Not overwriting with defaults to preserve user choice');
         } else {
-          console.log('🔄 [BLOCKING-DEBUG] No state found, keeping default focusMode:', this.focusMode);
+          console.log('✅ [PHASE-2] Found existing sites in unified state:', blockedSitesArray.length);
         }
+        
+        this.blockedSites = new Set(blockedSitesArray);
+        
+        // Load temporary overrides from unified state
+        const overrides = state.temporaryOverrides || {};
+        this.temporaryOverrides = new Map(Object.entries(overrides));
+        
+        console.log('✅ [PHASE-4] Unified state loaded successfully');
+      } else {
+        console.log('⚠️ [PHASE-4] No unified state found - migrating from legacy keys...');
+        
+        // Migration: Load from individual keys and create unified state
+        this.focusMode = result.focusMode || false;
+        this.currentLocalSessionId = null; // Legacy didn't track this
+        this.focusStartTime = result.focusStartTime || null;
+        this.blockedAttempts = result.blockedAttempts || 0;
+        this.focusStats = result.focusStats || {
+          totalFocusTime: 0,
+          sessionsToday: 0,
+          blockedAttemptsToday: 0
+        };
+        
+        // Load blocked sites from legacy key
+        let blockedSitesArray = result.blockedSites || [];
+        
+        // BUGFIX: Only initialize defaults during true first-time migration
+        // Check if any focus-related data exists to determine if this is a fresh install
+        const hasFocusData = result.focusStartTime || result.focusStats || result.focusMode;
+        const isTrueFreshInstall = blockedSitesArray.length === 0 && !hasFocusData;
+        
+        if (isTrueFreshInstall) {
+          console.log('🔧 [PHASE-2] True fresh install during migration, initializing with defaults...');
+          try {
+            const defaultSites = await this.getDefaultSites();
+            blockedSitesArray = defaultSites;
+            console.log('✅ [PHASE-2] Default sites initialized for fresh install:', defaultSites.length);
+          } catch (error) {
+            console.error('❌ [PHASE-2] Error initializing default sites:', error);
+            blockedSitesArray = ['facebook.com', 'x.com', 'instagram.com', 'youtube.com', 'tiktok.com'];
+          }
+        } else if (blockedSitesArray.length === 0) {
+          console.log('🚨 [PHASE-2-FIX] Preventing default initialization during migration - user data exists');
+          console.log('🚨 [PHASE-2-FIX] hasFocusData:', !!hasFocusData);
+          console.log('🚨 [PHASE-2-FIX] Not overwriting with defaults to preserve user choice');
+        } else {
+          console.log('✅ [PHASE-2] Found existing sites during migration:', blockedSitesArray.length);
+        }
+        
+        this.blockedSites = new Set(blockedSitesArray);
+        
+        // Load temporary overrides from legacy key  
+        const overrides = result.temporaryOverrides || {};
+        this.temporaryOverrides = new Map(Object.entries(overrides));
+        
+        console.log('🔄 [PHASE-4] Migration complete - will save unified state next');
+        
+        // Trigger save to create unified state
+        setTimeout(() => this.saveState(), 100);
       }
-      
-      // FIXED: The internal blockingManagerState is now the single source of truth
-      // No longer overwriting with potentially stale direct storage key
-      console.log('✅ [BLOCKING-DEBUG] BUGFIX APPLIED: Using internal state as single source of truth');
-      console.log('  - Final this.focusMode:', this.focusMode);
-      console.log('  - Ignored potentially stale result.focusMode:', result.focusMode);
-      
-      // Load blocked sites and convert to Set
-      const blockedSitesArray = result.blockedSites || [];
-      this.blockedSites = new Set(blockedSitesArray);
-      
-      // Load enhanced Deep Focus state
-      this.focusStartTime = result.focusStartTime || null;
-      this.blockedAttempts = result.blockedAttempts || 0;
-      this.focusStats = result.focusStats || {
-        totalFocusTime: 0,
-        sessionsToday: 0,
-        blockedAttemptsToday: 0
-      };
-      
-      // Load temporary overrides
-      const overrides = result.temporaryOverrides || {};
-      this.temporaryOverrides = new Map(Object.entries(overrides));
       
       console.log('🔍 [BLOCKING-DEBUG] Final loaded state:');
       console.log('  - Focus mode:', this.focusMode);
@@ -690,8 +750,8 @@ class BlockingManager {
     try {
       console.log('🔧 Updating blocking rules...');
       
-      // Get current blocked sites from storage and merge with instance blockedSites
-      const storage = await chrome.storage.local.get(['blockedSites']);
+      // Phase 5: Get current blocked sites using atomic read
+      const storage = await this.atomicRead(['blockedSites']);
       const storageSites = storage.blockedSites || [];
       
       // Use instance blockedSites if available, otherwise use storage
@@ -804,14 +864,12 @@ class BlockingManager {
     try {
       console.log('🛡️ Enabling blocking for sites:', sites);
       
-      // Update storage
-      await chrome.storage.local.set({ 
-        blockedSites: sites, 
-        focusMode: true 
-      });
-      
+      // BUGFIX: Update internal state and use unified saveState instead of direct write
       this.focusMode = true;
-      this.blockedSites = sites;
+      this.blockedSites = new Set(sites);
+      
+      // Save via unified state system
+      await this.saveState();
       
       // Update blocking rules
       const result = await this.updateBlockingRules();
@@ -835,9 +893,11 @@ class BlockingManager {
     try {
       console.log('🔓 Disabling all blocking...');
       
-      // Update storage
-      await chrome.storage.local.set({ focusMode: false });
+      // BUGFIX: Update internal state and use unified saveState instead of direct write
       this.focusMode = false;
+      
+      // Save via unified state system (preserves blockedSites)
+      await this.saveState();
       
       // Update blocking rules (will remove all rules since focusMode is false)
       const result = await this.updateBlockingRules();
@@ -1109,6 +1169,128 @@ class BlockingManager {
   setStateManager(stateManager) {
     this.stateManager = stateManager;
     console.log('✅ StateManager reference set in BlockingManager');
+  }
+
+  /**
+   * Get default blocked sites from background.js
+   * Phase 2: Default sites initialization
+   */
+  async getDefaultSites() {
+    return new Promise((resolve) => {
+      try {
+        // Send message to background script to get default sites
+        chrome.runtime.sendMessage({ type: 'GET_DEFAULT_BLOCKED_SITES' }, (response) => {
+          if (response && response.sites) {
+            resolve(response.sites);
+          } else {
+            // Fallback to hardcoded defaults
+            resolve(['facebook.com', 'x.com', 'instagram.com', 'youtube.com', 'tiktok.com', 'reddit.com']);
+          }
+        });
+      } catch (error) {
+        console.error('❌ Error getting default sites:', error);
+        // Fallback to hardcoded defaults
+        resolve(['facebook.com', 'x.com', 'instagram.com', 'youtube.com', 'tiktok.com', 'reddit.com']);
+      }
+    });
+  }
+
+  /**
+   * Phase 4: Sync external blockedSites key changes into unified state
+   * Called when background.js updates blockedSites directly
+   */
+  async syncExternalBlockedSitesChange() {
+    try {
+      console.log('🔄 [PHASE-4] Syncing external blockedSites changes...');
+      // Phase 5: Use atomic read for consistency
+      const storage = await this.atomicRead(['blockedSites']);
+      const externalSites = storage.blockedSites || [];
+      
+      // Update internal state
+      this.blockedSites = new Set(externalSites);
+      
+      // Save to unified state to maintain consistency
+      await this.saveState();
+      
+      console.log('✅ [PHASE-4] External blockedSites synced to unified state:', externalSites.length);
+    } catch (error) {
+      console.error('❌ [PHASE-4] Error syncing external blockedSites:', error);
+    }
+  }
+
+  /**
+   * Phase 5: Atomic storage operations to prevent race conditions
+   */
+  
+  // Storage operation queue and lock
+  storageQueue = [];
+  storageInProgress = false;
+  
+  /**
+   * Atomic storage read with retry logic
+   */
+  async atomicRead(keys, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔒 [PHASE-5] Atomic read attempt ${attempt}:`, keys);
+        const result = await chrome.storage.local.get(keys);
+        console.log(`✅ [PHASE-5] Atomic read successful:`, Object.keys(result));
+        return result;
+      } catch (error) {
+        console.warn(`⚠️ [PHASE-5] Atomic read attempt ${attempt} failed:`, error);
+        if (attempt === maxRetries) throw error;
+        // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+      }
+    }
+  }
+
+  /**
+   * Atomic storage write with queue management
+   */
+  async atomicWrite(data, maxRetries = 3) {
+    return new Promise((resolve, reject) => {
+      this.storageQueue.push({ data, resolve, reject, maxRetries });
+      this.processStorageQueue();
+    });
+  }
+
+  /**
+   * Process storage operation queue to prevent race conditions
+   */
+  async processStorageQueue() {
+    if (this.storageInProgress || this.storageQueue.length === 0) {
+      return;
+    }
+
+    this.storageInProgress = true;
+    console.log(`🔒 [PHASE-5] Processing storage queue: ${this.storageQueue.length} operations`);
+
+    while (this.storageQueue.length > 0) {
+      const operation = this.storageQueue.shift();
+      const { data, resolve, reject, maxRetries } = operation;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`💾 [PHASE-5] Atomic write attempt ${attempt}:`, Object.keys(data));
+          await chrome.storage.local.set(data);
+          console.log(`✅ [PHASE-5] Atomic write successful`);
+          resolve();
+          break;
+        } catch (error) {
+          console.warn(`⚠️ [PHASE-5] Atomic write attempt ${attempt} failed:`, error);
+          if (attempt === maxRetries) {
+            reject(error);
+          } else {
+            // Exponential backoff
+            await new Promise(r => setTimeout(r, 100 * attempt));
+          }
+        }
+      }
+    }
+
+    this.storageInProgress = false;
+    console.log(`🔓 [PHASE-5] Storage queue processing complete`);
   }
 }
 

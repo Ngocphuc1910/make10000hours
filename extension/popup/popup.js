@@ -1005,10 +1005,10 @@ class PopupManager {
     const viewAllBtnAnonymous = document.getElementById('view-all-btn-anonymous');
     
     if (viewAllBtnLoggedIn) {
-      viewAllBtnLoggedIn.addEventListener('click', () => this.viewAllSites());
+      viewAllBtnLoggedIn.addEventListener('click', () => this.openDetailProgress());
     }
     if (viewAllBtnAnonymous) {
-      viewAllBtnAnonymous.addEventListener('click', () => this.viewAllSites());
+      viewAllBtnAnonymous.addEventListener('click', () => this.openSignUp());
     }
 
     // Modal handlers
@@ -2424,11 +2424,52 @@ class PopupManager {
   }
 
   /**
+   * Get destination URL based on authentication state
+   * @param {boolean} isAuthenticated - User authentication status
+   * @returns {string} Target URL for navigation
+   */
+  getDestinationURL(isAuthenticated) {
+    return isAuthenticated 
+      ? 'https://app.make10000hours.com/#/deep-focus'
+      : 'https://app.make10000hours.com/#/pomodoro';
+  }
+
+  /**
+   * Open Detail Progress page for authenticated users
+   */
+  openDetailProgress() {
+    try {
+      const url = this.getDestinationURL(true);
+      chrome.tabs.create({ url });
+    } catch (error) {
+      console.error('Failed to open detail progress:', error);
+      // Fallback to main app
+      chrome.tabs.create({ url: 'https://app.make10000hours.com' });
+    }
+  }
+
+  /**
+   * Open Sign Up page for unauthenticated users  
+   */
+  openSignUp() {
+    try {
+      const url = this.getDestinationURL(false);
+      chrome.tabs.create({ url });
+    } catch (error) {
+      console.error('Failed to open sign up:', error);
+      // Fallback to main app
+      chrome.tabs.create({ url: 'https://app.make10000hours.com' });
+    }
+  }
+
+  /**
    * View all sites (opens detailed view)
    */
   viewAllSites() {
-    // Open the main web app
-    chrome.tabs.create({ url: 'https://app.make10000hours.com' });
+    // Smart routing based on current authentication state
+    const isAuthenticated = this.enhancedState.userInfo && this.enhancedState.userInfo.userId;
+    const url = this.getDestinationURL(isAuthenticated);
+    chrome.tabs.create({ url });
   }
 
   /**
