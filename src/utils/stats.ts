@@ -25,8 +25,8 @@ export const composeDeepFocusData = (input: {
   console.log('🔍 [STATS] Processing dailySiteUsages:', dailySiteUsages.length, 'records');
   
   const onScreenTime = dailySiteUsages.reduce((total, usage, index) => {
-    const timeInMinutes = Math.round(usage.totalTime / (1000 * 60));
-    console.log(`🔍 [STATS] Usage ${index + 1}: ${usage.date}, totalTime: ${usage.totalTime}ms, minutes: ${timeInMinutes}`);
+    const timeInMinutes = Math.round(usage.totalTime / 60); // totalTime is now in seconds
+    console.log(`🔍 [STATS] Usage ${index + 1}: ${usage.date}, totalTime: ${usage.totalTime}s, minutes: ${timeInMinutes}`);
     return total + timeInMinutes;
   }, 0);
   
@@ -60,7 +60,7 @@ export const composeDeepFocusData = (input: {
       });
     }
     const dailyUsage = dailyUsageMap.get(usage.date)!;
-    dailyUsage.onScreenTime += Math.round(usage.totalTime / (1000 * 60));
+    dailyUsage.onScreenTime += Math.round(usage.totalTime / 60); // totalTime is now in seconds
   });
 
   // Add work sessions to daily usage

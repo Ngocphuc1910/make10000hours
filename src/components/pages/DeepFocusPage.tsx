@@ -118,7 +118,7 @@ const DeepFocusPage: React.FC = () => {
   // Flag to prevent automatic closing
   const [isInitializing, setIsInitializing] = useState(false);
 
-  const { timeMetrics, dailyUsage, siteUsage, siteUsageData, onScreenTime, isLoading: isDashboardLoading, loadDashboardData, loadAllTimeData, loadSessionData } = useDeepFocusDashboardStore();
+  const { timeMetrics, dailyUsage, siteUsage, siteUsageData, onScreenTime, sessionMetrics, isLoading: isDashboardLoading, loadDashboardData, loadAllTimeData, loadSessionData, loadUnifiedDashboardData } = useDeepFocusDashboardStore();
   
   // Loading timeout state to prevent indefinite loading
   const [loadingTimeout, setLoadingTimeout] = useState(false);
@@ -162,14 +162,14 @@ const DeepFocusPage: React.FC = () => {
         console.log('✅ Smart sync completed:', result);
         
         // Reload data after sync
-        console.log('🔄 Reloading data after smart sync...');
+        console.log('🔄 Reloading data after smart sync with UNIFIED approach...');
         if (selectedRange.rangeType === 'all time') {
           loadAllTimeData();
         } else {
           const startDate = selectedRange.startDate || new Date();
           const endDate = selectedRange.endDate || new Date();
           if (startDate && endDate) {
-            loadDashboardData(startDate, endDate);
+            loadUnifiedDashboardData(startDate, endDate);
           }
         }
         console.log('✅ Data reloaded after smart sync');
@@ -191,14 +191,14 @@ const DeepFocusPage: React.FC = () => {
         console.log('✅ Last 10 sessions sync completed:', result);
         
         // Reload data after sync
-        console.log('🔄 Reloading data after last 10 sync...');
+        console.log('🔄 Reloading data after last 10 sync with UNIFIED approach...');
         if (selectedRange.rangeType === 'all time') {
           loadAllTimeData();
         } else {
           const startDate = selectedRange.startDate || new Date();
           const endDate = selectedRange.endDate || new Date();
           if (startDate && endDate) {
-            loadDashboardData(startDate, endDate);
+            loadUnifiedDashboardData(startDate, endDate);
           }
         }
         console.log('✅ Data reloaded after last 10 sync');
@@ -326,23 +326,22 @@ const DeepFocusPage: React.FC = () => {
       }
     }
     
-    // Load data with timezone awareness
+    // UNIFIED: Load data with single API call and unified processing
     if (selectedRange.rangeType === 'all time') {
-      console.log('🔄 Loading all time data...');
+      console.log('🔄 Loading all time data with unified approach...');
       loadAllTimeData();
     } else {
       const startDate = selectedRange.startDate || new Date();
       const endDate = selectedRange.endDate || new Date();
 
       if (startDate && endDate) {
-        console.log('🔄 Loading range data with timezone awareness...', { startDate, endDate });
-        loadDashboardData(startDate, endDate);
+        console.log('🔄 Loading range data with UNIFIED approach...', { startDate, endDate });
+        // Use new unified method that eliminates duplicate API calls
+        loadUnifiedDashboardData(startDate, endDate);
       }
     }
 
-    // Load session-based data
-    console.log('🔄 Loading timezone-aware session data...');
-    await loadSessionData();
+    // No separate loadSessionData() call needed - unified approach handles both!
   }
 
   useEffect(() => {
@@ -437,20 +436,19 @@ const DeepFocusPage: React.FC = () => {
           console.log('✅ Session-based sync request sent on page load');
           
           // Reload data after sync to show latest information
-          console.log('🔄 Reloading data after initial sync...');
+          console.log('🔄 Reloading data after initial sync with UNIFIED approach...');
           if (selectedRange.rangeType === 'all time') {
             loadAllTimeData();
           } else {
             const startDate = selectedRange.startDate || new Date();
             const endDate = selectedRange.endDate || new Date();
             if (startDate && endDate) {
-              loadDashboardData(startDate, endDate);
+              // Use unified method to eliminate duplicate API calls
+              loadUnifiedDashboardData(startDate, endDate);
             }
           }
           
-          // Load session-based data for new metrics display
-          console.log('🔄 Loading session-based data after initial sync...');
-          await loadSessionData();
+          // No separate loadSessionData needed - unified approach handles everything!
           console.log('✅ Data reloaded after initial sync');
         } else {
           console.warn('⚠️ User not authenticated, skipping immediate sync');
