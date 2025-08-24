@@ -1372,21 +1372,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('🔄 SET_BLOCKED_SITES received:', message.payload);
         
         // Extract blocked sites from payload
-        const blockedSites = Array.isArray(message.payload) 
+        const webAppSites = Array.isArray(message.payload) 
           ? message.payload 
           : (message.payload?.blockedSites || []);
+
+        // Phase 3: Fix web app overwrite bug - merge with defaults instead of overwriting
+        const defaultSites = getDefaultBlockedSites();
+        const currentStorage = await chrome.storage.local.get(['blockedSites']);
+        const currentSites = currentStorage.blockedSites || [];
+
+        // Smart merge: preserve defaults and current sites, add new ones from web app
+        const mergedSites = new Set([
+          ...defaultSites,  // Always include defaults
+          ...currentSites,  // Preserve current extension sites
+          ...webAppSites    // Add web app sites
+        ]);
         
-        // Store blocked sites
-        await chrome.storage.local.set({ blockedSites });
-        console.log('✅ Blocked sites synced from web app:', blockedSites);
+        const finalSites = Array.from(mergedSites);
         
-        // Update blocking rules if BlockingManager is available
+        // Store merged blocked sites
+        await chrome.storage.local.set({ blockedSites: finalSites });
+        console.log('✅ [PHASE-3] Blocked sites merged (defaults + current + web app):', {
+          defaultCount: defaultSites.length,
+          currentCount: currentSites.length,
+          webAppCount: webAppSites.length,
+          finalCount: finalSites.length
+        });
+        
+        // Phase 4: Sync external changes into BlockingManager unified state
         if (blockingManager) {
           try {
+            await blockingManager.syncExternalBlockedSitesChange();
             await blockingManager.updateBlockingRules();
-            console.log('🔧 Blocking rules updated after site sync');
+            console.log('🔧 [PHASE-4] BlockingManager synced and rules updated');
           } catch (error) {
-            console.warn('⚠️ Failed to update blocking rules after site sync:', error);
+            console.warn('⚠️ Could not sync to BlockingManager:', error);
           }
         }
         
@@ -1402,7 +1422,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           console.debug('📝 Could not broadcast blocked sites update:', error.message);
         }
         
-        sendResponse({ success: true, message: 'Blocked sites synced', count: blockedSites.length });
+        sendResponse({ success: true, message: 'Blocked sites synced', count: finalSites.length });
       } catch (error) {
         console.error('❌ Error handling SET_BLOCKED_SITES:', error);
         sendResponse({ success: false, error: error.message });
@@ -1432,6 +1452,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep channel open for async
   }
 
+  // Phase 2: Handle GET_DEFAULT_BLOCKED_SITES request
+  if (message.type === 'GET_DEFAULT_BLOCKED_SITES') {
+    try {
+      const defaultSites = getDefaultBlockedSites();
+      console.log('✅ GET_DEFAULT_BLOCKED_SITES: Returning', defaultSites.length, 'sites');
+      sendResponse({ success: true, sites: defaultSites });
+    } catch (error) {
+      console.error('❌ Error getting default blocked sites:', error);
+      sendResponse({ success: false, error: error.message });
+    }
+    return true; // Keep channel open for async
+  }
+
   // Handle ADD_BLOCKED_SITE request
   if (message.type === 'ADD_BLOCKED_SITE') {
     (async () => {
@@ -1458,6 +1491,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Add to blocked sites
         blockedSites.push(cleanDomain);
         await chrome.storage.local.set({ blockedSites });
+        
+        // BUGFIX: Sync to BlockingManager unified state
+        if (blockingManager) {
+          try {
+            await blockingManager.syncExternalBlockedSitesChange();
+            console.log('🔄 BlockingManager synced after ADD_BLOCKED_SITE');
+          } catch (error) {
+            console.warn('⚠️ Failed to sync to BlockingManager:', error);
+          }
+        }
         
         console.log('✅ ADD_BLOCKED_SITE: Added', cleanDomain);
         sendResponse({ success: true, domain: cleanDomain, message: 'Site blocked successfully' });
@@ -1555,6 +1598,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Remove from blocked sites
         blockedSites.splice(index, 1);
         await chrome.storage.local.set({ blockedSites });
+        
+        // BUGFIX: Sync to BlockingManager unified state
+        if (blockingManager) {
+          try {
+            await blockingManager.syncExternalBlockedSitesChange();
+            console.log('🔄 BlockingManager synced after REMOVE_BLOCKED_SITE');
+          } catch (error) {
+            console.warn('⚠️ Failed to sync to BlockingManager:', error);
+          }
+        }
         
         console.log('✅ REMOVE_BLOCKED_SITE: Removed', cleanDomain);
         sendResponse({ success: true, domain: cleanDomain, message: 'Site unblocked successfully' });
