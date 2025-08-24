@@ -39,6 +39,7 @@ export interface DeepFocusData {
   dailyUsage: DailyUsage[];
   siteUsage: SiteUsage[];
   blockedSites: BlockedSite[];
+  lastExtensionUpdate?: number | null;
 }
 
 export interface DeepFocusStore {

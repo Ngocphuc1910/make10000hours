@@ -19,6 +19,8 @@ interface UserBlockedSitesDocument {
     updatedAt: Timestamp | any;
     syncedAt?: Timestamp | any;
     version: string;
+    defaultsInitialized?: boolean;  // Track if user has been initialized with defaults
+    initializationMethod?: 'defaults' | 'empty' | 'imported';  // How the user was initialized
   };
 }
 
@@ -76,7 +78,7 @@ class BlockedSitesService {
         id: `default-${index + 1}-${Date.now()}`
       }));
       
-      // Save the default sites to Firestore
+      // Save the default sites to Firestore with initialization metadata
       const userDoc: UserBlockedSitesDocument = {
         userId,
         sites: sitesWithIds,
@@ -84,7 +86,9 @@ class BlockedSitesService {
           totalSites: sitesWithIds.length,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-          version: '1.0.0'
+          version: '1.0.0',
+          defaultsInitialized: true,  // Mark that user has been initialized with defaults
+          initializationMethod: 'defaults'  // Track how user was initialized
         }
       };
       
