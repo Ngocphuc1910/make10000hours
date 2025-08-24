@@ -1636,6 +1636,75 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep channel open for async
   }
 
+  // OPTION A FIX: Restore missing handlers from backup files
+  if (message.type === 'SYNC_BLOCKED_SITES_FROM_WEBAPP') {
+    (async () => {
+      try {
+        const webAppSites = message.payload?.sites || [];
+        console.log('🔄 Syncing', webAppSites.length, 'sites from web app');
+        
+        // NEW LOGIC: Use web app sites exactly as provided
+        let finalSites = webAppSites;
+        
+        // Only add defaults for truly new users (never initialized)
+        const storage = await chrome.storage.local.get(['blockedSites', 'userHasInitialized']);
+        const hasBeenInitialized = storage.userHasInitialized || false;
+        
+        if (!hasBeenInitialized && webAppSites.length === 0) {
+          // First-time user with no sites - initialize with defaults
+          const defaultSites = getDefaultBlockedSites();
+          finalSites = defaultSites;
+          
+          // Mark as initialized so defaults never appear again
+          await chrome.storage.local.set({ userHasInitialized: true });
+          console.log('🆕 New user: Initialized with', defaultSites.length, 'default sites');
+        } else {
+          // Existing user or user with sites - use exact web app sites
+          console.log('✅ Using exact web app sites:', webAppSites.length, '(user has been initialized)');
+        }
+        
+        if (blockingManager) {
+          blockingManager.blockedSites = new Set(finalSites);
+          await blockingManager.saveState();
+          await blockingManager.updateBlockingRules();
+        }
+        
+        await chrome.storage.local.set({ blockedSites: finalSites });
+        sendResponse({ success: true, synced: webAppSites.length, total: finalSites.length });
+      } catch (error) {
+        console.error('❌ Sync blocked sites failed:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'FORCE_SYNC_FROM_WEBAPP') {
+    (async () => {
+      try {
+        console.log('🧹 Force clearing all blocked sites from web app');
+        
+        // NEW LOGIC: Actually clear everything (no defaults)
+        const finalSites = [];
+        
+        if (blockingManager) {
+          blockingManager.blockedSites = new Set(finalSites);
+          await blockingManager.saveState();
+          await blockingManager.updateBlockingRules();
+        }
+        
+        await chrome.storage.local.set({ blockedSites: finalSites });
+        console.log('✅ Extension cleared - ready for fresh sync');
+        
+        sendResponse({ success: true, cleared: true });
+      } catch (error) {
+        console.error('❌ Force sync failed:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
   // Handle BLOCKED_ATTEMPT - Record when user tries to access blocked site
   if (message.type === 'BLOCKED_ATTEMPT') {
     (async () => {

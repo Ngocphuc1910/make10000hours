@@ -328,6 +328,12 @@ const DeepFocusPage: React.FC = () => {
         
         console.log('✅ Extension sync request sent with date range');
         
+        // 🔧 CRITICAL FIX: Add delay to ensure override sessions are synced before database query
+        // This matches the working behavior of page reload sequence
+        console.log('⏳ Waiting for extension sync to complete...');
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Slightly longer than page reload delay
+        console.log('✅ Extension sync completion wait finished');
+        
       } catch (error) {
         console.error('❌ Extension sync failed, continuing with cached data:', error);
         // Don't block data loading if extension sync fails
@@ -633,50 +639,67 @@ const DeepFocusPage: React.FC = () => {
       case 'Today': {
         // Get today in user's SETTING timezone, not browser timezone
         const todayStr = RobustTimezoneUtils.getTodayInUserTimezone(userTimezone);
-        const todayDate = new Date(`${todayStr}T12:00:00`); // Midday to avoid edge cases
+        const todayStart = new Date(`${todayStr}T00:00:00`); // Beginning of day
+        todayStart.setHours(0, 0, 0, 0);
+        
+        const todayEnd = new Date(`${todayStr}T23:59:59`); // End of day
+        todayEnd.setHours(23, 59, 59, 999);
 
         setSelectedRange({
-          startDate: todayDate,
-          endDate: todayDate,
+          startDate: todayStart,
+          endDate: todayEnd,
           rangeType: 'today'
         });
         break;
       }
       case 'Yesterday': {
         const todayStr = RobustTimezoneUtils.getTodayInUserTimezone(userTimezone);
-        const today = new Date(`${todayStr}T12:00:00`);
+        const today = new Date(`${todayStr}T00:00:00`);
         const yesterday = new Date(today);
         yesterday.setDate(today.getDate() - 1);
+        
+        // Set yesterday to full day range
+        const yesterdayStart = new Date(yesterday);
+        yesterdayStart.setHours(0, 0, 0, 0);
+        
+        const yesterdayEnd = new Date(yesterday);
+        yesterdayEnd.setHours(23, 59, 59, 999);
 
         setSelectedRange({
-          startDate: yesterday,
-          endDate: yesterday,
+          startDate: yesterdayStart,
+          endDate: yesterdayEnd,
           rangeType: 'yesterday'
         });
         break;
       }
       case 'Last 7 Days': {
         const todayStr = RobustTimezoneUtils.getTodayInUserTimezone(userTimezone);
-        const today = new Date(`${todayStr}T12:00:00`);
-        const weekAgo = new Date(today);
-        weekAgo.setDate(today.getDate() - 6); // -6 to include today = 7 days
+        const todayEnd = new Date(`${todayStr}T23:59:59`);
+        todayEnd.setHours(23, 59, 59, 999); // End of today
+        
+        const weekAgoStart = new Date(`${todayStr}T00:00:00`);
+        weekAgoStart.setDate(todayEnd.getDate() - 6); // -6 to include today = 7 days
+        weekAgoStart.setHours(0, 0, 0, 0); // Beginning of week ago day
 
         setSelectedRange({
-          startDate: weekAgo,
-          endDate: today,
+          startDate: weekAgoStart,
+          endDate: todayEnd,
           rangeType: 'last 7 days'
         });
         break;
       }
       case 'Last 30 Days': {
         const todayStr = RobustTimezoneUtils.getTodayInUserTimezone(userTimezone);
-        const today = new Date(`${todayStr}T12:00:00`);
-        const monthAgo = new Date(today);
-        monthAgo.setDate(today.getDate() - 29); // -29 to include today = 30 days
+        const todayEnd = new Date(`${todayStr}T23:59:59`);
+        todayEnd.setHours(23, 59, 59, 999); // End of today
+        
+        const monthAgoStart = new Date(`${todayStr}T00:00:00`);
+        monthAgoStart.setDate(todayEnd.getDate() - 29); // -29 to include today = 30 days
+        monthAgoStart.setHours(0, 0, 0, 0); // Beginning of month ago day
 
         setSelectedRange({
-          startDate: monthAgo,
-          endDate: today,
+          startDate: monthAgoStart,
+          endDate: todayEnd,
           rangeType: 'last 30 days'
         });
         break;
