@@ -355,14 +355,16 @@ class BlockingManager {
       }));
       
       const storageData = { 
-        blockingManagerState: unifiedState
+        blockingManagerState: unifiedState,
+        blockedSites: Array.from(this.blockedSites)  // ADD: Maintain backward compatibility
         // Phase 4: No longer saving individual keys - everything unified
       };
       
-      console.log('💾 [PHASE-4] Unified storage data to save:');
-      console.log('  - blockingManagerState only (no individual keys)');
+      console.log('💾 [DUAL-STORAGE] Storage data to save:');
+      console.log('  - blockingManagerState: unified storage');
+      console.log('  - blockedSites: legacy compatibility');
       console.log('  - unified focusMode:', unifiedState.focusMode);
-      console.log('  - unified blockedSites count:', unifiedState.blockedSites.length);
+      console.log('  - dual blockedSites count:', unifiedState.blockedSites.length);
       
       // Phase 5: Use atomic write for consistency  
       await this.atomicWrite(storageData);
