@@ -2136,8 +2136,11 @@ class PopupManager {
           response.focusMode ? 'success' : 'info'
         );
         
-        // Refresh state to ensure sync
-        await this.refreshState();
+        // Only refresh focus-related state, not the entire UI to prevent blocked sites list from disappearing
+        const focusResult = await this.loadFocusState();
+        if (focusResult?.success) {
+          this.updateEnhancedUI('focus');
+        }
       } else {
         // If failed, revert the switch state
         this.coreState.focusMode = !newFocusState;
