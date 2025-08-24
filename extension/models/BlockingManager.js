@@ -469,10 +469,9 @@ class BlockingManager {
         // Load blocked sites from legacy key
         let blockedSitesArray = result.blockedSites || [];
         
-        // BUGFIX: Only initialize defaults during true first-time migration
-        // Check if any focus-related data exists to determine if this is a fresh install
-        const hasFocusData = result.focusStartTime || result.focusStats || result.focusMode;
-        const isTrueFreshInstall = blockedSitesArray.length === 0 && !hasFocusData;
+        // Phase 1 Fix: Check webAppHasSynced flag instead of focus data
+        const webAppHasSynced = result.webAppHasSynced || false;
+        const isTrueFreshInstall = blockedSitesArray.length === 0 && !webAppHasSynced;
         
         if (isTrueFreshInstall) {
           console.log('🔧 [PHASE-2] True fresh install during migration, initializing with defaults...');
@@ -485,9 +484,8 @@ class BlockingManager {
             blockedSitesArray = ['facebook.com', 'x.com', 'instagram.com', 'youtube.com', 'tiktok.com'];
           }
         } else if (blockedSitesArray.length === 0) {
-          console.log('🚨 [PHASE-2-FIX] Preventing default initialization during migration - user data exists');
-          console.log('🚨 [PHASE-2-FIX] hasFocusData:', !!hasFocusData);
-          console.log('🚨 [PHASE-2-FIX] Not overwriting with defaults to preserve user choice');
+          console.log('🚨 [PHASE-1-FIX] Preventing default initialization - webAppHasSynced:', webAppHasSynced);
+          console.log('🚨 [PHASE-1-FIX] Not overwriting with defaults to preserve user choice');
         } else {
           console.log('✅ [PHASE-2] Found existing sites during migration:', blockedSitesArray.length);
         }
@@ -624,10 +622,10 @@ class BlockingManager {
       }
       
       // Set timeout to remove override
-      setTimeout(() => {
+      setTimeout(async () => {
         this.temporaryOverrides.delete(cleanDomain);
         if (this.focusMode) {
-          this.updateBlockingRules();
+          await this.updateBlockingRules();
         }
       }, duration);
       
@@ -743,10 +741,19 @@ class BlockingManager {
   }
 
   /**
-   * Update blocking rules using chrome.declarativeNetRequest
-   * This is the core blocking engine that was missing
+   * Update blocking rules using chrome.declarativeNetRequest (ATOMIC VERSION)
+   * Prevents race conditions and rule ID collisions
    */
   async updateBlockingRules() {
+    // Delegate to atomic version to prevent race conditions
+    return this.atomicUpdateBlockingRules();
+  }
+
+  /**
+   * DEPRECATED: Legacy updateBlockingRules implementation 
+   * Replaced with atomic version to prevent race conditions
+   */
+  async updateBlockingRulesLegacy() {
     try {
       console.log('🔧 Updating blocking rules...');
       
@@ -778,6 +785,9 @@ class BlockingManager {
           removeRuleIds: ourRuleIds
         });
         console.log('🧹 Removed', ourRuleIds.length, 'existing Deep Focus blocking rules');
+        
+        // Wait a moment for Chrome to process the removal
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
       
       // Only add blocking rules if focus mode is active and we have sites to block
@@ -805,8 +815,9 @@ class BlockingManager {
         
         if (activeDomains.length > 0) {
           // Generate collision-resistant IDs by checking existing rules
-          const existingIds = new Set(existingRules.map(rule => rule.id));
-          let nextRuleId = 2000; // Start from 2000 to avoid conflicts
+          const remainingRules = await chrome.declarativeNetRequest.getDynamicRules();
+          const existingIds = new Set(remainingRules.map(rule => rule.id));
+          let nextRuleId = 2000 + Math.floor(Math.random() * 1000); // Start from random point to avoid conflicts
           
           const newRules = activeDomains.map((domain, index) => {
             // Find next available ID
@@ -1005,10 +1016,10 @@ class BlockingManager {
       }
       
       // Set timeout to remove override
-      setTimeout(() => {
+      setTimeout(async () => {
         this.temporaryOverrides.delete(cleanDomain);
         if (this.focusMode) {
-          this.updateBlockingRules();
+          await this.updateBlockingRules();
         }
       }, durationMinutes * 60 * 1000);
       
@@ -1043,10 +1054,10 @@ class BlockingManager {
       }
       
       // Set timeout to remove override
-      setTimeout(() => {
+      setTimeout(async () => {
         this.temporaryOverrides.delete(cleanDomain);
         if (this.focusMode) {
-          this.updateBlockingRules();
+          await this.updateBlockingRules();
         }
       }, duration);
       
@@ -1226,6 +1237,10 @@ class BlockingManager {
   storageQueue = [];
   storageInProgress = false;
   
+  // Rules update queue and lock (prevent race conditions)
+  rulesUpdateQueue = [];
+  rulesUpdateInProgress = false;
+  
   /**
    * Atomic storage read with retry logic
    */
@@ -1291,6 +1306,173 @@ class BlockingManager {
 
     this.storageInProgress = false;
     console.log(`🔓 [PHASE-5] Storage queue processing complete`);
+  }
+
+  /**
+   * Atomic rules update with queue management to prevent race conditions
+   */
+  async atomicUpdateBlockingRules() {
+    return new Promise((resolve, reject) => {
+      this.rulesUpdateQueue.push({ resolve, reject, timestamp: Date.now() });
+      this.processRulesUpdateQueue();
+    });
+  }
+
+  /**
+   * Process rules update queue to prevent race conditions and rule ID collisions
+   */
+  async processRulesUpdateQueue() {
+    if (this.rulesUpdateInProgress || this.rulesUpdateQueue.length === 0) {
+      return;
+    }
+
+    this.rulesUpdateInProgress = true;
+    console.log(`🔒 [RULES-QUEUE] Processing rules update queue: ${this.rulesUpdateQueue.length} operations`);
+
+    // Process all queued requests as a single batch operation
+    const operations = [...this.rulesUpdateQueue];
+    this.rulesUpdateQueue = []; // Clear queue
+
+    try {
+      const result = await this.updateBlockingRulesInternal();
+      
+      // Resolve all queued promises with the same result
+      operations.forEach(({ resolve }) => resolve(result));
+      console.log(`✅ [RULES-QUEUE] Batch rules update completed successfully`);
+    } catch (error) {
+      // Reject all queued promises with the same error
+      operations.forEach(({ reject }) => reject(error));
+      console.error(`❌ [RULES-QUEUE] Batch rules update failed:`, error);
+    }
+
+    this.rulesUpdateInProgress = false;
+    console.log(`🔓 [RULES-QUEUE] Rules update queue processing complete`);
+    
+    // Process any new requests that came in while we were working
+    if (this.rulesUpdateQueue.length > 0) {
+      setTimeout(() => this.processRulesUpdateQueue(), 10);
+    }
+  }
+
+  /**
+   * Internal rules update implementation with collision-resistant ID generation
+   */
+  async updateBlockingRulesInternal() {
+    try {
+      console.log('🔧 [ATOMIC] Updating blocking rules (collision-resistant)...');
+      
+      // Phase 5: Get current blocked sites using atomic read
+      const storage = await this.atomicRead(['blockedSites']);
+      const storageSites = storage.blockedSites || [];
+      
+      // Use instance blockedSites if available, otherwise use storage
+      const blockedSites = this.blockedSites.size > 0 ? Array.from(this.blockedSites) : storageSites;
+      
+      // Use the instance focusMode (this.focusMode) rather than storage 
+      const focusMode = this.focusMode;
+      
+      console.log('🔍 [ATOMIC] Current blocking state:', {
+        blockedSites: blockedSites,
+        blockedSitesLength: blockedSites.length,
+        focusMode: focusMode,
+        instanceFocusMode: this.focusMode
+      });
+      
+      // Get existing rules to clean up - ONLY remove rules in our range (2000-9999)
+      const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+      const ourRuleIds = existingRules.filter(rule => rule.id >= 2000 && rule.id < 10000).map(rule => rule.id);
+      
+      // Remove only our existing blocking rules
+      if (ourRuleIds.length > 0) {
+        await chrome.declarativeNetRequest.updateDynamicRules({
+          removeRuleIds: ourRuleIds
+        });
+        console.log('🧹 [ATOMIC] Removed', ourRuleIds.length, 'existing Deep Focus blocking rules');
+      }
+      
+      // Only add blocking rules if focus mode is active and we have sites to block
+      if (focusMode && blockedSites.length > 0) {
+        // Filter out domains with active temporary overrides
+        const now = Date.now();
+        const activeDomains = blockedSites.filter(domain => {
+          const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+          
+          // Check if there's an active temporary override
+          if (this.temporaryOverrides.has(cleanDomain)) {
+            const expiryTime = this.temporaryOverrides.get(cleanDomain);
+            if (now < expiryTime) {
+              console.log(`⏰ [ATOMIC] Skipping blocking rule for ${cleanDomain} (temporary override active)`);
+              return false; // Skip this domain
+            } else {
+              // Remove expired override
+              this.temporaryOverrides.delete(cleanDomain);
+            }
+          }
+          return true;
+        });
+        
+        console.log(`🔍 [ATOMIC] Domains to block: ${activeDomains.length}/${blockedSites.length}`);
+        
+        if (activeDomains.length > 0) {
+          // Enhanced collision-resistant ID generation
+          const allExistingRules = await chrome.declarativeNetRequest.getDynamicRules();
+          const existingIds = new Set(allExistingRules.map(rule => rule.id));
+          
+          // Use timestamp + index for collision resistance
+          const baseId = 2000 + (Date.now() % 1000); // Base ID with timestamp component
+          let nextRuleId = baseId;
+          
+          const newRules = activeDomains.map((domain, index) => {
+            // Find next available ID with collision resistance
+            while (existingIds.has(nextRuleId)) {
+              nextRuleId += 1;
+              // If we've wrapped around too far, jump to a new range
+              if (nextRuleId >= 9999) {
+                nextRuleId = 3000 + Math.floor(Math.random() * 1000);
+              }
+            }
+            
+            const rule = {
+              id: nextRuleId,
+              priority: 1,
+              action: {
+                type: 'redirect',
+                redirect: {
+                  url: chrome.runtime.getURL('blocked.html') + '?domain=' + encodeURIComponent(domain)
+                }
+              },
+              condition: {
+                urlFilter: `*://*.${domain}/*`,
+                resourceTypes: ['main_frame']
+              }
+            };
+            
+            existingIds.add(nextRuleId); // Mark this ID as used
+            nextRuleId++; // Increment for next rule
+            return rule;
+          });
+          
+          console.log('📋 [ATOMIC] Creating collision-resistant rules with IDs:', newRules.map(r => r.id));
+          
+          await chrome.declarativeNetRequest.updateDynamicRules({
+            addRules: newRules
+          });
+          
+          console.log('✅ [ATOMIC] Added', newRules.length, 'blocking rules for focus mode');
+          return { success: true, rulesAdded: newRules.length, ruleIds: newRules.map(r => r.id) };
+        } else {
+          console.log('ℹ️ [ATOMIC] All domains have temporary overrides - no blocking rules added');
+          return { success: true, rulesAdded: 0 };
+        }
+      } else {
+        console.log('ℹ️ [ATOMIC] No blocking rules needed (focus mode:', focusMode, ', sites:', blockedSites.length, ')');
+        return { success: true, rulesAdded: 0 };
+      }
+      
+    } catch (error) {
+      console.error('❌ [ATOMIC] Failed to update blocking rules:', error);
+      return { success: false, error: error.message };
+    }
   }
 }
 
