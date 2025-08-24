@@ -308,25 +308,33 @@ const DeepFocusPage: React.FC = () => {
   const handleLoadData = async () => {
     console.log('🔄 handleLoadData called for range:', selectedRange.rangeType);
     
-    // NEW: Use session-based sync ONLY (no fallback to old sync)
     if (user?.uid) {
       try {
-        console.log('🎯 Using NEW session-based sync (no fallback)...');
+        // 🔧 CRITICAL FIX: Add missing circuit breaker reset (Friends' core insight)
+        console.log('🔄 Forcing fresh extension data before sync...');
+        await forceFreshExtensionData();
+        console.log('✅ Fresh extension data loaded');
         
-        // Import the extension sync listener  
+        // 🔧 CRITICAL FIX: Pass actual date range instead of using hard-coded "today"
+        console.log('🎯 Using session-based sync with date range awareness...');
         const { extensionSyncListener } = await import('../../services/extensionSyncListener');
         
-        // Trigger extension to send session data
-        await extensionSyncListener.triggerExtensionSync();
-        console.log('✅ Extension sync request sent - waiting for session data...');
+        // Pass current selected range to extension sync
+        await extensionSyncListener.triggerExtensionSync({
+          startDate: selectedRange.startDate || new Date(),
+          endDate: selectedRange.endDate || new Date(),
+          rangeType: selectedRange.rangeType
+        });
+        
+        console.log('✅ Extension sync request sent with date range');
         
       } catch (error) {
-        console.error('❌ Session-based sync failed:', error);
-        // NO FALLBACK - let session-based system handle this
+        console.error('❌ Extension sync failed, continuing with cached data:', error);
+        // Don't block data loading if extension sync fails
       }
     }
     
-    // UNIFIED: Load data with single API call and unified processing
+    // UNIFIED: Load data with single API call (unchanged)
     if (selectedRange.rangeType === 'all time') {
       console.log('🔄 Loading all time data with unified approach...');
       loadAllTimeData();
@@ -336,12 +344,11 @@ const DeepFocusPage: React.FC = () => {
 
       if (startDate && endDate) {
         console.log('🔄 Loading range data with UNIFIED approach...', { startDate, endDate });
-        // Use new unified method that eliminates duplicate API calls
         loadUnifiedDashboardData(startDate, endDate);
       }
     }
 
-    // No separate loadSessionData() call needed - unified approach handles both!
+    console.log('✅ handleLoadData completed');
   }
 
   useEffect(() => {

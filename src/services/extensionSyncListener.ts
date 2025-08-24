@@ -16,6 +16,13 @@ class ExtensionSyncListener {
   private chromeMessageHandler: (message: any, sender: any, sendResponse: (response?: any) => void) => void;
   private syncInProgress = false;
   private pendingSyncPromise: Promise<void> | null = null;
+  
+  // Add private property to store current sync range
+  private currentSyncRange: {
+    startDate: Date;
+    endDate: Date;
+    rangeType: string;
+  } | null = null;
 
   constructor() {
     this.messageHandler = this.handleMessage.bind(this);
@@ -220,10 +227,18 @@ class ExtensionSyncListener {
       // Trigger dashboard refresh using UNIFIED approach to prevent duplicate API calls
       const { useDeepFocusDashboardStore } = await import('../store/deepFocusDashboardStore');
       
-      // Use unified method that eliminates duplicate API calls
-      // This maintains timezone accuracy while avoiding the duplicate call issue
-      const now = new Date();
-      await useDeepFocusDashboardStore.getState().loadUnifiedDashboardData(now, now);
+      // 🔧 CRITICAL FIX: Use actual sync range instead of hard-coded "today"
+      if (this.currentSyncRange) {
+        console.log(`🔄 Refreshing dashboard for ${this.currentSyncRange.rangeType}: ${this.currentSyncRange.startDate.toDateString()} to ${this.currentSyncRange.endDate.toDateString()}`);
+        await useDeepFocusDashboardStore.getState().loadUnifiedDashboardData(
+          this.currentSyncRange.startDate,
+          this.currentSyncRange.endDate
+        );
+      } else {
+        console.log('🔄 Refreshing dashboard for today (no range specified)');
+        const now = new Date();
+        await useDeepFocusDashboardStore.getState().loadUnifiedDashboardData(now, now);
+      }
       
     } catch (error) {
       console.error('❌ Failed to process extension sessions:', error);
@@ -241,7 +256,24 @@ class ExtensionSyncListener {
    * Trigger extension to sync its data to the web app
    * Prevents concurrent sync operations to avoid Firebase race conditions
    */
-  async triggerExtensionSync(): Promise<void> {
+  async triggerExtensionSync(options?: {
+    startDate: Date;
+    endDate: Date;
+    rangeType: string;
+  }): Promise<void> {
+    console.log('🔄 Extension sync triggered', options ? `for ${options.rangeType}` : 'without date range');
+    
+    // Store date range for use in processSessions
+    if (options) {
+      this.currentSyncRange = {
+        startDate: options.startDate,
+        endDate: options.endDate,
+        rangeType: options.rangeType
+      };
+    } else {
+      this.currentSyncRange = null;
+    }
+    
     // If sync is already in progress, return the pending promise
     if (this.syncInProgress && this.pendingSyncPromise) {
       console.log('⏳ Sync already in progress, waiting for completion...');
