@@ -1463,10 +1463,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_BLOCKED_SITES') {
     (async () => {
       try {
+        // BUGFIX: Read from BlockingManager instance first (authoritative source)
+        // If BlockingManager is available and has data, use that instead of storage
+        if (blockingManager && blockingManager.blockedSites && blockingManager.blockedSites.size > 0) {
+          const blockedSites = Array.from(blockingManager.blockedSites);
+          console.log('✅ GET_BLOCKED_SITES: Found sites from BlockingManager instance:', blockedSites);
+          sendResponse({ success: true, data: blockedSites });
+          return;
+        }
+        
+        // Fallback to storage if BlockingManager unavailable
         const storage = await chrome.storage.local.get(['blockedSites']);
         const blockedSites = storage.blockedSites || [];
         
-        console.log('✅ GET_BLOCKED_SITES: Found sites:', blockedSites);
+        console.log('✅ GET_BLOCKED_SITES: Found sites from storage (fallback):', blockedSites);
         sendResponse({ success: true, data: blockedSites });
       } catch (error) {
         console.error('❌ Error getting blocked sites:', error);

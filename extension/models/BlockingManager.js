@@ -92,6 +92,15 @@ class BlockingManager {
   async toggleFocusMode() {
     const originalFocusMode = this.focusMode;
     
+    // DEBUG: Log both storage locations before toggle
+    const preFocusStorage = await this.atomicRead(['blockedSites', 'blockingManagerState']);
+    console.log('🔍 [DEBUG-PRE] Storage state before focus toggle:', {
+      legacy_blockedSites: preFocusStorage.blockedSites || [],
+      unified_blockedSites: preFocusStorage.blockingManagerState?.blockedSites || [],
+      instance_blockedSites: Array.from(this.blockedSites),
+      currentFocusMode: this.focusMode
+    });
+    
     try {
       // Strict validation: StorageManager is required for Deep Focus
       if (!this.storageManager) {
@@ -105,6 +114,14 @@ class BlockingManager {
           throw new Error('Valid user state is required to enable Deep Focus mode');
         }
       }
+
+      // DEBUG: Log state right before the toggle
+      console.log('🔍 [DEBUG-TOGGLE] About to toggle focus mode:', {
+        fromFocusMode: originalFocusMode,
+        toFocusMode: !this.focusMode,
+        instanceBlockedSites: Array.from(this.blockedSites),
+        instanceBlockedSitesLength: this.blockedSites.size
+      });
 
       // Toggle the focus mode
       this.focusMode = !this.focusMode;
@@ -145,6 +162,15 @@ class BlockingManager {
 
       // Save state
       await this.saveState();
+      
+      // DEBUG: Log both storage locations after saveState
+      const postFocusStorage = await this.atomicRead(['blockedSites', 'blockingManagerState']);
+      console.log('🔍 [DEBUG-POST] Storage state after focus toggle and saveState:', {
+        legacy_blockedSites: postFocusStorage.blockedSites || [],
+        unified_blockedSites: postFocusStorage.blockingManagerState?.blockedSites || [],
+        instance_blockedSites: Array.from(this.blockedSites),
+        newFocusMode: this.focusMode
+      });
       
       console.log(`✅ Focus mode toggle successful: ${this.focusMode}`);
       return {
@@ -366,14 +392,29 @@ class BlockingManager {
       console.log('  - unified focusMode:', unifiedState.focusMode);
       console.log('  - dual blockedSites count:', unifiedState.blockedSites.length);
       
+      // DEBUG: Log exactly what values we're writing to both storage locations
+      console.log('🔍 [DEBUG-SAVE] Exact values being written to storage:', {
+        legacy_blockedSites: storageData.blockedSites,
+        unified_blockedSites: storageData.blockingManagerState.blockedSites,
+        instance_before_save: Array.from(this.blockedSites),
+        unified_focusMode: unifiedState.focusMode
+      });
+      
       // Phase 5: Use atomic write for consistency  
       await this.atomicWrite(storageData);
       console.log('✅ [PHASE-5] Unified blocking manager state saved atomically');
       
       // Phase 5: Verify using atomic read
-      const verifyResult = await this.atomicRead(['blockingManagerState']);
+      const verifyResult = await this.atomicRead(['blockingManagerState', 'blockedSites']);
       console.log('🔍 [PHASE-5] Verification - unified state saved:');
       console.log('  - blockingManagerState saved successfully:', !!verifyResult.blockingManagerState);
+      
+      // DEBUG: Verify what was actually written to both storage locations
+      console.log('🔍 [DEBUG-SAVE-VERIFY] Values actually written to storage:', {
+        legacy_blockedSites_verify: verifyResult.blockedSites || [],
+        unified_blockedSites_verify: verifyResult.blockingManagerState?.blockedSites || [],
+        unified_focusMode_verify: verifyResult.blockingManagerState?.focusMode
+      });
       
     } catch (error) {
       console.error('❌ [BLOCKING-DEBUG] Failed to save blocking manager state:', error);
@@ -449,6 +490,14 @@ class BlockingManager {
         
         this.blockedSites = new Set(blockedSitesArray);
         
+        // DEBUG: Log instance state after loadState sets blockedSites
+        console.log('🔍 [DEBUG-LOAD] Instance blockedSites set during loadState:', {
+          loaded_sites: Array.from(this.blockedSites),
+          loaded_count: this.blockedSites.size,
+          source: 'unified_state',
+          timestamp: new Date().toISOString()
+        });
+        
         // Load temporary overrides from unified state
         const overrides = state.temporaryOverrides || {};
         this.temporaryOverrides = new Map(Object.entries(overrides));
@@ -494,14 +543,22 @@ class BlockingManager {
         
         this.blockedSites = new Set(blockedSitesArray);
         
+        // DEBUG: Log instance state after loadState sets blockedSites
+        console.log('🔍 [DEBUG-LOAD] Instance blockedSites set during loadState:', {
+          loaded_sites: Array.from(this.blockedSites),
+          loaded_count: this.blockedSites.size,
+          source: 'unified_state',
+          timestamp: new Date().toISOString()
+        });
+        
         // Load temporary overrides from legacy key  
         const overrides = result.temporaryOverrides || {};
         this.temporaryOverrides = new Map(Object.entries(overrides));
         
-        console.log('🔄 [PHASE-4] Migration complete - will save unified state next');
+        console.log('🔄 [PHASE-4] Migration complete - will save unified state immediately');
         
-        // Trigger save to create unified state
-        setTimeout(() => this.saveState(), 100);
+        // Save unified state immediately to prevent race conditions with focus mode toggle
+        await this.saveState();
       }
       
       console.log('🔍 [BLOCKING-DEBUG] Final loaded state:');
@@ -877,9 +934,25 @@ class BlockingManager {
     try {
       console.log('🛡️ Enabling blocking for sites:', sites);
       
+      // DEBUG: Log current instance state before enableBlocking overwrites it
+      console.log('🔍 [DEBUG-ENABLE-PRE] Instance state before enableBlocking:', {
+        current_instance_sites: Array.from(this.blockedSites),
+        current_instance_count: this.blockedSites.size,
+        incoming_sites: sites,
+        incoming_count: sites.length,
+        timestamp: new Date().toISOString()
+      });
+      
       // BUGFIX: Update internal state and use unified saveState instead of direct write
       this.focusMode = true;
       this.blockedSites = new Set(sites);
+      
+      // DEBUG: Log instance state after enableBlocking sets it
+      console.log('🔍 [DEBUG-ENABLE-POST] Instance state after enableBlocking:', {
+        new_instance_sites: Array.from(this.blockedSites),
+        new_instance_count: this.blockedSites.size,
+        timestamp: new Date().toISOString()
+      });
       
       // Save via unified state system
       await this.saveState();
@@ -1215,12 +1288,34 @@ class BlockingManager {
   async syncExternalBlockedSitesChange() {
     try {
       console.log('🔄 [PHASE-4] Syncing external blockedSites changes...');
+      
+      // DEBUG: Log current instance state before sync
+      console.log('🔍 [DEBUG-SYNC-PRE] Instance state before external sync:', {
+        current_instance_sites: Array.from(this.blockedSites),
+        current_instance_count: this.blockedSites.size,
+        timestamp: new Date().toISOString()
+      });
+      
       // Phase 5: Use atomic read for consistency
       const storage = await this.atomicRead(['blockedSites']);
       const externalSites = storage.blockedSites || [];
       
+      // DEBUG: Log what we read from external storage
+      console.log('🔍 [DEBUG-SYNC-READ] External storage data:', {
+        external_sites: externalSites,
+        external_count: externalSites.length,
+        timestamp: new Date().toISOString()
+      });
+      
       // Update internal state
       this.blockedSites = new Set(externalSites);
+      
+      // DEBUG: Log instance state after sync
+      console.log('🔍 [DEBUG-SYNC-POST] Instance state after external sync:', {
+        new_instance_sites: Array.from(this.blockedSites),
+        new_instance_count: this.blockedSites.size,
+        timestamp: new Date().toISOString()
+      });
       
       // Save to unified state to maintain consistency
       await this.saveState();
@@ -1363,12 +1458,18 @@ class BlockingManager {
     try {
       console.log('🔧 [ATOMIC] Updating blocking rules (collision-resistant)...');
       
-      // Phase 5: Get current blocked sites using atomic read
-      const storage = await this.atomicRead(['blockedSites']);
-      const storageSites = storage.blockedSites || [];
+      // DEBUG: Check storage state before processing rules
+      const ruleUpdateStorage = await this.atomicRead(['blockedSites', 'blockingManagerState']);
+      console.log('🔍 [DEBUG-RULES-PRE] Storage state during rules update:', {
+        legacy_blockedSites: ruleUpdateStorage.blockedSites || [],
+        unified_blockedSites: ruleUpdateStorage.blockingManagerState?.blockedSites || [],
+        instance_blockedSites: Array.from(this.blockedSites),
+        instance_focusMode: this.focusMode
+      });
       
-      // Use instance blockedSites if available, otherwise use storage
-      const blockedSites = this.blockedSites.size > 0 ? Array.from(this.blockedSites) : storageSites;
+      // Always use the instance blockedSites (from unified state) to prevent fallback to old storage
+      // The unified state is the authoritative source for blocked sites
+      const blockedSites = Array.from(this.blockedSites);
       
       // Use the instance focusMode (this.focusMode) rather than storage 
       const focusMode = this.focusMode;

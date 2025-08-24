@@ -871,6 +871,10 @@ class PopupManager {
         if (this.enhancedState.deepFocusStats) {
           this.updateDeepFocusTimeDisplay(this.enhancedState.deepFocusStats.minutes || 0);
         }
+        // Refresh blocked sites list if currently viewing blocking sites tab
+        if (this.currentTab === 'blocking-sites') {
+          this.updateBlockedSitesList();
+        }
         break;
     }
   }
