@@ -10,7 +10,7 @@ export interface SiteUsageData {
   name: string;
   domain: string;
   url: string;
-  timeSpent: number; // milliseconds for UI compatibility
+  timeSpent: number; // milliseconds for UI compatibility with legacy systems
   sessions: number;
   percentage: number;
 }
@@ -36,7 +36,7 @@ export const convertSessionsToSiteUsage = (sessions: SiteUsageSession[]): SiteUs
     name: domain,
     domain,
     url: `https://${domain}`,
-    timeSpent: domainSessions.reduce((sum, s) => sum + s.duration, 0) * 1000, // Convert seconds to ms for UI
+    timeSpent: domainSessions.reduce((sum, s) => sum + s.duration, 0) * 1000, // Convert seconds to ms for UI compatibility
     sessions: domainSessions.length,
     percentage: 0 // Will calculate after all domains
   }));
@@ -173,5 +173,145 @@ export const getSessionStats = (sessions: SiteUsageSession[]): {
       ? Math.round(totalTime / completedSessions.length) 
       : 0,
     longestSession
+  };
+};
+
+/**
+ * Enhanced daily site usage converter for unified processing
+ */
+export const convertSessionsToDailySiteUsage = (sessions: SiteUsageSession[]): Array<{
+  userId: string;
+  date: string;
+  totalTime: number;
+  sitesVisited: number;
+  productivityScore: number;
+  sites: Record<string, {
+    domain: string;
+    timeSpent: number;
+    visits: number;
+    lastVisit: Date;
+    category?: string;
+  }>;
+  syncedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}> => {
+  const dailyUsageMap = new Map();
+  
+  sessions.forEach(session => {
+    const dateKey = session.utcDate; // Use UTC date for consistency
+    
+    if (!dailyUsageMap.has(dateKey)) {
+      dailyUsageMap.set(dateKey, {
+        userId: session.userId,
+        date: dateKey,
+        totalTime: 0,
+        sitesVisited: 0,
+        productivityScore: 0,
+        sites: {},
+        syncedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+    }
+    
+    const dayUsage = dailyUsageMap.get(dateKey);
+    
+    // Process each session with proper duration handling
+    if (session.duration && session.duration > 0) {
+      const durationSeconds = session.duration; // Session duration is in seconds
+      const durationMs = session.duration * 1000; // Convert to ms for site-specific data compatibility
+      
+      // Add to daily total in SECONDS (this is the key fix for 14250h bug)
+      dayUsage.totalTime += durationSeconds;
+      
+      // Process site-specific data
+      if (!dayUsage.sites[session.domain]) {
+        dayUsage.sites[session.domain] = {
+          domain: session.domain,
+          timeSpent: 0,
+          visits: 0,
+          lastVisit: new Date(session.startTimeUTC),
+          category: session.category || 'uncategorized'
+        };
+        dayUsage.sitesVisited++;
+      }
+      
+      // Store site timeSpent in milliseconds for compatibility with existing mapArrSiteUsage
+      dayUsage.sites[session.domain].timeSpent += durationMs;
+      dayUsage.sites[session.domain].visits += (session.visits || 1);
+      
+      // Update last visit if more recent
+      if (new Date(session.startTimeUTC) > new Date(dayUsage.sites[session.domain].lastVisit)) {
+        dayUsage.sites[session.domain].lastVisit = new Date(session.startTimeUTC);
+      }
+    }
+  });
+  
+  return Array.from(dailyUsageMap.values());
+};
+
+/**
+ * Unified metrics interface for centralized processing
+ */
+export interface UnifiedSessionMetrics {
+  onScreenTime: number; // seconds
+  siteUsageData: SiteUsageData[];
+  dailySiteUsages: Array<{
+    userId: string;
+    date: string;
+    totalTime: number;
+    sitesVisited: number;
+    productivityScore: number;
+    sites: Record<string, {
+      domain: string;
+      timeSpent: number;
+      visits: number;
+      lastVisit: Date;
+      category?: string;
+    }>;
+    syncedAt: Date;
+    createdAt: Date;
+    updatedAt: Date;
+  }>;
+  sessionStats: {
+    totalTime: number;
+    totalSessions: number;
+    uniqueDomains: number;
+    averageSessionDuration: number;
+    longestSession: number;
+  };
+}
+
+/**
+ * UNIFIED: Process all session metrics in a single pass
+ * Eliminates duplicate processing and API calls
+ */
+export const processUnifiedSessionMetrics = (sessions: SiteUsageSession[]): UnifiedSessionMetrics => {
+  console.log(`🔄 Processing ${sessions.length} sessions with unified approach`);
+  
+  // Filter valid sessions once
+  const validSessions = sessions.filter(s => validateSessionForConversion(s));
+  console.log(`✅ ${validSessions.length} valid sessions after filtering`);
+  
+  // Calculate on-screen time (existing logic)
+  const onScreenTime = calculateOnScreenTime(validSessions);
+  
+  // Convert to site usage data (existing logic)  
+  const siteUsageData = convertSessionsToSiteUsage(validSessions);
+  
+  // Convert to daily site usage format (enhanced logic)
+  const dailySiteUsages = convertSessionsToDailySiteUsage(validSessions);
+  
+  // Generate session statistics
+  const sessionStats = getSessionStats(validSessions);
+  
+  console.log(`📊 Unified processing complete: ${Math.round(onScreenTime / 60)}min on-screen, ${siteUsageData.length} sites`);
+  
+  return { 
+    onScreenTime, 
+    siteUsageData, 
+    dailySiteUsages, 
+    sessionStats 
   };
 };
