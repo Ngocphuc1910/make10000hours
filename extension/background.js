@@ -404,6 +404,19 @@ function getDefaultBlockedSites() {
   ];
 }
 
+/**
+ * Simple validation helper for blocked sites
+ */
+function validateBlockedSites(sites) {
+  if (!Array.isArray(sites)) {
+    return [];
+  }
+  
+  return sites.filter(site => {
+    return typeof site === 'string' && site.trim().length > 0;
+  }).map(site => site.trim());
+}
+
 // ===== ULTRA-SIMPLE DOMAIN-DAY TRACKING SYSTEM =====
 
 /**
@@ -1126,7 +1139,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
       sessions.forEach(session => {
         stats.sites[session.domain] = {
-          time: (session.duration || 0) * 1000, // Convert seconds to milliseconds
+          timeSpent: (session.duration || 0) * 1000, // Convert seconds to milliseconds
           visits: session.visits || 0
         };
       });
@@ -1371,32 +1384,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         console.log('🔄 SET_BLOCKED_SITES received:', message.payload);
         
-        // Extract blocked sites from payload
-        const webAppSites = Array.isArray(message.payload) 
+        // Extract and validate blocked sites from payload
+        const rawSites = Array.isArray(message.payload) 
           ? message.payload 
           : (message.payload?.blockedSites || []);
+        const webAppSites = validateBlockedSites(rawSites);
 
-        // Phase 3: Fix web app overwrite bug - merge with defaults instead of overwriting
-        const defaultSites = getDefaultBlockedSites();
-        const currentStorage = await chrome.storage.local.get(['blockedSites']);
-        const currentSites = currentStorage.blockedSites || [];
-
-        // Smart merge: preserve defaults and current sites, add new ones from web app
-        const mergedSites = new Set([
-          ...defaultSites,  // Always include defaults
-          ...currentSites,  // Preserve current extension sites
-          ...webAppSites    // Add web app sites
-        ]);
+        // Phase 1 Fix: Stop force-merging - trust web app completely
+        const storage = await chrome.storage.local.get(['webAppHasSynced']);
+        const webAppHasSynced = storage.webAppHasSynced || false;
         
-        const finalSites = Array.from(mergedSites);
+        let finalSites = webAppSites;
+        
+        // Only add defaults for truly new users who have never synced
+        if (!webAppHasSynced && webAppSites.length === 0) {
+          const defaultSites = getDefaultBlockedSites();
+          finalSites = defaultSites;
+          await chrome.storage.local.set({ webAppHasSynced: true });
+          console.log('🆕 New user: initialized with defaults, marked as synced');
+        } else if (!webAppHasSynced) {
+          // First sync with actual sites - mark as synced
+          await chrome.storage.local.set({ webAppHasSynced: true });
+          console.log('🔄 First sync with sites, marked as synced');
+        }
         
         // Store merged blocked sites
         await chrome.storage.local.set({ blockedSites: finalSites });
-        console.log('✅ [PHASE-3] Blocked sites merged (defaults + current + web app):', {
-          defaultCount: defaultSites.length,
-          currentCount: currentSites.length,
+        console.log('✅ [PHASE-1-FIX] Blocked sites synced from web app:', {
           webAppCount: webAppSites.length,
-          finalCount: finalSites.length
+          finalCount: finalSites.length,
+          webAppHasSynced: webAppHasSynced
         });
         
         // Phase 4: Sync external changes into BlockingManager unified state
@@ -1636,74 +1653,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep channel open for async
   }
 
-  // OPTION A FIX: Restore missing handlers from backup files
-  if (message.type === 'SYNC_BLOCKED_SITES_FROM_WEBAPP') {
-    (async () => {
-      try {
-        const webAppSites = message.payload?.sites || [];
-        console.log('🔄 Syncing', webAppSites.length, 'sites from web app');
-        
-        // NEW LOGIC: Use web app sites exactly as provided
-        let finalSites = webAppSites;
-        
-        // Only add defaults for truly new users (never initialized)
-        const storage = await chrome.storage.local.get(['blockedSites', 'userHasInitialized']);
-        const hasBeenInitialized = storage.userHasInitialized || false;
-        
-        if (!hasBeenInitialized && webAppSites.length === 0) {
-          // First-time user with no sites - initialize with defaults
-          const defaultSites = getDefaultBlockedSites();
-          finalSites = defaultSites;
-          
-          // Mark as initialized so defaults never appear again
-          await chrome.storage.local.set({ userHasInitialized: true });
-          console.log('🆕 New user: Initialized with', defaultSites.length, 'default sites');
-        } else {
-          // Existing user or user with sites - use exact web app sites
-          console.log('✅ Using exact web app sites:', webAppSites.length, '(user has been initialized)');
-        }
-        
-        if (blockingManager) {
-          blockingManager.blockedSites = new Set(finalSites);
-          await blockingManager.saveState();
-          await blockingManager.updateBlockingRules();
-        }
-        
-        await chrome.storage.local.set({ blockedSites: finalSites });
-        sendResponse({ success: true, synced: webAppSites.length, total: finalSites.length });
-      } catch (error) {
-        console.error('❌ Sync blocked sites failed:', error);
-        sendResponse({ success: false, error: error.message });
-      }
-    })();
-    return true;
-  }
-
-  if (message.type === 'FORCE_SYNC_FROM_WEBAPP') {
-    (async () => {
-      try {
-        console.log('🧹 Force clearing all blocked sites from web app');
-        
-        // NEW LOGIC: Actually clear everything (no defaults)
-        const finalSites = [];
-        
-        if (blockingManager) {
-          blockingManager.blockedSites = new Set(finalSites);
-          await blockingManager.saveState();
-          await blockingManager.updateBlockingRules();
-        }
-        
-        await chrome.storage.local.set({ blockedSites: finalSites });
-        console.log('✅ Extension cleared - ready for fresh sync');
-        
-        sendResponse({ success: true, cleared: true });
-      } catch (error) {
-        console.error('❌ Force sync failed:', error);
-        sendResponse({ success: false, error: error.message });
-      }
-    })();
-    return true;
-  }
 
   // Handle BLOCKED_ATTEMPT - Record when user tries to access blocked site
   if (message.type === 'BLOCKED_ATTEMPT') {
@@ -2602,6 +2551,75 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         
       } catch (error) {
         console.error('❌ Error checking storage:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // Handle SYNC_BLOCKED_SITES_FROM_WEBAPP - Sync blocked sites from web app
+  if (message.type === 'SYNC_BLOCKED_SITES_FROM_WEBAPP') {
+    (async () => {
+      try {
+        const rawSites = message.payload?.sites || [];
+        const webAppSites = validateBlockedSites(rawSites);
+        console.log('🔄 Syncing', webAppSites.length, 'sites from web app');
+        
+        // Phase 1 Fix: Trust web app completely, use webAppHasSynced flag
+        const storage = await chrome.storage.local.get(['webAppHasSynced']);
+        const webAppHasSynced = storage.webAppHasSynced || false;
+        
+        let finalSites = webAppSites;
+        
+        // Only add defaults for truly new users who have never synced
+        if (!webAppHasSynced && webAppSites.length === 0) {
+          const defaultSites = getDefaultBlockedSites();
+          finalSites = defaultSites;
+          await chrome.storage.local.set({ webAppHasSynced: true });
+          console.log('🆕 New user: initialized with defaults, marked as synced');
+        } else if (!webAppHasSynced) {
+          // First sync with actual sites - mark as synced
+          await chrome.storage.local.set({ webAppHasSynced: true });
+          console.log('🔄 First sync with sites, marked as synced');
+        }
+        
+        if (blockingManager) {
+          blockingManager.blockedSites = new Set(finalSites);
+          await blockingManager.saveState();
+          await blockingManager.updateBlockingRules();
+        }
+        
+        await chrome.storage.local.set({ blockedSites: finalSites });
+        sendResponse({ success: true, synced: webAppSites.length, total: finalSites.length });
+      } catch (error) {
+        console.error('❌ Sync blocked sites failed:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // Handle FORCE_SYNC_FROM_WEBAPP - Force clear all blocked sites
+  if (message.type === 'FORCE_SYNC_FROM_WEBAPP') {
+    (async () => {
+      try {
+        console.log('🧹 Force clearing all blocked sites from web app');
+        
+        // NEW LOGIC: Actually clear everything (no defaults)
+        const finalSites = [];
+        
+        if (blockingManager) {
+          blockingManager.blockedSites = new Set(finalSites);
+          await blockingManager.saveState();
+          await blockingManager.updateBlockingRules();
+        }
+        
+        await chrome.storage.local.set({ blockedSites: finalSites });
+        console.log('✅ Extension cleared - ready for fresh sync');
+        
+        sendResponse({ success: true, cleared: true, timestamp: Date.now() });
+      } catch (error) {
+        console.error('❌ Force sync failed:', error);
         sendResponse({ success: false, error: error.message });
       }
     })();
