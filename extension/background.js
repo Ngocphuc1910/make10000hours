@@ -1048,7 +1048,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const currentDomain = trackingState.currentDomain;
         
         // If domain changed, handle tab switch
-        if (currentDomain !== domain) {
+        if (currentDomain && currentDomain !== domain) {
           console.log(`🔄 Domain change detected: ${currentDomain} → ${domain}`);
           handleTabSwitch(domain);
         }

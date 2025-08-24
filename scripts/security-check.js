@@ -25,6 +25,7 @@ function checkForSecrets() {
     // Application storage keys
     'storageKey = \'extensionConfig\'',
     'storageKey = \'overrideSessions\'',
+    'storageKey = \'override_sessions\'',
     'storageKey = \'timeData\'',
     'getDeepFocusStorageKey',
     'cachedStorageKey',
