@@ -526,6 +526,13 @@ async function updateDomainSession(domain, incrementalSeconds = 0, isNewVisit = 
  */
 async function completeActiveSessions() {
   try {
+    // CRITICAL FIX: Save any accumulated time before completing sessions
+    // This prevents data loss when toggling deep focus mode
+    if (trackingState.currentDomain && chromeIdleHelper.shouldTrackTime()) {
+      console.log('💾 Saving accumulated time before completing sessions...');
+      await performImmediateSave('pre_complete_sessions');
+    }
+    
     const today = DateUtils.getLocalDateString();
     const storage = await chrome.storage.local.get(['site_usage_sessions']);
     const allSessions = storage.site_usage_sessions || {};
