@@ -355,14 +355,16 @@ class BlockingManager {
       }));
       
       const storageData = { 
-        blockingManagerState: unifiedState
+        blockingManagerState: unifiedState,
+        blockedSites: Array.from(this.blockedSites)  // ADD: Maintain backward compatibility
         // Phase 4: No longer saving individual keys - everything unified
       };
       
-      console.log('💾 [PHASE-4] Unified storage data to save:');
-      console.log('  - blockingManagerState only (no individual keys)');
+      console.log('💾 [DUAL-STORAGE] Storage data to save:');
+      console.log('  - blockingManagerState: unified storage');
+      console.log('  - blockedSites: legacy compatibility');
       console.log('  - unified focusMode:', unifiedState.focusMode);
-      console.log('  - unified blockedSites count:', unifiedState.blockedSites.length);
+      console.log('  - dual blockedSites count:', unifiedState.blockedSites.length);
       
       // Phase 5: Use atomic write for consistency  
       await this.atomicWrite(storageData);
@@ -469,10 +471,9 @@ class BlockingManager {
         // Load blocked sites from legacy key
         let blockedSitesArray = result.blockedSites || [];
         
-        // BUGFIX: Only initialize defaults during true first-time migration
-        // Check if any focus-related data exists to determine if this is a fresh install
-        const hasFocusData = result.focusStartTime || result.focusStats || result.focusMode;
-        const isTrueFreshInstall = blockedSitesArray.length === 0 && !hasFocusData;
+        // Phase 1 Fix: Check webAppHasSynced flag instead of focus data
+        const webAppHasSynced = result.webAppHasSynced || false;
+        const isTrueFreshInstall = blockedSitesArray.length === 0 && !webAppHasSynced;
         
         if (isTrueFreshInstall) {
           console.log('🔧 [PHASE-2] True fresh install during migration, initializing with defaults...');
@@ -485,9 +486,8 @@ class BlockingManager {
             blockedSitesArray = ['facebook.com', 'x.com', 'instagram.com', 'youtube.com', 'tiktok.com'];
           }
         } else if (blockedSitesArray.length === 0) {
-          console.log('🚨 [PHASE-2-FIX] Preventing default initialization during migration - user data exists');
-          console.log('🚨 [PHASE-2-FIX] hasFocusData:', !!hasFocusData);
-          console.log('🚨 [PHASE-2-FIX] Not overwriting with defaults to preserve user choice');
+          console.log('🚨 [PHASE-1-FIX] Preventing default initialization - webAppHasSynced:', webAppHasSynced);
+          console.log('🚨 [PHASE-1-FIX] Not overwriting with defaults to preserve user choice');
         } else {
           console.log('✅ [PHASE-2] Found existing sites during migration:', blockedSitesArray.length);
         }
