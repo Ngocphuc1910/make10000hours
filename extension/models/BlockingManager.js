@@ -469,10 +469,9 @@ class BlockingManager {
         // Load blocked sites from legacy key
         let blockedSitesArray = result.blockedSites || [];
         
-        // BUGFIX: Only initialize defaults during true first-time migration
-        // Check if any focus-related data exists to determine if this is a fresh install
-        const hasFocusData = result.focusStartTime || result.focusStats || result.focusMode;
-        const isTrueFreshInstall = blockedSitesArray.length === 0 && !hasFocusData;
+        // Phase 1 Fix: Check webAppHasSynced flag instead of focus data
+        const webAppHasSynced = result.webAppHasSynced || false;
+        const isTrueFreshInstall = blockedSitesArray.length === 0 && !webAppHasSynced;
         
         if (isTrueFreshInstall) {
           console.log('🔧 [PHASE-2] True fresh install during migration, initializing with defaults...');
@@ -485,9 +484,8 @@ class BlockingManager {
             blockedSitesArray = ['facebook.com', 'x.com', 'instagram.com', 'youtube.com', 'tiktok.com'];
           }
         } else if (blockedSitesArray.length === 0) {
-          console.log('🚨 [PHASE-2-FIX] Preventing default initialization during migration - user data exists');
-          console.log('🚨 [PHASE-2-FIX] hasFocusData:', !!hasFocusData);
-          console.log('🚨 [PHASE-2-FIX] Not overwriting with defaults to preserve user choice');
+          console.log('🚨 [PHASE-1-FIX] Preventing default initialization - webAppHasSynced:', webAppHasSynced);
+          console.log('🚨 [PHASE-1-FIX] Not overwriting with defaults to preserve user choice');
         } else {
           console.log('✅ [PHASE-2] Found existing sites during migration:', blockedSitesArray.length);
         }
