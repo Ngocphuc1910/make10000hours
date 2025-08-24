@@ -1525,17 +1525,47 @@ class BlockingManager {
           const baseId = 2000 + (Date.now() % 1000); // Base ID with timestamp component
           let nextRuleId = baseId;
           
-          const newRules = activeDomains.map((domain, index) => {
-            // Find next available ID with collision resistance
+          const newRules = [];
+          
+          activeDomains.forEach((domain, index) => {
+            // BUGFIX: Create TWO rules per domain to handle both exact domain and subdomains
+            
+            // Rule 1: Exact domain match (e.g., github.com)
             while (existingIds.has(nextRuleId)) {
               nextRuleId += 1;
-              // If we've wrapped around too far, jump to a new range
               if (nextRuleId >= 9999) {
                 nextRuleId = 3000 + Math.floor(Math.random() * 1000);
               }
             }
             
-            const rule = {
+            const exactDomainRule = {
+              id: nextRuleId,
+              priority: 1,
+              action: {
+                type: 'redirect',
+                redirect: {
+                  url: chrome.runtime.getURL('blocked.html') + '?domain=' + encodeURIComponent(domain)
+                }
+              },
+              condition: {
+                urlFilter: `*://${domain}/*`,
+                resourceTypes: ['main_frame']
+              }
+            };
+            
+            existingIds.add(nextRuleId);
+            newRules.push(exactDomainRule);
+            nextRuleId++;
+            
+            // Rule 2: Subdomain match (e.g., www.github.com, api.github.com)
+            while (existingIds.has(nextRuleId)) {
+              nextRuleId += 1;
+              if (nextRuleId >= 9999) {
+                nextRuleId = 3000 + Math.floor(Math.random() * 1000);
+              }
+            }
+            
+            const subdomainRule = {
               id: nextRuleId,
               priority: 1,
               action: {
@@ -1550,9 +1580,9 @@ class BlockingManager {
               }
             };
             
-            existingIds.add(nextRuleId); // Mark this ID as used
-            nextRuleId++; // Increment for next rule
-            return rule;
+            existingIds.add(nextRuleId);
+            newRules.push(subdomainRule);
+            nextRuleId++;
           });
           
           console.log('📋 [ATOMIC] Creating collision-resistant rules with IDs:', newRules.map(r => r.id));
@@ -1561,7 +1591,7 @@ class BlockingManager {
             addRules: newRules
           });
           
-          console.log('✅ [ATOMIC] Added', newRules.length, 'blocking rules for focus mode');
+          console.log('✅ [ATOMIC] Added', newRules.length, 'blocking rules for focus mode (2 rules per domain: exact + subdomain)');
           return { success: true, rulesAdded: newRules.length, ruleIds: newRules.map(r => r.id) };
         } else {
           console.log('ℹ️ [ATOMIC] All domains have temporary overrides - no blocking rules added');
