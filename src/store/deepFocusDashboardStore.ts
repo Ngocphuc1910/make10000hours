@@ -12,7 +12,7 @@ import { composeDeepFocusData } from '../utils/stats';
 import { workSessionService } from '../api/workSessionService';
 import { DailySiteUsage } from '../api/siteUsageService';
 import { SiteUsageSession } from '../utils/SessionManager';
-import { convertSessionsToSiteUsage, calculateOnScreenTime, SiteUsageData } from '../utils/SessionConverter';
+import { convertSessionsToSiteUsage, calculateOnScreenTime, SiteUsageData, processUnifiedSessionMetrics, UnifiedSessionMetrics } from '../utils/SessionConverter';
 import { RobustTimezoneUtils } from '../utils/robustTimezoneUtils';
 
 // Helper function to convert session data to daily site usage format
@@ -56,10 +56,13 @@ const convertSessionsToDailySiteUsage = (sessions: SiteUsageSession[]): DailySit
     // 🐛 FIX: Include sessions with any valid duration, not just 'completed' status
     // This fixes the "On Screen Time: 0m" issue while bottom site usage shows data
     if (session.duration && session.duration > 0) {
-      // Convert seconds to milliseconds since composeDeepFocusData expects totalTime in milliseconds
-      const durationMs = session.duration * 1000;
-      dayUsage.totalTime += durationMs;
-      dayUsage.sites[session.domain].timeSpent += durationMs;
+      // Key fix: Keep daily totalTime in SECONDS to prevent 14250h bug in timeMetrics
+      // but keep site-specific timeSpent in milliseconds for UI compatibility
+      const durationSeconds = session.duration; // Session duration is in seconds
+      const durationMs = session.duration * 1000; // Convert to ms for compatibility
+      
+      dayUsage.totalTime += durationSeconds; // SECONDS for stats.ts calculation
+      dayUsage.sites[session.domain].timeSpent += durationMs; // MS for mapArrSiteUsage compatibility
       dayUsage.sites[session.domain].visits += (session.visits || 1); // Use actual visit count from session
       
       // Update last visit time if this session is more recent
@@ -87,12 +90,23 @@ interface DeepFocusDashboardStore {
   // New session-based data
   siteUsageData: SiteUsageData[];
   onScreenTime: number; // seconds
+  
+  // New unified metrics
+  sessionMetrics: {
+    totalSessions: number;
+    uniqueDomains: number;
+    averageSessionDuration: number;
+    longestSession: number;
+  };
 
   // UNIFIED: Single data loader with timezone support
   loadDashboardData: (startDate?: Date, endDate?: Date, userTimezone?: string) => Promise<void>;
   loadAllTimeData: (userTimezone?: string) => Promise<void>;
   loadSessionData: (userTimezone?: string) => Promise<void>;
   loadComparisonData: (startDate: Date, endDate: Date) => Promise<void>;
+  
+  // New unified loading method
+  loadUnifiedDashboardData: (startDate?: Date, endDate?: Date, userTimezone?: string) => Promise<void>;
 };
 
 export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
@@ -113,6 +127,14 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
       // New session-based data
       siteUsageData: [],
       onScreenTime: 0,
+      
+      // New unified metrics
+      sessionMetrics: {
+        totalSessions: 0,
+        uniqueDomains: 0,
+        averageSessionDuration: 0,
+        longestSession: 0
+      },
 
       // UNIFIED dashboard data loader
       loadDashboardData: async (startDate?: Date, endDate?: Date, userTimezone?: string) => {
@@ -180,6 +202,77 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
 
         } catch (error) {
           console.error('❌ Dashboard data loading failed:', error);
+          set({ isLoading: false });
+        }
+      },
+
+      // NEW: Unified dashboard data loader with single API call
+      loadUnifiedDashboardData: async (startDate?: Date, endDate?: Date, userTimezone?: string) => {
+        const userStore = useUserStore.getState();
+        if (!userStore.user?.uid) {
+          console.warn('⚠️ User not authenticated');
+          return;
+        }
+
+        set({ isLoading: true });
+
+        try {
+          const userId = userStore.user.uid;
+          const effectiveTimezone = userTimezone || RobustTimezoneUtils.getUserTimezone();
+          const queryStartDate = startDate || new Date();
+          const queryEndDate = endDate || new Date();
+
+          console.log(`🔄 Loading UNIFIED dashboard data using timezone: ${effectiveTimezone}`);
+          console.log(`📅 Date range: ${queryStartDate.toDateString()} to ${queryEndDate.toDateString()}`);
+
+          // SINGLE API call for session data with timezone support
+          const siteUsageSessions = await siteUsageSessionService.getSessionsByUserTimezone(
+            userId,
+            queryStartDate,
+            queryEndDate,
+            effectiveTimezone
+          );
+
+          console.log(`📊 Retrieved ${siteUsageSessions.length} sessions for unified processing`);
+
+          // UNIFIED processing in one pass - eliminates duplicate processing
+          const { onScreenTime, siteUsageData, dailySiteUsages, sessionStats } = 
+            processUnifiedSessionMetrics(siteUsageSessions);
+
+          // Get other session types in parallel (still separate as they're different data types)
+          const [workSessions, deepFocusSessions, overrideSessions] = await Promise.all([
+            workSessionService.getWorkSessionsForRange(userId, queryStartDate, queryEndDate),
+            deepFocusSessionService.getUserSessions(userId, queryStartDate, queryEndDate),
+            overrideSessionService.getUserOverrides(userId, queryStartDate, queryEndDate)
+          ]);
+
+          // Compose final dashboard data using processed daily site usages
+          const mappedData = composeDeepFocusData({
+            workSessions,
+            dailySiteUsages, // Use unified processed data
+            deepFocusSessions,
+            overrideSessions
+          });
+
+          // SINGLE state update with all unified metrics
+          set({
+            timeMetrics: {
+              ...mappedData.timeMetrics,
+              onScreenTime: Math.round(onScreenTime / 60) // Convert seconds to minutes for UI display
+            },
+            dailyUsage: mappedData.dailyUsage,
+            siteUsage: mappedData.siteUsage,
+            siteUsageData, // Site usage data for right panel
+            onScreenTime, // On-screen time in seconds for display
+            sessionMetrics: sessionStats, // New session statistics
+            isLoading: false
+          });
+
+          console.log(`✅ Unified dashboard data loaded successfully`);
+          console.log(`📊 Metrics: ${Math.round(onScreenTime / 60)}min on-screen, ${sessionStats.totalSessions} sessions, ${sessionStats.uniqueDomains} domains`);
+
+        } catch (error) {
+          console.error('❌ Unified dashboard data loading failed:', error);
           set({ isLoading: false });
         }
       },
@@ -308,6 +401,7 @@ export const useDeepFocusDashboardStore = create<DeepFocusDashboardStore>()(
         isLoadingComparison: state.isLoadingComparison,
         siteUsageData: state.siteUsageData,
         onScreenTime: state.onScreenTime,
+        sessionMetrics: state.sessionMetrics,
       }),
       version: 1,
     },

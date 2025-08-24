@@ -217,9 +217,13 @@ class ExtensionSyncListener {
       
       console.log(`✅ [SYNC-PROTECTION] Successfully synced all sessions to Firebase`);
 
-      // Trigger dashboard refresh
+      // Trigger dashboard refresh using UNIFIED approach to prevent duplicate API calls
       const { useDeepFocusDashboardStore } = await import('../store/deepFocusDashboardStore');
-      await useDeepFocusDashboardStore.getState().loadSessionData();
+      
+      // Use unified method that eliminates duplicate API calls
+      // This maintains timezone accuracy while avoiding the duplicate call issue
+      const now = new Date();
+      await useDeepFocusDashboardStore.getState().loadUnifiedDashboardData(now, now);
       
     } catch (error) {
       console.error('❌ Failed to process extension sessions:', error);
