@@ -733,9 +733,13 @@ body {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(4px);
+  /* BUGFIX: Reduced blur to prevent bleeding through */
+  backdrop-filter: blur(2px);
   transition: all 0.3s ease;
   opacity: 1;
+  /* Ensure proper GPU layer isolation */
+  will-change: opacity;
+  transform: translateZ(0);
 }
 
 .modal-overlay.hidden {
@@ -983,14 +987,16 @@ body {
        (min-resolution: 192dpi),
        (min-resolution: 2dppx) {
   body {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    /* BUGFIX: Less aggressive smoothing to prevent intermittent blur */
+    -webkit-font-smoothing: subpixel-antialiased;
+    -moz-osx-font-smoothing: auto;
     text-rendering: optimizeLegibility;
   }
   
   .popup-container {
-    transform: scale(1);
-    transform-origin: top left;
+    /* BUGFIX: Removed transform that causes intermittent blur */
+    /* transform: scale(1); */
+    /* transform-origin: top left; */
   }
   
   .site-icon, .stat-icon i, .site-card-icon {

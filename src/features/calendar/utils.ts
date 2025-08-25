@@ -2,6 +2,7 @@ import type { Task, TaskDisplay, Project } from '../../types/models';
 import type { CalendarEvent, DropResult } from './types';
 import { format, addMinutes, subMinutes, parse, differenceInMinutes, isAfter, isBefore, startOfDay, endOfDay, isSameDay } from 'date-fns';
 import { timezoneUtils } from '../../utils/timezoneUtils';
+import { debugCalendar } from '../../utils/debugCalendar';
 
 export interface EventDrop {
   eventId: string;
@@ -15,18 +16,6 @@ export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project)
   
   if (!taskAsTask.scheduledDate) return null;
   
-  // DEBUG: Log task conversion details
-  console.log('🔄 Converting task to CalendarEvent:', {
-    id: taskAsTask.id,
-    title: taskAsTask.title,
-    includeTime: taskAsTask.includeTime,
-    scheduledStartTime: taskAsTask.scheduledStartTime,
-    scheduledEndTime: taskAsTask.scheduledEndTime,
-    scheduledDate: taskAsTask.scheduledDate,
-    type: typeof taskAsTask.includeTime,
-    hasStartTime: !!taskAsTask.scheduledStartTime,
-    hasEndTime: !!taskAsTask.scheduledEndTime
-  });
   
   // Parse the scheduled date as local date (not UTC)
   const baseDate = new Date(taskAsTask.scheduledDate + 'T00:00:00');
@@ -35,15 +24,7 @@ export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project)
   let end: Date;
   let isAllDay = false;
   
-  // DEBUG: Check condition for timed vs all-day
   const conditionResult = taskAsTask.includeTime && taskAsTask.scheduledStartTime && taskAsTask.scheduledEndTime;
-  console.log('🔍 Timed event condition check:', {
-    includeTime: taskAsTask.includeTime,
-    hasStartTime: !!taskAsTask.scheduledStartTime,
-    hasEndTime: !!taskAsTask.scheduledEndTime,
-    conditionResult,
-    willCreateTimedEvent: conditionResult
-  });
   
   if (conditionResult) {
     // Parse times and combine with date
@@ -58,26 +39,12 @@ export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project)
       end = addMinutes(end, 24 * 60);
     }
     
-    console.log('⏰ TIMED event created:', {
-      id: taskAsTask.id,
-      title: taskAsTask.title,
-      isAllDay: false,
-      start: format(start, 'MMM dd HH:mm'),
-      end: format(end, 'MMM dd HH:mm')
-    });
   } else {
     // All-day event
     start = startOfDay(baseDate);
     end = endOfDay(baseDate);
     isAllDay = true;
     
-    console.log('📅 ALL-DAY event created:', {
-      id: taskAsTask.id,
-      title: taskAsTask.title,
-      isAllDay: true,
-      start: format(start, 'MMM dd HH:mm'),
-      end: format(end, 'MMM dd HH:mm')
-    });
   }
 
   // Determine the color
@@ -124,21 +91,25 @@ export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project)
 };
 
 export const tasksToCalendarEvents = (tasks: Task[], projects: Project[]): CalendarEvent[] => {
-  // DEBUG: Log tasks being converted
   const scheduledTasks = tasks.filter(task => task.scheduledDate);
-  console.log('📝 Converting tasks to CalendarEvents:', {
-    totalTasks: tasks.length,
-    scheduledTasks: scheduledTasks.length,
-    scheduledTaskTitles: scheduledTasks.map(t => t.title),
-    callStack: new Error().stack?.split('\n').slice(1, 4) // Show where this is called from
-  });
   
-  return scheduledTasks
+  // Batch logging with performance timing
+  const startTime = performance.now();
+  debugCalendar.batch('Converting tasks to events', scheduledTasks.length);
+  
+  const result = scheduledTasks
     .map(task => {
       const project = projects.find(p => p.id === task.projectId);
       return taskToCalendarEvent(task, project);
     })
     .filter((event): event is CalendarEvent => event !== null);
+  
+  const duration = performance.now() - startTime;
+  if (duration > 30) {
+    console.warn(`⚠️ Task-to-event conversion: ${Math.round(duration)}ms for ${scheduledTasks.length} tasks`);
+  }
+  
+  return result;
 };
 
 
@@ -150,19 +121,19 @@ export const mergeEventsAndTasks = (
   projects: Project[], 
   calendarEvents: CalendarEvent[] = []
 ): CalendarEvent[] => {
-  console.log('🔀 Merging events and tasks:', {
-    inputTasks: tasks.length,
-    inputCalendarEvents: calendarEvents.length
-  });
+  const startTime = performance.now();
   
   const taskEvents = tasksToCalendarEvents(tasks, projects);
   const mergedEvents = [...taskEvents, ...calendarEvents];
   
-  console.log('✅ Merge complete:', {
-    outputTaskEvents: taskEvents.length,
-    outputTotalEvents: mergedEvents.length,
-    eventTitles: mergedEvents.map(e => e.title)
-  });
+  const duration = performance.now() - startTime;
+  
+  // Batch logging with performance timing
+  debugCalendar.batch('Merged calendar events', mergedEvents.length);
+  
+  if (duration > 20) {
+    console.warn(`⚠️ Event merging: ${Math.round(duration)}ms for ${tasks.length} tasks + ${calendarEvents.length} calendar events`);
+  }
   
   return mergedEvents;
 };
