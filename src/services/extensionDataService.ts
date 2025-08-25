@@ -591,7 +591,7 @@ class ExtensionDataService {
         siteUsages[domain].timeSpent += Math.round(siteData.timeSpent / (1000 * 60)); // Convert ms to minutes
         siteUsages[domain].sessions += siteData.visits;
         // Update total time for percentage calculation
-        totalTime += siteData.timeSpent;
+        totalTime += Math.round(siteData.timeSpent / (1000 * 60)); // Convert to minutes to match site.timeSpent
       });
 
       // Map time metrics
