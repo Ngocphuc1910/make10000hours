@@ -113,6 +113,7 @@ export const Calendar: React.FC = () => {
 
   // Merge calendar events with task events using timezone-aware display
   const allEvents = useMemo(() => {
+    const startTime = performance.now();
     debugCalendar.batch('Calendar processing', tasks.length);
     
     try {
@@ -124,6 +125,14 @@ export const Calendar: React.FC = () => {
       
       // Merge calendar events with timezone-converted tasks
       const events = mergeEventsAndTasks(displayTasks, projects, calendarEvents);
+      
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      
+      // Only warn if processing is actually slow
+      if (duration > 50) {
+        console.warn(`⚠️ Calendar processing: ${Math.round(duration)}ms for ${tasks.length} tasks`);
+      }
       
       return events;
     } catch (error) {

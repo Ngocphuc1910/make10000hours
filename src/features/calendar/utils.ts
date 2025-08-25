@@ -93,15 +93,23 @@ export const taskToCalendarEvent = (task: Task | TaskDisplay, project?: Project)
 export const tasksToCalendarEvents = (tasks: Task[], projects: Project[]): CalendarEvent[] => {
   const scheduledTasks = tasks.filter(task => task.scheduledDate);
   
-  // Batch logging instead of per-task logging
+  // Batch logging with performance timing
+  const startTime = performance.now();
   debugCalendar.batch('Converting tasks to events', scheduledTasks.length);
   
-  return scheduledTasks
+  const result = scheduledTasks
     .map(task => {
       const project = projects.find(p => p.id === task.projectId);
       return taskToCalendarEvent(task, project);
     })
     .filter((event): event is CalendarEvent => event !== null);
+  
+  const duration = performance.now() - startTime;
+  if (duration > 30) {
+    console.warn(`⚠️ Task-to-event conversion: ${Math.round(duration)}ms for ${scheduledTasks.length} tasks`);
+  }
+  
+  return result;
 };
 
 
@@ -113,11 +121,19 @@ export const mergeEventsAndTasks = (
   projects: Project[], 
   calendarEvents: CalendarEvent[] = []
 ): CalendarEvent[] => {
+  const startTime = performance.now();
+  
   const taskEvents = tasksToCalendarEvents(tasks, projects);
   const mergedEvents = [...taskEvents, ...calendarEvents];
   
-  // Batch logging instead of verbose merge details
+  const duration = performance.now() - startTime;
+  
+  // Batch logging with performance timing
   debugCalendar.batch('Merged calendar events', mergedEvents.length);
+  
+  if (duration > 20) {
+    console.warn(`⚠️ Event merging: ${Math.round(duration)}ms for ${tasks.length} tasks + ${calendarEvents.length} calendar events`);
+  }
   
   return mergedEvents;
 };
