@@ -24,6 +24,7 @@ import { useSyncStore } from '../../store/syncStore';
 import { useSimpleGoogleCalendarAuth } from '../../hooks/useSimpleGoogleCalendarAuth';
 import { TaskDisplayService } from '../../services/TaskDisplayService';
 import { timezoneUtils } from '../../utils/timezoneUtils';
+import { debugCalendar } from '../../utils/debugCalendar';
 
 // Old DragState interface - removed since we have new drag-to-create system
 
@@ -112,12 +113,7 @@ export const Calendar: React.FC = () => {
 
   // Merge calendar events with task events using timezone-aware display
   const allEvents = useMemo(() => {
-    console.log('🏗️ Calendar.tsx: Building allEvents...');
-    console.log('📊 Input data:', {
-      totalTasks: tasks.length,
-      totalCalendarEvents: calendarEvents.length,
-      totalProjects: projects.length
-    });
+    debugCalendar.batch('Calendar processing', tasks.length);
     
     try {
       // Get user's timezone for proper display conversion
@@ -126,26 +122,14 @@ export const Calendar: React.FC = () => {
       // Convert tasks to display format with proper timezone
       const displayTasks = TaskDisplayService.batchConvertForDisplay(tasks, userTimezone);
       
-      console.log('🔄 After timezone conversion:', {
-        originalTasks: tasks.length,
-        displayTasks: displayTasks.length
-      });
-      
       // Merge calendar events with timezone-converted tasks
       const events = mergeEventsAndTasks(displayTasks, projects, calendarEvents);
-      
-      console.log('🎯 Calendar.tsx final result:', {
-        totalEvents: events.length,
-        allDayEvents: events.filter(e => e.isAllDay).length,
-        timedEvents: events.filter(e => !e.isAllDay).length
-      });
       
       return events;
     } catch (error) {
       console.error('❌ Calendar: Failed to process events:', error);
       
       // Return only calendar events to prevent task duplication
-      console.log('⚠️ Using fallback: calendar events only...');
       return [...calendarEvents];
     }
   }, [calendarEvents, tasks, projects, user?.settings?.timezone?.current]);
