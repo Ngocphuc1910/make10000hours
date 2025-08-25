@@ -8,6 +8,8 @@ export default defineConfig({
     port: 3001,
     host: 'localhost',
     https: false
+    // Alternative: Enable HTTPS for local dev to match production
+    // https: true
   },
   define: {
     global: 'globalThis',

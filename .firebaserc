@@ -1,5 +1,7 @@
 {
-  "projects": {},
+  "projects": {
+    "default": "make10000hours"
+  },
   "targets": {
     "make10000hours": {
       "hosting": {

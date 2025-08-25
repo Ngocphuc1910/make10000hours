@@ -48,6 +48,7 @@ import SettingsDialogWrapper from './components/settings/SettingsDialogWrapper';
 import DeepFocusCleanup from './utils/deepFocusCleanup';
 import { useSimpleGoogleCalendarAuth } from './hooks/useSimpleGoogleCalendarAuth';
 import OAuthCallbackPage from './components/auth/OAuthCallbackPage';
+import { OAuthDebugger } from './components/debug/OAuthDebugger';
 import './utils/resetMonitoring'; // Make resetUTCMonitoring available globally
 
 // Import cleanup utility for orphaned sessions
@@ -951,6 +952,7 @@ const App: React.FC = () => {
               <Route path="support" element={<SupportPageWithLayout />} />
               <Route path="privacy-policy" element={<PrivacyPolicyPageWithLayout />} />
               <Route path="oauth/callback" element={<OAuthCallbackPage />} />
+              <Route path="oauth-debug" element={<OAuthDebugger />} />
             </Routes>
           </AnalyticsWrapper>
           <ToastContainer />
